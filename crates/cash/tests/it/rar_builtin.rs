@@ -203,9 +203,10 @@ fn rar_adds_links_as_winrar_7_23_does() {
 fn rar_says_it_makes_no_recovery_volumes_or_sfx() {
     let out = run("rar rv2 -idq a.rar; echo \"rc=$?\"; rar s -idq a.rar; echo \"rc=$?\"");
     assert_eq!(out.stdout, "rc=2\nrc=2");
+    // -idq ends standard error with one more line's end, as rar does.
     assert_eq!(
         out.stderr,
-        "\nrar: cash's rar does not make recovery volumes\n\n\
+        "\nrar: cash's rar does not make recovery volumes\n\n\n\
          rar: cash's rar does not make self-extracting archives"
     );
 }

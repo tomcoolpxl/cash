@@ -830,14 +830,27 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      `rar50_dictionary_size` is public now. Sizes above 4 GB (RAR 7's) are not tried.
    - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines then,
      the rewrites WinRAR's byte for byte). Left of them: `ch` takes `-cl`, `-cu`, `-z`,
-     `-k`, `-tl`, `-rr`, `-ts`, `-ams`, `-amr` and `-qo` (its three forms, seen
-     WinRAR's byte for byte on 2026-10-09), not `-hp`: Rar.exe encrypts a plain
-     archive's headers with it, and refuses an archive whose files are encrypted
-     ("Cannot change the header encryption mode in already encrypted archive", rc 2).
-     `-ep`, `-htb`, `-s`, `-p` and `-df` change nothing there; `-ma4` is refused as by
-     cash.
+     `-k`, `-tl`, `-rr`, `-ts`, `-ams`, `-amr`, `-qo` (its three forms, seen WinRAR's
+     byte for byte on 2026-10-09) and `-hp` (below). `-ep`, `-htb`, `-s`, `-p` and
+     `-df` change nothing there; `-ma4` is refused as by cash.
+   - `-hp` on the commands that change an archive: done 2026-10-09 (in
+     `rar_passwords.sh`, now 803 lines, by size and details, the salts being
+     random). `a`, `u`, `f`, `m`, `d`, `c`, `k`, `rn`, `ch` and `rr` encrypt a plain
+     archive's headers with it; cash did in `a` alone. An archive whose headers are
+     plain and some files encrypted is refused: "Cannot change the header encryption
+     mode in already encrypted archive", rc 2, after `a`'s "Updating archive" and
+     `c`'s comment read, before `k`'s "Locking archive". A comment written under
+     encrypted headers is encrypted as a file is, with the headers' salt and key, its
+     own IV and the password's check, zero-padded to 16, the padded text's CRC its
+     own; cash stored it plain inside them (60 bytes short). A comment carried keeps
+     its form (rars' builder's `comment_kept_plain`). An encrypted file is never
+     stored for want of compression: Rar.exe packs seven bytes into 32 with `-m3`
+     where cash stored them (rars' compression plan's `keep_method`). With `-idq`,
+     "Program aborted" is hidden, as a message; a run that stops leaves standard
+     error's line as it is, and one that ends ends standard error with a line's end
+     whenever it wrote there, an ended line getting another.
    - Passwords typed, and archives that do not open to be changed: done 2026-10-09
-     (`rar_passwords.sh`, 676 lines). A bare `-p` or `-hp` is asked for as rar reads
+     (`rar_passwords.sh`, 676 lines then). A bare `-p` or `-hp` is asked for as rar reads
      it, before its banner and the other switches' words, unless a password came
      before it (`-hp` takes `-p`'s; `-p` asks after `-hp`'s); cash asked after its
      banner. A password from a pipe is all one read gives, its line ends trimmed

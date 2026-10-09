@@ -162,6 +162,12 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         (None, false) => "Creating archive",
     };
     rar.console.msg(&format!("\n{words} {display}\n"));
+    if old
+        .as_ref()
+        .is_some_and(|old| open::header_mode_refused(rar, old))
+    {
+        return Err(Stop::Refused(code::FATAL));
+    }
 
     let comment = read_comment(rar, &display)?;
 
@@ -806,11 +812,12 @@ fn settings<SE: cash_core::ShellExtensions>(
             switches.header_password.is_some() || old.is_some_and(|o| o.facts.encrypted_headers),
         );
     }
+    let kept = comment.is_none() && old.is_some_and(comment_stored_plain);
     let comment = match comment {
         Some(comment) => Some(comment),
         None => old.and_then(|o| o.archive.comment(password).ok().flatten()),
     };
-    builder = builder.comment(comment);
+    builder = builder.comment(comment).comment_kept_plain(kept);
     if let Some(percent) = asked_recovery_percent(rar) {
         builder = builder.recovery_percent(Some(percent));
     }
@@ -889,6 +896,33 @@ pub(super) fn rewriting_builder(
     // WinRAR drops the recovery record of an archive it changes, unless `-rr` asks for
     // one again.
     Ok(builder.recovery_percent(None))
+}
+
+/// Whether the archive's comment is stored unencrypted: kept so when it is carried,
+/// as rar keeps it, where a comment written anew under encrypted headers is
+/// encrypted.
+pub(super) fn comment_stored_plain(opened: &open::Opened) -> bool {
+    opened.archive.as_rar50().is_some_and(|archive| {
+        archive.blocks.iter().any(|block| {
+            matches!(block, rar::rar50::Block::Service(header)
+                if header.name == b"CMT" && header.encryption.is_none())
+        })
+    })
+}
+
+/// `-hp`: the headers of an archive changed encrypted with its password, as rar
+/// encrypts them whatever the command; the files carried stay as they are.
+pub(super) fn encrypting_headers<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    builder: Builder,
+    password: Option<&[u8]>,
+) -> Builder {
+    match password {
+        Some(password) if rar.switches.header_password.is_some() => builder
+            .password(Some(password.to_vec()))
+            .header_encryption(true),
+        _ => builder,
+    }
 }
 
 /// The recovery record `-rr` asks for, as a percentage of the archive.

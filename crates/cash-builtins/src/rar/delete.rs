@@ -28,7 +28,9 @@ fn rewriter<SE: cash_core::ShellExtensions>(
     let mut builder = add::rewriting_builder(opened, password)
         .map_err(fatal)?
         .comment(opened.archive.comment(password).ok().flatten())
+        .comment_kept_plain(add::comment_stored_plain(opened))
         .layout(add::layout(rar, Some(add::old_bound(&opened.archive))));
+    builder = add::encrypting_headers(rar, builder, password);
     if opened.archive.as_rar50().is_some() {
         let quick_open = add::quick_open_on(rar);
         let metadata = add::saved_metadata(rar, path, newest);
@@ -64,6 +66,9 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     if opened.facts.volume {
         rar.console.err("\n\nERROR: Cannot modify volume");
         return Err(Stop::Refused(code::LOCKED));
+    }
+    if open::header_mode_refused(rar, &opened) {
+        return Err(Stop::Refused(code::FATAL));
     }
     rar.console.msg(&format!("\nDeleting from {display}"));
 

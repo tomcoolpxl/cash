@@ -377,12 +377,13 @@ pub(super) fn compress_members_with_context(
                     // successors decode against the dictionary it fills.
                     store: plan.method == 0
                         || input_size == 0
-                        || should_store_compressed_payload(
-                            input_size,
-                            packed.len(),
-                            plan.solid,
-                            &plan.filter_policy,
-                        ),
+                        || !plan.keeps_method(member)
+                            && should_store_compressed_payload(
+                                input_size,
+                                packed.len(),
+                                plan.solid,
+                                &plan.filter_policy,
+                            ),
                     packed,
                     solid_continuation: plan.solid && member > 0,
                 })
@@ -708,12 +709,13 @@ fn compress_whole_member<B: Budget>(
         )?;
         // An explicitly requested filter is not discarded just
         // because the result did not shrink.
-        stored = should_store_compressed_payload(
-            data.len() as u64,
-            packed.len() as u64,
-            plan.solid,
-            &plan.filter_policy,
-        );
+        stored = !plan.keeps_method(index)
+            && should_store_compressed_payload(
+                data.len() as u64,
+                packed.len() as u64,
+                plan.solid,
+                &plan.filter_policy,
+            );
         if !stored {
             packed_spool.write_all(&packed)?;
         }
@@ -798,12 +800,13 @@ fn compress_fallback_member(
         input_size,
         crc32,
         hash,
-        store: should_store_compressed_payload(
-            input_size,
-            packed.len(),
-            false,
-            &FilterPolicy::None,
-        ),
+        store: !plan.keeps_method(index)
+            && should_store_compressed_payload(
+                input_size,
+                packed.len(),
+                false,
+                &FilterPolicy::None,
+            ),
         packed,
         solid_continuation: false,
     })
@@ -1192,12 +1195,14 @@ fn append_packed_runs<B: Budget, C: Budget>(
             let stream = &streams[member];
             // A completed block run always came from `has_more`, so an empty
             // member cannot reach this branch.
-            if !should_store_compressed_payload(
-                stream.input_size,
-                stream.packed.len(),
-                plan.solid,
-                &plan.filter_policy,
-            ) {
+            if plan.keeps_method(stream.member)
+                || !should_store_compressed_payload(
+                    stream.input_size,
+                    stream.packed.len(),
+                    plan.solid,
+                    &plan.filter_policy,
+                )
+            {
                 stream.source.release();
             }
             advance.finished(stream.member, stream.input_size);
@@ -1251,6 +1256,7 @@ mod tests {
                 .with_temp_dir(scratch.join("missing-directory"));
             let options = EncodeOptions::new(8).with_max_match_distance(65536);
             let plan = CompressPlan {
+                keep_method: None,
                 algorithm_version: 0,
                 encode_options: options,
                 dictionary_size: 65536,
@@ -1308,6 +1314,7 @@ mod tests {
         let resources = WriterResources::new(128 * 1024 * 1024).with_temp_dir(&*scratch);
         let options = EncodeOptions::new(8).with_max_match_distance(65536);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 65536,
@@ -1358,6 +1365,7 @@ mod tests {
         let options = EncodeOptions::new(8);
         for solid in [false, true] {
             let plan = CompressPlan {
+                keep_method: None,
                 algorithm_version: 0,
                 encode_options: options,
                 dictionary_size: 65536,
@@ -1402,6 +1410,7 @@ mod tests {
     fn admitted_whole_member_worker_propagates_source_failure() {
         let options = EncodeOptions::new(8);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 65536,
@@ -1428,6 +1437,7 @@ mod tests {
     fn stored_member_descriptor_refusal_releases_preparation_charge() {
         let options = EncodeOptions::new(8);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 128 * 1024,
@@ -1479,6 +1489,7 @@ mod tests {
         let resources = WriterResources::default().with_temp_dir(&*scratch);
         let options = EncodeOptions::new(8);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 128 * 1024,
@@ -1551,6 +1562,7 @@ mod tests {
 
         let options = EncodeOptions::new(8).with_max_match_distance(65536);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 65536,
@@ -1748,6 +1760,7 @@ mod tests {
         }
         let options = EncodeOptions::new(8);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 128 * 1024,
@@ -1898,6 +1911,7 @@ mod tests {
         let options = EncodeOptions::new(8).with_max_match_distance(65536);
         for solid in [false, true] {
             let plan = CompressPlan {
+                keep_method: None,
                 algorithm_version: 0,
                 encode_options: options,
                 dictionary_size: 65536,
@@ -2025,6 +2039,7 @@ mod tests {
         let options = EncodeOptions::new(8).with_max_match_distance(65536);
         for solid in [false, true] {
             let plan = CompressPlan {
+                keep_method: None,
                 algorithm_version: 0,
                 encode_options: options,
                 dictionary_size: 65536,
@@ -2108,6 +2123,7 @@ mod tests {
             (false, FilterPolicy::Auto),
         ] {
             let plan = CompressPlan {
+                keep_method: None,
                 algorithm_version: 0,
                 encode_options: options,
                 dictionary_size: 65536,
@@ -2194,6 +2210,7 @@ mod tests {
         let options = EncodeOptions::new(8).with_max_match_distance(65536);
         for solid in [false, true] {
             let plan = CompressPlan {
+                keep_method: None,
                 algorithm_version: 0,
                 encode_options: options,
                 dictionary_size: 65536,
@@ -2266,6 +2283,7 @@ mod tests {
         let scratch = crate::rar::scratch::case("stored-ledger");
         let options = EncodeOptions::new(8);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 65536,
@@ -2403,6 +2421,7 @@ mod tests {
         let scratch = crate::rar::scratch::case("whole-member-ledger");
         let options = EncodeOptions::new(8).with_max_match_distance(65536);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 65536,
@@ -2607,6 +2626,7 @@ mod tests {
         let resources = WriterResources::default().with_temp_dir(&*scratch);
         let options = EncodeOptions::new(8).with_max_match_distance(65536);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 65536,
@@ -2730,6 +2750,7 @@ mod tests {
         use std::sync::{Arc, atomic::AtomicUsize};
         let encode_options = EncodeOptions::new(8).with_max_match_distance(65536);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options,
             dictionary_size: 65536,
@@ -2778,6 +2799,7 @@ mod tests {
         let length = 2 * 1024 * 1024;
         let options = EncodeOptions::new(8).with_max_match_distance(128 * 1024);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 128 * 1024,
@@ -2867,6 +2889,7 @@ mod tests {
         ];
         let encode_options = EncodeOptions::new(8).with_max_match_distance(128 * 1024);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options,
             dictionary_size: 128 * 1024,
@@ -2922,6 +2945,7 @@ mod tests {
                 let mut plain = compress_members_reporting(
                     &sources[1..2],
                     CompressPlan {
+                        keep_method: None,
                         filter_policy: FilterPolicy::None,
                         ..plan.clone()
                     },
@@ -3015,6 +3039,7 @@ mod tests {
             (1, false, FilterPolicy::Auto),
         ] {
             let plan = CompressPlan {
+                keep_method: None,
                 algorithm_version: 0,
                 encode_options: options,
                 dictionary_size: 65536,
@@ -3085,6 +3110,7 @@ mod tests {
             .collect();
         let options = EncodeOptions::new(8).with_max_match_distance(65536);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 65536,
@@ -3113,6 +3139,7 @@ mod tests {
             .with_max_match_distance(size)
             .with_optimal_parse(true);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: size as u64,
@@ -3153,6 +3180,7 @@ mod tests {
             .collect();
         let options = EncodeOptions::new(8);
         let plan = CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options: options,
             dictionary_size: 65536,
@@ -3232,6 +3260,7 @@ mod tests {
                     .collect();
                 let options = EncodeOptions::new(8).with_max_match_distance(131072);
                 let plan = CompressPlan {
+                    keep_method: None,
                     algorithm_version: 0,
                     encode_options: options,
                     dictionary_size: 131072,

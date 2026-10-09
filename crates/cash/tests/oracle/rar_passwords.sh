@@ -97,6 +97,24 @@ for cmd in l t "x -o+ -opout" "c -zcmt.txt" k "rn a.txt z.txt" ch rr "d a.txt" "
   done
 done
 
+echo "== -hp encrypts the headers of an archive changed, whatever the command"
+# Shown by size and lt's details, as the salts and IVs differ each run. A comment
+# carried keeps its form, one written anew is encrypted; an archive whose files are
+# encrypted and headers plain is refused.
+rar a -m0 -idq ab.rar a.txt b.txt
+rar a -m0 -idq -zcmt.txt abc.rar a.txt b.txt
+for base in ab abc p4 hp; do
+  for cmd in ch k "c -zcmt.txt" rr "rn a.txt z.txt" "d b.txt" "a b.txt"; do
+    set -- $cmd
+    op=$1
+    shift
+    echo "-- $base: $op -hpx"
+    cp "$base.rar" t.rar
+    z rar "$op" -hpx -idq t.rar "$@"
+    echo "t.rar $(stat -c %s t.rar) bytes, $(rar lt -p- t.rar 2>/dev/null | tr -d '\r' | grep Details | sed 's/^ *//')"
+  done
+done
+
 echo "== a file that is no RAR archive"
 for cmd in l lb lt t "x -o+ -opout" "e -o+ -opout" p i=file "c -zcmt.txt" k "rn a.txt z.txt" \
   ch rr "d a.txt" "a d.txt" "u d.txt" cw; do

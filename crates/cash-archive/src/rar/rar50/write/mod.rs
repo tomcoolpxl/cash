@@ -460,6 +460,7 @@ pub fn write_streaming_volumes_with_progress(
                 extras.filter_policy,
                 dictionary_reach(entries, options.features.solid),
                 resources.memory_limit(),
+                kept_methods(entries, extras.layout.winrar, resources)?,
                 resources,
             )?,
             recovery_percent: extras.recovery_percent,
@@ -595,6 +596,10 @@ pub struct ArchiveExtras<'a> {
     pub comment: Option<&'a [u8]>,
     /// Encrypts the comment. Without it the comment is stored in the clear.
     pub comment_password: Option<&'a [u8]>,
+    /// The comment is carried plain from the archive changed. WinRAR's layout
+    /// encrypts a comment written anew under encrypted headers, and keeps a carried
+    /// one as it was.
+    pub comment_kept_plain: bool,
     /// Password for encrypted headers, including archives without members.
     /// When omitted, uses the shared member password. When supplied, must
     /// agree with any member passwords; ignored unless header encryption is set.
@@ -727,6 +732,7 @@ pub(crate) fn write_streaming_archive_reporting(
                 extras.filter_policy,
                 dictionary_reach(entries, options.features.solid),
                 resources.memory_limit(),
+                kept_methods(entries, extras.layout.winrar, resources)?,
                 resources,
             )?,
             recovery_percent,
@@ -735,6 +741,9 @@ pub(crate) fn write_streaming_archive_reporting(
             archive_comment: match (extras.comment, extras.comment_password) {
                 (Some(data), Some(password)) => {
                     Some(engine::ArchiveCommentPlan::Encrypted { data, password })
+                }
+                (Some(data), None) if extras.comment_kept_plain => {
+                    Some(engine::ArchiveCommentPlan::Kept(data))
                 }
                 (Some(data), None) => Some(engine::ArchiveCommentPlan::Plain(data)),
                 (None, _) => None,
@@ -769,11 +778,33 @@ fn dictionary_reach(entries: &[ArchiveEntry], solid: bool) -> u64 {
     }
 }
 
+/// The members whose compression is kept however little it gains: in WinRAR's
+/// layout the encrypted ones, as WinRAR never stores an encrypted file for want of
+/// compression.
+fn kept_methods(
+    entries: &[ArchiveEntry],
+    winrar: bool,
+    resources: &WriterResources,
+) -> Result<Option<crate::rar::streaming::preparation::Records<bool>>> {
+    if !winrar || entries.iter().all(|entry| entry.password.is_none()) {
+        return Ok(None);
+    }
+    // By their place among the members compressed: the carried ones are not.
+    let fresh = entries.iter().filter(|entry| entry.carried.is_none());
+    let mut kept =
+        crate::rar::streaming::preparation::Records::new(fresh.clone().count(), resources)?;
+    for entry in fresh {
+        kept.push(entry.password.is_some())?;
+    }
+    Ok(Some(kept))
+}
+
 fn compression_plan(
     options: WriterOptions,
     filter_policy: FilterPolicy,
     content: u64,
     memory_limit: u64,
+    keep_method: Option<crate::rar::streaming::preparation::Records<bool>>,
     resources: &WriterResources,
 ) -> Result<compress::CompressPlan> {
     let method = compression_method_for_level(options.compression_level)?;
@@ -799,6 +830,7 @@ fn compression_plan(
             candidates.into_iter().map(Ok),
             resources,
         )?,
+        keep_method,
     })
 }
 
@@ -2428,6 +2460,7 @@ mod tests {
         let mut prepared = compress::compress_members_reporting(
             &[source],
             compress::CompressPlan {
+                keep_method: None,
                 algorithm_version,
                 encode_options,
                 dictionary_size,

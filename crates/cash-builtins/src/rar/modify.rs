@@ -66,6 +66,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     if refused(rar, &opened) {
         return Ok(());
     }
+    // `c` reads its comment before it refuses.
+    if *command != Command::Comment && open::header_mode_refused(rar, &opened) {
+        return Err(Stop::Refused(code::FATAL));
+    }
     let switches = &rar.switches;
     let mut change = Change {
         recovery_percent: add::asked_recovery_percent(rar),
@@ -79,6 +83,9 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         Command::Comment => {
             let file = switches.comment_file.as_ref().and_then(|arg| arg.text());
             change.comment = Some(add::comment_from(rar, &display, file)?);
+            if open::header_mode_refused(rar, &opened) {
+                return Err(Stop::Aborted(code::FATAL));
+            }
         }
         Command::Lock => {
             // The recovery record `-rr` asks for is announced before the lock.
@@ -519,9 +526,12 @@ fn rewrite<SE: cash_core::ShellExtensions>(
         Some(comment) => Some(comment.clone()),
         None => opened.archive.comment(password.as_deref()).ok().flatten(),
     };
+    let kept = change.comment.is_none() && add::comment_stored_plain(opened);
     builder = builder
         .comment(comment)
+        .comment_kept_plain(kept)
         .layout(add::layout(rar, Some(add::old_bound(&opened.archive))));
+    builder = add::encrypting_headers(rar, builder, password.as_deref());
     if let Some(percent) = change.recovery_percent {
         builder = builder.recovery_percent(Some(percent));
     }

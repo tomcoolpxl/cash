@@ -509,6 +509,22 @@ pub(super) fn refuse<SE: cash_core::ShellExtensions>(
     Some(Stop::Refused(code::BAD_ARCHIVE))
 }
 
+/// rar's refusal to encrypt the headers (`-hp`) of an archive whose headers are plain
+/// and some of whose files are encrypted, said: whether it refuses.
+pub(super) fn header_mode_refused<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    opened: &Opened,
+) -> bool {
+    let refused = rar.switches.header_password.is_some()
+        && !opened.facts.encrypted_headers
+        && opened.items.iter().any(|item| item.encrypted);
+    if refused {
+        rar.console
+            .err("\nCannot change the header encryption mode in already encrypted archive");
+    }
+    refused
+}
+
 pub(super) fn report_missing<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     found: &Found,

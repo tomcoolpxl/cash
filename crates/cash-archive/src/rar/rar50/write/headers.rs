@@ -412,8 +412,18 @@ const INDEX_PASSWORD_CHECK: [u8; 12] = [0, 0, 0, 0, 0, 0, 0, 0, 0xaf, 0x55, 0x70
 impl ServiceParts {
     /// The encryption record WinRAR gives its quick-open block under encrypted headers:
     /// the archive's salt, the block's own IV, and a zero password check.
-    pub(super) fn encrypted(mut self, salt: [u8; 16], iv: [u8; 16]) -> Result<Self> {
-        write_file_encryption_record_with(&mut self.extra, salt, iv, INDEX_PASSWORD_CHECK, false)?;
+    pub(super) fn encrypted(self, salt: [u8; 16], iv: [u8; 16]) -> Result<Self> {
+        self.encrypted_with_check(salt, iv, INDEX_PASSWORD_CHECK)
+    }
+
+    /// An encryption record with `check` for the password, no MAC on the checksums.
+    pub(super) fn encrypted_with_check(
+        mut self,
+        salt: [u8; 16],
+        iv: [u8; 16],
+        check: [u8; 12],
+    ) -> Result<Self> {
+        write_file_encryption_record_with(&mut self.extra, salt, iv, check, false)?;
         self.flags |= HFL_EXTRA;
         Ok(self)
     }

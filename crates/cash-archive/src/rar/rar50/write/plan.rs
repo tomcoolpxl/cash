@@ -125,6 +125,21 @@ pub(super) struct CompressPlan {
     /// once, so they only run for members that fit the memory budget.
     pub(super) filter_policy: FilterPolicy,
     pub(super) candidates: Records<EncodeOptions>,
+    /// The members, by their place, whose compression is kept however little it
+    /// gains: WinRAR never stores an encrypted file for want of it. `None` for
+    /// none.
+    pub(super) keep_method: Option<Records<bool>>,
+}
+
+impl CompressPlan {
+    /// Whether the member at `index` keeps its compression however little it gains.
+    pub(super) fn keeps_method(&self, index: usize) -> bool {
+        self.keep_method
+            .as_ref()
+            .and_then(|keep| keep.get(index))
+            .copied()
+            .unwrap_or(false)
+    }
 }
 
 /// Working memory a member needs to be filtered as a whole: the member, the
@@ -158,6 +173,7 @@ mod tests {
     fn settings() -> CompressPlan {
         let encode_options = EncodeOptions::new(8).with_max_match_distance(128 * 1024);
         CompressPlan {
+            keep_method: None,
             algorithm_version: 0,
             encode_options,
             dictionary_size: 128 * 1024,

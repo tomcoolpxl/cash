@@ -59,7 +59,13 @@ pub(super) struct EnginePlan<'a> {
 
 pub(super) enum ArchiveCommentPlan<'a> {
     Plain(&'a [u8]),
-    Encrypted { data: &'a [u8], password: &'a [u8] },
+    /// A plain comment carried from the archive changed: stored plain under
+    /// WinRAR's encrypted headers too, as it was.
+    Kept(&'a [u8]),
+    Encrypted {
+        data: &'a [u8],
+        password: &'a [u8],
+    },
 }
 
 /// A block with its framing settled: the header bytes are final and the
@@ -734,6 +740,63 @@ fn encrypted_index_block(
     })
 }
 
+/// WinRAR's comment under encrypted headers: encrypted as its files are, with the
+/// headers' salt and key, the block's own IV and the password's check, zero-padded
+/// to 16 bytes; the padded length is its size and the padded text's CRC its
+/// checksum.
+fn encrypted_comment_block<'a>(
+    data: &'a [u8],
+    header_keys: &HeaderEncryptionKeys,
+    resources: &WriterResources,
+) -> Result<PreparedBlock<'a>> {
+    let mut iv = [0u8; 16];
+    crate::rar::write_stream::fill_entropy(
+        &mut iv,
+        "RAR 5 writer could not generate encryption IV",
+    )?;
+    let payload_len = (data.len() as u64)
+        .checked_add(15)
+        .ok_or(Error::InvalidArgument(
+            "RAR 5 encrypted data size overflows",
+        ))?
+        & !15;
+    let mut crc = crate::rar::crc32::Crc32::new();
+    crc.update(data);
+    crc.update_zeroes(payload_len - data.len() as u64);
+    let check = header_keys.keys.checked_password_record()?;
+    let parts = super::headers::service_parts(
+        b"CMT",
+        payload_len,
+        crc.finish(),
+        None,
+        false,
+        true,
+        resources,
+    )?
+    .encrypted_with_check(header_keys.salt, iv, check)?;
+    let header = prepared_header_image_padded(
+        HEAD_SERVICE,
+        parts.flags,
+        Some(payload_len),
+        parts.data_width,
+        &parts.specific,
+        &parts.extra,
+        Some(header_keys),
+        resources,
+    )?;
+    Ok(PreparedBlock {
+        header,
+        payload: Payload::Encrypted {
+            plain: Owned::new(PlainPayload::Borrowed(data), resources)?,
+            keys: header_keys.keys.clone(),
+            iv,
+        },
+        payload_len,
+        quick_open_cached: false,
+        entry_index: None,
+    })
+}
+
 fn prepare_comment<'a>(
     comment: &ArchiveCommentPlan<'a>,
     header_keys: Option<&HeaderEncryptionKeys>,
@@ -741,7 +804,11 @@ fn prepare_comment<'a>(
     resources: &WriterResources,
 ) -> Result<PreparedBlock<'a>> {
     match comment {
-        ArchiveCommentPlan::Plain(data) => {
+        ArchiveCommentPlan::Plain(data) if winrar && header_keys.is_some() => {
+            let header_keys = header_keys.ok_or(Error::InvalidArgument("header keys"))?;
+            encrypted_comment_block(data, header_keys, resources)
+        }
+        ArchiveCommentPlan::Plain(data) | ArchiveCommentPlan::Kept(data) => {
             let mut block = stored_service_block(b"CMT", data, header_keys, winrar, resources)?;
             // Plain comments are listed by quick-open, in rars' archives; encrypted
             // ones are not, and WinRAR's index has members only.
@@ -3010,6 +3077,7 @@ mod emission_ledger_tests {
             crate::rar::codec::rar50::EncodeOptions::new(8).with_max_match_distance(131072);
         EnginePlan {
             compress: CompressPlan {
+                keep_method: None,
                 algorithm_version: 0,
                 encode_options: options,
                 dictionary_size: 131072,

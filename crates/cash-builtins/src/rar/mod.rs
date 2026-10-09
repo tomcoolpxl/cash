@@ -144,8 +144,8 @@ struct Console<'a, SE: cash_core::ShellExtensions> {
     quiet: Cell<bool>,
     /// `p`: standard output is the files' data, and no message goes there.
     data_only: Cell<bool>,
-    /// Standard error's last words left their line open.
-    err_open: Cell<bool>,
+    /// Something was written to standard error.
+    err_written: Cell<bool>,
 }
 
 impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
@@ -156,14 +156,15 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
             to_stderr: Cell::new(false),
             quiet: Cell::new(false),
             data_only: Cell::new(false),
-            err_open: Cell::new(false),
+            err_written: Cell::new(false),
         }
     }
 
-    /// The run's end: with `-idq`, rar ends standard error's open line, as it ends the
-    /// messages' last line when they show.
+    /// The run's end: with `-idq`, rar ends standard error with a line's end when it
+    /// wrote there, as it ends the messages' last line when they show; a line already
+    /// ended gets another.
     fn finish(&self) {
-        if self.quiet.get() && self.err_open.get() {
+        if self.quiet.get() && self.err_written.get() {
             self.write(true, "\n");
         }
     }
@@ -176,7 +177,7 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
 
     fn write(&self, to_err: bool, text: &str) {
         if to_err && !text.is_empty() {
-            self.err_open.set(!text.ends_with('\n'));
+            self.err_written.set(true);
         }
         let result = if to_err {
             let mut err = self.context.stderr();
@@ -260,20 +261,24 @@ impl<'a, SE: cash_core::ShellExtensions> Rar<'a, SE> {
                 self.console.err("\nUser break\n");
                 code::BREAK
             }
+            // A message, which -idq hides.
             Err(Stop::Aborted(code)) => {
-                self.console.notice("\n\nProgram aborted\n");
+                self.console.msg("\n\nProgram aborted\n");
                 code
             }
             Err(Stop::Refused(code)) => {
-                self.console.notice("\nProgram aborted\n");
+                self.console.msg("\nProgram aborted\n");
                 code
             }
             Err(Stop::Quit) => {
-                self.console.notice("\nProgram aborted\n");
+                self.console.msg("\nProgram aborted\n");
                 code::BREAK
             }
         };
-        self.console.finish();
+        // A run stopped leaves standard error's line as it is, `-idq` or not.
+        if result.is_ok() {
+            self.console.finish();
+        }
         code
     }
 

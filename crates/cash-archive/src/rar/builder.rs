@@ -204,6 +204,9 @@ pub struct Builder {
     encrypt_headers: bool,
     comment: Option<Vec<u8>>,
     comment_password: Option<Vec<u8>>,
+    /// The comment is the archive's own, carried plain: see
+    /// [`comment_kept_plain`](Self::comment_kept_plain).
+    comment_kept_plain: bool,
     recovery_percent: Option<u64>,
     locked: bool,
     quick_open: bool,
@@ -232,6 +235,7 @@ impl Builder {
             encrypt_headers: false,
             comment: None,
             comment_password: None,
+            comment_kept_plain: false,
             recovery_percent: None,
             locked: false,
             quick_open: false,
@@ -282,6 +286,14 @@ impl Builder {
     /// a password.
     pub fn header_encryption(mut self, encrypt: bool) -> Self {
         self.encrypt_headers = encrypt;
+        self
+    }
+
+    /// Whether the comment is the changed archive's own, stored plain: WinRAR keeps
+    /// such a comment plain under encrypted headers, where it encrypts one written
+    /// anew.
+    pub fn comment_kept_plain(mut self, kept: bool) -> Self {
+        self.comment_kept_plain = kept;
         self
     }
 
@@ -1903,6 +1915,7 @@ impl Builder {
                 Some(password) => extras.with_encrypted_comment(comment, password),
                 None => extras.with_comment(comment),
             };
+            extras.comment_kept_plain = self.comment_kept_plain;
         }
         let converted = self.rar50_entries_with_resources(resources)?;
         rar50::write_streaming_archive_with_progress(
@@ -2949,6 +2962,77 @@ mod tests {
         assert_eq!(builder.names().collect::<Vec<_>>(), vec![&b"c.txt"[..]]);
         assert!(builder.remove(b"gone").is_err());
         assert!(builder.rename(b"gone", b"x".to_vec()).is_err());
+    }
+
+    /// WinRAR's encrypted headers, a comment and one 7-byte file, read back.
+    fn winrar_encrypted(kept_plain: bool, password: Option<&[u8]>) -> crate::rar::Archive {
+        let mut builder = Builder::new(ArchiveVersion::Rar50)
+            .password(password.map(<[u8]>::to_vec))
+            .header_encryption(password.is_some())
+            .compression_level(Some(3))
+            .layout(crate::rar::rar50::Layout::winrar())
+            .comment(Some(b"cmt\n".to_vec()))
+            .comment_kept_plain(kept_plain);
+        builder
+            .add_bytes(b"b.txt".to_vec(), b"file b\n".to_vec(), Some(0), None)
+            .unwrap();
+        crate::rar::ArchiveReader::read_owned_with_options(
+            builder.to_bytes().unwrap(),
+            crate::rar::ArchiveReadOptions::with_optional_password(password),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn winrar_encrypts_a_new_comment_under_encrypted_headers_and_keeps_a_carried_one() {
+        for kept_plain in [false, true] {
+            let archive = winrar_encrypted(kept_plain, Some(b"secret"));
+            let comment = archive.comment(Some(b"secret")).unwrap().unwrap();
+            assert!(comment.starts_with(b"cmt\n"));
+            let cmt = archive
+                .as_rar50()
+                .unwrap()
+                .blocks
+                .iter()
+                .find_map(|block| match block {
+                    crate::rar::rar50::Block::Service(header) if header.name == b"CMT" => {
+                        Some(header.clone())
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            // Encrypted as a file is: padded to 16, the padded text's CRC its own.
+            assert_eq!(cmt.encryption.is_some(), !kept_plain);
+            let padded = [&b"cmt\n"[..], &[0; 12]].concat();
+            let (size, crc) = if kept_plain {
+                (4, crate::rar::crc32::crc32(b"cmt\n"))
+            } else {
+                (16, crate::rar::crc32::crc32(&padded))
+            };
+            assert_eq!(cmt.unpacked_size, size);
+            assert_eq!(cmt.data_crc32, Some(crc));
+        }
+    }
+
+    #[test]
+    fn winrar_compresses_an_encrypted_file_however_little_it_gains() {
+        for password in [None, Some(&b"secret"[..])] {
+            let archive = winrar_encrypted(false, password);
+            let method = archive
+                .as_rar50()
+                .unwrap()
+                .blocks
+                .iter()
+                .find_map(|block| match block {
+                    crate::rar::rar50::Block::File(header) => {
+                        Some((header.compression_info >> 7) & 7)
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            // Seven bytes grow when packed: stored plain, packed encrypted.
+            assert_eq!(method, if password.is_some() { 3 } else { 0 });
+        }
     }
 
     #[test]
