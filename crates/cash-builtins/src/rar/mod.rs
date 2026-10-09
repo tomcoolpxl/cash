@@ -29,6 +29,7 @@ mod item;
 mod list;
 mod modify;
 mod open;
+mod repair;
 
 use std::cell::{Cell, RefCell};
 use std::io::{self, Read as _, Write as _};
@@ -631,6 +632,7 @@ fn dispatch<SE: cash_core::ShellExtensions>(
             return add::run(rar, command, parsed);
         }
         Command::Delete => return delete::run(rar, parsed),
+        Command::Repair => return repair::run(rar, parsed),
         Command::Comment
         | Command::CommentWrite
         | Command::Rename

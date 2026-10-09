@@ -888,6 +888,72 @@ impl Archive {
         }
     }
 
+    /// The ranges of the archive's file whose checksums its recovery record finds
+    /// wrong, a shard each, in order: what a repair mends. Empty when nothing is
+    /// damaged.
+    pub fn recovery_damaged_ranges(&self, password: Option<&[u8]>) -> Result<Vec<Range<usize>>> {
+        #[cfg(not(feature = "recovery"))]
+        {
+            let _ = (self, password);
+            Err(Error::FeatureDisabled {
+                feature: "recovery",
+            })
+        }
+        #[cfg(feature = "recovery")]
+        {
+            let control = crate::rar::read_control::ReadControl::new(None);
+            let recovery = self.recovery_service()?;
+            let recovery_data = recovery.decoded_recovery_data(self, password, &control)?;
+            let prefix_start = self.sfx_offset;
+            let prefix_len =
+                recovery
+                    .block
+                    .offset
+                    .checked_sub(prefix_start)
+                    .ok_or(Error::InvalidHeader(
+                        "RAR 5 recovery prefix range overflows archive bounds",
+                    ))?;
+            let shards =
+                crate::rar::recovery::rar5::repair_inline_recovery_prefix_shards_with_control(
+                    prefix_len,
+                    &recovery_data,
+                    |range| {
+                        self.read_range(prefix_start + range.start..prefix_start + range.end)
+                            .map_err(|_| crate::rar::recovery::rar5::Error::BadRecoveryChunk)
+                    },
+                    &control,
+                )?;
+            Ok(shards
+                .into_iter()
+                .map(|(range, _)| prefix_start + range.start..prefix_start + range.end)
+                .collect())
+        }
+    }
+
+    /// Whether every chunk of the recovery record checks: the record itself whole,
+    /// whatever the state of the data it protects.
+    pub fn recovery_record_intact(&self, password: Option<&[u8]>) -> Result<bool> {
+        #[cfg(not(feature = "recovery"))]
+        {
+            let _ = (self, password);
+            Err(Error::FeatureDisabled {
+                feature: "recovery",
+            })
+        }
+        #[cfg(feature = "recovery")]
+        {
+            let control = crate::rar::read_control::ReadControl::new(None);
+            let recovery = self.recovery_service()?;
+            let recovery_data = recovery.decoded_recovery_data(self, password, &control)?;
+            let (available, expected) =
+                crate::rar::recovery::rar5::inline_recovery_chunk_counts_with_control(
+                    &recovery_data,
+                    &control,
+                )?;
+            Ok(available == expected)
+        }
+    }
+
     #[cfg(feature = "recovery")]
     fn recovery_service(&self) -> Result<&FileHeader> {
         self.services()

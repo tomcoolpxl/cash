@@ -1,0 +1,253 @@
+== a sound archive with a recovery record
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building fixed.good.rar      
+0 blocks are recovered, 0 blocks are relocated
+Done
+rc=0
+e.txt
+good.rar
+norr.rar
+o.txt
+rr.rar
+src
+== its data damaged
+
+Testing archive bad1.rar
+
+Testing     src/noise.bin                                                
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+Testing the recovery record         OK
+Total errors: 1
+--- stderr
+
+src/noise.bin        - checksum error
+rc=3
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building fixed.bad1.rar      
+Corrupt 1020 bytes at 00000000 00000ff0 - data recovered     
+Corrupt 1020 bytes at 00000000 000013ec - data recovered     
+2 blocks are recovered, 0 blocks are relocated
+Done
+rc=0
+bad1.rar
+fixed.bad1.rar
+good.rar
+norr.rar
+rr.rar
+
+Testing archive fixed.bad1.rar
+
+Testing     src/noise.bin                                                  OK 
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+Testing the recovery record         OK
+All OK
+rc=0
+fixed.bad1.rar is the archive before its damage
+== damaged in two places, into a folder
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building out/fixed.bad3.rar      
+Corrupt 1020 bytes at 00000000 000007f8 - data recovered     
+Corrupt 1020 bytes at 00000000 0000e718 - data recovered     
+Corrupt 1020 bytes at 00000000 0000eb14 - data recovered     
+3 blocks are recovered, 0 blocks are relocated
+Done
+rc=0
+fixed.bad3.rar
+
+Testing archive out/fixed.bad3.rar
+
+Testing     src/noise.bin                                                  OK 
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+Testing the recovery record         OK
+All OK
+rc=0
+== the recovery record damaged, then the data too
+
+Testing archive bad5.rar
+
+Testing     src/noise.bin                                                  OK 
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+Testing the recovery record        Failed
+Total errors: 1
+--- stderr
+
+Recovery record is corrupt.
+rc=3
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building fixed.bad5.rar      
+0 blocks are recovered, 0 blocks are relocated
+Recovery record is corrupt.
+Done
+rc=3
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building fixed.bad5.rar      
+Corrupt 1020 bytes at 00000000 00000ff0 - data recovered     
+Corrupt 1020 bytes at 00000000 000013ec - data recovered     
+2 blocks are recovered, 0 blocks are relocated
+Recovery record is corrupt.
+Done
+rc=3
+
+Testing archive fixed.bad5.rar
+
+Testing     src/noise.bin                                                  OK 
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+Testing the recovery record        Failed
+Total errors: 1
+--- stderr
+
+Recovery record is corrupt.
+rc=3
+== no recovery record, its data damaged
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Data recovery record not found
+Reconstructing bad2.rar
+Building rebuilt.bad2.rar      
+Found  src/noise.bin     
+Found  src/small.txt     
+Found  src/text.txt     
+Done
+rc=0
+src/noise.bin
+src/small.txt
+src/text.txt
+rc=0
+
+Testing archive rebuilt.bad2.rar
+
+Testing     src/noise.bin                                                
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+Total errors: 1
+--- stderr
+
+src/noise.bin        - checksum error
+rc=3
+== no recovery record, a header damaged
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Data recovery record not found
+Reconstructing bad4.rar
+Building rebuilt.bad4.rar      
+Found  src/small.txt     
+Found  src/text.txt     
+Done
+rc=0
+src/small.txt
+src/text.txt
+--- stderr
+
+Unexpected end of archive
+rc=1
+
+Testing archive rebuilt.bad4.rar
+
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+Total errors: 1
+--- stderr
+
+Unexpected end of archive
+rc=1
+== a sound archive without one
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Data recovery record not found
+Reconstructing good2.rar
+Building rebuilt.good2.rar      
+Found  src/noise.bin     
+Found  src/small.txt     
+Found  src/text.txt     
+Done
+rc=0
+
+Testing archive rebuilt.good2.rar
+
+Testing     src/noise.bin                                                  OK 
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+All OK
+rc=0
+== a comment, rebuilt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Data recovery record not found
+Reconstructing cmt.rar
+Building rebuilt.cmt.rar      
+Found  src/small.txt     
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+hello world
+HELLO again
+
+
+Archive: rebuilt.cmt.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....         24  2025-03-01 11:00  src/small.txt
+----------- ----------  ---------- -----  ----
+                    24                    1
+
+rc=0
+== missing
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+--- stderr
+
+Cannot open missing.rar
+The system cannot find the file specified.
+rc=10

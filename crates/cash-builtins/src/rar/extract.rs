@@ -346,10 +346,14 @@ fn set<SE: cash_core::ShellExtensions>(
         work.test_recovery_volumes(new_numbering);
     }
     if let Some(damage) = damage {
-        // Counted twice, as rar counts it: reading, and at the end.
         let end = if job.mode.quiet() { "\n" } else { "" };
-        work.error(&format!("\n{}{end}", damage.words()), code::CRC);
-        work.errors += 1;
+        if damage == open::Damage::Unended {
+            work.error(&format!("\n{}{end}", damage.words()), code::WARNING);
+        } else {
+            // Counted twice, as rar counts it: reading, and at the end.
+            work.error(&format!("\n{}{end}", damage.words()), code::CRC);
+            work.errors += 1;
+        }
     }
     work.summary();
     Ok(())
@@ -1194,8 +1198,8 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         }
     }
 
-    /// `t`'s test of each RAR 5 volume's recovery record: what it rebuilds is the archive
-    /// as it is.
+    /// `t`'s test of each RAR 5 volume's recovery record: every chunk of it checks,
+    /// whether or not the data it protects is damaged.
     fn test_recovery_records(&mut self) {
         for index in 0..self.volumes.len() {
             let archive = &self.volumes[index].archive;
@@ -1206,25 +1210,11 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
                 continue;
             }
             self.say("\nTesting the recovery record");
-            let same = File::open(&self.volumes[index].path).is_ok_and(|file| {
-                let mut compare = Compare {
-                    original: io::BufReader::new(file),
-                    same: true,
-                };
-                archive
-                    .repair_recovery_to_with_report(&mut compare, None)
-                    .is_ok()
-                    && compare.same
-                    && compare.at_end()
-            });
-            if same {
+            if rar5.recovery_record_intact(None).unwrap_or(false) {
                 self.say("         OK");
             } else {
-                let name = self.volumes[index].display.clone();
-                self.error(
-                    &format!("\nThe recovery record is corrupt in {name}"),
-                    code::CRC,
-                );
+                self.say("        Failed");
+                self.error("\nRecovery record is corrupt.", code::CRC);
             }
         }
     }
@@ -1363,36 +1353,6 @@ impl Sink for Hashed<'_> {
         }
         self.written += data.len() as u64;
         self.out.put(data)
-    }
-}
-
-/// A writer that compares what it is given with a file, byte for byte.
-struct Compare<R> {
-    original: R,
-    same: bool,
-}
-
-impl<R: Read> Compare<R> {
-    /// Whether the file has nothing left after what was compared.
-    fn at_end(&mut self) -> bool {
-        let mut byte = [0u8; 1];
-        matches!(self.original.read(&mut byte), Ok(0))
-    }
-}
-
-impl<R: Read> Write for Compare<R> {
-    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
-        if self.same {
-            let mut theirs = vec![0u8; data.len()];
-            if self.original.read_exact(&mut theirs).is_err() || theirs != data {
-                self.same = false;
-            }
-        }
-        Ok(data.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
     }
 }
 

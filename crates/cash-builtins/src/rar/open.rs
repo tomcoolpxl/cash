@@ -137,7 +137,10 @@ pub(super) struct Opened {
 /// How a damaged archive's headers stopped reading.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Damage {
+    /// Cut off inside a block.
     Truncated,
+    /// Whole blocks, and no end header after them: a warning, said once.
+    Unended,
     Corrupt,
 }
 
@@ -145,7 +148,7 @@ impl Damage {
     /// rar's words for it.
     pub(super) const fn words(self) -> &'static str {
         match self {
-            Self::Truncated => "Unexpected end of archive",
+            Self::Truncated | Self::Unended => "Unexpected end of archive",
             Self::Corrupt => "Corrupt header is found",
         }
     }
@@ -213,7 +216,8 @@ fn try_open<SE: cash_core::ShellExtensions>(
             }
             Some(damage_of(error))
         }
-    };
+    }
+    .or_else(|| ends_early(&archive).then_some(Damage::Unended));
     Ok(Opened {
         archive,
         facts,
@@ -252,6 +256,36 @@ fn damage_of(error: &rar::Error) -> Damage {
     } else {
         Damage::Corrupt
     }
+}
+
+/// A RAR 5 archive without its end header, whose main header's locator puts the
+/// quick-open record where there is none, ends early as rar reads it. Without the
+/// pointer, or with the record where it says, its blocks simply end there, as a
+/// rebuilt archive's do.
+fn ends_early(archive: &rar::Archive) -> bool {
+    let Some(archive) = archive.as_rar50() else {
+        return false;
+    };
+    if archive
+        .blocks
+        .iter()
+        .any(|block| matches!(block, rar::rar50::Block::End(_)))
+    {
+        return false;
+    }
+    let Some(offset) = archive
+        .main
+        .locator()
+        .and_then(|locator| locator.quick_open_offset)
+        .filter(|&offset| offset != 0)
+        .and_then(|offset| usize::try_from(offset).ok())
+    else {
+        return false;
+    };
+    let at = archive.main.block.offset.checked_add(offset);
+    !archive
+        .services()
+        .any(|service| service.name == b"QO" && Some(service.block.offset) == at)
 }
 
 /// An unsigned RAR 5 number: seven bits a byte, the last without its top bit.

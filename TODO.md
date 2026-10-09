@@ -684,10 +684,15 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    - `i`: done 2026-10-09 (`rar_find.sh`, 264 lines). Its OEM table is not looked in
      with `t` (ANSI, UTF-8 and UTF-16 are); a name chosen in a solid archive leaves
      out the spaces rar's progress leaves.
-   - `r` (with a recovery record: rars' repair report has to say which blocks it
-     mended, for rar's "Corrupt N bytes at" lines; without one: a rebuild that finds
-     the headers after damage, as rar's does) and `rc` (RAR 5 `.rev` volumes: rars
-     reads them, mends none); `s` and `rv` refused.
+   - `r`: done 2026-10-09 (`rar_repair.sh`, 253 lines; `t` now tests a recovery record
+     by its own chunks' checksums, and finds an archive "ended early" only where its
+     locator points at a missing quick-open record, as rar does). Left of it: a damaged
+     main header (rar asks "Mark archive as solid?", cash writes a plain one); a
+     recovery record whose header is damaged (rar finds its chunks by their marks and
+     mends with them, cash finds none); RAR 1.5 to 4 rebuilds, unobserved (WinRAR 7.23
+     writes no RAR 4 to damage).
+   - `rc` (RAR 5 `.rev` volumes: rars' `repair_rev5_volumes_to` mends them, RAR 3's
+     `repair_rev3_volumes_to`); `s` and `rv` refused.
    - The `expect(dead_code)` at the top of `rar/mod.rs` goes when every part is used.
 3. **The page, `builtins.md`, doctor** (done 2026-10-09): `help rar` covers both names;
    `CARRIED` and doctor's note on a program cash goes ahead of have `rar` and `unrar`,

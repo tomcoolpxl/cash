@@ -60,13 +60,18 @@ fn list_set<SE: cash_core::ShellExtensions>(
         };
         let totals = list_one(rar, &found, &opened, verbose, form, masks);
         if let Some(damage) = opened.damage {
-            // rar says it twice: once reading, once at the end.
+            // rar says it twice: once reading, once at the end; once when no block is
+            // cut off.
             let words = damage.words();
-            rar.console.err(&format!("\n{words}\n{words}"));
-            rar.fail(if damage == open::Damage::Truncated {
-                super::code::WARNING
+            if damage == open::Damage::Unended {
+                rar.console.err(&format!("\n{words}"));
             } else {
+                rar.console.err(&format!("\n{words}\n{words}"));
+            }
+            rar.fail(if damage == open::Damage::Corrupt {
                 super::code::CRC
+            } else {
+                super::code::WARNING
             });
         }
         grand.files += totals.files;

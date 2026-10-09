@@ -80,6 +80,14 @@ fn rar_finds_strings_as_winrar_7_23_does() {
 }
 
 #[test]
+fn rar_repairs_as_winrar_7_23_does() {
+    assert_eq!(
+        run_oracle_script("rar_repair"),
+        with_cash_banners("rar_repair", 11, 0)
+    );
+}
+
+#[test]
 fn rar_and_unrar_name_themselves_as_cash() {
     let out = run("rar -iver; unrar -iver; rar | sed -n 2,3p; unrar | sed -n 2p");
     assert_eq!(

@@ -32,7 +32,10 @@ holds; `*` and `?` in OLD and NEW for patterns such as `'src/*.txt' 'src/*.bak'`
 (3 by default), and `rar ch` changes it by switches (`-cl`, `-cu`, `-z`, `-k`, `-tl`).
 Each copies the archive's files as they are. `rar i=TEXT` looks for a string in the
 archived files and shows where it is (`ic=` case-sensitive, `ih=` hexadecimal bytes,
-`it=` in UTF-8 and UTF-16 too).
+`it=` in UTF-8 and UTF-16 too). `rar r` repairs a damaged archive: with a recovery
+record, what it protects is mended into `fixed.NAME`; without one, every file whose
+header is whole is copied into `rebuilt.NAME`, damaged data and all; a folder named
+last with a trailing `\` or `/` takes the result.
 
 The commands, switches, messages, listings and exit codes are WinRAR 7.23's console
 `Rar.exe` and `UnRAR.exe`'s, learned by running them and from their manual: switches
@@ -61,8 +64,9 @@ update copies the files already archived as they are, not packed again, as WinRA
 - A new archive is RAR 5: `-ma4` is an unknown option, as in WinRAR 7.23. An update of
   a RAR 4 archive keeps it RAR 4, as WinRAR's does.
 - Self-extracting archives (`s`, `-sfx`) and recovery volumes (`rv`) are not made.
-  `r` and `rc` are not in cash's rar yet. A volume set is not changed by `c` or
-  `k`, as it is by WinRAR.
+  `rc` is not in cash's rar yet. A volume set is not changed by `c` or `k`, as it is
+  by WinRAR. `r` gives an archive whose main header is damaged a plain one, where
+  WinRAR asks whether to mark it solid.
 - A WinRAR installed by Scoop or by its installer stays reachable by its path, or after
   `enable -n rar`.
 

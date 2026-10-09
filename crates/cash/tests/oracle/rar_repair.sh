@@ -1,0 +1,104 @@
+# rar's r, run under WinRAR 7.23's Rar.exe (the oracle: Scoop's extras/winrar on
+# Windows) and under cash's builtin: archives damaged in their data and in a header,
+# with a recovery record and without, repaired; the results listed and tested.
+# rar_repair.out is the original's output.
+#
+# As in rar_write.sh, `z` keeps standard output and standard error apart, turns CRLF and
+# `\` into LF and `/`, and drops the percentages rar writes with backspaces. A rebuilt
+# archive is listed by name only: rar gives a folder it rebuilds the time of the rebuild.
+#
+# Regenerate the golden file on Windows, with Scoop's WinRAR and a cash without the
+# builtins, such as 1.10.0, in Brussels' zone:
+#   cash rar_repair.sh > rar_repair.out
+
+exec </dev/null
+export TZ=Europe/Brussels
+export RARINISWITCHES=-scfr
+dir=$(mktemp -d)
+cd "$dir" || exit 1
+z() {
+  "$@" > "$dir/o.txt" 2> "$dir/e.txt"
+  r=$?
+  tr -d '\r' < "$dir/o.txt" | sed -e 's/\x08\{1,\}[ 0-9]\{3\}%//g' -e 's/\x08//g' -e 's#\\#/#g'
+  if [ -s "$dir/e.txt" ]; then
+    echo "--- stderr"
+    tr -d '\r' < "$dir/e.txt" | sed -e 's/\x08\{1,\}[ 0-9]\{3\}%//g' -e 's/\x08//g' -e 's#\\#/#g'
+    echo
+  fi
+  echo "rc=$r"
+}
+# Overwrites COUNT bytes of FILE at OFFSET with 'U'.
+damage() {
+  head -c "$2" "$1" > "$1.new"
+  head -c "$3" /dev/zero | tr '\0' 'U' >> "$1.new"
+  tail -c +$(($2 + $3 + 1)) "$1" >> "$1.new"
+  mv "$1.new" "$1"
+}
+mkdir src
+awk 'BEGIN { for (i = 0; i < 2000; i++) printf "line %d of the text file with hello in it\n", i }' > src/text.txt
+printf 'hello world\nHELLO again\n' > src/small.txt
+awk 'BEGIN { srand(5); for (i = 0; i < 30000; i++) printf "%c", 33 + int(rand() * 90) }' > src/noise.bin
+touch -d '2025-03-01T10:00:00Z' src/* src
+rar a -m0 -rr5 -idq rr.rar src/noise.bin src/small.txt src/text.txt
+rar a -m0 -idq norr.rar src/noise.bin src/small.txt src/text.txt
+
+echo "== a sound archive with a recovery record"
+cp rr.rar good.rar
+z rar r good.rar
+ls
+
+echo "== its data damaged"
+cp rr.rar bad1.rar
+damage bad1.rar 5000 200
+z rar t -idc bad1.rar
+z rar r bad1.rar
+ls *.rar
+z rar t -idc fixed.bad1.rar
+cmp rr.rar fixed.bad1.rar && echo "fixed.bad1.rar is the archive before its damage"
+
+echo "== damaged in two places, into a folder"
+mkdir out
+cp rr.rar bad3.rar
+damage bad3.rar 3000 10
+damage bad3.rar 60000 300
+z rar r bad3.rar 'out\'
+ls out
+z rar t -idc 'out\fixed.bad3.rar'
+
+echo "== the recovery record damaged, then the data too"
+cp rr.rar bad5.rar
+damage bad5.rar $(($(wc -c < rr.rar) - 2000)) 50
+z rar t -idc bad5.rar
+z rar r bad5.rar
+damage bad5.rar 5000 200
+z rar r bad5.rar
+z rar t -idc fixed.bad5.rar
+
+echo "== no recovery record, its data damaged"
+cp norr.rar bad2.rar
+damage bad2.rar 5000 200
+z rar r bad2.rar
+z rar lb rebuilt.bad2.rar
+z rar t -idc rebuilt.bad2.rar
+
+echo "== no recovery record, a header damaged"
+cp norr.rar bad4.rar
+damage bad4.rar 40 10
+z rar r bad4.rar
+z rar lb rebuilt.bad4.rar
+z rar t -idc rebuilt.bad4.rar
+
+echo "== a sound archive without one"
+cp norr.rar good2.rar
+z rar r good2.rar
+z rar t -idc rebuilt.good2.rar
+
+echo "== a comment, rebuilt"
+rar a -m0 -idq -zsrc/small.txt cmt.rar src/small.txt
+z rar r cmt.rar
+z rar l rebuilt.cmt.rar
+
+echo "== missing"
+z rar r missing.rar
+
+cd / && rm -rf "$dir"
