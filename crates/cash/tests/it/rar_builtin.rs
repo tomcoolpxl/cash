@@ -52,6 +52,18 @@ fn rar_tests_extracts_and_prints_as_winrar_7_23_does() {
 }
 
 #[test]
+fn rar_adds_updates_moves_and_deletes_as_winrar_7_23_does() {
+    // A trial WinRAR says so after its banner; cash has no trial to speak of.
+    let expected = with_divergence(
+        &with_cash_banners("rar_write", 53, 0),
+        "\nEvaluation copy. Please register.\n",
+        "",
+        50,
+    );
+    assert_eq!(run_oracle_script("rar_write"), expected);
+}
+
+#[test]
 fn rar_and_unrar_name_themselves_as_cash() {
     let out = run("rar -iver; unrar -iver; rar | sed -n 2,3p; unrar | sed -n 2p");
     assert_eq!(

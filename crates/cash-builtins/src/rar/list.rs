@@ -48,8 +48,12 @@ fn list_set<SE: cash_core::ShellExtensions>(
         let opened = match open::open(rar, &found)? {
             Ok(opened) => opened,
             Err(failure) => {
-                if listed == 0 || !matches!(failure, Failure::Missing(_)) {
-                    open::report(rar, &found, &failure, form == ListForm::Plain);
+                match &failure {
+                    Failure::Missing(error) if listed == 0 && form == ListForm::Bare => {
+                        open::report_missing(rar, &found, error);
+                    }
+                    Failure::Missing(_) if listed > 0 => {}
+                    _ => open::report(rar, &found, &failure, form == ListForm::Plain),
                 }
                 break;
             }
@@ -469,6 +473,15 @@ impl Masks {
         })
     }
 
+    /// Masks that take every name.
+    pub(super) const fn all() -> Self {
+        Self {
+            include: Vec::new(),
+            exclude: Vec::new(),
+            filter: Vec::new(),
+        }
+    }
+
     /// The folders masks name before their last part, wildcard-free: `SUBDIR` of
     /// `SUBDIR\*`, what `-ep1` takes off the names it matches.
     pub(super) fn bases(&self) -> impl Iterator<Item = &str> {
@@ -493,7 +506,7 @@ fn normalize(mask: &str) -> String {
 
 /// A list file's names, one a line, `//` starting a comment; `@` alone is standard
 /// input. One that does not open aborts.
-fn read_list<SE: cash_core::ShellExtensions>(
+pub(super) fn read_list<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     list: &str,
 ) -> Result<Vec<String>, Stop> {

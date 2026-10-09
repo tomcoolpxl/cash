@@ -1,0 +1,1634 @@
+== a, a new archive, then the same file again
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive new.rar
+
+Adding    src/a.txt                                                        OK 
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating archive new.rar
+
+Updating  src/a.txt                                                        OK 
+Done
+rc=0
+
+Archive: new.rar
+Details: RAR 5
+
+        Name: src/a.txt
+        Type: File
+        Size: 6
+ Packed size: 6
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 363A3020
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+rc=0
+
+Testing archive new.rar
+
+Testing     src/a.txt                                                      OK 
+All OK
+rc=0
+./src/
+./src/a.txt 3015617425 6
+== a -m0, a folder: its files, then its folders, deepest first
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive st.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/noise.bin                                                    OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/empty                                                        OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Done
+rc=0
+
+Archive: st.rar
+Details: RAR 5
+
+        Name: src/a.txt
+        Type: File
+        Size: 6
+ Packed size: 6
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 363A3020
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/big.txt
+        Type: File
+        Size: 76890
+ Packed size: 76890
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 205992AF
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/noise.bin
+        Type: File
+        Size: 40000
+ Packed size: 40000
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: DE075BEC
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/sub/b.txt
+        Type: File
+        Size: 6
+ Packed size: 6
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: DD3861A8
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/sub/deep/c.dat
+        Type: File
+        Size: 7
+ Packed size: 7
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 33818A61
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/sub/deep
+        Type: Directory
+    Modified: 2025-03-01 12:00:00,000000000
+  Attributes: ...D...
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0
+
+        Name: src/empty
+        Type: Directory
+    Modified: 2025-03-01 12:00:00,000000000
+  Attributes: ...D...
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0
+
+        Name: src/sub
+        Type: Directory
+    Modified: 2025-03-01 12:00:00,000000000
+  Attributes: ...D...
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0
+
+        Name: src
+        Type: Directory
+    Modified: 2025-03-01 12:00:00,000000000
+  Attributes: ...D...
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0
+
+rc=0
+
+Testing archive st.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/big.txt                                                    OK 
+Testing     src/noise.bin                                                  OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/sub/deep/c.dat                                             OK 
+Testing     src/sub/deep                                              OK
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+All OK
+rc=0
+./src/
+./src/a.txt 3015617425 6
+./src/big.txt 3515781233 76890
+./src/empty/
+./src/noise.bin 516480025 40000
+./src/sub/
+./src/sub/b.txt 1576634217 6
+./src/sub/deep/
+./src/sub/deep/c.dat 3957766713 7
+1000659853 117447
+== the path switches
+== a -ep
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive p.rar
+
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Done
+rc=0
+b.txt
+c.dat
+rc=0
+== a -ep1
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive p.rar
+
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+sub/b.txt
+sub/deep/c.dat
+sub/deep
+sub
+rc=0
+== a -apinner
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive p.rar
+
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+inner/src/sub/b.txt
+inner/src/sub/deep/c.dat
+inner/src/sub/deep
+inner/src/sub
+rc=0
+== a -apin\ner
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive p.rar
+
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+in/ner/src/sub/b.txt
+in/ner/src/sub/deep/c.dat
+in/ner/src/sub/deep
+in/ner/src/sub
+rc=0
+== a -ep4src
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive p.rar
+
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+sub/b.txt
+sub/deep/c.dat
+sub/deep
+sub
+rc=0
+== selection: -r, -r0, -r-, -x, -n, -ed, -sl, -sm, -ta, -tb
+== a -r 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+src/a.txt
+src/big.txt
+src/sub/b.txt
+src/sub/deep/c.dat
+src/sub/deep
+src/sub
+rc=0
+== a -r0 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+src/a.txt
+src/big.txt
+src/sub/b.txt
+src/sub/deep/c.dat
+src/sub/deep
+src/sub
+rc=0
+== a -r- 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+src/a.txt
+src/big.txt
+src/sub
+rc=0
+== a -x*.txt 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+src/sub/deep/c.dat
+src/sub/deep
+src/sub
+rc=0
+== a -xsrc\sub 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Done
+rc=0
+src/a.txt
+src/big.txt
+rc=0
+== a -n*.dat 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/sub/deep/c.dat                                               OK 
+Done
+rc=0
+src/sub/deep/c.dat
+rc=0
+== a -ed 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Done
+rc=0
+src/a.txt
+src/big.txt
+src/sub/b.txt
+src/sub/deep/c.dat
+rc=0
+== a -sl100 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+src/a.txt
+src/sub/b.txt
+src/sub/deep/c.dat
+src/sub/deep
+src/sub
+rc=0
+== a -sm100 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/big.txt                                                      OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+src/big.txt
+src/sub/deep
+src/sub
+rc=0
+== a -ta20250302 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+WARNING: No files
+rc=10
+--- stderr
+
+Cannot open s.rar
+The system cannot find the file specified.
+rc=10
+== a -tb20250302 'src\*.txt'
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Done
+rc=0
+src/a.txt
+src/big.txt
+src/sub/b.txt
+src/sub/deep/c.dat
+src/sub/deep
+src/sub
+rc=0
+== compressed: each level
+== a -m1
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive c.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/noise.bin                                                    OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/empty                                                        OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Done
+rc=0
+
+Archive: c.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          6  2025-03-01 11:00  src/a.txt
+    ..A....      76890  2025-03-01 11:00  src/big.txt
+    ..A....      40000  2025-03-01 11:00  src/noise.bin
+    ..A....          6  2025-03-01 11:00  src/sub/b.txt
+    ..A....          7  2025-03-01 11:00  src/sub/deep/c.dat
+    ...D...          0  2025-03-01 12:00  src/sub/deep
+    ...D...          0  2025-03-01 12:00  src/empty
+    ...D...          0  2025-03-01 12:00  src/sub
+    ...D...          0  2025-03-01 12:00  src
+----------- ----------  ---------- -----  ----
+                116909                    9
+
+rc=0
+
+Testing archive c.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/big.txt                                                    OK 
+Testing     src/noise.bin                                                  OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/sub/deep/c.dat                                             OK 
+Testing     src/sub/deep                                              OK
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+All OK
+rc=0
+== a -m3
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive c.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/noise.bin                                                    OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/empty                                                        OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Done
+rc=0
+
+Archive: c.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          6  2025-03-01 11:00  src/a.txt
+    ..A....      76890  2025-03-01 11:00  src/big.txt
+    ..A....      40000  2025-03-01 11:00  src/noise.bin
+    ..A....          6  2025-03-01 11:00  src/sub/b.txt
+    ..A....          7  2025-03-01 11:00  src/sub/deep/c.dat
+    ...D...          0  2025-03-01 12:00  src/sub/deep
+    ...D...          0  2025-03-01 12:00  src/empty
+    ...D...          0  2025-03-01 12:00  src/sub
+    ...D...          0  2025-03-01 12:00  src
+----------- ----------  ---------- -----  ----
+                116909                    9
+
+rc=0
+
+Testing archive c.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/big.txt                                                    OK 
+Testing     src/noise.bin                                                  OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/sub/deep/c.dat                                             OK 
+Testing     src/sub/deep                                              OK
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+All OK
+rc=0
+== a -m5
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive c.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/noise.bin                                                    OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/empty                                                        OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Done
+rc=0
+
+Archive: c.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          6  2025-03-01 11:00  src/a.txt
+    ..A....      76890  2025-03-01 11:00  src/big.txt
+    ..A....      40000  2025-03-01 11:00  src/noise.bin
+    ..A....          6  2025-03-01 11:00  src/sub/b.txt
+    ..A....          7  2025-03-01 11:00  src/sub/deep/c.dat
+    ...D...          0  2025-03-01 12:00  src/sub/deep
+    ...D...          0  2025-03-01 12:00  src/empty
+    ...D...          0  2025-03-01 12:00  src/sub
+    ...D...          0  2025-03-01 12:00  src
+----------- ----------  ---------- -----  ----
+                116909                    9
+
+rc=0
+
+Testing archive c.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/big.txt                                                    OK 
+Testing     src/noise.bin                                                  OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/sub/deep/c.dat                                             OK 
+Testing     src/sub/deep                                              OK
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+All OK
+rc=0
+== a -ds
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive c.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/noise.bin                                                    OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/empty                                                        OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Done
+rc=0
+
+Archive: c.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          6  2025-03-01 11:00  src/a.txt
+    ..A....      76890  2025-03-01 11:00  src/big.txt
+    ..A....      40000  2025-03-01 11:00  src/noise.bin
+    ..A....          6  2025-03-01 11:00  src/sub/b.txt
+    ..A....          7  2025-03-01 11:00  src/sub/deep/c.dat
+    ...D...          0  2025-03-01 12:00  src/sub/deep
+    ...D...          0  2025-03-01 12:00  src/empty
+    ...D...          0  2025-03-01 12:00  src/sub
+    ...D...          0  2025-03-01 12:00  src
+----------- ----------  ---------- -----  ----
+                116909                    9
+
+rc=0
+
+Testing archive c.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/big.txt                                                    OK 
+Testing     src/noise.bin                                                  OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/sub/deep/c.dat                                             OK 
+Testing     src/sub/deep                                              OK
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+All OK
+rc=0
+== a -md1m
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive c.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Adding    src/noise.bin                                                    OK 
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/empty                                                        OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Done
+rc=0
+
+Archive: c.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          6  2025-03-01 11:00  src/a.txt
+    ..A....      76890  2025-03-01 11:00  src/big.txt
+    ..A....      40000  2025-03-01 11:00  src/noise.bin
+    ..A....          6  2025-03-01 11:00  src/sub/b.txt
+    ..A....          7  2025-03-01 11:00  src/sub/deep/c.dat
+    ...D...          0  2025-03-01 12:00  src/sub/deep
+    ...D...          0  2025-03-01 12:00  src/empty
+    ...D...          0  2025-03-01 12:00  src/sub
+    ...D...          0  2025-03-01 12:00  src
+----------- ----------  ---------- -----  ----
+                116909                    9
+
+rc=0
+
+Testing archive c.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/big.txt                                                    OK 
+Testing     src/noise.bin                                                  OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/sub/deep/c.dat                                             OK 
+Testing     src/sub/deep                                              OK
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+All OK
+rc=0
+== solid, sorted or not
+== a -s
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating solid archive c.rar
+
+Adding    sol/inner/beta.aaa                                               OK 
+Adding    sol/inner/omega.csv                                              OK 
+Adding    sol/mid.dat                                                      OK 
+Adding    sol/alpha.json                                                   OK 
+Adding    sol/zeta.zzz                                                     OK 
+Adding    sol/inner                                                        OK 
+Adding    sol                                                              OK 
+Done
+rc=0
+
+Archive: c.rar
+Details: RAR 5, solid
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....       4690  2025-03-01 11:00  sol/inner/beta.aaa
+    ..A....       4890  2025-03-01 11:00  sol/inner/omega.csv
+    ..A....       3290  2025-03-01 11:00  sol/mid.dat
+    ..A....       3890  2025-03-01 11:00  sol/alpha.json
+    ..A....       3490  2025-03-01 11:00  sol/zeta.zzz
+    ...D...          0  2025-03-01 12:00  sol/inner
+    ...D...          0  2025-03-01 12:00  sol
+----------- ----------  ---------- -----  ----
+                 20250                    7
+
+rc=0
+
+Testing archive c.rar
+
+Testing     sol/inner/beta.aaa                                             OK 
+Testing     sol/inner/omega.csv                                            OK 
+Testing     sol/mid.dat                                                    OK 
+Testing     sol/alpha.json                                                 OK 
+Testing     sol/zeta.zzz                                                   OK 
+Testing     sol/inner                                                 OK
+Testing     sol                                                       OK
+All OK
+rc=0
+== a -s -ds
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating solid archive c.rar
+
+Adding    sol/alpha.json                                                   OK 
+Adding    sol/inner/beta.aaa                                               OK 
+Adding    sol/inner/omega.csv                                              OK 
+Adding    sol/mid.dat                                                      OK 
+Adding    sol/zeta.zzz                                                     OK 
+Adding    sol/inner                                                        OK 
+Adding    sol                                                              OK 
+Done
+rc=0
+
+Archive: c.rar
+Details: RAR 5, solid
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....       3890  2025-03-01 11:00  sol/alpha.json
+    ..A....       4690  2025-03-01 11:00  sol/inner/beta.aaa
+    ..A....       4890  2025-03-01 11:00  sol/inner/omega.csv
+    ..A....       3290  2025-03-01 11:00  sol/mid.dat
+    ..A....       3490  2025-03-01 11:00  sol/zeta.zzz
+    ...D...          0  2025-03-01 12:00  sol/inner
+    ...D...          0  2025-03-01 12:00  sol
+----------- ----------  ---------- -----  ----
+                 20250                    7
+
+rc=0
+
+Testing archive c.rar
+
+Testing     sol/alpha.json                                                 OK 
+Testing     sol/inner/beta.aaa                                             OK 
+Testing     sol/inner/omega.csv                                            OK 
+Testing     sol/mid.dat                                                    OK 
+Testing     sol/zeta.zzz                                                   OK 
+Testing     sol/inner                                                 OK
+Testing     sol                                                       OK
+All OK
+rc=0
+== a -s -m0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive c.rar
+
+Adding    sol/alpha.json                                                   OK 
+Adding    sol/inner/beta.aaa                                               OK 
+Adding    sol/inner/omega.csv                                              OK 
+Adding    sol/mid.dat                                                      OK 
+Adding    sol/zeta.zzz                                                     OK 
+Adding    sol/inner                                                        OK 
+Adding    sol                                                              OK 
+Done
+rc=0
+
+Archive: c.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....       3890  2025-03-01 11:00  sol/alpha.json
+    ..A....       4690  2025-03-01 11:00  sol/inner/beta.aaa
+    ..A....       4890  2025-03-01 11:00  sol/inner/omega.csv
+    ..A....       3290  2025-03-01 11:00  sol/mid.dat
+    ..A....       3490  2025-03-01 11:00  sol/zeta.zzz
+    ...D...          0  2025-03-01 12:00  sol/inner
+    ...D...          0  2025-03-01 12:00  sol
+----------- ----------  ---------- -----  ----
+                 20250                    7
+
+rc=0
+
+Testing archive c.rar
+
+Testing     sol/alpha.json                                                 OK 
+Testing     sol/inner/beta.aaa                                             OK 
+Testing     sol/inner/omega.csv                                            OK 
+Testing     sol/mid.dat                                                    OK 
+Testing     sol/zeta.zzz                                                   OK 
+Testing     sol/inner                                                 OK
+Testing     sol                                                       OK
+All OK
+rc=0
+== u and f over an archive
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive up.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/sub/b.txt                                                    OK 
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating archive up.rar
+
+Updating  src/a.txt                                                        OK 
+Adding    src/big.txt                                                      OK 
+Done
+rc=0
+src/a.txt
+src/sub/b.txt
+src/big.txt
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating archive up.rar
+
+Updating  src/sub/b.txt                                                    OK 
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating archive up.rar
+
+WARNING: No files
+rc=10
+
+Archive: up.rar
+Details: RAR 5
+
+        Name: src/a.txt
+        Type: File
+        Size: 12
+ Packed size: 12
+       Ratio: 100%
+    Modified: 2025-03-02 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: F47F437A
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/sub/b.txt
+        Type: File
+        Size: 12
+ Packed size: 12
+       Ratio: 100%
+    Modified: 2025-03-03 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 0C51C47E
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/big.txt
+        Type: File
+        Size: 76890
+ Packed size: 76890
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 205992AF
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+rc=0
+
+Testing archive up.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/big.txt                                                    OK 
+All OK
+rc=0
+./src/
+./src/a.txt 3014611103 12
+./src/big.txt 3515781233 76890
+./src/sub/
+./src/sub/b.txt 233525419 12
+== d
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from up.rar
+Deleting src/a.txt
+Done
+rc=0
+src/sub/b.txt
+src/big.txt
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from up.rar
+No files to delete
+rc=10
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from up.rar
+Deleting src/sub/b.txt
+Deleting src/big.txt
+Erasing empty archive up.rar
+Done
+rc=0
+ls: cannot access 'up.rar': No such file or directory
+== m, mf, -df
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive mv.rar
+
+Adding    src/a.txt                                                        OK 
+Deleting src/a.txt                         deleted 100%
+Done
+rc=0
+big.txt
+empty
+noise.bin
+sub
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive mvf.rar
+
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Deleting src/sub/deep/c.dat                deleted  25%
+Deleting src/sub/b.txt                     deleted  50%
+Done
+rc=0
+src
+src/big.txt
+src/empty
+src/noise.bin
+src/sub
+src/sub/deep
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive df.rar
+
+Adding    src/sub/b.txt                                                    OK 
+Adding    src/sub/deep/c.dat                                               OK 
+Adding    src/sub/deep                                                     OK 
+Adding    src/sub                                                          OK 
+Deleting src/sub/deep/c.dat                deleted  25%
+Deleting directory src/sub/deep                      deleted  50%
+Deleting src/sub/b.txt                     deleted  75%
+Deleting directory src/sub                           deleted 100%
+Done
+rc=0
+src
+src/a.txt
+src/big.txt
+src/empty
+src/noise.bin
+== -t, -k, -rr, -z, -htb, -qo
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive t.rar
+
+Adding    src/a.txt                                                        OK 
+Testing archive t.rar
+
+Testing     src/a.txt                                                      OK 
+All OK
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive k.rar
+
+Adding    src/a.txt                                                        OK 
+Locking archive
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Program aborted
+--- stderr
+
+
+ERROR: Locked archive
+rc=4
+
+Archive: k.rar
+Details: RAR 5, lock
+
+        Name: src/a.txt
+        Type: File
+        Size: 6
+ Packed size: 6
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 363A3020
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive rr.rar
+
+Adding    src/big.txt                                                      OK 
+Adding the data recovery record     
+Done
+rc=0
+
+Archive: rr.rar
+Details: RAR 5, recovery record
+
+        Name: src/big.txt
+        Type: File
+        Size: 76890
+ Packed size: 76890
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 205992AF
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+rc=0
+
+Testing archive rr.rar
+
+Testing     src/big.txt                                                    OK 
+Testing the recovery record         OK
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive z.rar
+
+Reading comment from cmt.txt
+Adding a comment to z.rar
+
+Adding    src/a.txt                                                        OK 
+Done
+rc=0
+
+Archive comment:
+a comment
+of two lines
+
+
+Archive: z.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          6  2025-03-01 11:00  src/a.txt
+----------- ----------  ---------- -----  ----
+                     6                    1
+
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive h.rar
+
+Adding    src/a.txt                                                        OK 
+Done
+rc=0
+
+Archive: h.rar
+Details: RAR 5
+
+        Name: src/a.txt
+        Type: File
+        Size: 6
+ Packed size: 6
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+      BLAKE2: 68505689ed9e9910f32668d51bfc0ec82641936350099accdcda9ab464be1870
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+rc=0
+
+Testing archive h.rar
+
+Testing     src/a.txt                                                      OK 
+All OK
+rc=0
+./src/
+./src/a.txt 3015617425 6
+298293522 110
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive ts1.rar
+
+Adding    src/a.txt                                                        OK 
+Done
+rc=0
+447586048 71
+== a -qo
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive q.rar
+
+Adding    src/big.txt                                                      OK 
+Done
+rc=0
+
+Archive: q.rar
+Details: RAR 5
+
+        Name: src/big.txt
+        Type: File
+        Size: 76890
+ Packed size: 76890
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 205992AF
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: QO
+        Type: Service
+        Size: 56
+ Packed size: 56
+       Ratio: 100%
+  Attributes: .B
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+     Service: EOF
+
+rc=0
+== a -qo+
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive q.rar
+
+Adding    src/big.txt                                                      OK 
+Done
+rc=0
+
+Archive: q.rar
+Details: RAR 5
+
+        Name: src/big.txt
+        Type: File
+        Size: 76890
+ Packed size: 76890
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 205992AF
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: QO
+        Type: Service
+        Size: 56
+ Packed size: 56
+       Ratio: 100%
+  Attributes: .B
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+     Service: EOF
+
+rc=0
+== a -qo-
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive q.rar
+
+Adding    src/big.txt                                                      OK 
+Done
+rc=0
+
+Archive: q.rar
+Details: RAR 5
+
+        Name: src/big.txt
+        Type: File
+        Size: 76890
+ Packed size: 76890
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 205992AF
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+     Service: EOF
+
+rc=0
+== passwords
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating archive p.rar
+
+Adding    src/a.txt                                                        OK 
+Done
+rc=0
+
+Archive: p.rar
+Details: RAR 5
+
+        Name: sub/b.txt
+        Type: File
+        Size: 6
+ Packed size: 6
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: DD3861A8
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: sub/deep/c.dat
+        Type: File
+        Size: 7
+ Packed size: 7
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 33818A61
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/a.txt
+        Type: File
+        Size: 6
+ Packed size: 16
+       Ratio: 266%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+   CRC32 MAC: (keyed)
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+       Flags: encrypted 
+
+        Name: sub/deep
+        Type: Directory
+    Modified: 2025-03-01 12:00:00,000000000
+  Attributes: ...D...
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0
+
+        Name: sub
+        Type: Directory
+    Modified: 2025-03-01 12:00:00,000000000
+  Attributes: ...D...
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0
+
+rc=0
+
+Testing archive p.rar
+
+Testing     sub/b.txt                                                      OK 
+Testing     sub/deep/c.dat                                                 OK 
+Testing     src/a.txt                                                      OK 
+Testing     sub/deep                                                  OK
+Testing     sub                                                       OK
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive hp.rar
+
+Adding    src/a.txt                                                        OK 
+Done
+rc=0
+
+Archive: hp.rar
+Details: RAR 5, encrypted headers
+
+        Name: src/a.txt
+        Type: File
+        Size: 6
+ Packed size: 16
+       Ratio: 266%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 363A3020
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+       Flags: encrypted 
+
+rc=0
+
+Testing archive hp.rar
+
+Testing     src/a.txt                                                      OK 
+All OK
+rc=0
+== volumes
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive vol.rar
+
+Adding    src/noise.bin                                                      
+
+Creating archive vol.part2.rar
+
+...       src/noise.bin                                                      
+
+Creating archive vol.part3.rar
+
+...       src/noise.bin                                                    OK 
+Done
+rc=0
+vol.part1.rar
+vol.part2.rar
+vol.part3.rar
+
+Archive: vol.part1.rar
+Details: RAR 5, volume 1
+
+        Name: src/noise.bin
+        Type: File
+        Size: 40000
+ Packed size: 15195
+       Ratio: -->
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+  Pack-CRC32: 0E8D93DC
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+Archive: vol.part2.rar
+Details: RAR 5, volume 2
+
+        Name: src/noise.bin
+        Type: File
+        Size: 40000
+ Packed size: 15194
+       Ratio: <->
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+  Pack-CRC32: 1F6E55BE
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+Archive: vol.part3.rar
+Details: RAR 5, volume 3
+
+        Name: src/noise.bin
+        Type: File
+        Size: 40000
+ Packed size: 9611
+       Ratio: <--
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: DE075BEC
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+rc=0
+
+Testing archive vol.part1.rar
+
+Testing     src/noise.bin                                                
+
+Testing archive vol.part2.rar
+
+...         src/noise.bin                                                
+
+Testing archive vol.part3.rar
+
+...         src/noise.bin                                                  OK 
+All OK
+rc=0
+vol.part1.rar 2350357732 15360
+vol.part2.rar 14252184 15360
+vol.part3.rar 1712161789 9768
+== errors
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive nothing.rar
+
+WARNING: No files
+--- stderr
+
+Cannot open src/missing.txt
+The system cannot find the file specified.
+rc=10
+ls: cannot access 'nothing.rar': No such file or directory
+
+ERROR: Unknown option: ma4
+rc=7
+
+ERROR: Unknown option: m6
+rc=7
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating archive old.rar
+
+Adding    src/a.txt                                                        OK 
+Done
+rc=0
+
+Archive: old.rar
+Details: RAR 1.5
+
+        Name: text.txt
+        Type: File
+        Size: 2400
+ Packed size: 58
+       Ratio: 2%
+    Modified: 2026-04-29 03:45:56,000000000
+  Attributes: ..A....
+       CRC32: 6A0D746D
+     Host OS: Windows
+ Compression: RAR 1.5(v29) -m3 -md=128k
+
+        Name: src/a.txt
+        Type: File
+        Size: 6
+ Packed size: 6
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 363A3020
+     Host OS: Windows
+ Compression: RAR 1.5(v29) -m0 -md=128k
+
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Program aborted
+--- stderr
+
+
+ERROR: Cannot modify volume
+rc=4

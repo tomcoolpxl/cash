@@ -391,12 +391,7 @@ pub(super) fn report<SE: cash_core::ShellExtensions>(
     match failure {
         Failure::Missing(error) => {
             rar.console.msg("\n");
-            rar.console.err(&format!(
-                "\nCannot open {}\n{}",
-                found.display,
-                system_message(error)
-            ));
-            rar.fail(code::NO_FILES);
+            report_missing(rar, found, error);
         }
         Failure::NotRar => {
             rar.console
@@ -430,6 +425,21 @@ pub(super) fn report<SE: cash_core::ShellExtensions>(
             }
         }
     }
+}
+
+/// "Cannot open" an archive that is not there, with Windows' words; a bare listing has
+/// no blank line before it, the others do.
+pub(super) fn report_missing<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    found: &Found,
+    error: &io::Error,
+) {
+    rar.console.err(&format!(
+        "\nCannot open {}\n{}",
+        found.display,
+        system_message(error)
+    ));
+    rar.fail(code::NO_FILES);
 }
 
 /// Windows' own words for an error, without Rust's "(os error N)".

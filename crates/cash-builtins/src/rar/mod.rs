@@ -18,7 +18,9 @@
 // Phase 33 builds rar a command at a time; this goes once every part has its use.
 #![expect(dead_code, reason = "rar's other commands follow in this phase")]
 
+mod add;
 mod cmdline;
+mod delete;
 mod entry;
 mod extract;
 mod help;
@@ -123,6 +125,9 @@ enum Stop {
     Break,
     /// Standard input ended at a question: "Program aborted", with the code.
     Aborted(u8),
+    /// An archive the command may not change, its error already shown: "Program
+    /// aborted" on a line of its own, with the code.
+    Refused(u8),
     /// "Quit" at a question.
     Quit,
 }
@@ -329,14 +334,7 @@ fn default_switches<SE: cash_core::ShellExtensions>(
     if typed_no_config {
         return switches;
     }
-    let env = |name: &str| {
-        context
-            .shell
-            .env()
-            .get(name)
-            .filter(|(_, var)| var.is_exported())
-            .map(|(_, var)| var.value().to_cow_str(context.shell).into_owned())
-    };
+    let env = |name: &str| env_var(context, name);
     if let Some(appdata) = env("APPDATA") {
         let command = args
             .iter()
@@ -354,6 +352,19 @@ fn default_switches<SE: cash_core::ShellExtensions>(
         cmdline::apply_defaults(&mut switches, &text);
     }
     switches
+}
+
+/// An exported variable of the shell's.
+fn env_var<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    name: &str,
+) -> Option<String> {
+    context
+        .shell
+        .env()
+        .get(name)
+        .filter(|(_, var)| var.is_exported())
+        .map(|(_, var)| var.value().to_cow_str(context.shell).into_owned())
 }
 
 /// A text file as rar reads one: UTF-16 or UTF-8 by its byte order mark, else UTF-8
@@ -393,11 +404,9 @@ fn run_with<SE: cash_core::ShellExtensions>(
     let mut parsed = match cmdline::parse(args) {
         Ok(parsed) => parsed,
         Err(unknown) => {
+            // rar reads its switches before it says who it is: no banner here.
             let switches = default_switches(context, args);
             console.set(&switches);
-            if !switches.no_banner {
-                console.msg(help::banner(tool));
-            }
             console.notice(&format!("\nERROR: Unknown option: {}\n", unknown.0));
             return code::USER;
         }
@@ -459,6 +468,10 @@ fn run_with<SE: cash_core::ShellExtensions>(
         }
         Err(Stop::Aborted(code)) => {
             rar.console.notice("\n\nProgram aborted\n");
+            code
+        }
+        Err(Stop::Refused(code)) => {
+            rar.console.notice("\nProgram aborted\n");
             code
         }
         Err(Stop::Quit) => {
@@ -608,6 +621,10 @@ fn dispatch<SE: cash_core::ShellExtensions>(
         Command::Test | Command::Extract | Command::ExtractFull | Command::Print => {
             return extract::run(rar, command, parsed);
         }
+        Command::Add | Command::Update | Command::Freshen | Command::Move { .. } => {
+            return add::run(rar, command, parsed);
+        }
+        Command::Delete => return delete::run(rar, parsed),
         _ => {}
     }
     rar.console.err(&format!(

@@ -656,17 +656,26 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    (`rar_list.sh`, 12,470 lines like WinRAR's); `t`, `x`, `e`, `p` with the overwrite
    question and `-o`, passwords asked per file, the path switches, volumes from any
    one, damaged headers (rars' lenient read), recovery records and `.rev` files
-   (`rar_extract.sh`, 2,880 lines). Left, in order:
+   (`rar_extract.sh`, 2,880 lines); `a`, `u`, `f`, `m`, `mf`, `d` with the archiving
+   switches, RAR 5 only (`-ma4` refused, the user's pick, 2026-10-08), stored archives
+   and volume sets WinRAR's byte for byte (`rar_write.sh`, 1,634 lines). For that rars
+   gained a WinRAR layout (`rar50::Layout`: padded sizes and offsets, the locator, skip
+   flags, CRC32 or BLAKE2, the quick-open threshold, volumes counting their headers) and
+   carried members (`Builder::carry`: an archive's packed data copied on update, RAR 1.5
+   to 7, as rar copies it). Left, in order:
    - `t` checks a RAR 3 `.rev` file only by reading it: its own checksum's place is
      to be learned from Rar.exe (damage one and watch), not from UnRAR's source.
    - Extraction's links (`-ol`), `-ts`'s other times, `-ver`, `-f`/`-u` on
      extraction, `-ad1`/`-ad2`, `-ai` on folders: built, not yet in the oracle.
-   - `a`, `u`, `f`, `m`, `mf`, `d`, with the archiving switches; their oracle. RAR 5
-     only: `-ma4` is refused as rar 7.23 refuses it (the user's pick, 2026-10-08).
+   - Writing, not yet in the oracle or not yet WinRAR's: `-ts`'s creation and access
+     times (a file's creation time is the run's); `-df`'s "NOT DELETED" when a folder
+     is not empty; `-r` with a plain file name (rar looks for it in every folder);
+     WinRAR's layout for volumes with `-hp` or `-rr` (they keep rars' own, payload-sized);
+     the quick-open room kept for earlier big files in the same volume (taken as their
+     header and 18 bytes each, as for the file going in, unchecked with two); updating
+     an archive whose files are encrypted without its password (rar copies them, rars'
+     preserving builder asks for it); `-as`, `-dr`, `-dw`, `-ag`, `-log` read, not done.
    - `c`, `cw`, `rn`, `k`, `rr`, `ch`, `r`, `rc`, `i`; `s` and `rv` refused.
-   - A lenient read in rars, so a damaged archive lists the files before its damage, as
-     rar does; today rars stops at the first bad header and rar's two "Corrupt header"
-     lines come with no files.
    - The `expect(dead_code)` at the top of `rar/mod.rs` goes when every part is used.
 3. Pages, `builtins.md`, doctor's shadows (`rar`, `unrar`, `7z`'s RAR).
 4. **rar's spool files outlive a killed process**: done 2026-10-08. Spools and reader

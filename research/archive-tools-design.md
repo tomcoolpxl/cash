@@ -402,7 +402,10 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
   ma4", observed 2026-10-08), though the user's first pick assumed it had; asked again,
   the user chose to refuse it as rar 7.23 does (section 7). rars' compressor is not
   WinRAR's, so compressed sizes differ; stored archives (`-m0`) are compared byte for
-  byte, as 7z's `-mx0` are.
+  byte, as 7z's `-mx0` are. For that rars writes WinRAR's layout when asked
+  (`rar50::Layout`, every width measured from `Rar.exe`'s archives, none taken from
+  its code), and an update carries the archive's members as they are
+  (`Builder::carry`), as rar copies them rather than packing them again.
 - **Windows facts**: attributes and times as WinRAR stores them on Windows (`-ts` for the
   three times). `-ol` stores symbolic links and junctions as links and `-oh` hard links,
   as 7z's `-snl` and `-snh` do. NTFS streams and security (`-os`, `-ow`) get "not
@@ -419,6 +422,21 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
   volumes from `.rev` files), `ch`, `i`, `-ag`, `-as`, `-dr`, `-dw`, `-sc` and `-log`.
   Refused with rar's words in every set: SFX (`s`, `-sfx`), `rv` (rars writes no
   `.rev`), `-ieml`, `-ioff`, `-isnd`, `-ri`, `-vp`, `-om`, `-oc`.
+- **What `a` puts in, and in what order** (observed 2026-10-08): a folder is walked in the
+  file system's own order, files and folders as they come, and its folders are written
+  after every file, deepest first. A mask takes files only; with `-r` it also takes the
+  folders it matches, without their contents. An update keeps the archive's files where
+  they are (a replaced one in its place), puts new files after them, then every folder,
+  the new before the old, deepest first. `m`, `mf` and `-df` delete in the walk's
+  reverse; a folder still holding something is "NOT DELETED", with status 0. RAR 5's
+  quick-open record covers files packed to more than 4,096 bytes (`-qo+` all, `-qo-`
+  none).
+- **Solid order** (the user's pick, 2026-10-08): a compressed solid archive's new files
+  sorted by extension, then name, as `Rar.exe` does with no `rarfiles.lst`; a
+  `rarfiles.lst` in `%APPDATA%\WinRAR` orders them, as `Rar.txt` says it may. rar 7.23
+  reads that list only from its own folder, where WinRAR ships one; cash has no such
+  folder, so the oracle's solid case uses extensions both orders agree on. Stored (`-m0`)
+  archives are never sorted.
 - **Spool files first**: TODO's item on rars' spool files (deleted on close, in the temp
   folder cash names) is fixed before `rar a` is built, since rar's writes are the path
   that spools.
@@ -490,6 +508,8 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
    learned only from running `Rar.exe` and `UnRAR.exe` and from reading `Rar.txt`; never
    from UnRAR's source, whose licence forbids using it to develop a RAR-compatible
    archiver; `-?` in cash's own words, not RAR's help text.
+   A solid archive's order (asked 2026-10-08): by extension, as `Rar.exe` without a list,
+   and `%APPDATA%\WinRAR\rarfiles.lst` when there; not WinRAR's shipped list built in.
 
 ## 8. Open, decided later in their phases
 

@@ -98,6 +98,24 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     Ok(())
 }
 
+/// `a -t`: the archive just written, tested whole.
+pub(super) fn test_written<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    display: &str,
+    path: PathBuf,
+) -> Result<(), Stop> {
+    let job = Job {
+        mode: Mode::Test,
+        masks: Masks::all(),
+        dest: None,
+    };
+    let found = Found {
+        display: display.to_owned(),
+        path,
+    };
+    set(rar, &job, &found)
+}
+
 /// The first volume of the set `display` belongs to, by its naming.
 fn first_volume(display: &str, new_numbering: bool) -> String {
     if new_numbering {
