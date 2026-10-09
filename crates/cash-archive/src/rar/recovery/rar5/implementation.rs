@@ -45,14 +45,15 @@ pub fn plan_inline_recovery(
     archive_size: u64,
     recovery_percent: u64,
 ) -> Result<InlineRecoveryPlan> {
-    let pct = recovery_percent.min(100);
+    // WinRAR 7 takes up to 1000%: more recovery shards than data ones, as many as ten
+    // times; the Cauchy matrix allows that within the field's size.
+    let pct = recovery_percent.min(1000);
     let data_shards = if archive_size >= 200 * KIB {
         MAX_WINRAR602_DATA_SHARDS
     } else {
         archive_size.div_ceil(KIB).max(1)
     };
     let mut recovery_shards = (2 * pct * data_shards) / 200;
-    recovery_shards = recovery_shards.min(data_shards);
     if recovery_shards == 0 && archive_size < 200 * KIB {
         recovery_shards = 1;
     }
@@ -2841,7 +2842,7 @@ mod tests {
             }
         );
         assert_eq!(
-            plan_inline_recovery(200 * 1024, 1000).unwrap(),
+            plan_inline_recovery(200 * 1024, 100).unwrap(),
             InlineRecoveryPlan {
                 data_shards: 200,
                 recovery_shards: 200,
@@ -2850,6 +2851,16 @@ mod tests {
                 shard_size: 2696,
             }
         );
+        // Above 100%, ten times the data shards at 1000%, as WinRAR 7 writes them; more
+        // is taken as 1000.
+        for percent in [1000, 5000] {
+            assert_eq!(
+                plan_inline_recovery(200 * 1024, percent)
+                    .unwrap()
+                    .recovery_shards,
+                2000
+            );
+        }
         let largest = plan_inline_recovery(u64::MAX, 1000).unwrap();
         assert_eq!(largest.data_shards, MAX_WINRAR602_DATA_SHARDS);
         assert_eq!(largest.header_size, 1672);

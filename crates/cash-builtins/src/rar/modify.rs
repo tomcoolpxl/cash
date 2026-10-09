@@ -43,6 +43,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         rar.console.msg("\n");
         return Ok(());
     }
+    add::adjusted_recovery(rar, rar.switches.recovery_record.as_deref());
     let display = super::cmdline::with_default_extension(archive).replace('\\', "/");
     let found = Found {
         display: display.clone(),
@@ -100,7 +101,8 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             change.lock = true;
         }
         Command::RecoveryRecord(size) => {
-            change.recovery_percent = Some(recovery_percent(size.as_deref()));
+            add::adjusted_recovery(rar, size.as_deref());
+            change.recovery_percent = add::recovery_percent(size.as_deref());
         }
         Command::Rename => change.renames = renames(rar, &opened, &pairs),
         _ => {
@@ -150,14 +152,6 @@ fn plain_names(parsed: &Parsed) -> Vec<String> {
             Name::Plain(text) | Name::List(text) => text.replace('\\', "/"),
         })
         .collect()
-}
-
-/// `rr[N]`'s size: `N`, `N%` or `Np` percent of the archive, 3 when left out.
-fn recovery_percent(size: Option<&str>) -> u64 {
-    size.map(|size| size.trim_end_matches(['%', 'p', 'P']))
-        .and_then(|size| size.parse().ok())
-        .filter(|percent| (1..=100).contains(percent))
-        .unwrap_or(3)
 }
 
 /// `cw`: the comment to the file named, or to standard output.

@@ -49,7 +49,7 @@ or every one with `-ver`, or version N under its file's name with `-verN`.
 or standard output. `rar rn ARCHIVE OLD NEW…` renames files (a folder with what it
 holds; `*` and `?` in OLD and NEW for patterns such as `'src/*.txt' 'src/*.bak'`).
 `rar k` locks an archive against change, `rar rr[N]` gives it a recovery record of N%
-(3 by default), and `rar ch` changes it by switches (`-cl`, `-cu`, `-z`, `-k`, `-tl`).
+(3 by default, up to 1000), and `rar ch` changes it by switches (`-cl`, `-cu`, `-z`, `-k`, `-tl`).
 Each copies the archive's files as they are. `rar i=TEXT` looks for a string in the
 archived files and shows where it is (`ic=` case-sensitive, `ih=` hexadecimal bytes,
 `it=` in UTF-8 and UTF-16 too). `rar r` repairs a damaged archive: with a recovery

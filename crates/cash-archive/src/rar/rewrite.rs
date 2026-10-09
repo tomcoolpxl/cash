@@ -530,7 +530,7 @@ impl Archive {
                                     || service.compression_info != 0
                                     || (service.name == b"RR"
                                         && !service.recovery_record().ok().flatten().is_some_and(
-                                            |record| (1..=100).contains(&record.percent),
+                                            |record| (1..=1000).contains(&record.percent),
                                         ))
                                 {
                                     issues.push(format!(

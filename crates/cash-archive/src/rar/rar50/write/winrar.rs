@@ -23,6 +23,13 @@ pub(super) fn size_width(size: u64) -> usize {
     if size >= 1 << 20 { width.max(5) } else { width }
 }
 
+/// The same for a service's data, a recovery record's say: room for twice its size and
+/// a kilobyte, without a file's five bytes from a mebibyte on (a 1.2 MB record took
+/// four).
+pub(super) fn service_size_width(size: u64) -> usize {
+    vint_len(size.saturating_mul(2).saturating_add(1024))
+}
+
 /// The width of the locator's offsets: room for the archive's members, each its size,
 /// 32 bytes and three for every character of its name, counted in 4,096ths.
 pub(super) fn offset_width(entries: &[ArchiveEntry]) -> usize {

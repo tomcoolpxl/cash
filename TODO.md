@@ -831,8 +831,16 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines then,
      the rewrites WinRAR's byte for byte). Left of them: `c` and `k` on a volume set,
      which rar 7.23 does and cash refuses as it refuses `a` ("Cannot modify volume");
-     `rr` above 100% (rar takes up to 1000%, rars' writer 100); `ch` takes `-cl`, `-cu`,
-     `-z`, `-k` and `-tl`, not the other switches rar lets it change (`-amr`, `-ma`…).
+     `ch` takes `-cl`, `-cu`, `-z`, `-k` and `-tl`, not the other switches rar lets it
+     change (`-amr`, `-ma`…).
+   - Recovery records above 100%: done 2026-10-09 (in `rar_modify.sh`, now 639 lines).
+     cash took anything above 100 as the default 3%; now up to 1000%, more recovery
+     shards than data ones, as WinRAR writes them; `-rr0` none; above 1000 rar's
+     "Adjusting -rrN value to 1000." on standard error and, as Rar.exe was seen to,
+     200%'s record. A service's sizes take room for twice them and a kilobyte, without
+     a file's five bytes from a mebibyte on (a 1.2 MB record took four). Reading,
+     testing, repairing and changing such an archive work. With `-idq`, rar ends
+     standard error's open line at the end ("Cannot open ..." too); cash does now.
    - `i`: done 2026-10-09 (`rar_find.sh`, 264 lines). Its OEM table is not looked in
      with `t` (ANSI, UTF-8 and UTF-16 are); a name chosen in a solid archive leaves
      out the spaces rar's progress leaves.

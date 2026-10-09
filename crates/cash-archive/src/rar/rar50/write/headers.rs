@@ -437,7 +437,7 @@ pub(super) fn service_parts(
         )?;
     }
     let data_width = if winrar {
-        super::winrar::size_width(data_len)
+        super::winrar::service_size_width(data_len)
     } else {
         0
     };

@@ -118,6 +118,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let Some(archive) = parsed.archive.as_deref() else {
         return Ok(());
     };
+    adjusted_recovery(rar, switches.recovery_record.as_deref());
     let display = super::cmdline::with_default_extension(archive).replace('\\', "/");
     let path = rar.path(&display);
     let found = Found {
@@ -411,7 +412,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         }
     }
 
-    if switches.recovery_record.is_some() {
+    if asked_recovery_percent(rar).is_some() {
         rar.console.msg("\nAdding the data recovery record     ");
     }
     if switches.lock {
@@ -747,8 +748,8 @@ fn settings<SE: cash_core::ShellExtensions>(
         None => old.and_then(|o| o.archive.comment(password).ok().flatten()),
     };
     builder = builder.comment(comment);
-    if let Some(percent) = &switches.recovery_record {
-        builder = builder.recovery_percent(Some(recovery_percent(percent)));
+    if let Some(percent) = asked_recovery_percent(rar) {
+        builder = builder.recovery_percent(Some(percent));
     }
     builder = builder.layout(layout(rar, None));
     if builder.format().family() == ArchiveFamily::Rar50Plus {
@@ -831,7 +832,7 @@ pub(super) fn asked_recovery_percent<SE: cash_core::ShellExtensions>(
     rar.switches
         .recovery_record
         .as_deref()
-        .map(recovery_percent)
+        .and_then(|text| recovery_percent(Some(text)))
 }
 
 /// The bound `WinRAR` gives the locator's offsets when it changes an archive: from the
@@ -861,13 +862,29 @@ pub(super) fn quick_open_on<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) -
     rar.switches.quick_open != Some('-')
 }
 
-/// `-rr[N]`'s size as a percentage of the archive: `N`, `N%` or `Np`; 3 by default.
-fn recovery_percent(text: &str) -> u64 {
-    text.trim_end_matches(['%', 'p', 'P'])
-        .parse()
-        .ok()
-        .filter(|percent| (1..=100).contains(percent))
-        .unwrap_or(3)
+/// `-rr[N]`'s and `rr[N]`'s size as a percentage of the archive, `N`, `N%` or `Np`: 3
+/// when left out, none for 0, up to 1000; above that rar says it adjusts it to 1000
+/// ([`adjusted_recovery`]) and writes 200, as `Rar.exe` 7.23 was seen to.
+pub(super) fn recovery_percent(text: Option<&str>) -> Option<u64> {
+    let digits = text.map_or("", |text| text.trim_end_matches(['%', 'p', 'P']));
+    match digits.parse::<u64>() {
+        Ok(0) => None,
+        Ok(percent @ 1..=1000) => Some(percent),
+        Ok(_) => Some(200),
+        Err(_) => Some(3),
+    }
+}
+
+/// rar's word on a recovery record asked above 1000%, said once by the command.
+pub(super) fn adjusted_recovery<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    text: Option<&str>,
+) {
+    let digits = text.map_or("", |text| text.trim_end_matches(['%', 'p', 'P']));
+    if digits.parse::<u64>().is_ok_and(|percent| percent > 1000) {
+        rar.console
+            .err(&format!("\nAdjusting -rr{digits} value to 1000."));
+    }
 }
 
 /// A source queued in the builder, with its times and attributes; with `link`, as that

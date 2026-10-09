@@ -17,6 +17,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         return Ok(());
     };
     let masks = Masks::new(rar, parsed)?;
+    add::adjusted_recovery(rar, rar.switches.recovery_record.as_deref());
     let display = super::cmdline::with_default_extension(archive).replace('\\', "/");
     let found = Found {
         display: display.clone(),

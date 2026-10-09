@@ -129,6 +129,26 @@ for cmd in "a n.txt" "u n.txt" "f src/a.txt" "m n.txt" "d src\\c.dat" "c -zcmt.t
   echo "$(stat -c %s r.rar) bytes, $(rar lt -idc r.rar | tr -d '\r' | grep -c 'Details:.*recovery record') record, time $t"
 done
 
+echo "== recovery records up to 1000%, and none for 0"
+# Shown by size: a record's bytes differ from one Rar.exe run to the next. Above 1000%
+# rar says it adjusts the value to 1000 and writes 200%'s record.
+awk 'BEGIN { srand(5); for (i = 0; i < 30000; i++) printf "%c", 33 + int(rand() * 90) }' > rr.bin
+touch -d '2024-01-01T00:00:00Z' rr.bin
+for p in 0 100 150% 1000 2000p; do
+  rm -f rr.rar
+  echo "-- a -rr$p"
+  z rar a -m0 -idq -rr$p rr.rar rr.bin
+  echo "$(stat -c %s rr.rar) bytes"
+done
+rar a -m0 -idq rrplain.rar rr.bin
+for p in 150% 3000; do
+  cp rrplain.rar rrc.rar
+  echo "-- rr$p"
+  z rar rr$p -idq rrc.rar
+  echo "$(stat -c %s rrc.rar) bytes"
+  z rar t -idq rrc.rar
+done
+
 echo "== missing archive"
 z rar c -zcmt.txt missing.rar
 z rar k missing.rar

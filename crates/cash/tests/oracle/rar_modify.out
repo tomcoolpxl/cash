@@ -565,6 +565,38 @@ Adding the data recovery record
 Done
 rc=0
 678 bytes, 1 record, time now
+== recovery records up to 1000%, and none for 0
+-- a -rr0
+rc=0
+30143 bytes
+-- a -rr100
+rc=0
+69712 bytes
+-- a -rr150%
+rc=0
+89483 bytes
+-- a -rr1000
+rc=0
+425573 bytes
+-- a -rr2000p
+--- stderr
+
+Adjusting -rr2000 value to 1000.
+
+rc=0
+109253 bytes
+-- rr150%
+rc=0
+89483 bytes
+rc=0
+-- rr3000
+--- stderr
+
+Adjusting -rr3000 value to 1000.
+
+rc=0
+109253 bytes
+rc=0
 == missing archive
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026

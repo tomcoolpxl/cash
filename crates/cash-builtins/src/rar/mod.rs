@@ -143,6 +143,8 @@ struct Console<'a, SE: cash_core::ShellExtensions> {
     quiet: Cell<bool>,
     /// `p`: standard output is the files' data, and no message goes there.
     data_only: Cell<bool>,
+    /// Standard error's last words left their line open.
+    err_open: Cell<bool>,
 }
 
 impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
@@ -153,6 +155,15 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
             to_stderr: Cell::new(false),
             quiet: Cell::new(false),
             data_only: Cell::new(false),
+            err_open: Cell::new(false),
+        }
+    }
+
+    /// The run's end: with `-idq`, rar ends standard error's open line, as it ends the
+    /// messages' last line when they show.
+    fn finish(&self) {
+        if self.quiet.get() && self.err_open.get() {
+            self.write(true, "\n");
         }
     }
 
@@ -163,6 +174,9 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
     }
 
     fn write(&self, to_err: bool, text: &str) {
+        if to_err && !text.is_empty() {
+            self.err_open.set(!text.ends_with('\n'));
+        }
         let result = if to_err {
             let mut err = self.context.stderr();
             err.write_all(text.as_bytes()).and_then(|()| err.flush())
@@ -494,7 +508,7 @@ fn run_with<SE: cash_core::ShellExtensions>(
         parsed.archive = Some(name);
     }
     let result = dispatch(&rar, &command, &parsed);
-    match result {
+    let code = match result {
         Ok(()) => rar.status(),
         Err(Stop::Break) => {
             rar.console.err("\nUser break\n");
@@ -512,7 +526,9 @@ fn run_with<SE: cash_core::ShellExtensions>(
             rar.console.notice("\nProgram aborted\n");
             code::BREAK
         }
-    }
+    };
+    rar.console.finish();
+    code
 }
 
 /// The command line's switches over the defaults: a switch given there wins.

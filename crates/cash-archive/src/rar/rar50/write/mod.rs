@@ -1145,9 +1145,9 @@ fn validate_recovery_percent(percent: u64) -> Result<()> {
             feature: "recovery",
         });
     }
-    if !(1..=100).contains(&percent) {
+    if !(1..=1000).contains(&percent) {
         return Err(Error::InvalidArgument(
-            "RAR 5 recovery percent must be in 1..=100",
+            "RAR 5 recovery percent must be in 1..=1000",
         ));
     }
     Ok(())
@@ -1733,7 +1733,7 @@ mod tests {
         for error in [
             super::validate_file_entry(b"").unwrap_err(),
             super::validate_nonempty_password(b"").unwrap_err(),
-            super::validate_recovery_percent(101).unwrap_err(),
+            super::validate_recovery_percent(1001).unwrap_err(),
             super::filter_policy::dictionary_size_fields(0, 0).unwrap_err(),
             super::filter_policy::dictionary_size_fields(1, 131073).unwrap_err(),
             super::headers::header_encryption_password([&b"one"[..], &b"two"[..]].into_iter())
