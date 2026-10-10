@@ -18,8 +18,8 @@ and in the fewest places it can.
 - Globbing and `find -name` ignore case, as the file system does; `shopt -u nocaseglob`
   turns that off.
 - Variable names ignore case: `$Path` is `$PATH`.
-- At the prompt, an unquoted `C:\...` keeps its backslashes (`shopt winpaths`; off in
-  scripts).
+- At the prompt, an unquoted `C:\...` or `\\server\share` keeps its backslashes
+  (`shopt winpaths`; off in scripts).
 - `sh`, `bash` and `cash` always run cash, however they are started: otherwise `bash`
   is WSL's launcher and the script goes on under Linux. Started as `sh`,
   cash runs in POSIX mode, as Bash does.

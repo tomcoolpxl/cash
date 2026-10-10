@@ -21,8 +21,10 @@ everywhere `C:\src` does. The cost: `case $PWD in /c/*)` no longer matches.
 
 `/c/src`, `/tmp` (your `TEMP` folder), `/dev/null`, `/dev/tty`, `/dev/stdin` and the
 other `/dev` names work wherever cash itself opens the path: in redirections
-(`> /tmp/out`, `2> /dev/null`), `cd`, `source`, `test` and `[`, and cash's own builtins
-such as `ls`. An argument to any other command reaches it as written, and a Windows
+(`> /tmp/out`, `2> /dev/null`), `cd`, `source`, `test` and `[`, globs, and cash's own
+builtins such as `ls`. A glob gives its matches in cash's spelling, so
+`cat /c/logs/*.txt` hands `cat` `C:/logs/a.txt`. An argument to any other command
+reaches it as written, and a Windows
 program, or a bundled tool such as `cat` or `rm`, has no `/c` or `/tmp`; cash
 warns when it sees one and names the `C:/` spelling. `/dev/null` is the null device; a
 bare `nul` is the device too, as every Windows program sees it.
@@ -47,8 +49,16 @@ cd "$dir"
 ```
 
 At the interactive prompt, `shopt winpaths` (on by default there, off in scripts) lets
-a word that starts with a drive and a backslash keep its backslashes, so a path pasted
-from Explorer works unquoted. `shopt -u winpaths` turns it off.
+a word that starts with a drive and a backslash, or with `\\` and a server's name, keep
+its backslashes, so a path pasted from Explorer works unquoted: `cd C:\Users\me`,
+`cd \\nas\share\docs`. `shopt -u winpaths` turns it off. Tab completes a path in the
+spelling it was typed in, backslashes included.
+
+## Network paths
+
+`//server/share/dir` and `\\server\share\dir` (quoted in a script, or at the prompt
+with `winpaths`) work wherever a drive path does: `cd`, redirections, globs, Tab and
+Alt-E. `pwd` says `//server/share/dir`.
 
 ## Arguments are never rewritten
 

@@ -385,12 +385,46 @@ impl Pattern {
             }
         }
 
+        // cash (D3): a fixed start spelled as only cash reads it, `/c/src`, `/tmp/x`,
+        // `//server/share` or `\\server\share`, is read as `cd` reads it; the matches come
+        // out in cash's `C:/` (or `//server/share`) spelling, as `~/x/*` does.
+        let literal_count = components
+            .iter()
+            .take_while(|component| {
+                !component.iter().any(|piece| {
+                    matches!(piece, PatternPiece::Pattern(_))
+                        && requires_expansion(piece.as_str(), self.enable_extended_globbing)
+                })
+            })
+            .count();
+        let spelled_root = (literal_count >= 2)
+            .then(|| {
+                components[..literal_count]
+                    .iter()
+                    .map(|component| component.iter().map(|p| p.as_str()).collect::<String>())
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
+            .filter(|start| start.starts_with('/'))
+            .map(|start| (cash_win32::path::accept_path(&start), start))
+            .filter(|(accepted, start)| {
+                start.starts_with("//") || accepted.to_string_lossy().replace('\\', "/") != *start
+            })
+            .map(|(accepted, _)| accepted);
+        if spelled_root.is_some() {
+            // The root takes the place of the components it was read from, but the first,
+            // which the root replaces below.
+            components.drain(1..literal_count);
+        }
+
         // Check if the path appears to be absolute by inspecting the first component:
         // a leading `/` produces an empty first component, and a drive-letter prefix
         // like `c:` is recognized too. That logic lives in `sys::fs::pattern_path_root`.
-        let absolute_root = components.first().and_then(|first_component| {
-            let flattened: String = first_component.iter().map(|p| p.as_str()).collect();
-            sys::fs::pattern_path_root(&flattened)
+        let absolute_root = spelled_root.or_else(|| {
+            components.first().and_then(|first_component| {
+                let flattened: String = first_component.iter().map(|p| p.as_str()).collect();
+                sys::fs::pattern_path_root(&flattened)
+            })
         });
 
         let prefix_to_remove;

@@ -1958,6 +1958,12 @@ script. It is therefore **on by default in interactive shells and off otherwise*
 target has lost its backslashes (`cd: C:Usersme: No such file or directory`) prints a
 hint naming the option.
 
+A word that starts with `\\` and a server's name (a letter, digit, `.`, `_`, `-` or
+`$`), a UNC path pasted as `\\server\share\dir` or `\\wsl$\Ubuntu\home`, follows the
+same rule, its leading `\\` kept as two backslashes (the user, 2026-10-10, by pick list:
+bash reads it as `\servershare`, which no script means either). Tab completes a path
+typed with backslashes in that spelling.
+
 ### D54 — `pkill`, `pidof` and `killall`: one set of name rules, `kill`'s signals
 
 Native builtins, with procps-ng 4.0.7's (`pkill`, `pidof`) and psmisc 23.7's (`killall`)

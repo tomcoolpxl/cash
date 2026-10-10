@@ -181,7 +181,8 @@ pub struct RuntimeOptions {
     pub source_builtin_searches_path: bool,
     /// `varredir_close`
     pub var_redir_close: bool,
-    /// `winpaths` (cash, D53): an unquoted word starting `C:\` keeps its backslashes.
+    /// `winpaths` (cash, D53): an unquoted word starting `C:\` or `\\server` keeps its
+    /// backslashes.
     pub windows_drive_paths: bool,
     /// `xpg_echo`
     pub echo_builtin_expands_escape_sequences: bool,

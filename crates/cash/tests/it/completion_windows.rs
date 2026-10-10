@@ -459,6 +459,55 @@ async fn a_unix_spelled_drive_path_completes() {
     );
 }
 
+/// Each way of writing a path completes, in the way it was written: the candidate
+/// starts as the typed word does and names the file.
+#[tokio::test]
+async fn a_path_completes_in_each_spelling_it_is_typed_in() {
+    let mut fixture = Fixture::new("spellings").await;
+    fixture.touch("spellme/inner_file.txt");
+    let fwd = fixture.path().to_string_lossy().replace('\\', "/");
+    let (drive, rest) = fwd.split_at(2);
+    let letter = drive.get(..1).unwrap();
+    let back = fwd.replace('/', "\\");
+    let unc_rest = rest.replace('/', "\\");
+    let typed = [
+        format!("{fwd}/spellme/inn"),
+        format!("{}{rest}/spellme/inn", drive.to_lowercase()),
+        format!("'{back}\\spellme\\inn"),
+        format!("'{fwd}\\spellme/inn"),
+        "./spellme/inn".to_owned(),
+        format!("//localhost/{letter}${rest}/spellme/inn"),
+        format!("'\\\\localhost\\{letter}${unc_rest}\\spellme\\inn"),
+    ];
+    let mut failed = Vec::new();
+    for word in typed {
+        let candidates = fixture.complete(&format!("cat {word}")).await;
+        // A word whose `$` needs quoting comes back quoted, the spelling kept inside.
+        let stem = word.trim_end_matches("inn").trim_start_matches('\'');
+        if !candidates
+            .iter()
+            .any(|c| c.trim_start_matches('\'').starts_with(stem) && c.contains("inner_file.txt"))
+        {
+            failed.push(format!("{word}: {candidates:?}"));
+        }
+    }
+
+    // Unquoted backslashes, which the prompt keeps with `shopt winpaths`; a UNC path's
+    // `$` still needs its quotes.
+    fixture.define("shopt -s winpaths").await;
+    for stem in [back.clone(), format!("\\\\localhost\\{letter}${unc_rest}")] {
+        let word = format!("{stem}\\spellme\\inn");
+        let candidates = fixture.complete(&format!("cat {word}")).await;
+        if !candidates
+            .iter()
+            .any(|c| c.trim_start_matches('\'').starts_with(&stem) && c.contains("inner_file.txt"))
+        {
+            failed.push(format!("{word}: {candidates:?}"));
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
 /// `C:/x` -> `/c/x`, without depending on `cash-win32` from this crate.
 fn cash_win32_unix_spelling(windows: &str) -> String {
     let bytes = windows.as_bytes();

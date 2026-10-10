@@ -620,7 +620,9 @@ fn cacheable_parse(
         .map_err(|err| error::WordParseError::Word(word.to_owned(), err.into()))?;
 
     if options.windows_drive_paths && starts_with_drive_backslash(word) {
-        keep_path_backslashes(&mut pieces);
+        keep_path_backslashes(&mut pieces, false);
+    } else if options.windows_drive_paths && starts_with_unc_backslashes(word) {
+        keep_path_backslashes(&mut pieces, true);
     }
 
     tracing::debug!(target: "expansion", "Parsed word '{}' => {{{:?}}}", word, pieces);
@@ -634,8 +636,17 @@ const fn starts_with_drive_backslash(word: &str) -> bool {
     bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\'
 }
 
-/// cash's `winpaths` (D53): in the leading unquoted run of a word that starts `C:\`,
-/// a backslash is a path separator where bash's escape would only have eaten it:
+/// Whether `word` begins `\\name`: a UNC path's two backslashes and a server's name
+/// (`\\server\share`, `\\wsl$\Ubuntu`), unquoted.
+fn starts_with_unc_backslashes(word: &str) -> bool {
+    word.strip_prefix(r"\\")
+        .and_then(|rest| rest.chars().next())
+        .is_some_and(|c| c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '$'))
+}
+
+/// cash's `winpaths` (D53): in the leading unquoted run of a word that starts `C:\`, or
+/// `\\server` (`unc`, whose leading `\\` stays two backslashes), a backslash is a path
+/// separator where bash's escape would only have eaten it:
 ///
 /// * before a character that can begin a file name and means nothing special there
 ///   (see [`starts_a_path_component`]), the backslash and the character are both kept
@@ -743,10 +754,10 @@ fn starts_a_path_component(c: char) -> bool {
         )
 }
 
-fn keep_path_backslashes(pieces: &mut Vec<WordPieceWithSource>) {
+fn keep_path_backslashes(pieces: &mut Vec<WordPieceWithSource>, unc: bool) {
     let mut out = Vec::with_capacity(pieces.len() + 2);
     let mut in_run = true;
-    for piece in pieces.drain(..) {
+    for (index, piece) in pieces.drain(..).enumerate() {
         if !in_run {
             out.push(piece);
             continue;
@@ -762,6 +773,13 @@ fn keep_path_backslashes(pieces: &mut Vec<WordPieceWithSource>) {
             }
         };
         match escaped {
+            // A UNC path's leading `\\`, which bash reads as one escaped backslash.
+            Some('\\') if unc && index == 0 => {
+                out.push(WordPieceWithSource {
+                    piece: WordPiece::SingleQuotedText(r"\\".to_owned()),
+                    ..piece
+                });
+            }
             Some(c) if starts_a_path_component(c) => {
                 out.push(WordPieceWithSource {
                     piece: WordPiece::SingleQuotedText(std::format!("\\{c}")),

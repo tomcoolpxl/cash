@@ -78,6 +78,33 @@ fn names_bash_would_only_have_unescaped_are_kept() {
 }
 
 #[test]
+fn a_unc_path_keeps_its_backslashes_the_leading_two_included() {
+    assert_eq!(
+        words_with_winpaths(r"\\server\share\dir \\wsl$\Ubuntu\home \\ x"),
+        "[\\\\server\\share\\dir]\n[\\\\wsl$\\Ubuntu\\home]\n[\\]\n[x]"
+    );
+    // Without the option, bash's reading.
+    assert_eq!(
+        cash(&["-c", r"printf '[%s]\n' \\server\share"]),
+        r"[\servershare]"
+    );
+}
+
+#[test]
+fn cd_follows_a_pasted_unc_path() {
+    let here = std::env::current_dir()
+        .unwrap()
+        .to_string_lossy()
+        .replace('/', r"\");
+    let (drive, rest) = here.split_at(2);
+    let unc = format!(r"\\localhost\{}${rest}", drive.get(..1).unwrap());
+    assert_eq!(
+        cash(&["-c", &format!("shopt -s winpaths; cd {unc} && pwd")]),
+        unc.replace('\\', "/")
+    );
+}
+
+#[test]
 fn an_escaped_space_still_joins_the_word() {
     assert_eq!(
         words_with_winpaths(r"C:\Program\ Files\Git"),

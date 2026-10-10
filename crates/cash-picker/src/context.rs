@@ -140,9 +140,30 @@ fn words(line: &str) -> Vec<Word> {
         }
         let mut text = String::new();
         let mut quote: Option<char> = None;
+        // A word that starts `C:\` keeps its backslashes until its first quote, as the
+        // prompt reads it (`shopt winpaths`): `cd C:\Users\me\sr` starts in `C:\Users\me`.
+        let mut winpath = line.get(at..).is_some_and(starts_with_drive_backslash);
+        // A UNC path's leading `\\` is two backslashes, not an escaped one.
+        if winpath && line.get(at..).is_some_and(|rest| rest.starts_with(r"\\")) {
+            text.push_str(r"\\");
+            chars.next();
+            chars.next();
+        }
         while let Some(&(_, c)) = chars.peek() {
             match quote {
                 Some(q) if c == q => quote = None,
+                None if c == '\\' && winpath => {
+                    chars.next();
+                    // At the line's end too: `cd C:\Users\` is being typed.
+                    let separates = chars.peek().is_none_or(|&(_, next)| is_winpath_char(next));
+                    if separates {
+                        text.push('\\');
+                    } else if let Some(&(_, escaped)) = chars.peek() {
+                        text.push(escaped);
+                        chars.next();
+                    }
+                    continue;
+                }
                 Some('"') if c == '\\' => {
                     chars.next();
                     if let Some(&(_, escaped)) = chars.peek() {
@@ -150,7 +171,10 @@ fn words(line: &str) -> Vec<Word> {
                     }
                 }
                 Some(_) => text.push(c),
-                None if c == '\'' || c == '"' => quote = Some(c),
+                None if c == '\'' || c == '"' => {
+                    quote = Some(c);
+                    winpath = false;
+                }
                 None if c.is_whitespace() || matches!(c, ';' | '|' | '&' | '(' | ')') => {
                     break;
                 }
@@ -172,6 +196,45 @@ fn words(line: &str) -> Vec<Word> {
         });
     }
     words
+}
+
+/// Whether `word` begins `X:\`, a drive letter, a colon and a backslash, or `\\name`, a
+/// UNC path's server.
+fn starts_with_drive_backslash(word: &str) -> bool {
+    let bytes = word.as_bytes();
+    let drive =
+        bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\';
+    drive
+        || word
+            .strip_prefix(r"\\")
+            .and_then(|rest| rest.chars().next())
+            .is_some_and(|c| c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '$'))
+}
+
+/// Whether a backslash before `c`, in a word that starts `C:\`, is a separator rather
+/// than an escape: before what can start a file name, or a wildcard (the shell's rule).
+fn is_winpath_char(c: char) -> bool {
+    c.is_alphanumeric()
+        || matches!(
+            c,
+            '.' | '_'
+                | '-'
+                | '$'
+                | '@'
+                | '+'
+                | '%'
+                | ','
+                | '='
+                | '^'
+                | '~'
+                | '#'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+                | '*'
+                | '?'
+        )
 }
 
 /// The command word of a simple command: the first word that is not an assignment, nor
@@ -278,5 +341,21 @@ mod tests {
         assert_eq!(line.text, "a b/c");
         let line = at(r"cd My\ Docs^");
         assert_eq!(line.text, "My Docs");
+    }
+
+    #[test]
+    fn a_word_starting_with_a_drive_keeps_its_backslashes_as_the_prompt_does() {
+        assert_eq!(at(r"cd C:\Users\me\sr^").text, r"C:\Users\me\sr");
+        assert_eq!(at(r"cd C:\Users\^").text, r"C:\Users\");
+        assert_eq!(at(r"ls C:\logs\*.txt^").text, r"C:\logs\*.txt");
+        // Before a space it is the escape it always was, and after a quote too.
+        assert_eq!(at(r"cd C:\Program\ Files\Gi^").text, r"C:\Program Files\Gi");
+        assert_eq!(at(r"cd C:\x'y'\z^").text, "C:\\xyz");
+        // A UNC path's too, its leading `\\` included.
+        assert_eq!(at(r"cd \\server\share\di^").text, r"\\server\share\di");
+        assert_eq!(at(r"cd \\wsl$\Ubuntu\ho^").text, r"\\wsl$\Ubuntu\ho");
+        // A word that starts with neither is read as before.
+        assert_eq!(at(r"cd a\b^").text, "ab");
+        assert_eq!(at(r"cd \\ x^").text, "x");
     }
 }

@@ -163,6 +163,8 @@ mod own_path;
 mod nc_builtin;
 // D48: one pager behind `less` and `more`.
 mod pager;
+// D3: every spelling of a folder in every place a script writes a path.
+mod path_spellings;
 mod ping;
 // The offer a portable cash makes once at its first prompt: PATH, the Terminal profile,
 // the tool links.

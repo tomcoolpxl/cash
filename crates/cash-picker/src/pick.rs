@@ -176,4 +176,36 @@ mod tests {
         let (folder, filter) = start("no/such/place/x", &home(), Some(&home()));
         assert_eq!((folder, filter.as_str()), (home(), "x"));
     }
+
+    #[test]
+    fn every_spelling_of_a_folder_starts_the_picker_in_it() {
+        let parent = tempfile::tempdir().unwrap();
+        let dir = parent.path().join("spell dir");
+        std::fs::create_dir(&dir).unwrap();
+        let fwd = cash_win32::path::render(&dir);
+        let (drive, rest) = fwd.split_at(2);
+        let letter = drive.get(..1).unwrap();
+        let back = fwd.replace('/', "\\");
+        let spellings = [
+            format!("{fwd}/in"),
+            format!("{}{rest}/in", drive.to_lowercase()),
+            format!("{back}\\in"),
+            format!("{fwd}\\in"),
+            format!("/{}{rest}/in", letter.to_lowercase()),
+            "~/spell dir/in".to_owned(),
+            "spell dir/in".to_owned(),
+            "./spell dir/in".to_owned(),
+            format!("//localhost/{letter}${rest}/in"),
+            format!("\\\\localhost\\{letter}${}\\in", rest.replace('/', "\\")),
+        ];
+        for typed in spellings {
+            let (folder, filter) = start(&typed, parent.path(), Some(parent.path()));
+            let shown = cash_win32::path::render(&folder);
+            assert!(
+                folder.is_dir() && shown.trim_end_matches('/').ends_with("spell dir"),
+                "{typed}: {shown}"
+            );
+            assert_eq!(filter, "in", "{typed}");
+        }
+    }
 }

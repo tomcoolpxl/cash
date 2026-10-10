@@ -1198,19 +1198,8 @@ impl Config {
 
         match result {
             Answer::Candidates(candidates, options) => {
-                // cash (D40): auto-quote, using the quoting the user has already typed.
-                // The candidates leave here quoted, so the front end must not quote them
-                // again: it used to backslash-escape the result, turning `"a b"` into
-                // `\"a\ b\"`.
-                let (candidates, options) = (
-                    autoquote_candidates(candidates, completion_prefix, &options, |name| {
-                        shell.absolute_path(Path::new(name)).is_dir()
-                    }),
-                    ProcessingOptions {
-                        no_autoquote_filenames: true,
-                        ..options
-                    },
-                );
+                let (candidates, options) =
+                    quoted_as_typed(shell, candidates, completion_prefix, &options);
 
                 // Completing inside a quoted word, `'my dir/in|'`, replaces its closing
                 // quote too: the candidate brings its own.
@@ -1348,6 +1337,29 @@ impl Config {
     }
 }
 
+/// cash (D40): `candidates` auto-quoted, using the quoting the user has already typed in
+/// `prefix`, and the options that say so. The candidates leave here quoted, so the front
+/// end must not quote them again: it used to backslash-escape the result, turning
+/// `"a b"` into `\"a\ b\"`. With `winpaths`, a word typed `C:\x\...` or `\\server\...`
+/// keeps its backslashes unquoted.
+fn quoted_as_typed(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    candidates: Vec<String>,
+    prefix: &str,
+    options: &ProcessingOptions,
+) -> (Vec<String>, ProcessingOptions) {
+    let winpaths = shell.options().windows_drive_paths && is_unquoted_drive_path(prefix);
+    (
+        autoquote_candidates(candidates, prefix, options, winpaths, |name| {
+            shell.absolute_path(Path::new(name)).is_dir()
+        }),
+        ProcessingOptions {
+            no_autoquote_filenames: true,
+            ..*options
+        },
+    )
+}
+
 /// Quote completion candidates the way the user has already started quoting — **D40**.
 ///
 /// `C:/Program Files` is the most common path on Windows and it breaks unquoted every
@@ -1366,10 +1378,14 @@ impl Config {
 ///
 /// A directory keeps its `/` inside the quotes and gets no trailing space, so the path
 /// can go on; the front end leaves the cursor before the closing quote.
+///
+/// With `winpaths` (a `C:\x\...` word typed unquoted, `shopt winpaths` on), a backslash is
+/// a separator and needs no quoting.
 fn autoquote_candidates(
     candidates: Vec<String>,
     replaced_prefix: &str,
     options: &ProcessingOptions,
+    winpaths: bool,
     is_dir: impl Fn(&str) -> bool,
 ) -> Vec<String> {
     // `compgen -o noquote` is the caller's explicit opt-out, and non-filename candidates
@@ -1379,7 +1395,12 @@ fn autoquote_candidates(
         return candidates;
     }
 
-    let style = typed_quote_style(replaced_prefix);
+    // A winpaths word's backslashes are separators, not a style of escaping.
+    let style = if winpaths {
+        QuoteStyle::None
+    } else {
+        typed_quote_style(replaced_prefix)
+    };
 
     candidates
         .into_iter()
@@ -1404,6 +1425,9 @@ fn autoquote_candidates(
                 QuoteStyle::Single => single_quoted(body),
                 QuoteStyle::Double => double_quoted(body),
                 QuoteStyle::Backslash => backslash_escaped(body),
+                QuoteStyle::None if winpaths && !needs_quoting(&body.replace('\\', "/")) => {
+                    body.to_owned()
+                }
                 QuoteStyle::None if !needs_quoting(body) => body.to_owned(),
                 QuoteStyle::None if body.contains('\'') => double_quoted(body),
                 QuoteStyle::None => single_quoted(body),
@@ -1550,15 +1574,59 @@ fn escape_for_double_quotes(text: &str) -> String {
     out
 }
 
-/// Whether `token` starts with a drive and a backslash (`C:\`) and holds no quote that
-/// the expansion would have to see closed.
+/// Whether `token` starts with a drive and a backslash (`C:\`), or a UNC path's `\\` and
+/// a name (`\\server`), and holds no quote that the expansion would have to see closed.
 fn is_unquoted_drive_path(token: &str) -> bool {
     let bytes = token.as_bytes();
-    bytes.len() >= 3
-        && bytes[0].is_ascii_alphabetic()
-        && bytes[1] == b':'
-        && bytes[2] == b'\\'
-        && !token.contains(['\'', '"', '`'])
+    let drive =
+        bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\';
+    let unc = token
+        .strip_prefix(r"\\")
+        .and_then(|rest| rest.chars().next())
+        .is_some_and(|c| c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '$'));
+    (drive || unc) && !token.contains(['\'', '"', '`'])
+}
+
+/// The word Tab expands to find what `token` completes to.
+///
+/// cash (D53): with `winpaths`, `C:\Users\me\sr` keeps its backslashes, and the expansion
+/// applies that rule itself; unquoting first would strip them and complete `C:Usersmesr`
+/// instead. A quote left open mid-completion is closed, and the expansion reads the word
+/// as the shell will: `'C:\x\in` keeps its backslashes, which `unquote_str`, taking each
+/// for an escape, removed. `compgen`'s word is taken as it is.
+fn word_to_expand(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    token: &str,
+    from_compgen: bool,
+) -> String {
+    let keeps_backslashes = shell.options().windows_drive_paths && is_unquoted_drive_path(token);
+    if keeps_backslashes || from_compgen {
+        token.to_owned()
+    } else if token.contains(['\'', '"']) {
+        close_open_quote(token)
+    } else {
+        unquote_str(token)
+    }
+}
+
+/// `token` with the quote it leaves open, if any, closed: `'C:\x\in` is `'C:\x\in'`.
+fn close_open_quote(token: &str) -> String {
+    let mut open: Option<char> = None;
+    let mut chars = token.chars();
+    while let Some(c) = chars.next() {
+        match (open, c) {
+            (Some('\''), '\'') | (Some('"'), '"') => open = None,
+            (None | Some('"'), '\\') => {
+                chars.next();
+            }
+            (None, '\'' | '"') => open = Some(c),
+            _ => {}
+        }
+    }
+    match open {
+        Some(quote) => format!("{token}{quote}"),
+        None => token.to_owned(),
+    }
 }
 
 /// The pattern a typed word completes: its `*` and `?` glob, as no Windows file name can
@@ -1614,17 +1682,7 @@ async fn get_file_completions(
         },
         ..Default::default()
     };
-    // cash (D53): with `winpaths`, `C:\Users\me\sr` keeps its backslashes, and the
-    // expansion applies that rule itself; unquoting first would strip them and complete
-    // `C:Usersmesr` instead. A word with quotes in it still goes through `unquote_str`,
-    // which copes with a quote left open mid-completion.
-    let keeps_backslashes =
-        shell.options().windows_drive_paths && is_unquoted_drive_path(token_to_complete);
-    let to_expand = if keeps_backslashes || from_compgen {
-        token_to_complete.to_owned()
-    } else {
-        unquote_str(token_to_complete)
-    };
+    let to_expand = word_to_expand(shell, token_to_complete, from_compgen);
     let expanded_token = expansion::basic_expand_word_with_options(
         &mut throwaway_shell,
         &params,
@@ -1633,6 +1691,14 @@ async fn get_file_completions(
     )
     .await
     .unwrap_or_else(|_err| token_to_complete.to_owned());
+
+    // The folder as typed, when it was typed with backslashes (`C:\x\`, `\\server\share\`),
+    // to put back on the names found: a path completes in the spelling it was typed in.
+    let backslashed_folder = expanded_token
+        .rfind(['/', '\\'])
+        .and_then(|at| expanded_token.get(..=at))
+        .filter(|folder| folder.contains('\\'))
+        .map(str::to_owned);
 
     // Normalize path separators before building the glob pattern, because backslash
     // is the escape character in glob syntax and must not be confused with a Windows
@@ -1680,6 +1746,13 @@ async fn get_file_completions(
         for completion in &mut completions {
             if let Some(rest) = completion.get(windows_form.len()..) {
                 *completion = std::format!("{expanded_token}{rest}");
+            }
+        }
+    }
+    if let Some(typed) = backslashed_folder.as_deref() {
+        for completion in &mut completions {
+            if let Some(rest) = completion.get(typed.len()..) {
+                *completion = std::format!("{typed}{rest}");
             }
         }
     }
@@ -1978,6 +2051,7 @@ fn z_completions(
         found.into_iter().map(|(folder, _)| folder.path).collect(),
         before.get(start..).unwrap_or_default(),
         &options,
+        false,
         |name| Path::new(name).is_dir(),
     );
     Some(Completions {

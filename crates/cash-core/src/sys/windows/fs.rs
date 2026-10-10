@@ -357,11 +357,9 @@ pub fn split_path_for_pattern(s: &str) -> impl Iterator<Item = &str> {
 /// On Windows, recognizes both a leading separator (empty first component from splitting
 /// a path like `/foo`) and a drive-letter prefix like `C:` as absolute.
 ///
-/// TODO(windows): UNC paths like `\\server\share\foo` are not yet handled
-/// specially; they split into `["", "", "server", "share", "foo"]`, and the
-/// leading empty component causes them to be treated as if they were rooted
-/// at `/`, which drops the server/share portion. Supporting UNC requires
-/// peeking further into the component list.
+/// A UNC start (`\\server\share\foo`, `//server/share/foo`), like `/c/foo` and `/tmp/foo`,
+/// needs more than the first component; `Pattern::expand` reads such a start as `cd`
+/// does before it asks here.
 pub fn pattern_path_root(first_component: &str) -> Option<PathBuf> {
     if first_component.is_empty() {
         // Leading separator, e.g. `/foo` split into ["", "foo"].

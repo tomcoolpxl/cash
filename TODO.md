@@ -1054,8 +1054,17 @@ day (spec D79, D80). In order:
    once (an unplugged drive keeps its folders). Tab replaces all the words typed, since
    a full path would not match them in turn. Tests: `it/z_jump.rs`, and two sessions in
    `conpty_z_jumps_to_folders_a_session_before_went_to`.
-3. **Every way of writing a path, everywhere**: each spelling in each place a path is
-   typed or written, as a table of tests; what fails fixed.
+3. **Every way of writing a path, everywhere** (done 2026-10-10): `it/path_spellings.rs`
+   runs a folder named `my dir` in ten spellings (`C:/`, `c:/`, `C:\`, mixed, `/c/`,
+   `~/`, relative, `./`, `//localhost/C$/…`, `\\localhost\C$\…`) through 17 places
+   (`cd`, `pushd`, `cdh`, `CDPATH`, `z`, `<`, `>`, `>>`, `source`, `test`, `ls`, globs,
+   a script by its path, `PATH`, `cat`, `git`); Tab and Alt-E's start have tables of
+   their own. Fixed: a glob whose fixed start is `/c/…`, `/tmp/…` or UNC matched
+   nothing (now read as `cd` reads it, matches in `C:/` spelling); Tab on a word typed
+   with an open quote and backslashes (`'C:\x\in`) completed nothing, and Tab gave
+   `C:/` for a word typed `C:\` (now kept); Alt-E took a `C:\…` word's backslashes for
+   escapes. `winpaths` now covers `\\server\share` too (the user's pick, spec D53).
+   `/c/…` given to a program stays as written, with the warning, as documented.
 4. **A guard on size and speed**: `cargo xtask perf`, `perf-budget.toml`, run by the
    release workflow before it publishes.
 5. **`rm -rf` on junctions**, from "Found along the way": a junction inside a folder
