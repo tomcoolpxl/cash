@@ -233,5 +233,7 @@ xt -ppassword rar15_40/encrypted/header_rar300_password.rar
 echo "== e, a wrong password"
 rm -rf out
 z e -y -oout -pwrong rar15_40/encrypted/per_file_rar300_password.rar
+echo "== t, a RAR 3 VM program none of the standard filters"
+z t rar15_40/rarvm/generic_delta_padding_mutation.rar
 
 cd / && rm -rf "$dir"

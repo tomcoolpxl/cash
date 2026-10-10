@@ -791,7 +791,9 @@ pub(super) fn work4(
                             &mut input,
                             output_size,
                             &mut out,
-                            false,
+                            // A VM program none of the standard filters fails, as in
+                            // 7-Zip (an unsupported method there, a data error here).
+                            true,
                         )
                     }
                 }

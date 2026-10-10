@@ -631,15 +631,15 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    user's leave on 2026-10-07). `l`, `t`, `x` and `e` are in, RAR 1.5 to 7
    (`sevenzip/rar7`; `7z_rar.sh` and `7z_rar4.sh` check them against 7-Zip on 160 of
    rars' fixtures). Left:
-   - 7-Zip's strictness where rar's decoders are WinRAR's: a match reaching before the
-     start of the data is a data error in 7-Zip and zeros in rar (RAR 2.0, 2.9 and 5;
-     `zero_fill/`), a RAR 1.5 volume opened in the middle is a data error in 7-Zip and
-     a CRC error in rar (`rar154/random.r00`), and a RAR 3 VM program that is none of the
-     standard filters is an unsupported method in 7-Zip and run by rar
-     (`rarvm/generic_delta_padding_mutation.rar`). A strict mode in rar's decoders:
-     the last has one now, `Unpack29::with_standard_filters_only`, which the rar builtin
-     uses (WinRAR 7.23 refuses such a program too); 7z would word its refusal as
-     "Unsupported Method".
+   - 7-Zip's strictness where rar's decoders are WinRAR's: closed 2026-10-10 by the
+     user's rule (a faulty archive needs a faulty status, not 7-Zip's words). A RAR 1.5
+     volume opened in the middle is a data error in 7-Zip and a CRC error in rar
+     (`rar154/random.r00`): both faulty. A RAR 3 VM program that is none of the standard
+     filters now fails in 7z as well (`Unpack29::with_standard_filters_only`, as the rar
+     builtin has it), a data error where 7-Zip says "Unsupported Method"
+     (`7z_rar4.sh`). A match reaching before the start of the data is a data error in
+     7-Zip; in 7z too for RAR 5 (finish mode), zeros for RAR 2.0 and 2.9 (`zero_fill/`,
+     which WinRAR reads as valid): left so.
    - Copy links (`-oi`): done 2026-10-10. A link points at the last file before it of
      its target's name, version and size (`FillLinks`). One to a file that starts its
      stream decodes that file again; one to a solid file takes a copy kept as that file

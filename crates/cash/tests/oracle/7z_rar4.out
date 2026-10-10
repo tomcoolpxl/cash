@@ -13546,3 +13546,28 @@ Archives with Errors: 1
 
 Sub items Errors: 1
 rc=2
+== t, a RAR 3 VM program none of the standard filters
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3064 bytes (3 KiB)
+
+Testing archive: rar15_40/rarvm/generic_delta_padding_mutation.rar
+--
+Path = rar15_40/rarvm/generic_delta_padding_mutation.rar
+Type = Rar
+Physical Size = 3064
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+ERROR: Unsupported Method : itanium_synthetic_bundles.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2

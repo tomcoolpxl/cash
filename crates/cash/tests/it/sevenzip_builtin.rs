@@ -61,11 +61,19 @@ fn seven_z_reads_rar_1_5_to_4_as_7_zip_26_03_does() {
         &golden("7z_rar4"),
         "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
-        210,
+        211,
     );
     // A name outside ASCII, which 7-Zip writes in the console's code page and cash in
     // UTF-8.
     let expected = with_divergence(&expected, "Path = 2__.txt\n", "Path = 2中文.txt\n", 1);
+    // A RAR 3 VM program none of the standard filters fails in both, an unsupported
+    // method in 7-Zip and a data error in rar's decoder: a faulty status is the bar.
+    let expected = with_divergence(
+        &expected,
+        "ERROR: Unsupported Method : itanium_synthetic_bundles.bin\n",
+        "ERROR: Data Error : itanium_synthetic_bundles.bin\n",
+        1,
+    );
     assert_eq!(run_oracle_script("7z_rar4"), expected);
 }
 
