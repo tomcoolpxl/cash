@@ -2783,6 +2783,41 @@ thing" for tar, zip and the rest, designed before anything is built.
   adoption work (GIFs, a docs site, issue templates, `doctor --report`) and an ARM64
   build, which stay on the list.
 
+### D79 — Ctrl-R: a history picker
+
+**Status: chosen by the user on 2026-10-10**, by pick list (TODO.md phase 34;
+`research/prompt-history-and-jump-design.md`).
+
+Ctrl-R opens a list of the history below the command line, drawn as Alt-E's picker
+(D73): its height, colours and moving keys, inline, Esc on an empty filter closing it
+and leaving the line. Each command shows once, at its last use, newest first, with its
+age; a command of several lines shows on one. Typing is the same fuzzy filter, on the
+whole command, best matches first and the newest of equals first; what was on the line
+when Ctrl-R was pressed is the filter it opens with. Enter puts the command on the line
+to edit; Tab runs it at once. Ctrl-R in the picker switches between the whole history
+and what ran in the current folder: cash records each command's folder in a file of its
+own, `%LOCALAPPDATA%\cash\history-folders`, beside Bash's history file, which holds
+commands and times only; commands from before that record show in the whole list only.
+Bash's reverse search stays a Readline function `bind` can put back on a key.
+
+### D80 — `z`: the folder jump
+
+**Status: chosen by the user on 2026-10-10**, by pick list (TODO.md phase 34;
+`research/prompt-history-and-jump-design.md`).
+
+Every change of folder counts a visit to the folder arrived in, kept across sessions in
+`%LOCALAPPDATA%\cash\folders` (this machine's paths, so local, not roaming). A folder's
+rank is zoxide's: its visits weighted by the last one's age (×4 within the hour, ×2
+the day, ×½ the week, ×¼ older); when visits add up past 10,000 all are scaled by 0.9
+and those under 1 forgotten, and a folder that is gone is forgotten when a jump meets
+it. `z foo bar` goes to the best folder whose path holds `foo` and then `bar`, the last
+word in its last part, case aside; a word that is a folder is `cd`'s; `z` alone goes
+home and `z -` back; no match is status 1. `z -l` lists the matches with their ranks,
+`z -i` opens Alt-E's picker on them, and Tab completes from the record. A `z` function,
+zoxide's included, comes before the builtin. Alt-E's Alt-H shows this record, best
+first, in place of the session's 25 folders; Alt-←/→ stay the session's back and
+forward.
+
 ### D72 — `help` from one catalogue
 
 Every builtin has an entry: a kind and a one-line summary, in

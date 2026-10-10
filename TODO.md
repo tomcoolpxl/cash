@@ -1031,6 +1031,28 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 
 ---
 
+## Phase 34. The prompt, paths, and a guard on size and speed
+
+Asked by the user on 2026-10-10, after 1.11.0, on what they like most: small and fast,
+every way of writing a path working, and the prompt's helpers. Design in
+`research/prompt-history-and-jump-design.md`; the choices made by pick list the same
+day (spec D79, D80). In order:
+
+1. **Ctrl-R: a history picker** (D79): Alt-E's inline list over the history, fuzzy,
+   newest first, Enter to the line and Tab to run, Ctrl-R again for what ran in this
+   folder (a folder record of cash's own beside the history file).
+2. **`z`: the folder jump** (D80): every change of folder ranked across sessions as
+   zoxide ranks, `z WORDS`, `z -l`, `z -i`, Tab, and Alt-E's Alt-H on the same record.
+3. **Every way of writing a path, everywhere**: each spelling in each place a path is
+   typed or written, as a table of tests; what fails fixed.
+4. **A guard on size and speed**: `cargo xtask perf`, `perf-budget.toml`, run by the
+   release workflow before it publishes.
+5. **`rm -rf` on junctions**, from "Found along the way": a junction inside a folder
+   gives "Permission denied", and one whose target went first fails too; both need the
+   link removed as a folder link, never followed (`uu_rm` 0.12.0).
+
+---
+
 ## Found along the way
 
 - **cash's `printf` writes a line's end in a write of its own** (found on 2026-10-09

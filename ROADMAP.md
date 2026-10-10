@@ -34,6 +34,7 @@ Feature work follows the sequence below.
 | 21 | `gzip`, `gunzip` and `zcat` in pure Rust | **Active** (built 2026-10-06, for 1.8.0) | TODO.md phase 24; spec D77 |
 | 22 | Compatibility corners: `/dev/tcp`, `command_not_found_handle`, kept `abbr`, kinder refusals, `getconf`, `locale` | **Active** (built 2026-10-06, for 1.8.0) | TODO.md phase 25; spec D77 |
 | 23 | Archive and compression tools on shared parts: `bzip2`, `xz`, `zstd` and their names, `tar`, `zip`/`unzip`/`zipinfo` | **Done** (2026-10-07: the compressors, `tar`, and `zip`, `unzip`, `zipinfo`) | [Design](research/archive-tools-design.md); TODO.md phases 29–30; spec D78 |
+| 24 | The prompt and paths: a Ctrl-R history picker, the `z` folder jump, every path spelling everywhere, and a guard on size and speed | **Active** (decided 2026-10-10) | [Design](research/prompt-history-and-jump-design.md); TODO.md phase 34; spec D79, D80 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
