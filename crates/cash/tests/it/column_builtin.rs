@@ -11,40 +11,7 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::path::PathBuf;
-use std::process::Stdio;
-
-use crate::common::{Scratch, cash_command, run};
-
-fn oracle_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("oracle")
-}
-
-/// Runs the oracle script under cash; standard output and error together, as the golden
-/// file was made.
-fn run_oracle_script(name: &str) -> String {
-    let out = cash_command()
-        .arg(format!("{name}.sh"))
-        .current_dir(oracle_dir())
-        .stdin(Stdio::null())
-        .output()
-        .expect("run cash");
-    String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr)
-}
-
-fn golden(name: &str) -> String {
-    std::fs::read_to_string(oracle_dir().join(format!("{name}.out")))
-        .expect("read golden output")
-        .replace("\r\n", "\n")
-}
-
-/// `golden` with `from` replaced by `to`, which must occur exactly once.
-fn with_divergence(golden: &str, from: &str, to: &str) -> String {
-    assert_eq!(golden.matches(from).count(), 1, "golden text moved: {from}");
-    golden.replacen(from, to, 1)
-}
+use crate::common::{Scratch, golden, run, run_oracle_script, with_divergence};
 
 #[test]
 fn column_matches_util_linux() {
@@ -54,18 +21,21 @@ fn column_matches_util_linux() {
         // util-linux keeps it inside the item.
         " a \\r \\t b b \\r \\n\n",
         " a \\t b b \\r \\n\n",
+        1,
     );
     let expected = with_divergence(
         &expected,
         // A byte that is not UTF-8 is kept, one cell wide; util-linux prints `\xff`.
         " a \\ x f f b _ _ c \\n d _ _ _ _ _\n _ _ e \\n\n",
         " a 377 b _ _ c \\n d _ _ _ _ e \\n\n",
+        1,
     );
     let expected = with_divergence(
         &expected,
         // The CR of a CRLF line is a line ending, not part of the last cell.
         "         \"b\": \"b\\r\"\n",
         "         \"b\": \"b\"\n",
+        1,
     );
     let expected = with_divergence(
         &expected,
@@ -73,11 +43,13 @@ fn column_matches_util_linux() {
         // util-linux's status is the table's.
         "a    b\nccc  d\nrc=0\n",
         "a    b\nccc  d\nrc=1\n",
+        1,
     );
     let expected = with_divergence(
         &expected,
         "column from util-linux 2.42.3\n",
         "column (cash): util-linux 2.42.3's options\n",
+        1,
     );
     assert_eq!(run_oracle_script("column_cases"), expected);
 }

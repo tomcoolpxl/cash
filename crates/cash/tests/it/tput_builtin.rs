@@ -11,40 +11,7 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::path::PathBuf;
-use std::process::Stdio;
-
-use crate::common::{cash_command, run};
-
-fn oracle_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("oracle")
-}
-
-/// Runs an oracle script under cash; standard output and error together, as the golden
-/// file was made.
-fn run_oracle_script(name: &str) -> String {
-    let out = cash_command()
-        .arg(format!("{name}.sh"))
-        .current_dir(oracle_dir())
-        .stdin(Stdio::null())
-        .output()
-        .expect("run cash");
-    String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr)
-}
-
-fn golden(name: &str) -> String {
-    std::fs::read_to_string(oracle_dir().join(format!("{name}.out")))
-        .expect("read golden output")
-        .replace("\r\n", "\n")
-}
-
-/// `golden` with `from` replaced by `to`, which must occur exactly once.
-fn with_divergence(golden: &str, from: &str, to: &str) -> String {
-    assert_eq!(golden.matches(from).count(), 1, "golden text moved: {from}");
-    golden.replacen(from, to, 1)
-}
+use crate::common::{golden, run, run_oracle_script, with_divergence};
 
 #[test]
 fn tput_matches_ncurses() {
@@ -53,6 +20,7 @@ fn tput_matches_ncurses() {
         // cash's own version line; the sequences are ncurses 6.6's.
         "== the version\nncurses 6.6.20251230\n",
         "== the version\ntput (cash): VT sequences, as ncurses 6.6 writes them\n",
+        1,
     );
     let expected = with_divergence(
         &expected,
@@ -60,6 +28,7 @@ fn tput_matches_ncurses() {
         // nor a non-VT one is refused; only an explicit -T is checked.
         "tput: No value for $TERM and no -T specified\nrc=2\nrc=1\n",
         " 033 [ 1 m\nrc=0\n 033 [ 1 m\nrc=0\n",
+        1,
     );
     assert_eq!(run_oracle_script("tput_cases"), expected);
 }

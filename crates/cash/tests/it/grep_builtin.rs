@@ -12,40 +12,7 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::path::PathBuf;
-use std::process::Stdio;
-
-use crate::common::{Scratch, cash_command, run, run_in};
-
-fn oracle_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("oracle")
-}
-
-/// Runs the oracle script under cash; standard output and error together, as the golden
-/// file was made.
-fn run_oracle_script(name: &str) -> String {
-    let out = cash_command()
-        .arg(format!("{name}.sh"))
-        .current_dir(oracle_dir())
-        .stdin(Stdio::null())
-        .output()
-        .expect("run cash");
-    String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr)
-}
-
-fn golden(name: &str) -> String {
-    std::fs::read_to_string(oracle_dir().join(format!("{name}.out")))
-        .expect("read golden output")
-        .replace("\r\n", "\n")
-}
-
-/// `golden` with `from` replaced by `to`, which must occur exactly once.
-fn with_divergence(golden: &str, from: &str, to: &str) -> String {
-    assert_eq!(golden.matches(from).count(), 1, "golden text moved: {from}");
-    golden.replacen(from, to, 1)
-}
+use crate::common::{Scratch, golden, run, run_in, run_oracle_script, with_divergence};
 
 /// The bytes of `od -An -c` output, as words.
 fn od_words(text: &str) -> Vec<&str> {
@@ -63,11 +30,13 @@ fn grep_matches_gnu_grep() {
         "== CRLF\n0\n f o o \\r \\n\n f o o \\n\n f o o \\r \\n\n1\nrc=1\n4:foo\n5:oo\n",
         "== CRLF\n f o o \\r \\n\n1\n f o o \\r \\n\n f o o \\n\n f o o \\r \\n\n f o o \\n\n\
          0\nfoo\r\nrc=0\n4:foo\r\n5:oo\n",
+        1,
     );
     let expected = with_divergence(
         &expected,
         "1\n0\n f o o \\n\n f o o \\r \\n\n a \\r b \\n\n b a r \\n\n== end\n",
         "0\n0\n f o o \\n\n f o o \\r \\n\n a \\r b \\n\n o o \\n b a r \\n\n== end\n",
+        1,
     );
     // cash's own version line, for `--version` and `-V`.
     let expected = with_divergence(
@@ -75,6 +44,7 @@ fn grep_matches_gnu_grep() {
         "grep (GNU grep) 3.12-modified\ngrep (GNU grep) 3.12-modified\n",
         "grep (cash): GNU grep 3.12's options, on ripgrep's engine\n\
          grep (cash): GNU grep 3.12's options, on ripgrep's engine\n",
+        1,
     );
     // A repetition of an interval, `a\{1\}*`: refused as the bundled sed refuses it,
     // since grep's patterns are sed's; GNU grep reads it as `\(a\{1\}\)*`.
@@ -82,6 +52,7 @@ fn grep_matches_gnu_grep() {
         &expected,
         "rc=0\naa\naaa\na\naXb\n",
         "rc=0\naa\naaa\ngrep: Invalid preceding regular expression\naXb\n",
+        1,
     );
     assert_eq!(run_oracle_script("grep_cases"), expected);
 }

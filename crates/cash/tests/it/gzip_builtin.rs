@@ -13,41 +13,8 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::path::PathBuf;
-use std::process::Stdio;
-
-use crate::common::{Scratch, cash_command, run, run_in};
+use crate::common::{Scratch, golden, run, run_in, run_oracle_script, with_divergence};
 use crate::read_console::Script;
-
-fn oracle_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("oracle")
-}
-
-/// Runs the oracle script under cash; standard output and error together, as the golden
-/// file was made.
-fn run_oracle_script(name: &str) -> String {
-    let out = cash_command()
-        .arg(format!("{name}.sh"))
-        .current_dir(oracle_dir())
-        .stdin(Stdio::null())
-        .output()
-        .expect("run cash");
-    String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr)
-}
-
-fn golden(name: &str) -> String {
-    std::fs::read_to_string(oracle_dir().join(format!("{name}.out")))
-        .expect("read golden output")
-        .replace("\r\n", "\n")
-}
-
-/// `golden` with `from` replaced by `to`, which must occur exactly once.
-fn with_divergence(golden: &str, from: &str, to: &str) -> String {
-    assert_eq!(golden.matches(from).count(), 1, "golden text moved: {from}");
-    golden.replacen(from, to, 1)
-}
 
 #[test]
 fn gzip_matches_gnu_gzip() {
@@ -57,6 +24,7 @@ fn gzip_matches_gnu_gzip() {
         &golden("gzip_cases"),
         "Usage: /usr/sbin/gunzip [OPTION]... [FILE]...\nUsage: gzip [OPTION]... [FILE]...\n",
         "Usage: gunzip [OPTION]... [FILE]...\nUsage: zcat [OPTION]... [FILE]...\n",
+        1,
     );
     // A zip file: GNU gzip reads one of a single member, and says so of a bad one;
     // cash carries deflate in gzip's framing only, and refuses zip by name.
@@ -64,6 +32,7 @@ fn gzip_matches_gnu_gzip() {
         &expected,
         "\ngzip: pk.gz: not a valid zip file\n",
         "gzip: pk.gz: zip format is not supported by cash's gzip\n",
+        1,
     );
     // cash's own version line, under each of the three names.
     let expected = with_divergence(
@@ -74,6 +43,7 @@ fn gzip_matches_gnu_gzip() {
          gzip (cash): GNU gzip 1.14's options, in pure Rust\n\
          gunzip (cash): GNU gzip 1.14's options, in pure Rust\n\
          zcat (cash): GNU gzip 1.14's options, in pure Rust\n",
+        1,
     );
     assert_eq!(run_oracle_script("gzip_cases"), expected);
 }

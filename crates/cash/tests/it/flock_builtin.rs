@@ -13,41 +13,10 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
-use crate::common::{Scratch, cash_command, run_in};
-
-fn oracle_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("oracle")
-}
-
-/// Runs the oracle script under cash; standard output and error together, as the golden
-/// file was made.
-fn run_oracle_script(name: &str) -> String {
-    let out = cash_command()
-        .arg(format!("{name}.sh"))
-        .current_dir(oracle_dir())
-        .stdin(Stdio::null())
-        .output()
-        .expect("run cash");
-    String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr)
-}
-
-fn golden(name: &str) -> String {
-    std::fs::read_to_string(oracle_dir().join(format!("{name}.out")))
-        .expect("read golden output")
-        .replace("\r\n", "\n")
-}
-
-/// `golden` with `from` replaced by `to`, which must occur exactly once.
-fn with_divergence(golden: &str, from: &str, to: &str) -> String {
-    assert_eq!(golden.matches(from).count(), 1, "golden text moved: {from}");
-    golden.replacen(from, to, 1)
-}
+use crate::common::{Scratch, cash_command, golden, run_in, run_oracle_script, with_divergence};
 
 #[test]
 fn flock_matches_util_linux() {
@@ -56,6 +25,7 @@ fn flock_matches_util_linux() {
         // cash's version line names what the lock is made of.
         "flock from util-linux 2.42.3\n",
         "flock (cash): util-linux 2.42.3's options, on LockFileEx\n",
+        1,
     );
     // util-linux's `--verbose` lines are block-buffered into a pipe, so they come out
     // after the command's output there; cash writes them before it runs the command, as
@@ -65,17 +35,20 @@ fn flock_matches_util_linux() {
         &expected,
         "== --verbose\nhi\nflock: getting lock took N seconds\nflock: executing echo\n",
         "== --verbose\nflock: getting lock took N seconds\nflock: executing echo\nhi\n",
+        1,
     );
     let expected = with_divergence(
         &expected,
         "== --verbose -c\nhi\nflock: getting lock took N seconds\nflock: executing /usr/bin/bash\n",
         "== --verbose -c\nflock: getting lock took N seconds\nflock: executing cash\nhi\n",
+        1,
     );
     let expected = with_divergence(
         &expected,
         // A pipe is not a file; LockFileEx takes only a file's handle.
         "== a descriptor that is a pipe\nrc=0\n",
         "== a descriptor that is a pipe\nflock: 0: not a file; Windows can lock only a file\nrc=65\n",
+        1,
     );
     let expected = with_divergence(
         &expected,
@@ -83,6 +56,7 @@ fn flock_matches_util_linux() {
         // file that could not be opened.
         "== a directory\nrc=0\n",
         "== a directory\nflock: d: cannot lock a directory on Windows; use a file inside it\nrc=66\n",
+        1,
     );
     assert_eq!(run_oracle_script("flock_cases"), expected);
 }

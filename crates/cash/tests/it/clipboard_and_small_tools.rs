@@ -13,34 +13,9 @@
 )]
 
 use std::io::Write;
-use std::path::PathBuf;
 use std::process::Stdio;
 
-use crate::common::{Scratch, cash_command, run, run_in};
-
-fn oracle_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("oracle")
-}
-
-/// Runs an oracle script under cash; standard output and error together, as the golden
-/// file was made.
-fn run_oracle_script(name: &str) -> String {
-    let out = cash_command()
-        .arg(format!("{name}.sh"))
-        .current_dir(oracle_dir())
-        .stdin(Stdio::null())
-        .output()
-        .expect("run cash");
-    String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr)
-}
-
-fn golden(name: &str) -> String {
-    std::fs::read_to_string(oracle_dir().join(format!("{name}.out")))
-        .expect("read golden output")
-        .replace("\r\n", "\n")
-}
+use crate::common::{Scratch, cash_command, golden, run, run_in, run_oracle_script};
 
 #[test]
 fn uuidgen_matches_util_linux() {

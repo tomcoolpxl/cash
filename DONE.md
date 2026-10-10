@@ -1254,6 +1254,16 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    first try in CI; their `#[serial]` orders one process only, so they share a nextest
    group of one (`console-buffer`).
 
+5. **Ten oracle tests keep their own copies of the oracle helpers** (found 2026-10-07,
+   phase 28): `oracle_dir`, `run_oracle_script`, `golden` and `with_divergence` are
+   written out again in `gzip_builtin.rs`, `grep_builtin.rs`, `column_builtin.rs` and
+   seven more under `crates/cash/tests/it`. `common.rs` has them now, and the bzip2, xz
+   and zstd tests use those; move the ten onto them.
+   Done 2026-10-10: nine files still had copies (`clipboard_and_small_tools`, `column`,
+   `flock`, `grep`, `gzip`, `hexdump`, `iconv`, `tput`, `xxd`), each the same as
+   `common.rs`'s; they use those now, `with_divergence` with its count of 1. 288 lines
+   fewer.
+
 ---
 
 ## Found along the way, done

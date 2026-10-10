@@ -82,11 +82,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
   real; until then the page says so.
-- **Ten oracle tests keep their own copies of the oracle helpers** (found 2026-10-07,
-  phase 28): `oracle_dir`, `run_oracle_script`, `golden` and `with_divergence` are
-  written out again in `gzip_builtin.rs`, `grep_builtin.rs`, `column_builtin.rs` and
-  seven more under `crates/cash/tests/it`. `common.rs` has them now, and the bzip2, xz
-  and zstd tests use those; move the ten onto them.
 - **cash never runs a user's `command_not_found_handle`** (found building the install
   hint, 2026-10-06). Bash calls that function, when defined, with the command and its
   arguments instead of printing `command not found`, and its status becomes the

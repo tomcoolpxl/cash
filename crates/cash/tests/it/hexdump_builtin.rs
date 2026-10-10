@@ -11,40 +11,7 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::path::PathBuf;
-use std::process::Stdio;
-
-use crate::common::{Scratch, cash_command, run};
-
-fn oracle_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("oracle")
-}
-
-/// Runs the oracle script under cash; standard output and error together, as the golden
-/// file was made.
-fn run_oracle_script(name: &str) -> String {
-    let out = cash_command()
-        .arg(format!("{name}.sh"))
-        .current_dir(oracle_dir())
-        .stdin(Stdio::null())
-        .output()
-        .expect("run cash");
-    String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr)
-}
-
-fn golden(name: &str) -> String {
-    std::fs::read_to_string(oracle_dir().join(format!("{name}.out")))
-        .expect("read golden output")
-        .replace("\r\n", "\n")
-}
-
-/// `golden` with `from` replaced by `to`, which must occur exactly once.
-fn with_divergence(golden: &str, from: &str, to: &str) -> String {
-    assert_eq!(golden.matches(from).count(), 1, "golden text moved: {from}");
-    golden.replacen(from, to, 1)
-}
+use crate::common::{Scratch, golden, run, run_oracle_script, with_divergence};
 
 #[test]
 fn hexdump_matches_util_linux() {
@@ -54,12 +21,14 @@ fn hexdump_matches_util_linux() {
         "== -s on stdin\nhexdump: stdin: Illegal seek\nrc=1\n",
         "== -s on stdin\n00000003  6c 6f 20 77 6f 72 6c 64  21 21                    |lo world!!|\n\
          0000000d\nrc=0\n",
+        1,
     );
     let expected = with_divergence(
         &expected,
         "== -V\nhexdump from util-linux 2.42.3\nrc=0\n== --version\nhexdump from util-linux 2.42.3\n",
         "== -V\nhexdump (cash): util-linux 2.42.3's options\nrc=0\n\
          == --version\nhexdump (cash): util-linux 2.42.3's options\n",
+        1,
     );
     assert_eq!(run_oracle_script("hexdump_cases"), expected);
 }
