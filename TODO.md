@@ -103,12 +103,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
   during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs
   with the repository as its folder. Find it and give it a temporary folder.
-- **`sort` never asks Windows how much memory there is** (found 2026-10-10, making it
-  cash's own): uutils sizes its buffer from `sysinfo` on Linux and gives up elsewhere,
-  so on Windows the buffer is always the fixed default. `GlobalMemoryStatusEx` (through
-  `cash-win32`) would let a big sort use more memory and fewer temporary files;
-  `physical_memory_bytes` in `crates/cash-uutils/src/sort/buffer_hint.rs` is the place.
-  Likewise `tee -i` ignores no Ctrl-C on Windows (uutils' is Unix-only).
 - **`cp src >(cat)` can print zeros** (found 2026-10-10 in the 1.12.0 gate, once in a
   full run): a `>(...)` handed to a tool not patched for pipes is a temp file read as it
   grows, and `cp` (through `CopyFileEx`) sizes its target before it writes it, so a read

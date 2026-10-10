@@ -32,6 +32,10 @@ as it registers the uutils tools it uses unchanged.
   junction or a symbolic link to a folder is taken away with `RemoveDirectoryW`, never
   followed, whether its target is there or not; `DeleteFileW` refused it ("Permission
   denied").
+- **What uutils asks of Unix alone, asked of Windows** (2026-10-10): `sort` sizes its
+  buffer from the memory Windows can hand out (`GetPerformanceInfo`), as uutils takes
+  `MemAvailable` on Linux; it had the fixed 32 MiB. `tee -i` ignores Ctrl-C, Windows'
+  SIGINT, with a console handler that the programs it starts do not inherit.
 - **`rm`'s trailing separators**: `d/../////` is trimmed to `d/../` with either
   separator; uutils looked for `\` alone on Windows.
 - **What could panic** now says why it cannot, or is an error the tool reports, under

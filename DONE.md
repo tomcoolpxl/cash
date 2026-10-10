@@ -1211,6 +1211,20 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    before. `pwd -P` printed the resolved folder as `\\?\C:\…`; it is `C:/…` now, as every
    path cash prints. Tests: `it/pwd_forms.rs`.
 
+2. **`sort` never asks Windows how much memory there is** (found 2026-10-10, making it
+   cash's own): uutils sizes its buffer from `sysinfo` on Linux and gives up elsewhere,
+   so on Windows the buffer is always the fixed default. `GlobalMemoryStatusEx` (through
+   `cash-win32`) would let a big sort use more memory and fewer temporary files;
+   `physical_memory_bytes` in `crates/cash-uutils/src/sort/buffer_hint.rs` is the place.
+   Likewise `tee -i` ignores no Ctrl-C on Windows (uutils' is Unix-only).
+   Done 2026-10-10: `sort` takes a quarter of the memory Windows can hand out
+   (`cash_win32::memory::counts`, `GetPerformanceInfo`, as `free` reads it), else of all of
+   it, as uutils takes `MemAvailable` on Linux, within its 512 KiB to 1 GiB; the place
+   named above is gone. `tee -i` ignores Ctrl-C through a console handler, which programs
+   it starts do not inherit (`cash_win32::console::ignore_ctrl_c`). Tests: a unit test in
+   `buffer_hint.rs`, and `ctrl_c::tee_i_lives_through_ctrl_c`, where `tee -i` keeps what
+   the shell before it writes after a Ctrl-C ended its `ping`.
+
 ---
 
 ## Found along the way, done

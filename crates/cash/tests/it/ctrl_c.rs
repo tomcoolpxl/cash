@@ -169,6 +169,27 @@ echo "outer went on: rc=$?" >> out.txt"#
     assert_eq!(left.out, "outer exit trap");
 }
 
+/// `tee -i` lives through the Ctrl-C that ends the program before it in the pipeline, and
+/// keeps what the program's shell writes after it; uutils ignored SIGINT on Unix only, and
+/// Windows ended `tee` with the rest.
+#[test]
+fn tee_i_lives_through_ctrl_c() {
+    let cash = CASH.replace('\\', "/");
+    let left = script(
+        "tee-i",
+        &format!(
+            r#"'{cash}' --no-config -c 'trap "echo after" INT; {PING}; echo done' | tee -i t.txt
+echo "rc=$?" >> out.txt
+tail -n 2 t.txt >> out.txt"#
+        ),
+    )
+    .when_shown("127.0.0.1")
+    .type_keys("\x03")
+    .finish();
+
+    assert_eq!(left.out, "rc=0\nafter\ndone");
+}
+
 /// `select` asks with its prompt, which it shows once the keys are its own.
 #[test]
 fn ctrl_c_ends_a_script_waiting_in_select() {

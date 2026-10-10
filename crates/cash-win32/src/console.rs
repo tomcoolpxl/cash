@@ -134,6 +134,20 @@ pub fn enable_ctrl_c() {
     unsafe { SetConsoleCtrlHandler(None, FALSE) };
 }
 
+/// Ignores Ctrl-C from here on, as `tee -i` ignores SIGINT.
+///
+/// Ctrl-Break and the console's closing still end the process. A handler, not
+/// `SetConsoleCtrlHandler(NULL, TRUE)`, which the programs this process starts would
+/// inherit.
+pub fn ignore_ctrl_c() {
+    unsafe extern "system" fn handler(kind: u32) -> i32 {
+        i32::from(kind == CTRL_C_EVENT)
+    }
+
+    // SAFETY: registers a handler that touches nothing.
+    unsafe { SetConsoleCtrlHandler(Some(handler), 1) };
+}
+
 /// A Ctrl-C the console delivered while the shell was running commands of its own, and
 /// which the shell has not acted on yet.
 static PENDING_INTERRUPT: AtomicBool = AtomicBool::new(false);

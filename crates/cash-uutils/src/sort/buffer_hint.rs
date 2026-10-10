@@ -52,8 +52,16 @@ fn file_size_hint(files: &[OsString]) -> Option<usize> {
     Some(clamp_hint(desired_bytes))
 }
 
+/// A quarter of the memory Windows can hand out now, else of all of it, as uutils takes
+/// `MemAvailable`, else the total, on Linux.
 fn available_memory_hint() -> Option<usize> {
-    physical_memory_bytes().map(|bytes| clamp_hint(bytes / 4))
+    let counts = cash_win32::memory::counts()?;
+    let bytes = if counts.physical_available > 0 {
+        counts.physical_available
+    } else {
+        counts.physical_total
+    };
+    (bytes > 0).then(|| clamp_hint(u128::from(bytes) / 4))
 }
 
 fn clamp_hint(bytes: u128) -> usize {
@@ -78,16 +86,6 @@ fn desired_file_buffer_bytes(total_bytes: u128) -> u128 {
     quarter.max(max)
 }
 
-/// The machine's memory, which is not asked of Windows: the buffer then has its
-/// fixed default.
-#[allow(
-    clippy::unnecessary_wraps,
-    reason = "a place for the size, once it is asked of Windows"
-)]
-fn physical_memory_bytes() -> Option<u128> {
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,6 +98,12 @@ mod tests {
             crate::sort::MAX_AUTOMATIC_BUF_SIZE as u128,
         );
         assert_eq!(desired_file_buffer_bytes(six_mebibytes as u128), expected);
+    }
+
+    #[test]
+    fn the_buffer_follows_the_memory_windows_has() {
+        let sizes = crate::sort::MIN_AUTOMATIC_BUF_SIZE..=crate::sort::MAX_AUTOMATIC_BUF_SIZE;
+        assert!(matches!(available_memory_hint(), Some(hint) if sizes.contains(&hint)));
     }
 
     #[test]

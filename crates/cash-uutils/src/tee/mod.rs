@@ -57,6 +57,10 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 }
 
 fn tee(options: &Options) -> Result<(), ()> {
+    // cash: uutils ignores SIGINT on Unix only; Ctrl-C is Windows' SIGINT.
+    if options.ignore_interrupts {
+        cash_win32::console::ignore_ctrl_c();
+    }
     let mut writers: Vec<NamedWriter> = options
         .files
         .iter()
