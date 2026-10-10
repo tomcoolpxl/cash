@@ -326,6 +326,9 @@ struct Totals {
     files: u64,
     size: u64,
     packed: u64,
+    /// Alternate streams, counted apart from the files.
+    alt_streams: u64,
+    alt_size: u64,
     /// `-scrc`'s hashes of what was tested or extracted.
     hash: Option<super::hash::Bundle>,
 }
@@ -399,8 +402,14 @@ fn extract_all<SE: cash_core::ShellExtensions>(
         if totals.folders != 0 {
             console.so(&format!("Folders: {}\n", totals.folders));
         }
-        if totals.files != 1 || totals.folders != 0 {
+        if totals.files != 1 || totals.folders != 0 || totals.alt_streams != 0 {
             console.so(&format!("Files: {}\n", totals.files));
+        }
+        if totals.alt_streams != 0 {
+            console.so(&format!(
+                "Alternate Streams: {}\nAlternate Streams Size: {}\n",
+                totals.alt_streams, totals.alt_size
+            ));
         }
         console.so(&format!(
             "Size:       {}\nCompressed: {}\n",
@@ -603,9 +612,15 @@ fn extract_items<SE: cash_core::ShellExtensions>(
     let items = opened.items.clone();
     let censor = &options.censor;
     let all = censor.all_allowed() && !options.exclude_dirs && !options.exclude_files;
+    // An alternate stream is wanted with its file, unless -sns-.
     let wanted: Vec<bool> = items
         .iter()
-        .map(|item| all || censor.wants(&item.path, item.is_dir))
+        .map(|item| match item.stream_parts() {
+            Some((file, _)) => {
+                options.alt_streams != Some(false) && (all || censor.wants(&file, false))
+            }
+            None => all || censor.wants(&item.path, item.is_dir),
+        })
         .collect();
     if !wanted.contains(&true) {
         console.so("\nNo files to process\n");
@@ -786,6 +801,8 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         console.progress_item(mark, &item.path, logged);
         if item.is_dir {
             totals.folders += 1;
+        } else if item.alt_stream {
+            totals.alt_streams += 1;
         } else {
             totals.files += 1;
         }
@@ -868,11 +885,16 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         // size known before decoding, else the one the format reports after. A folder's
         // is a link's name.
         if !item.is_dir || item.link.is_some() {
-            totals.size += if written || through_hash {
+            let size = if written || through_hash {
                 read.get()
             } else {
                 item.size.or_else(|| data.unpacked()).unwrap_or(0)
             };
+            if item.alt_stream {
+                totals.alt_size += size;
+            } else {
+                totals.size += size;
+            }
         }
         if let Err(problem) = finished {
             if !skip {
@@ -1120,6 +1142,18 @@ fn elim_prefix(options: &Options, items: &[Item]) -> Option<String> {
 /// (`e`), less `-spe`'s folder, each part made one Windows can hold (`Correct_FsPath`);
 /// and that path as shown, relative to the output folder.
 fn target(out_dir: &Path, item: &Item, keep: PathKeep, elim: Option<&str>) -> (PathBuf, String) {
+    // An alternate stream goes into its file's stream of that name.
+    if let Some((file, stream)) = item.stream_parts() {
+        let host = Item {
+            path: file,
+            ..Item::default()
+        };
+        let (mut path, mut shown) = target(out_dir, &host, keep, elim);
+        let stream = format!(":{}", correct_part(stream));
+        path.as_mut_os_string().push(&stream);
+        shown.push_str(&stream);
+        return (path, shown);
+    }
     let mut parts = split_path(&item.path);
     // -spe's folder comes off with paths kept; `e` keeps names alone anyway.
     if elim.is_some() && keep != PathKeep::None && !parts.is_empty() {
@@ -1278,8 +1312,9 @@ fn write_file(
     }
     drop(file);
     // Before the times, which writing the stream would change; a volume without streams
-    // (FAT) keeps none, and says nothing.
-    if let Some(zone) = zone {
+    // (FAT) keeps none, and says nothing. An alternate stream has none of its own; its
+    // times and attributes, set below, are its file's, as 7-Zip sets them.
+    if let Some(zone) = zone.filter(|_| !item.alt_stream) {
         let mut stream = path.as_os_str().to_owned();
         stream.push(":Zone.Identifier");
         let _ = fs::write(&stream, zone);

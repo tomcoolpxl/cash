@@ -675,8 +675,14 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      gets nothing written in either, and the error word differs on some offsets (CRC
      against data error, both ways; 5 of 30 offsets of `rarvm/filter_bsdcat_exe.rar`
      and `rar250/unpack20_keep_tables.rar`).
-   - Alternate streams (`STM`) and ACLs, whose `NT Security` 7-Zip shows as the
-     descriptor's SDDL text.
+   - Alternate streams (`STM`) and ACLs: done 2026-10-10. A stream is listed with
+     `-sns` only, its count and sizes on lines of their own in `l`'s totals and in
+     `t`/`x`'s summary ("Alternate Streams"), wanted with its file, and extracted into
+     its file's stream unless `-sns-` (cash wrote `a.txt_note`). An ACL is decoded at
+     open, its file's "ACL" characteristic, and its `NT Security` is 7-Zip's own text
+     for a descriptor (owner, group, `s:`/`d:` entry counts, size; not SDDL as this
+     line said), checked on 48 made-up descriptors (`nt_security_crafted.rar`). Left:
+     `x -sni`, which 7-Zip uses to set the ACLs on what it extracts.
    - An SFX's archive inside its `.exe` (7-Zip opens an `.exe` as PE first, which
      cash's 7z does not read).
 2. **`rar` and `unrar` builtins** with RARLAB's console interface, reading and writing:

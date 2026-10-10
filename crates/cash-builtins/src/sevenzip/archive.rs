@@ -293,6 +293,29 @@ pub(super) struct Item {
     pub(super) extra: Vec<(Prop, String)>,
     /// What a link names (`kpidSymLink`, `kpidHardLink`): a tar's.
     pub(super) link: Option<Link>,
+    /// An NTFS alternate stream (`kpidIsAltStream`), its path the file's, `:` and the
+    /// stream's name: listed with `-sns` only, extracted into the file's stream unless
+    /// `-sns-`, and counted apart.
+    pub(super) alt_stream: bool,
+}
+
+impl Item {
+    /// An alternate stream's file and stream names: the path split at the last part's
+    /// first `:`.
+    pub(super) fn stream_parts(&self) -> Option<(String, &str)> {
+        if !self.alt_stream {
+            return None;
+        }
+        let (folder, name) = match self.path.rsplit_once('/') {
+            Some((folder, name)) => (Some(folder), name),
+            None => (None, self.path.as_str()),
+        };
+        let (file, stream) = name.split_once(':')?;
+        Some((
+            folder.map_or_else(|| file.to_owned(), |f| format!("{f}/{file}")),
+            stream,
+        ))
+    }
 }
 
 /// A link an item is, and the path it names as the archive keeps it.
@@ -854,6 +877,7 @@ fn items_of(archive: &sevenz::Archive) -> Vec<Item> {
                 host_os: None,
                 extra: Vec::new(),
                 link: None,
+                alt_stream: false,
             }
         })
         .collect()

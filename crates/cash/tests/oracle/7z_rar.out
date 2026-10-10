@@ -8062,3 +8062,326 @@ Archives with Errors: 1
 Sub items Errors: 1
 rc=2
 ./x86_e8_stream.bin 3067148647 131072
+== alternate streams: listed with -sns, counted apart, extracted into their file
+== unless -sns-, and with their file
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 225 bytes (1 KiB)
+
+Listing archive: rar50/alt_streams.rar
+
+--
+Path = rar50/alt_streams.rar
+Type = Rar5
+Physical Size = 225
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 4
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-10 00:37:44 ....A           13           13  s/a.txt
+2026-10-10 00:37:44 ....A           13           13  s/b.txt
+2026-10-10 00:37:44 D....            0            0  s
+------------------- ----- ------------ ------------  ------------------------
+2026-10-10 00:37:44                 26           26  2 files, 1 folders
+2026-10-10 00:37:44                 13           26  1 alternate streams
+2026-10-10 00:37:44                 39           52  3 streams
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 225 bytes (1 KiB)
+
+Listing archive: rar50/alt_streams.rar
+
+--
+Path = rar50/alt_streams.rar
+Type = Rar5
+Physical Size = 225
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 4
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-10 00:37:44 ....A           13           13  s/a.txt
+2026-10-10 00:37:44 .....           13           26  s/a.txt:note
+2026-10-10 00:37:44 ....A           13           13  s/b.txt
+2026-10-10 00:37:44 D....            0            0  s
+------------------- ----- ------------ ------------  ------------------------
+2026-10-10 00:37:44                 26           26  2 files, 1 folders
+2026-10-10 00:37:44                 13           26  1 alternate streams
+2026-10-10 00:37:44                 39           52  3 streams
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 225 bytes (1 KiB)
+
+Testing archive: rar50/alt_streams.rar
+--
+Path = rar50/alt_streams.rar
+Type = Rar5
+Physical Size = 225
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 4
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Folders: 1
+Files: 2
+Alternate Streams: 1
+Alternate Streams Size: 13
+Size:       26
+Compressed: 225
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 225 bytes (1 KiB)
+
+Extracting archive: rar50/alt_streams.rar
+--
+Path = rar50/alt_streams.rar
+Type = Rar5
+Physical Size = 225
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 4
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Folders: 1
+Files: 2
+Alternate Streams: 1
+Alternate Streams Size: 13
+Size:       26
+Compressed: 225
+rc=0
+./s/a.txt 1055315600 13
+./s/b.txt 1586586878 13
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 225 bytes (1 KiB)
+
+Extracting archive: rar50/alt_streams.rar
+--
+Path = rar50/alt_streams.rar
+Type = Rar5
+Physical Size = 225
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 4
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Folders: 1
+Files: 2
+Size:       26
+Compressed: 225
+rc=0
+./s/a.txt 1055315600 13
+./s/b.txt 1586586878 13
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 225 bytes (1 KiB)
+
+Extracting archive: rar50/alt_streams.rar
+--
+Path = rar50/alt_streams.rar
+Type = Rar5
+Physical Size = 225
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 4
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 1
+Alternate Streams: 1
+Alternate Streams Size: 13
+Size:       13
+Compressed: 225
+rc=0
+./s/a.txt 1055315600 13
+== ACLs: a file's NT Security, as 7-Zip shows a descriptor
+Characteristics = ACL
+Path = f00.txt
+Characteristics = ACL CRC
+NT Security = 0 Domains d:1 88
+Path = f01.txt
+Characteristics = ACL CRC
+NT Security = Dialup Domains d:1 88
+Path = f02.txt
+Characteristics = ACL CRC
+NT Security = Network Domains d:1 88
+Path = f03.txt
+Characteristics = ACL CRC
+NT Security = Batch Domains d:1 88
+Path = f04.txt
+Characteristics = ACL CRC
+NT Security = Interactive Domains d:1 88
+Path = f05.txt
+Characteristics = ACL CRC
+NT Security = Logon Domains d:1 88
+Path = f06.txt
+Characteristics = ACL CRC
+NT Security = Service Domains d:1 88
+Path = f07.txt
+Characteristics = ACL CRC
+NT Security = Anonymous Domains d:1 88
+Path = f08.txt
+Characteristics = ACL CRC
+NT Security = Proxy Domains d:1 88
+Path = f09.txt
+Characteristics = ACL CRC
+NT Security = EnterpriseDC Domains d:1 88
+Path = f10.txt
+Characteristics = ACL CRC
+NT Security = Self Domains d:1 88
+Path = f11.txt
+Characteristics = ACL CRC
+NT Security = AuthenticatedUsers Domains d:1 88
+Path = f12.txt
+Characteristics = ACL CRC
+NT Security = RestrictedCode Domains d:1 88
+Path = f13.txt
+Characteristics = ACL CRC
+NT Security = TerminalServer Domains d:1 88
+Path = f14.txt
+Characteristics = ACL CRC
+NT Security = RemoteInteractiveLogon Domains d:1 88
+Path = f15.txt
+Characteristics = ACL CRC
+NT Security = ThisOrganization Domains d:1 88
+Path = f16.txt
+Characteristics = ACL CRC
+NT Security = 16 Domains d:1 88
+Path = f17.txt
+Characteristics = ACL CRC
+NT Security = IUserIIS Domains d:1 88
+Path = f18.txt
+Characteristics = ACL CRC
+NT Security = LocalSystem Domains d:1 88
+Path = f19.txt
+Characteristics = ACL CRC
+NT Security = LocalService Domains d:1 88
+Path = f20.txt
+Characteristics = ACL CRC
+NT Security = NetworkService Domains d:1 88
+Path = f21.txt
+Characteristics = ACL CRC
+NT Security = Domains Domains d:1 88
+Path = f22.txt
+Characteristics = ACL CRC
+NT Security = S-1-5-22 Domains d:1 88
+Path = f23.txt
+Characteristics = ACL CRC
+NT Security = S-1-5-23 Domains d:1 88
+Path = f24.txt
+Characteristics = ACL CRC
+NT Security = Administrators Users d:2 100
+Path = f25.txt
+Characteristics = ACL CRC
+NT Security = Users Users d:2 100
+Path = f26.txt
+Characteristics = ACL CRC
+NT Security = Backup Operators Users d:2 100
+Path = f27.txt
+Characteristics = ACL CRC
+NT Security = DistributedCOMUsers Users d:2 100
+Path = f28.txt
+Characteristics = ACL CRC
+NT Security = S-1-5-32-563 Users d:2 100
+Path = f29.txt
+Characteristics = ACL CRC
+NT Security = CryptographicOperators Users d:2 100
+Path = f30.txt
+Characteristics = ACL CRC
+NT Security = EventLogReaders Users d:2 100
+Path = f31.txt
+Characteristics = ACL CRC
+NT Security = CertificateServiceDCOMAccess Users d:2 100
+Path = f32.txt
+Characteristics = ACL CRC
+NT Security = S-1-5-32-575 Users d:2 100
+Path = f33.txt
+Characteristics = ACL CRC
+NT Security = S-1-5-32 S-1-5-32-544-1 d:3 120
+Path = f34.txt
+Characteristics = ACL CRC
+NT Security = S-1-5-80-1-2-3-4-5 S-1-5-80-1-2 d:0 80
+Path = f35.txt
+Characteristics = ACL CRC
+NT Security = Domains Domains d:6 204
+Path = f36.txt
+Characteristics = ACL CRC
+NT Security = S-1-1-0 S-1-16-12288 d:1 72
+Path = f37.txt
+Characteristics = ACL CRC
+NT Security = S-1-0x010203040506-7-8 S-1-0-0 d:1 76
+Path = f38.txt
+Characteristics = ACL CRC
+NT Security = UNSUPPORTED Domains d:1 88
+Path = f39.txt
+Characteristics = ACL CRC
+NT Security = Domains Domains s:3 d:2 192
+Path = f40.txt
+Characteristics = ACL CRC
+NT Security = Domains Domains d: 124
+Path = f41.txt
+Characteristics = ACL CRC
+NT Security = Domains Domains d: 76
+Path = f42.txt
+Characteristics = ACL CRC
+NT Security = Domains Domains d: 124
+Path = f43.txt
+Characteristics = ACL CRC
+NT Security = ERROR Domains d:2 124
+Path = f44.txt
+Characteristics = ACL CRC
+NT Security = UNSUPPORTED
+Path = f45.txt
+Characteristics = ACL CRC
+NT Security = Domains S-1-0x048014000000 d:2 96
+Path = f46.txt
+Characteristics = ACL CRC
+NT Security = S-1-5 Domains d:1 84
+Path = f47.txt
+Characteristics = ACL CRC
+NT Security = ERROR

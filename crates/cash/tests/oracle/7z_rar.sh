@@ -234,4 +234,15 @@ for case in m3_default:1090 m3_default:1284 solid_text:1535 solid_text:4487 filt
   xt dmg.rar
 done
 
+echo "== alternate streams: listed with -sns, counted apart, extracted into their file"
+echo "== unless -sns-, and with their file"
+z l rar50/alt_streams.rar
+z l -sns rar50/alt_streams.rar
+z t rar50/alt_streams.rar
+xt rar50/alt_streams.rar
+xt -sns- rar50/alt_streams.rar
+xt rar50/alt_streams.rar s/a.txt
+echo "== ACLs: a file's NT Security, as 7-Zip shows a descriptor"
+z l -slt rar50/nt_security_crafted.rar | grep '^Path = f\|^Characteristics\|^NT Security'
+
 cd / && rm -rf "$dir"

@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
+use cash_archive::rar::codec::rar50::Unpack50Decoder;
 use cash_archive::rar::crypto::rar50::{Rar50Cipher, Rar50Keys};
 
 use super::super::archive::{Item, Link, Prop, TimePrec};
@@ -1318,7 +1319,7 @@ impl Rar5 {
                         && item.method_number() == 0
                         && !item.is_split()
                     {
-                        if let Some(data) = stored_data(&mut reader.file, &item, password)? {
+                        if let Some(data) = service_data(&mut reader.file, &item, password)? {
                             rar.comment = data;
                         }
                         need_add = false;
@@ -1338,6 +1339,25 @@ impl Rar5 {
                             need_add = false;
                             if item.is_acl() {
                                 rar.note_acl(&item, reader.keys.is_some(), prev_main);
+                                // Its data the file's security before it, the first
+                                // one only; the same as the last kept is that one.
+                                if let Some(main) = prev_main
+                                    && item.size != 0
+                                    && item.size < 1 << 24
+                                    && rar.items[rar.refs[main].item].acl.is_none()
+                                {
+                                    match service_data(&mut reader.file, &item, password)? {
+                                        Some(acl) if !acl.is_empty() => {
+                                            if rar.acls.last() != Some(&acl) {
+                                                rar.acls.push(acl);
+                                            }
+                                            let file = rar.refs[main].item;
+                                            rar.items[file].acl = Some(rar.acls.len() - 1);
+                                        }
+                                        Some(_) => {}
+                                        None => rar.error_in_acl = true,
+                                    }
+                                }
                             }
                         }
                     }
@@ -1783,6 +1803,7 @@ impl Rar5 {
             encrypted: item.is_encrypted(),
             method: Some(item_method(item)),
             host_os: Some(type_name(&["Windows", "Unix"], item.host_os)),
+            alt_stream: item.is_stm(),
             ..Item::default()
         };
         for (slot, stamp) in stamps.iter_mut().enumerate() {
@@ -1832,7 +1853,13 @@ impl Rar5 {
             (Prop::CopyLink, item.link_target(link_type::FILE_COPY)),
             (Prop::VolumeIndex, vol_index),
             (Prop::Checksum, checksum),
-            (Prop::NtSecurity, String::new()),
+            (
+                Prop::NtSecurity,
+                item.acl
+                    .and_then(|i| self.acls.get(i))
+                    .map(|acl| nt_secure_text(acl))
+                    .unwrap_or_default(),
+            ),
         ];
         listed
     }
@@ -1926,9 +1953,10 @@ pub(super) fn multi_line(text: &str) -> String {
     out
 }
 
-/// A stored item's data, decrypted when it is encrypted, as `DecodeToBuf` reads the
-/// archive comment: none where its password or checksum is not right.
-fn stored_data(
+/// A service item's data, decrypted when it is encrypted and unpacked when it is
+/// packed, as `DecodeToBuf` reads the archive comment and an ACL: none where its
+/// password, data or checksum is not right, or it is solid.
+fn service_data(
     file: &mut File,
     item: &RarItem,
     password: Option<&str>,
@@ -1971,10 +1999,32 @@ fn stored_data(
     let Ok(size) = usize::try_from(item.size) else {
         return Ok(None);
     };
-    if data.len() < size {
-        return Ok(None);
+    if item.method_number() == 0 {
+        if data.len() < size {
+            return Ok(None);
+        }
+        data.truncate(size);
+    } else {
+        if item.is_solid() || item.algo_raw() > 1 || item.method_number() > 5 {
+            return Ok(None);
+        }
+        let mut decoder = Unpack50Decoder::new();
+        decoder.set_finish_mode(true);
+        let mut out = Collect(Vec::with_capacity(size));
+        let decoded = crate::rardata::decode5(
+            &mut decoder,
+            &mut &data[..],
+            u8::try_from(item.algo_huff_rev()).unwrap_or(0),
+            size,
+            usize::try_from(item.dict_size()).unwrap_or(usize::MAX),
+            false,
+            &mut out,
+        );
+        if decoded.is_err() || out.0.len() != size {
+            return Ok(None);
+        }
+        data = out.0;
     }
-    data.truncate(size);
     if item.has_crc() {
         let crc = crc32fast::hash(&data);
         let crc = mac.as_ref().map_or(crc, |keys| keys.mac_crc32(crc));
@@ -1990,6 +2040,165 @@ fn stored_data(
         }
     }
     Ok(Some(data))
+}
+
+/// The names 7-Zip gives the SIDs S-1-5-N (`sidNames`), by N.
+const SID_NAMES: [&str; 22] = [
+    "0",
+    "Dialup",
+    "Network",
+    "Batch",
+    "Interactive",
+    "Logon",
+    "Service",
+    "Anonymous",
+    "Proxy",
+    "EnterpriseDC",
+    "Self",
+    "AuthenticatedUsers",
+    "RestrictedCode",
+    "TerminalServer",
+    "RemoteInteractiveLogon",
+    "ThisOrganization",
+    "16",
+    "IUserIIS",
+    "LocalSystem",
+    "LocalService",
+    "NetworkService",
+    "Domains",
+];
+
+/// The names 7-Zip gives the SIDs S-1-5-32-N, the builtin groups (`sid_32_Names`).
+const SID_32_NAMES: [(u32, &str); 22] = [
+    (544, "Administrators"),
+    (545, "Users"),
+    (546, "Guests"),
+    (547, "PowerUsers"),
+    (548, "AccountOperators"),
+    (549, "ServerOperators"),
+    (550, "PrintOperators"),
+    (551, "BackupOperators"),
+    (552, "Replicators"),
+    (553, "Backup Operators"),
+    (554, "PreWindows2000CompatibleAccess"),
+    (555, "RemoteDesktopUsers"),
+    (556, "NetworkConfigurationOperators"),
+    (557, "IncomingForestTrustBuilders"),
+    (558, "PerformanceMonitorUsers"),
+    (559, "PerformanceLogUsers"),
+    (560, "WindowsAuthorizationAccessGroup"),
+    (561, "TerminalServerLicenseServers"),
+    (562, "DistributedCOMUsers"),
+    (569, "CryptographicOperators"),
+    (573, "EventLogReaders"),
+    (574, "CertificateServiceDCOMAccess"),
+];
+
+fn sd16(p: &[u8], at: usize) -> u32 {
+    p.get(at..at + 2)
+        .map_or(0, |b| u32::from(u16::from_le_bytes([b[0], b[1]])))
+}
+
+fn sd32(p: &[u8], at: usize) -> u32 {
+    p.get(at..at + 4)
+        .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+/// 7-Zip's `ConvertNtSecureToString`: a security descriptor shown as its owner and
+/// group, the entries of its SACL and DACL, and its size.
+fn nt_secure_text(data: &[u8]) -> String {
+    let size = data.len();
+    if !(20..=1 << 18).contains(&size) {
+        return "ERROR".to_owned();
+    }
+    if sd16(data, 0) != 1 {
+        return "UNSUPPORTED".to_owned();
+    }
+    let mut s = String::new();
+    sid_text(&mut s, data, sd32(data, 4) as usize);
+    s.push(' ');
+    sid_text(&mut s, data, sd32(data, 8) as usize);
+    acl_text(&mut s, data, "s:", 0x10, 12);
+    acl_text(&mut s, data, "d:", 0x4, 16);
+    let _ = write!(s, " {size}");
+    s
+}
+
+/// `ParseOwner` and `ParseSid`: the SID at `pos`, by name where 7-Zip has one.
+fn sid_text(s: &mut String, data: &[u8], pos: usize) {
+    let Some(p) = data.get(pos..) else {
+        s.push_str("ERROR");
+        return;
+    };
+    if p.len() < 8 {
+        s.push_str("ERROR");
+        return;
+    }
+    if p[0] != 1 {
+        s.push_str("UNSUPPORTED");
+        return;
+    }
+    let num = usize::from(p[1]);
+    if 8 + num * 4 > p.len() {
+        s.push_str("ERROR");
+        return;
+    }
+    let sub = |i: usize| sd32(p, 8 + i * 4);
+    let authority = u32::from_be_bytes([p[4], p[5], p[6], p[7]]);
+    if p[2] == 0 && p[3] == 0 && authority == 5 && num >= 1 {
+        let v0 = sub(0);
+        if let Some(name) = SID_NAMES.get(v0 as usize) {
+            s.push_str(name);
+            return;
+        }
+        if v0 == 32
+            && num == 2
+            && let Some((_, name)) = SID_32_NAMES.iter().find(|(n, _)| *n == sub(1))
+        {
+            s.push_str(name);
+            return;
+        }
+    }
+    s.push_str("S-1-");
+    if p[2] == 0 && p[3] == 0 {
+        let _ = write!(s, "{authority}");
+    } else {
+        s.push_str("0x");
+        for byte in &p[2..8] {
+            let _ = write!(s, "{byte:02X}");
+        }
+    }
+    for i in 0..num {
+        let _ = write!(s, "-{}", sub(i));
+    }
+}
+
+/// `ParseAcl`: " s:N" or " d:N", the entries of the list the control flag says is
+/// there.
+fn acl_text(s: &mut String, data: &[u8], name: &str, flag: u32, offset: usize) {
+    if sd16(data, 2) & flag == 0 {
+        return;
+    }
+    let pos = sd32(data, offset) as usize;
+    s.push(' ');
+    s.push_str(name);
+    let Some(p) = data.get(pos..).filter(|_| pos < data.len()) else {
+        return;
+    };
+    if p.len() < 8 || sd16(p, 0) != 2 {
+        return;
+    }
+    let _ = write!(s, "{}", sd32(p, 4));
+}
+
+/// What a service item unpacks to, gathered.
+struct Collect(Vec<u8>);
+
+impl crate::rardata::Sink for Collect {
+    fn put(&mut self, data: &[u8]) -> io::Result<()> {
+        self.0.extend_from_slice(data);
+        Ok(())
+    }
 }
 
 /// `ReadZeroTail`: how many zeros follow a volume's end, up to 4 KiB, when nothing else

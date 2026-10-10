@@ -1144,7 +1144,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
     ) -> Result<(u64, u64, Option<usize>), Stop> {
         let console = self.console;
         // No format written here keeps NTFS streams or security.
-        if self.options.alt_streams || self.options.nt_security {
+        if self.options.alt_streams == Some(true) || self.options.nt_security {
             return Err(Stop::System(win_error(win::E_NOTIMPL)));
         }
         check_properties(self.kind, &self.options.properties)?;

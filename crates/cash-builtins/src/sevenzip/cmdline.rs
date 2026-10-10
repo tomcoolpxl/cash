@@ -461,8 +461,9 @@ pub(super) struct Options {
     /// `-snld`: how dangerous a link extraction makes (5 unless given, 9 bare).
     pub(super) dangerous_level: u32,
     /// `-sns`, `-sni`: NTFS alternate streams and security, which 7-Zip's formats here
-    /// do not keep.
-    pub(super) alt_streams: bool,
+    /// do not write. Streams read (RAR's) are listed with `-sns` and extracted unless
+    /// `-sns-`.
+    pub(super) alt_streams: Option<bool>,
     pub(super) nt_security: bool,
     /// `-spe`: the output folder's name taken off items that all begin with it.
     pub(super) elim_dup: bool,
@@ -764,7 +765,7 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
         symlinks: flag(Key::SymLinks),
         hard_links: flag(Key::HardLinks).unwrap_or(false),
         dangerous_level,
-        alt_streams: flag(Key::AltStreams).unwrap_or(false),
+        alt_streams: flag(Key::AltStreams),
         nt_security: parsed.there(Key::NtSecurity),
         elim_dup: flag(Key::ElimDup).unwrap_or(false),
         show_time: parsed.there(Key::ShowTime),

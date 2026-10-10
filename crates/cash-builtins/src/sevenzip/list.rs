@@ -65,6 +65,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let mut warnings = 0u64;
     let mut not_implemented = false;
     let mut total = Stat::default();
+    let mut total_alt = Stat::default();
     let mut archives = 0u64;
     let mut volumes = 0u64;
     let mut total_size = 0u64;
@@ -153,11 +154,18 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             }
         }
         let mut stat = Stat::default();
+        // Alternate streams, counted apart and listed with -sns only (`CListStat2`).
+        let mut alt = Stat::default();
         for item in &opened.items {
             if item.is_dir && options.exclude_dirs || !item.is_dir && options.exclude_files {
                 continue;
             }
-            if !all && !censor.wants(&item.path, item.is_dir) {
+            // A stream is wanted with its file.
+            let (path, is_dir) = item.stream_parts().map_or_else(
+                || (std::borrow::Cow::Borrowed(item.path.as_str()), item.is_dir),
+                |(file, _)| (std::borrow::Cow::Owned(file), false),
+            );
+            if !all && !censor.wants(&path, is_dir) {
                 continue;
             }
             let one = Stat {
@@ -167,7 +175,14 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 files: u64::from(!item.is_dir),
                 dirs: u64::from(item.is_dir),
             };
-            stat.add(&one);
+            if item.alt_stream {
+                alt.add(&one);
+                if options.alt_streams != Some(true) {
+                    continue;
+                }
+            } else {
+                stat.add(&one);
+            }
             if options.tech {
                 console.stdout(&technical(env, &opened.item_props, item));
             } else {
@@ -193,9 +208,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         }
         if options.headers && !options.tech {
             console.stdout(&format!("{LINES}\n"));
-            console.stdout(&sum(env, &stat));
+            console.stdout(&sums(env, &stat, &alt));
         }
         total.add(&stat);
+        total_alt.add(&alt);
         console.flush_stdout();
     }
     if options.headers && !options.tech && (found.len() > 1 || volumes > 1) {
@@ -204,7 +220,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             total.size.get_or_insert(0);
         }
         console.stdout(&format!("\n{LINES}\n"));
-        console.stdout(&sum(env, &total));
+        console.stdout(&sums(env, &total, &total_alt));
         console.stdout(&format!(
             "\nArchives: {archives}\nVolumes: {volumes}\nTotal archives size: {total_size}\n"
         ));
@@ -239,15 +255,28 @@ fn line<SE: cash_core::ShellExtensions>(env: &Env<'_, SE>, item: &Item) -> Strin
     )
 }
 
-/// The totals' line: the newest time, the sizes, "N files, M folders".
-fn sum<SE: cash_core::ShellExtensions>(env: &Env<'_, SE>, stat: &Stat) -> String {
-    let time = stat
-        .modified
-        .map_or_else(String::new, |t| text::time(&env.zone, t, 0));
+/// The totals' lines: "N files, M folders", and with alternate streams theirs and all
+/// the streams'.
+fn sums<SE: cash_core::ShellExtensions>(env: &Env<'_, SE>, stat: &Stat, alt: &Stat) -> String {
     let mut names = format!("{} files", stat.files);
     if stat.dirs != 0 {
         let _ = write!(names, ", {} folders", stat.dirs);
     }
+    let mut out = sum(env, stat, &names);
+    if alt.files != 0 {
+        out.push_str(&sum(env, alt, &format!("{} alternate streams", alt.files)));
+        let mut both = *stat;
+        both.add(alt);
+        out.push_str(&sum(env, &both, &format!("{} streams", both.files)));
+    }
+    out
+}
+
+/// A totals' line: the newest time, the sizes, `names`.
+fn sum<SE: cash_core::ShellExtensions>(env: &Env<'_, SE>, stat: &Stat, names: &str) -> String {
+    let time = stat
+        .modified
+        .map_or_else(String::new, |t| text::time(&env.zone, t, 0));
     format!(
         "{time:<19} {:5} {} {}  {names}\n",
         "",
