@@ -73,6 +73,14 @@ jobs:
         shell: pwsh
         run: ./.github/scripts/report-flaky.ps1 -Results target/nextest/default/test-results.xml
 
+      # Nothing reads the documentation after the run, and the cache's cleanup took a
+      # folder rustdoc made for a module for a build folder, and failed on it (ENOENT
+      # annotations on every green run).
+      - name: Leave the documentation out of the cache
+        if: always()
+        shell: pwsh
+        run: if (Test-Path target/doc) { Remove-Item -Recurse -Force target/doc }
+
   slow:
     name: Slow tests ${{ matrix.part }}/4 (Windows)
     runs-on: windows-latest

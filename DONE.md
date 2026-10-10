@@ -1239,6 +1239,21 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    it was given; the long one names the same folder. Test: `it/long_temp.rs`, a folder's
    8.3 name as `TEMP`, under a `HOME` in long form.
 
+4. **CI's annotations show four `ENOENT ... opendir 'D:\a\cash\cash\target\doc\cash_core\tests\trybuild'`**
+   (and `...\tests\target`) errors on every green run, 1.8.0's and 1.8.1's included
+   (seen 2026-10-06). The job passes; the cleanup of the Rust Cache step
+   (`Swatinem/rust-cache`, `.github/workflows/ci.yml`) walks `target\doc` and trips on
+   folders that are gone. Find what makes `target\doc\cash_core\tests` and keep it out of
+   the documentation, or exclude `target\doc` from the cache.
+   Done 2026-10-10: `cash_core::tests`, the `test` builtin's expressions, was a public
+   module named `tests`, whose rustdoc folder the cache's cleanup took for a build folder
+   and looked for `target` and `trybuild` in; it is `cash_core::test_expr` now. As a
+   restored cache still holds the old folder, the quick job removes `target\doc` before
+   the cache is saved. Found in the same annotations: crossterm's console tests
+   (`*_winapi`) each make a screen buffer the console's active one, and two failed on a
+   first try in CI; their `#[serial]` orders one process only, so they share a nextest
+   group of one (`console-buffer`).
+
 ---
 
 ## Found along the way, done

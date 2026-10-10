@@ -2,7 +2,7 @@ use clap::Parser;
 use std::io::Write;
 
 use cash_core::{
-    ErrorKind, ExecutionExitCode, ExecutionParameters, ExecutionResult, Shell, builtins, tests,
+    ErrorKind, ExecutionExitCode, ExecutionParameters, ExecutionResult, Shell, builtins, test_expr,
 };
 
 /// Evaluate test expression.
@@ -63,7 +63,7 @@ async fn execute_test(
 ) -> Result<bool, cash_core::Error> {
     let test_command = cash_parser::test_command::parse(args)
         .map_err(|_| ErrorKind::TestError(complaint(args)))?;
-    tests::eval_expr(&test_command, shell, params).await
+    test_expr::eval_expr(&test_command, shell, params).await
 }
 
 /// Bash's complaint about arguments `test` cannot read, found as Bash finds it, by their

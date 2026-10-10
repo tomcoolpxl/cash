@@ -47,7 +47,7 @@ mod shell;
 pub mod sourceinfo;
 pub mod sys;
 pub mod terminal;
-pub mod tests;
+pub mod test_expr;
 pub mod timefmt;
 pub mod timing;
 

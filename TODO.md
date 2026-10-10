@@ -87,12 +87,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   written out again in `gzip_builtin.rs`, `grep_builtin.rs`, `column_builtin.rs` and
   seven more under `crates/cash/tests/it`. `common.rs` has them now, and the bzip2, xz
   and zstd tests use those; move the ten onto them.
-- **CI's annotations show four `ENOENT ... opendir 'D:\a\cash\cash\target\doc\cash_core\tests\trybuild'`**
-  (and `...\tests\target`) errors on every green run, 1.8.0's and 1.8.1's included
-  (seen 2026-10-06). The job passes; the cleanup of the Rust Cache step
-  (`Swatinem/rust-cache`, `.github/workflows/ci.yml`) walks `target\doc` and trips on
-  folders that are gone. Find what makes `target\doc\cash_core\tests` and keep it out of
-  the documentation, or exclude `target\doc` from the cache.
 - **cash never runs a user's `command_not_found_handle`** (found building the install
   hint, 2026-10-06). Bash calls that function, when defined, with the command and its
   arguments instead of printing `command not found`, and its status becomes the

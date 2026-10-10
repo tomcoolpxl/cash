@@ -44,10 +44,18 @@ link-tools = { max-threads = 1 }
 # `conpty_ctrl_z_…` and `conpty_interactive_variables_and_arithmetic` each failed a full
 # run on 2026-09-30 and passed alone. So no more than four run at the same time.
 conpty = { max-threads = 4 }
+# crossterm's console tests each make a screen buffer of their own the console's active
+# one, so two at once move each other's cursor; their `#[serial]` orders tests in one
+# process only. Two failed on a first try in CI on 2026-10-10.
+console-buffer = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = 'binary(it) and test(/^link_tools::/)'
 test-group = 'link-tools'
+
+[[profile.default.overrides]]
+filter = 'package(crossterm) and test(/_winapi/)'
+test-group = 'console-buffer'
 
 [[profile.default.overrides]]
 filter = 'binary(conpty-interactive-tests) or (binary(it) and test(/^(read_console|ctrl_c|f1_help)::/))'
