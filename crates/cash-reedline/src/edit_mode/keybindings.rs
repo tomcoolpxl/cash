@@ -5,9 +5,12 @@ use {
     std::collections::HashMap,
 };
 
+/// A key with the modifiers held with it: what a binding is bound to.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct KeyCombination {
+    /// Shift, Control, Alt and the rest, held.
     pub modifier: KeyModifiers,
+    /// The key pressed.
     pub key_code: KeyCode,
 }
 
@@ -221,24 +224,6 @@ pub fn add_common_edit_bindings(kb: &mut Keybindings) {
     // Base commands should not affect cut buffer
     kb.add_binding(KM::CONTROL, KC::Char('h'), edit_bind(EC::Backspace));
     kb.add_binding(KM::CONTROL, KC::Char('w'), edit_bind(EC::BackspaceWord));
-    #[cfg(feature = "system_clipboard")]
-    kb.add_binding(
-        KM::CONTROL | KM::SHIFT,
-        KC::Char('x'),
-        edit_bind(EC::CutSelectionSystem),
-    );
-    #[cfg(feature = "system_clipboard")]
-    kb.add_binding(
-        KM::CONTROL | KM::SHIFT,
-        KC::Char('c'),
-        edit_bind(EC::CopySelectionSystem),
-    );
-    #[cfg(feature = "system_clipboard")]
-    kb.add_binding(
-        KM::CONTROL | KM::SHIFT,
-        KC::Char('v'),
-        edit_bind(EC::PasteSystem),
-    );
     kb.add_binding(KM::ALT, KC::Enter, edit_bind(EC::InsertNewline));
     kb.add_binding(KM::SHIFT, KC::Enter, edit_bind(EC::InsertNewline));
     kb.add_binding(KM::CONTROL, KC::Char('j'), ReedlineEvent::Enter);

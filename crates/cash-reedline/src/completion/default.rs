@@ -1,3 +1,4 @@
+#![expect(clippy::string_slice, reason = "the line is cut at the caret")]
 use crate::{Completer, CompletionResult, Span, Suggestion};
 use std::{
     collections::{BTreeMap, BTreeSet},

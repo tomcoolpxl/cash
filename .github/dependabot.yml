@@ -13,7 +13,6 @@ updates:
       # Patched copies in vendor/ ([patch.crates-io] in Cargo.toml): a new version needs
       # cash's patch carried over by hand (vendor/*/CASH-PATCHES.md), and the other uutils
       # crates move with the patched ones, on the same uucore.
-      - dependency-name: reedline
       - dependency-name: crossterm
       - dependency-name: "uu_*"
       - dependency-name: uucore

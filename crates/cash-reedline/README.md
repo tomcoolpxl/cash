@@ -1,261 +1,142 @@
-# A feature-rich line editor - powering Nushell
+# cash-reedline
 
-![GitHub](https://img.shields.io/github/license/nushell/reedline)
-[![Crates.io](https://img.shields.io/crates/v/reedline)](https://crates.io/crates/reedline)
-[![docs.rs](https://img.shields.io/docsrs/reedline)](https://docs.rs/reedline/)
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/nushell/reedline/ci.yml?branch=main)
-[![codecov](https://codecov.io/gh/nushell/reedline/graph/badge.svg?token=NUTC465WOL)](https://codecov.io/gh/nushell/reedline)
-[![Discord](https://img.shields.io/discord/601130461678272522.svg?logo=discord)](https://discord.gg/NtAbbGn)
+The line editor of cash's prompt: [reedline](https://github.com/nushell/reedline) 0.51.0,
+© 2021 the Nushell Project Developers, under the MIT License (`LICENSE`), made cash's own
+on 2026-10-10. From 2026-09-26 until then it was carried in `vendor/reedline` as a
+patched copy. The package is `cash-reedline`; its library keeps the name `reedline`, so
+cash's code, its tests and the examples in its documentation say `reedline::`.
 
-## Introduction
+## Made cash's own (2026-10-10)
 
-Reedline is a project to create a line editor (like bash's `readline` or zsh's `zle`) that supports many of the modern conveniences of CLIs, including syntax highlighting, completions, multiline support, Unicode support, and more.
-It is currently primarily developed as the interactive editor for [nushell](https://github.com/nushell/nushell) (starting with `v0.60`) striving to provide a pleasant interactive experience.
+- **Features cash never turned on are gone**, with their code and dependencies: the
+  system clipboard (`arboard`), `bashisms`, the SQLite history (`rusqlite`), the external
+  printer (`crossbeam`), the idle callback and `libc`. Helix mode, on by default and so
+  compiled into cash though cash never offers it, stays for now: its code runs through
+  the core editor, and taking it out is a change of its own.
+- **What could panic in the code cash runs** now returns an error or says why it cannot:
+  - a history that cannot be read or written is an error from `print_history`,
+    `submit_buffer` and the history search, where it was `expect("todo: error
+    handling")`; moving through it leaves the line as it is, and a hint is not shown;
+  - a substring search through the history shows the line found, or what was typed, as
+    the prefix search does: reedline left that case to `todo!()`, a crash if reached;
+  - `Menu::settings` has no default that panics: every menu says (cash's `QuoteAwareMenu`
+    passes its wrapped menu's on);
+  - the undo stack shortens itself with `truncate` rather than a `resize_with` whose
+    closure panicked;
+  - where the editor cuts its text at positions it keeps on character boundaries, each
+    module says why they are (every caret goes through `rest_policy::recohere`).
+- **Six types its public items use are exported** (`KeyCombination`, `RepaintSignal`,
+  `EditType`, `EventStatus`, `MenuSettings`, `PainterSuspendedState`), as the workspace's
+  `unnameable_types` asks, with documentation.
+- **Lints and edition.** The workspace's lints apply; the style ones reedline was not
+  written to are allowed in `src/lib.rs`, as for `cash-sed`. The 2021 edition stays until
+  moving to the workspace's is a change of its own.
+- A test of crossterm's colour codes asks for colour, so `NO_COLOR` in a developer's
+  shell no longer fails it.
 
-## Outline
+## The changes made while it was a patched copy
 
-- [Examples](#examples)
-  - [Basic example](#basic-example)
-  - [Integrate with custom keybindings](#integrate-with-custom-keybindings)
-  - [Integrate with `History`](#integrate-with-history)
-  - [Integrate with custom syntax `Highlighter`](#integrate-with-custom-syntax-highlighter)
-  - [Integrate with custom tab completion](#integrate-with-custom-tab-completion)
-  - [Integrate with `Hinter` for fish-style history autosuggestions](#integrate-with-hinter-for-fish-style-history-autosuggestions)
-  - [Integrate with custom line completion `Validator`](#integrate-with-custom-line-completion-validator)
-  - [Use custom `EditMode`](#use-custom-editmode)
-- [Crate features](#crate-features)
-- [Are we prompt yet? (Development status)](#are-we-prompt-yet-development-status)
-- [Contributing](./CONTRIBUTING.md)
-- [Alternatives](#alternatives)
+The tests and comments elsewhere in cash refer to these by number.
 
-## Examples
+1. **A host command's output is not painted over** (`src/painting/painter.rs`,
+   ROADMAP item 15). After a `bind -x` command (`ExecuteHostCommand`), Reedline redrew
+   the prompt on its old rows whenever the cursor came back anywhere inside them, and
+   that range runs one row past a single-line prompt. A command that printed one line
+   ended there, so `bind -x '"\C-t": echo hi'` showed nothing: the prompt was redrawn
+   over `hi`. The painter now records the cursor's cell when it suspends and redraws in
+   place only when the cursor is back on exactly that cell; otherwise the prompt goes
+   where the cursor is. That also covers upstream's flush-at-bottom case
+   (nushell/reedline#1130). Upstream's main branch records the same cell but still
+   uses the range above the bottom row, so the bug is there too.
 
-For the full documentation visit <https://docs.rs/reedline>. The examples should highlight how you enable the most important features or which traits can be implemented for language-specific behavior.
+   Cash's side (`crates/cash-interactive/src/reedline/input_backend.rs`) clears the
+   line before running the command, as Bash does, so the output starts where the
+   prompt was and the prompt returns below it, byte for byte as in Bash 5.3.
 
-### Basic example
+2. **A keystroke no longer redraws the prompt** (`src/painting/painter.rs`,
+   `src/painting/utils.rs`). Reedline cleared from the prompt's first row and printed
+   the prompt and the line again on every key. With Starship that is a colored status
+   line, glyphs included, for each character typed or deleted: 178 bytes per Backspace
+   through ConPTY where PowerShell sends 68, all of it for the terminal to parse and draw
+   again. The painter now records the prompt it drew (text, colors, row, screen size);
+   a paint that would draw the same one, with nothing written, scrolled or re-anchored
+   in between, moves to where the input starts and redraws from there. A right prompt,
+   a large buffer, a prompt ending on the margin, a resize, a scroll, a new line or
+   anything that invalidates the anchor still gets the full paint.
 
-```rust,no_run
-// Create a default reedline object to handle user input
+   Such a paint erases only the rest of the input's row when neither it nor the paint
+   before drew anything below that row (no wrap, no menu, no multi-line input or hint).
+   ConPTY resends every row an erase covers, blank or not, so erasing to the end of the
+   screen made a prompt at the top of an empty screen cost the whole screen on each key.
 
-use reedline::{DefaultPrompt, Reedline, Signal};
+3. **A paste is not held back for 100 ms** (`src/engine.rs`). After a burst of more than
+   ten events Reedline waits `POLL_WAIT` for more before painting, and every paste ended
+   with that wait running out. It is 10 ms now: a paste reaches the console in one piece,
+   and one that stalls longer is painted in two batches, which costs a repaint.
 
-let mut line_editor = Reedline::create();
-let prompt = DefaultPrompt::default();
+4. **An abbreviation expands however the keys were read** (`src/engine.rs`, spec D60).
+   Reedline merges the keys of one read into one edit and tried abbreviation expansion
+   only when that edit began with a space. Keys that arrive faster than the prompt
+   repaints are read together, so `gco` then Space became one edit starting with `o`, and
+   `gco` stayed as typed. The edit now runs up to each space it inserts, tries expansion
+   there, and goes on. A bracketed paste arrives as one inserted string rather than as
+   spaces, so pasted text still never expands, as in fish.
 
-loop {
-    let sig = line_editor.read_line(&prompt);
-    match sig {
-        Ok(Signal::Success(buffer)) => {
-            println!("We processed: {}", buffer);
-        }
-        Ok(Signal::CtrlD) | Ok(Signal::CtrlC) => {
-            println!("\nAborted!");
-            break;
-        }
-        x => {
-            println!("Event: {:?}", x);
-        }
-    }
-}
-```
+5. **Keys typed after a bound key are kept** (`src/engine.rs`). A key bound to a host
+   command (`bind -x`, and cash's own Ctrl-X Ctrl-E and Alt-arrows) ends the read, and
+   Reedline dropped the rest of the batch it arrived in: typing on straight after Ctrl-R
+   for atuin, or after Ctrl-T for fzf, lost those keys. The rest of the batch is now kept,
+   unparsed, and read first by the next read, so it meets the bindings the command may
+   have changed. Keys typed after Enter never reach this batch: the console is read only
+   up to an Enter (crossterm's patch).
 
-### Integrate with custom keybindings
+6. **Tab over a history hint opens the menu on the hint's value** (`src/engine.rs`,
+   `src/menu/mod.rs`, `src/menu/columnar_menu.rs`, `src/menu/menu_functions.rs`; spec
+   D40). The hint and the completion menu knew nothing of each other. With
+   `cd docker-labs/` in history, `cd dock` showed the hint `er-labs/`, and Tab opened
+   the menu on its first value, `docker-fullstack-lab/`.
+   - As a menu opens, the engine offers it the line the hint would make, through a new
+     `Menu::set_hinted_line` that other menus ignore. It asks the hinter again for the
+     line on screen, because keys read in one batch leave the last paint's hint behind.
+     This happens only where a hint could be accepted: hints active, the cursor at the
+     buffer end.
+   - On its first final answer, the columnar menu selects the value whose acceptance
+     turns the buffer into the longest start of that line
+     (`CompletionDisplay::index_leading_to`). A value that appends a space counts only
+     where the line has whitespace after it, or ends.
+   - A move or an edit in the menu drops the line.
+   - Cash's menu wrapper (`QuoteAwareMenu`) forwards the call.
 
-```rust
-// Configure reedline with custom keybindings
+7. **A Tab that inserts the shared prefix does only that** (`src/engine.rs`, spec D40).
+   With partial completions on, Reedline spliced in the prefix the suggestions share and
+   opened the menu beneath it, on the same Tab. With the new
+   `with_shared_prefix_first(true)`, which cash sets, the menu is closed again, and the
+   next Tab opens it, as Bash lists only on a later Tab.
+   - A Tab with nothing shared left to insert opens the menu at once.
+   - `decide_menu_completion` now returns what the caller does next (`MenuOpening`), so
+     the `Menu` event and a late answer in `settle_completions` still decide alike.
+   - Off by default, so Reedline's own behaviour and tests stay as they were.
 
-//Cargo.toml
-//    [dependencies]
-//    crossterm = "*"
+8. **Text typed ahead of an Esc keeps its order in vi mode** (`src/engine.rs`,
+   2026-10-05). `process_input_batch` parsed a whole batch of keys, then ran the events
+   under the mode the parsing ended in. Text and an Esc read together (fast typing, a
+   paste, a slow link) were inserted under vi normal mode, whose cursor rests on a
+   character, so each insert after the first landed before it: `abc` Esc became `bca`.
+   Each event now carries the mode it was parsed under, the editor takes that mode
+   before running it, and a run of fused edits is cut where the mode changes;
+   `run_edit_commands` keeps re-syncing to the current mode when a host calls it.
+   Test: `engine::tests::text_and_esc_in_one_batch_insert_in_order`.
 
-use {
-  crossterm::event::{KeyCode, KeyModifiers},
-  reedline::{default_emacs_keybindings, EditCommand, Reedline, Emacs, ReedlineEvent},
-};
+9. **Accepting the next line can be set on a `Reedline` in use** (`src/engine.rs`,
+   2026-10-05). `with_immediately_accept` is a builder, which takes the `Reedline` by
+   value; cash's croot picker (spec D73) sets a line like `cd src/` and has it accepted
+   by the next `read_line`, which paints it first, on the `Reedline` the input backend
+   holds. `set_immediately_accept` does that by reference.
 
-let mut keybindings = default_emacs_keybindings();
-keybindings.add_binding(
-    KeyModifiers::ALT,
-    KeyCode::Char('m'),
-    ReedlineEvent::Edit(vec![EditCommand::BackspaceWord]),
-);
-let edit_mode = Box::new(Emacs::new(keybindings));
-
-let mut line_editor = Reedline::create().with_edit_mode(edit_mode);
-```
-
-### Integrate with `History`
-
-```rust,no_run
-// Create a reedline object with history support, including history size limits
-
-use reedline::{FileBackedHistory, Reedline};
-
-let history = Box::new(
-  FileBackedHistory::with_file(5, "history.txt".into())
-    .expect("Error configuring history with file"),
-);
-let mut line_editor = Reedline::create()
-  .with_history(history);
-```
-
-### Integrate with custom syntax `Highlighter`
-
-```rust
-// Create a reedline object with highlighter support
-
-use reedline::{ExampleHighlighter, Reedline};
-
-let commands = vec![
-  "test".into(),
-  "hello world".into(),
-  "hello world reedline".into(),
-  "this is the reedline crate".into(),
-];
-let mut line_editor =
-Reedline::create().with_highlighter(Box::new(ExampleHighlighter::new(commands)));
-```
-
-### Integrate with custom tab completion
-
-```rust
-// Create a reedline object with tab completions support
-
-use reedline::{default_emacs_keybindings, ColumnarMenu, DefaultCompleter, Emacs, KeyCode, KeyModifiers, Reedline, ReedlineEvent, ReedlineMenu, MenuBuilder};
-
-let commands = vec![
-  "test".into(),
-  "hello world".into(),
-  "hello world reedline".into(),
-  "this is the reedline crate".into(),
-];
-let completer = Box::new(DefaultCompleter::new_with_wordlen(commands.clone(), 2));
-// Use the interactive menu to select options from the completer
-let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
-// Set up the required keybindings
-let mut keybindings = default_emacs_keybindings();
-keybindings.add_binding(
-    KeyModifiers::NONE,
-    KeyCode::Tab,
-    ReedlineEvent::UntilFound(vec![
-        ReedlineEvent::Menu("completion_menu".to_string()),
-        ReedlineEvent::MenuNext,
-    ]),
-);
-
-let edit_mode = Box::new(Emacs::new(keybindings));
-
-let mut line_editor = Reedline::create()
-    .with_completer(completer)
-    .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
-    .with_edit_mode(edit_mode);
-```
-
-### Integrate with `Hinter` for fish-style history autosuggestions
-
-```rust
-// Create a reedline object with in-line hint support
-
-//Cargo.toml
-//  [dependencies]
-//  nu-ansi-term = "*"
-
-use {
-  nu_ansi_term::{Color, Style},
-  reedline::{DefaultHinter, Reedline},
-};
-
-let mut line_editor = Reedline::create().with_hinter(Box::new(
-  DefaultHinter::default()
-  .with_style(Style::new().italic().fg(Color::LightGray)),
-));
-```
-
-### Integrate with custom line completion `Validator`
-
-```rust
-// Create a reedline object with line completion validation support
-
-use reedline::{DefaultValidator, Reedline};
-
-let validator = Box::new(DefaultValidator);
-
-let mut line_editor = Reedline::create().with_validator(validator);
-```
-
-### Use custom `EditMode`
-
-```rust
-// Create a reedline object with custom edit mode
-// This can define a keybinding setting or enable vi-emulation
-
-use reedline::{
-    default_vi_insert_keybindings, default_vi_normal_keybindings, EditMode, Reedline, Vi,
-};
-
-let mut line_editor = Reedline::create().with_edit_mode(Box::new(Vi::new(
-    default_vi_insert_keybindings(),
-    default_vi_normal_keybindings(),
-)));
-```
-
-### Use `Helix` edit mode
-
-```rust
-// Selection-first editing: motions carry the selection, verbs act on it.
-// Requires the `helix` feature (enabled by default).
-
-use reedline::{default_helix_normal_keybindings, Helix, Reedline};
-
-let mut normal_keybindings = default_helix_normal_keybindings();
-// normal_keybindings.add_binding(..);
-
-let mut line_editor = Reedline::create()
-    .with_edit_mode(Box::new(Helix::default().with_normal_keybindings(normal_keybindings)));
-```
-
-Run `cargo run --example helix` for the mode on its own, or
-`cargo run --example demo -- --helix` to exercise it against the demo's
-history and menus.
-
-## Crate features
-
-- `clipboard`: Enable support to use the `SystemClipboard`. Enabling this feature will return a `SystemClipboard` instead of a local clipboard when calling `get_default_clipboard()`.
-- `bashisms`: Enable support for special text sequences that recall components from the history. e.g. `!!` and `!$`. For use in shells like `bash` or [`nushell`](https://nushell.sh).
-- `sqlite`: Provides the `SqliteBackedHistory` to store richer information in the history. Statically links the required sqlite version.
-- `sqlite-dynlib`: Alternative to the feature `sqlite`. Will not statically link. Requires `sqlite >= 3.38` to link dynamically!
-- `external_printer`: **Experimental:** Thread-safe `ExternalPrinter` handle to print lines from concurrently running threads.
-- `helix`: Selection-first `Helix`/Kakoune-style edit mode, where a motion moves the selection and a verb acts on it. On by default; the `Helix` type and its keybinding defaults are gated behind it, so `default-features = false` builds compile without the mode.
-
-## Are we prompt yet? (Development status)
-
-Reedline has now all the basic features to become the primary line editor for [nushell](https://github.com/nushell/nushell
-)
-
-- General editing functionality, that should feel familiar coming from other shells (e.g. bash, fish, zsh).
-- Configurable keybindings (emacs-style bindings and basic vi-style).
-- Configurable prompt
-- Content-aware syntax highlighting.
-- Autocompletion (With graphical selection menu or simple cycling inline).
-- History with interactive search options (optionally persists to file, can support multiple sessions accessing the same file)
-- Fish-style history autosuggestion hints
-- Undo support.
-- Clipboard integration
-- Line completeness validation for seamless entry of multiline command sequences.
-- Visual selection
-
-### Areas for future improvements
-
-- [ ] Support for Unicode beyond simple left-to-right scripts
-- [ ] Easier keybinding configuration
-- [ ] Support for more advanced vi commands
-- [ ] Smooth experience if completion or prompt content takes long to compute
-- [ ] Support for a concurrent output stream from background tasks to be displayed, while the input prompt is active. ("Full duplex" mode)
-
-For more ideas check out the [feature discussion](https://github.com/nushell/reedline/issues/63) or hop on the `#reedline` channel of the [nushell discord](https://discordapp.com/invite/NtAbbGn).
-
-### Alternatives
-
-For currently more mature Rust line editing check out:
-
-- [rustyline](https://crates.io/crates/rustyline)
+10. **A host command can take the keys typed after its key** (`src/engine.rs`,
+    2026-10-10). Patch 5 keeps the keys read together with a host command's key for the
+    next read; but cash's pickers (Ctrl-R's history, spec D79; Alt-E's, D73) are that
+    host command, and keys typed straight after Ctrl-R belong to their filter, not to
+    the line after the picker closes. `take_pending_input` hands them to the host
+    command, and `give_back_input` returns what it did not use to the next read.
+    Test: `engine::tests::a_host_command_takes_the_keys_after_it_and_gives_back_the_rest`.

@@ -1,8 +1,10 @@
+#![expect(
+    clippy::string_slice,
+    reason = "positions in the editor's buffer are on grapheme boundaries: every caret is committed through `rest_policy::recohere`, and the others come from grapheme or char iteration over the same text"
+)]
 use super::{
     edit_stack::EditStack, CaretGeometry, Clipboard, Cursor, LineBuffer, Movement, SelectionExtent,
 };
-#[cfg(feature = "system_clipboard")]
-use crate::core_editor::get_system_clipboard;
 use crate::core_editor::graphemes::{next_grapheme_boundary, prev_grapheme_boundary};
 use crate::core_editor::resolve::resolve_selection;
 use crate::core_editor::{commit, line, operator_span, resolve_motion, RestPolicy};
@@ -20,8 +22,6 @@ use std::ops::{DerefMut, Range};
 pub struct Editor {
     line_buffer: LineBuffer,
     cut_buffer: Box<dyn Clipboard>,
-    #[cfg(feature = "system_clipboard")]
-    system_clipboard: Box<dyn Clipboard>,
     edit_stack: EditStack<LineBuffer>,
     last_undo_behavior: UndoBehavior,
     edit_mode: PromptEditMode,
@@ -66,8 +66,6 @@ impl Default for Editor {
         Editor {
             line_buffer: LineBuffer::new(),
             cut_buffer: get_local_clipboard(),
-            #[cfg(feature = "system_clipboard")]
-            system_clipboard: get_system_clipboard(),
             edit_stack: EditStack::new(),
             last_undo_behavior: UndoBehavior::CreateUndoPoint,
             edit_mode: PromptEditMode::Default,
@@ -294,12 +292,10 @@ impl Editor {
                 self.move_left_until_char(*c, true, true, *select)
             }
             EditCommand::SelectAll => self.select_all(),
-            #[cfg(feature = "helix")]
             EditCommand::SelectLine => self.select_line(),
             EditCommand::CutSelection { granularity } => {
                 self.cut_selection_to_cut_buffer(*granularity)
             }
-            #[cfg(feature = "helix")]
             EditCommand::EraseSelection => self.erase_selection(),
             EditCommand::CopySelection => self.copy_selection_to_cut_buffer(),
             EditCommand::LowercaseSelection => self.lowercase_selection(),
@@ -355,12 +351,6 @@ impl Editor {
             EditCommand::SwapCursorAndAnchor => self
                 .line_buffer
                 .set_cursor(self.line_buffer.cursor().flip()),
-            #[cfg(feature = "system_clipboard")]
-            EditCommand::CutSelectionSystem => self.cut_selection_to_system(),
-            #[cfg(feature = "system_clipboard")]
-            EditCommand::CopySelectionSystem => self.copy_selection_to_system(),
-            #[cfg(feature = "system_clipboard")]
-            EditCommand::PasteSystem => self.paste_from_system(),
             EditCommand::CutInsidePair { left, right } => self.cut_inside_pair(*left, *right),
             EditCommand::CopyInsidePair { left, right } => self.copy_inside_pair(*left, *right),
             EditCommand::CutAroundPair { left, right } => self.cut_around_pair(*left, *right),
@@ -522,7 +512,7 @@ impl Editor {
     /// Adopt `mode`'s rest policy *without* committing the cursor.
     ///
     /// Called at the parse seam, before the events a mode transition emitted
-    /// are run, so those commands resolve under the new [`RestPolicy`] (e.g.
+    /// are run, so those commands resolve under the new `RestPolicy` (e.g.
     /// the Esc→normal grapheme step-back reads `OnGrapheme`). The cursor is
     /// deliberately left where insert mode put it: the emitted commands move
     /// and commit it under the new policy, and any no-command transition is
@@ -1306,7 +1296,6 @@ impl Editor {
     /// express: [`Select`](EditCommand::Select) re-anchors at the origin and
     /// [`Extend`](EditCommand::Extend) keeps its anchor, so neither can move
     /// both edges to line boundaries *and* notice they were there already.
-    #[cfg(feature = "helix")]
     fn select_line(&mut self) {
         let buf = self.line_buffer.get_buffer();
         let cursor = self.line_buffer.cursor();
@@ -1330,16 +1319,6 @@ impl Editor {
         self.place(Cursor::new(first, head));
     }
 
-    #[cfg(feature = "system_clipboard")]
-    fn cut_selection_to_system(&mut self) {
-        if let Some((start, end)) = self.get_selection() {
-            let cut_slice = &self.line_buffer.get_buffer()[start..end];
-            self.system_clipboard.set(cut_slice, Granularity::CharWise);
-            self.cut_range(start..end);
-            self.clear_selection();
-        }
-    }
-
     fn cut_selection_to_cut_buffer(&mut self, granularity: Granularity) {
         if let Some((start, end)) = self.get_selection() {
             let sel = Cursor::new(start, end);
@@ -1352,20 +1331,11 @@ impl Editor {
     ///
     /// `OperatorVerb::Erase` is the register-free deletion the motion-shaped
     /// `Erase` already uses; only the span differs.
-    #[cfg(feature = "helix")]
     fn erase_selection(&mut self) {
         if let Some((start, end)) = self.get_selection() {
             let sel = Cursor::new(start, end);
             self.operate(sel, OperatorVerb::Erase, Granularity::CharWise);
             self.clear_selection();
-        }
-    }
-
-    #[cfg(feature = "system_clipboard")]
-    fn copy_selection_to_system(&mut self) {
-        if let Some((start, end)) = self.get_selection() {
-            let cut_slice = &self.line_buffer.get_buffer()[start..end];
-            self.system_clipboard.set(cut_slice, Granularity::CharWise);
         }
     }
 
@@ -1578,12 +1548,6 @@ impl Editor {
             .unwrap_or(self.line_buffer.len());
         self.line_buffer.set_insertion_point(index);
         self.line_buffer.insert_newline();
-    }
-
-    #[cfg(feature = "system_clipboard")]
-    fn paste_from_system(&mut self) {
-        self.delete_selection();
-        insert_clipboard_content_before(&mut self.line_buffer, self.system_clipboard.deref_mut());
     }
 
     fn paste_cut_buffer(&mut self) {
@@ -3434,38 +3398,6 @@ mod test {
         assert_eq!(editor.insertion_point(), 0);
     }
 
-    #[cfg(feature = "system_clipboard")]
-    mod without_system_clipboard {
-        use super::*;
-        #[test]
-        fn test_cut_selection_system() {
-            let mut editor = editor_with("This is a test!");
-            // Build the whole-buffer selection head-first: under the unified
-            // Cursor model, anchoring where the head already sits makes an empty
-            // cursor that the next head move would collapse, so move the head to
-            // the start first, then drop the anchor at the end.
-            editor.line_buffer.set_insertion_point(0);
-            editor
-                .line_buffer
-                .set_selection_anchor(Some(editor.line_buffer.len()));
-            editor.run_edit_command(&EditCommand::CutSelectionSystem);
-            assert!(editor.line_buffer.get_buffer().is_empty());
-        }
-        #[test]
-        fn test_copypaste_selection_system() {
-            let s = "This is a test!";
-            let mut editor = editor_with(s);
-            // Head-first selection build; see `test_cut_selection_system`.
-            editor.line_buffer.set_insertion_point(0);
-            editor
-                .line_buffer
-                .set_selection_anchor(Some(editor.line_buffer.len()));
-            editor.run_edit_command(&EditCommand::CopySelectionSystem);
-            editor.run_edit_command(&EditCommand::PasteSystem);
-            pretty_assertions::assert_eq!(editor.line_buffer.len(), s.len() * 2);
-        }
-    }
-
     #[test]
     fn test_cut_inside_brackets() {
         let mut editor = editor_with("foo(bar)baz");
@@ -4305,7 +4237,6 @@ mod test {
 
     /// Helix-only editor behaviour. One gate for the whole block so it
     /// lifts in a single edit once helix stops being feature gated.
-    #[cfg(feature = "helix")]
     mod helix {
         use super::*;
         use pretty_assertions::assert_eq;

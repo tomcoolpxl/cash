@@ -13,6 +13,11 @@
 //! — means vi-word, vi-WORD, emacs-word, and helix-word are thin variations over
 //! one definition rather than eight ad-hoc functions.
 
+#![expect(
+    clippy::string_slice,
+    reason = "positions in the editor's buffer are on grapheme boundaries: every caret is committed through `rest_policy::recohere`, and the others come from grapheme or char iteration over the same text"
+)]
+
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::core_editor::graphemes::{ensure_grapheme_boundary_prev, next_grapheme_boundary};

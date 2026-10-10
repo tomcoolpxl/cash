@@ -1,3 +1,7 @@
+#![expect(
+    clippy::string_slice,
+    reason = "the cuts are the positions `match_indices` gives"
+)]
 use crate::highlighter::Highlighter;
 use crate::StyledText;
 use nu_ansi_term::{Color, Style};

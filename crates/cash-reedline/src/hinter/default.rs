@@ -23,7 +23,8 @@ impl Hinter for DefaultHinter {
                     line.to_string(),
                     history.session(),
                 ))
-                .expect("todo: error handling")
+                // A history that cannot be read gives no hint.
+                .unwrap_or_default()
                 .first()
                 .map_or_else(String::new, |entry| {
                     entry

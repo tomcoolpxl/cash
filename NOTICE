@@ -68,10 +68,17 @@ changes are listed in each crate's `README.md`.
 
 ## Vendored crates
 
-`vendor/` carries patched copies of [reedline](https://github.com/nushell/reedline)
-0.51.0 (© 2021 the Nushell Project) and [crossterm](https://github.com/crossterm-rs/crossterm)
-0.29.0 (© 2019 Timon), both under the MIT License, whose text is in each one's
-`LICENSE`. Each `CASH-PATCHES.md` lists the changes.
+`vendor/` carries a patched copy of [crossterm](https://github.com/crossterm-rs/crossterm)
+0.29.0 (© 2019 Timon), under the MIT License, whose text is in its `LICENSE`. Its
+`CASH-PATCHES.md` lists the changes.
+
+## reedline
+
+`crates/cash-reedline`, the line editor of cash's prompt, is taken and modified from
+[reedline](https://github.com/nushell/reedline) 0.51.0, © 2021 the Nushell Project
+Developers, under the MIT License, whose text is in
+[crates/cash-reedline/LICENSE](crates/cash-reedline/LICENSE). The changes are listed in
+its `README.md`.
 
 ## uutils coreutils
 

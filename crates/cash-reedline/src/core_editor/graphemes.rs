@@ -1,3 +1,7 @@
+#![expect(
+    clippy::string_slice,
+    reason = "positions in the editor's buffer are on grapheme boundaries: every caret is committed through `rest_policy::recohere`, and the others come from grapheme or char iteration over the same text"
+)]
 use unicode_segmentation::{GraphemeCursor, UnicodeSegmentation};
 
 /// Byte index of the next grapheme boundary at or after `pos`.

@@ -27,6 +27,10 @@ fn step_inside_closing_quote(editor: &mut Editor) {
 }
 
 impl<M: Menu> Menu for QuoteAwareMenu<M> {
+    fn settings(&self) -> &reedline::MenuSettings {
+        self.0.settings()
+    }
+
     fn name(&self) -> &str {
         self.0.name()
     }

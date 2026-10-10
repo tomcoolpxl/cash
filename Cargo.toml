@@ -16,13 +16,15 @@ members = [
     "crates/cash-uutils",
     "crates/cash-diffutils",
     "crates/cash-picker",
+    "crates/cash-reedline",
     "crates/cash-getopt",
     "crates/cash-archive",
     "xtask",
 ]
 default-members = ["crates/cash"]
 # Upstream code carried with a patch (see its CASH-PATCHES.md), not linted as cash's own.
-exclude = ["vendor/crossterm", "vendor/reedline"]
+# Reedline and the patched uutils tools were too, before they became cash's own crates.
+exclude = ["vendor/crossterm"]
 
 [workspace.package]
 version = "1.11.0"
@@ -48,6 +50,8 @@ cash-getopt = { version = "1.3.13", path = "crates/cash-getopt" }
 cash-interactive = { version = "1.3.13", path = "crates/cash-interactive" }
 cash-parser = { version = "1.3.13", path = "crates/cash-parser" }
 cash-picker = { version = "1.3.13", path = "crates/cash-picker" }
+# The line editor, reedline made cash's own; the code calls it `reedline`.
+reedline = { package = "cash-reedline", version = "1.3.13", path = "crates/cash-reedline" }
 cash-sed = { version = "1.3.13", path = "crates/cash-sed" }
 cash-uutils = { version = "1.3.13", path = "crates/cash-uutils" }
 cash-shell = { version = "1.3.13", path = "crates/cash-shell" }
@@ -247,13 +251,8 @@ codegen-units = 1
 inherits = "release"
 strip = "debuginfo"
 
-# Reedline 0.51.0 with the patches listed in vendor/reedline/CASH-PATCHES.md: a `bind -x`
-# command's output was painted over by the next prompt (ROADMAP item 15); each keystroke
-# redrew the whole prompt; each paste waited 100 ms before it was drawn.
-#
 # Crossterm 0.29.0 with the patch in vendor/crossterm/CASH-PATCHES.md: console input is
 # read in batches rather than one record per round trip to the console host.
 #
 [patch.crates-io]
 crossterm = { path = "vendor/crossterm" }
-reedline = { path = "vendor/reedline" }

@@ -1086,8 +1086,17 @@ day (spec D79, D80). In order:
    printed (`it/uutils_messages.rs`). The workspace lints apply, the style ones allowed
    as for `cash-sed`, the panic ones in full: about 50 sites, each an error the tool
    now reports or a stated reason it cannot fail.
-7. **reedline becomes cash's own code**, next, its own commit: the line editor (39k
-   lines, 10 changes) as a cash crate, its patch list turned into the crate's history.
+7. **reedline becomes cash's own code** (done 2026-10-10): `vendor/reedline` moved to
+   `crates/cash-reedline` (`git mv`, its history kept), the package `cash-reedline`,
+   its library still `reedline`. The features cash never turned on went with their
+   code and dependencies (clipboard, bashisms, SQLite history, external printer, idle
+   callback; 1,400 lines, `arboard`, `rusqlite`, `crossbeam`). The workspace lints
+   apply: style ones allowed, panic ones met (history errors returned, a `todo!()`
+   that could crash the prompt gone, `Menu::settings` required); string slicing at
+   positions the editor keeps on boundaries is stated per module. Its 1,548 tests run
+   with the workspace's; the patch list is the README's "changes made while it was a
+   patched copy". Left for later: Helix mode (on by default, so compiled in, never
+   offered by cash; its code runs through the core editor) and the 2021 edition.
 8. **crossterm becomes cash's own code**, after reedline: terminal I/O (12k lines, 2
    changes).
 

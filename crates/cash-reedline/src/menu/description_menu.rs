@@ -586,6 +586,10 @@ impl Menu for DescriptionMenu {
     fn replace_in_buffer(&self, editor: &mut Editor) {
         if let Some(mut suggestion) = self.get_value() {
             if let Some(example_index) = self.example_index {
+                #[expect(
+                    clippy::expect_used,
+                    reason = "the example index is checked against the examples where it is set"
+                )]
                 let example = self
                     .examples
                     .get(example_index)

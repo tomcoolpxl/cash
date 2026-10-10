@@ -66,7 +66,7 @@ pub enum TextObjectType {
     BigWord,
     /// (, ), \[, ], {, }
     Brackets,
-    /// ", ', `
+    /// `"`, `'` and the backtick
     Quote,
 }
 
@@ -185,7 +185,6 @@ pub enum MotionTarget {
     LineEdge(Direction),
     /// First non-whitespace character on the current line (helix `gs`). A blank
     /// line has none, so the motion stays put.
-    #[cfg(feature = "helix")]
     LineStartNonBlank,
     /// Whole-buffer edge: `Backward` = start (`gg`), `Forward` = end (`G`).
     BufferEdge(Direction),
@@ -241,7 +240,6 @@ impl MotionTarget {
             // Destination-shaped targets go here. Where they lie depends on the
             // cursor, so callers resolve first and compare after.
             MotionTarget::Position(_) => None,
-            #[cfg(feature = "helix")]
             MotionTarget::LineStartNonBlank => None,
         }
     }
@@ -625,14 +623,12 @@ pub enum EditCommand {
     ///
     /// Repeating therefore grows it a line at a time, so a count is the command
     /// applied that many times.
-    #[cfg(feature = "helix")]
     SelectLine,
 
     /// Delete the selection without filling the cut buffer (helix `Alt-d`).
     ///
     /// [`CutSelection`](EditCommand::CutSelection) clobbers the register, which
     /// is exactly what this avoids when the text is not wanted back.
-    #[cfg(feature = "helix")]
     EraseSelection,
 
     /// Cut selection to local buffer
@@ -727,18 +723,6 @@ pub enum EditCommand {
     /// Swap the positions of the cursor and anchor
     SwapCursorAndAnchor,
 
-    /// Cut selection to system clipboard
-    #[cfg(feature = "system_clipboard")]
-    CutSelectionSystem,
-
-    /// Copy selection to system clipboard
-    #[cfg(feature = "system_clipboard")]
-    CopySelectionSystem,
-
-    /// Paste content from system clipboard at the current cursor position
-    #[cfg(feature = "system_clipboard")]
-    PasteSystem,
-
     /// Delete text between matching characters atomically
     CutInsidePair {
         /// Left character of the pair
@@ -811,9 +795,7 @@ impl EditCommand {
             EditCommand::SwapCursorAndAnchor => EditType::MoveCursor { select: true },
 
             EditCommand::SelectAll => EditType::MoveCursor { select: true },
-            #[cfg(feature = "helix")]
             EditCommand::EraseSelection => EditType::EditText,
-            #[cfg(feature = "helix")]
             EditCommand::SelectLine => EditType::MoveCursor { select: true },
             // Text edits
             EditCommand::InsertChar(_)
@@ -869,14 +851,9 @@ impl EditCommand {
             | EditCommand::CutTextObject { .. }
             | EditCommand::PasteAtSelectionEdge { .. } => EditType::EditText,
 
-            #[cfg(feature = "system_clipboard")] // Sadly cfg attributes in patterns don't work
-            EditCommand::CutSelectionSystem | EditCommand::PasteSystem => EditType::EditText,
-
             EditCommand::Undo | EditCommand::Redo => EditType::UndoRedo,
 
             EditCommand::CopySelection => EditType::NoOp,
-            #[cfg(feature = "system_clipboard")]
-            EditCommand::CopySelectionSystem => EditType::NoOp,
             EditCommand::CopyFromStart
             | EditCommand::CopyFromStartLinewise
             | EditCommand::CopyFromLineStart
@@ -922,7 +899,10 @@ impl EditCommand {
 #[derive(PartialEq, Eq)]
 pub enum EditType {
     /// Cursor movement commands
-    MoveCursor { select: bool },
+    MoveCursor {
+        /// Whether the move extends the selection.
+        select: bool,
+    },
     /// Undo/Redo commands
     UndoRedo,
     /// Text editing commands
@@ -1145,13 +1125,16 @@ pub enum ReedlineEvent {
     /// its own that is a keybinding that does nothing; inside an
     /// [`UntilFound`](ReedlineEvent::UntilFound) it hands the key to the next
     /// event in the list instead.
-    #[cfg(feature = "helix")]
     HelixChangeMode(String),
 }
 
+/// What became of an event the editor was given.
 pub enum EventStatus {
+    /// It was acted on, and the line is drawn again.
     Handled,
+    /// It meant nothing where it arrived.
     Inapplicable,
+    /// It ends the read, with this signal.
     Exits(Signal),
 }
 
@@ -1193,7 +1176,6 @@ impl From<ReedlineRawEvent> for Event {
     }
 }
 
-#[cfg(feature = "helix")]
 impl TryFrom<ReedlineRawEvent> for KeyEvent {
     type Error = ReedlineRawEvent;
 

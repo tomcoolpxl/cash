@@ -209,11 +209,8 @@
 //!
 //! ## Crate features
 //!
-//! - `clipboard`: Enable support to use the `SystemClipboard`. Enabling this feature will return a `SystemClipboard` instead of a local clipboard when calling `get_default_clipboard()`.
-//! - `bashisms`: Enable support for special text sequences that recall components from the history. e.g. `!!` and `!$`. For use in shells like `bash` or [`nushell`](https://nushell.sh).
-//! - `sqlite`: Provides the `SqliteBackedHistory` to store richer information in the history. Statically links the required sqlite version.
-//! - `sqlite-dynlib`: Alternative to the feature `sqlite`. Will not statically link. Requires `sqlite >= 3.38` to link dynamically!
-//! - `external_printer`: **Experimental:** Thread-safe `ExternalPrinter` handle to print lines from concurrently running threads.
+//! cash: reedline's other features (the system clipboard, bashisms, SQLite history,
+//! the external printer, the idle callback) were never on in cash and are gone.
 //! - `helix`: Selection-first `Helix`/Kakoune-style edit mode, where a motion moves the selection and a verb acts on it. On by default; the `Helix` type and its keybinding defaults are gated behind it, so `default-features = false` builds compile without the mode.
 //!
 //! ## Are we prompt yet? (Development status)
@@ -251,6 +248,72 @@
 //!
 #![warn(rustdoc::missing_crate_level_docs)]
 #![warn(missing_docs)]
+// cash: the workspace lints apply here as everywhere, rustc's warnings included; this code
+// came from reedline, written to other rules, so the style lints it was not written to are
+// allowed rather than rewritten, as for `cash-sed`. The lints for code that can panic
+// apply in full; where the editor slices its text at positions it keeps on character
+// boundaries, the module says so.
+#![allow(
+    elided_lifetimes_in_paths,
+    clippy::assert_is_empty,
+    clippy::branches_sharing_code,
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::doc_link_code,
+    clippy::doc_markdown,
+    clippy::elidable_lifetime_names,
+    clippy::equatable_if_let,
+    clippy::explicit_deref_methods,
+    clippy::explicit_iter_loop,
+    clippy::format_collect,
+    clippy::ignored_unit_patterns,
+    clippy::implicit_clone,
+    clippy::inconsistent_struct_constructor,
+    clippy::items_after_statements,
+    clippy::manual_assert_eq,
+    clippy::manual_let_else,
+    clippy::manual_string_new,
+    clippy::map_unwrap_or,
+    clippy::match_bool,
+    clippy::match_wildcard_for_single_variants,
+    clippy::missing_const_for_fn,
+    clippy::missing_panics_doc,
+    clippy::needless_for_each,
+    clippy::needless_pass_by_ref_mut,
+    clippy::needless_pass_by_value,
+    clippy::needless_raw_string_hashes,
+    clippy::or_fun_call,
+    clippy::redundant_clone,
+    clippy::ref_option,
+    clippy::return_self_not_must_use,
+    clippy::semicolon_if_nothing_returned,
+    clippy::significant_drop_tightening,
+    clippy::single_match_else,
+    clippy::string_lit_as_bytes,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    clippy::uninlined_format_args,
+    clippy::unnecessary_lazy_evaluations,
+    clippy::unnecessary_semicolon,
+    clippy::unnecessary_trailing_comma,
+    clippy::unnecessary_wraps,
+    clippy::unnested_or_patterns,
+    clippy::unused_self,
+    clippy::use_self,
+    reason = "reedline code, not written to the workspace's style lints"
+)]
+// Tests that return a `Result` may unwrap and assert in it; clippy.toml lets tests
+// panic, and these two lints are the same thing seen from a `Result`.
+#![cfg_attr(
+    test,
+    allow(
+        clippy::panic_in_result_fn,
+        clippy::unwrap_in_result,
+        reason = "tests may unwrap and assert"
+    )
+)]
 // #![deny(warnings)]
 mod core_editor;
 pub use core_editor::{Editor, LineBuffer};
@@ -272,8 +335,6 @@ mod result;
 pub use result::{ReedlineError, ReedlineErrorVariants, Result};
 
 mod history;
-#[cfg(any(feature = "sqlite", feature = "sqlite-dynlib"))]
-pub use history::SqliteBackedHistory;
 pub use history::{
     CommandLineSearch, FileBackedHistory, History, HistoryItem, HistoryItemExtraInfo,
     HistoryItemId, HistoryNavigationQuery, HistorySessionId, IgnoreAllExtraInfo, JsonFilterValue,
@@ -281,7 +342,6 @@ pub use history::{
 };
 
 mod prompt;
-#[cfg(feature = "helix")]
 pub use prompt::PromptHelixMode;
 pub use prompt::{
     DefaultPrompt, DefaultPromptSegment, Prompt, PromptEditMode, PromptEditModeDiscriminants,
@@ -294,7 +354,6 @@ pub use edit_mode::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
     CursorConfig, EditMode, Emacs, Keybindings, Vi,
 };
-#[cfg(feature = "helix")]
 pub use edit_mode::{
     default_helix_insert_keybindings, default_helix_normal_keybindings,
     default_helix_select_keybindings, Helix,
@@ -331,13 +390,17 @@ pub use terminal_extensions::semantic_prompt::{
 
 mod utils;
 
-mod external_printer;
 pub use utils::{
     get_reedline_default_keybindings, get_reedline_keybinding_modifiers, get_reedline_keycodes,
 };
 
 // Reexport the key types to be independent from an explicit crossterm dependency.
 pub use crossterm::event::{KeyCode, KeyModifiers};
-#[cfg(feature = "external_printer")]
-pub use external_printer::ExternalPrinter;
 pub use nu_ansi_term::Color;
+
+// cash: types the public items above use, named so a caller can name them too.
+pub use edit_mode::KeyCombination;
+pub use engine::RepaintSignal;
+pub use enums::{EditType, EventStatus};
+pub use menu::MenuSettings;
+pub use painting::PainterSuspendedState;

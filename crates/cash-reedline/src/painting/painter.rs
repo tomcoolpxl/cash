@@ -1,5 +1,8 @@
+#![expect(
+    clippy::string_slice,
+    reason = "the painter cuts the line at the caret and at positions found in the same text"
+)]
 use crate::terminal_extensions::semantic_prompt::{PromptKind, SemanticPromptMarkers};
-#[cfg(feature = "helix")]
 use crate::PromptHelixMode;
 use crate::{CursorConfig, PromptEditMode, PromptViMode};
 
@@ -23,8 +26,6 @@ use {
     unicode_segmentation::UnicodeSegmentation,
     unicode_width::UnicodeWidthStr,
 };
-#[cfg(feature = "external_printer")]
-use {crate::LineBuffer, crossterm::cursor::MoveUp};
 
 // Returns a string that skips N number of lines with the next offset of lines
 // An offset of 0 would return only one line after skipping the required lines
@@ -154,6 +155,8 @@ impl Write for W {
     }
 }
 
+/// Where the prompt was when the painter stepped aside for a host command, so that
+/// it can be drawn again in place when nothing moved.
 #[derive(Debug, PartialEq, Eq)]
 pub struct PainterSuspendedState {
     previous_prompt_rows_range: RangeInclusive<u16>,
@@ -793,11 +796,8 @@ impl Painter {
                 PromptEditMode::Emacs => shapes.emacs,
                 PromptEditMode::Vi(PromptViMode::Insert) => shapes.vi_insert,
                 PromptEditMode::Vi(PromptViMode::Normal | PromptViMode::Visual) => shapes.vi_normal,
-                #[cfg(feature = "helix")]
                 PromptEditMode::Helix(PromptHelixMode::Insert) => shapes.hx_insert,
-                #[cfg(feature = "helix")]
                 PromptEditMode::Helix(PromptHelixMode::Normal) => shapes.hx_normal,
-                #[cfg(feature = "helix")]
                 PromptEditMode::Helix(PromptHelixMode::Select) => shapes.hx_select,
                 _ => None,
             };
@@ -1365,81 +1365,6 @@ impl Painter {
             self.stdout.queue(Print(after_cursor))?;
         }
         self.print_crlf()
-    }
-
-    /// Prints an external message
-    ///
-    /// This function doesn't flush the buffer. So buffer should be flushed
-    /// afterwards perhaps by repainting the prompt via `repaint_buffer()`.
-    #[cfg(feature = "external_printer")]
-    pub(crate) fn print_external_message(
-        &mut self,
-        messages: Vec<String>,
-        line_buffer: &LineBuffer,
-        prompt: &dyn Prompt,
-    ) -> Result<()> {
-        // adding 3 seems to be right for first line-wrap
-        let prompt_len = prompt.render_prompt_right().len() + 3;
-        let mut buffer_num_lines = 0_u16;
-        for (i, line) in line_buffer.get_buffer().lines().enumerate() {
-            let screen_lines = match i {
-                0 => {
-                    // the first line has to deal with the prompt
-                    let first_line_len = line.len() + prompt_len;
-                    // at least, it is one line
-                    ((first_line_len as u16) / (self.screen_width())) + 1
-                }
-                _ => {
-                    // the n-th line, no prompt, at least, it is one line
-                    ((line.len() as u16) / self.screen_width()) + 1
-                }
-            };
-            // count up screen-lines
-            buffer_num_lines = buffer_num_lines.saturating_add(screen_lines);
-        }
-        // move upward to start print if the line-buffer is more than one screen-line
-        if buffer_num_lines > 1 {
-            self.stdout.queue(MoveUp(buffer_num_lines - 1))?;
-        }
-        let erase_line = format!("\r{}\r", " ".repeat(self.screen_width().into()));
-        let max_row = self.screen_height().saturating_sub(1);
-        let starting_row = self.prompt_start_row.last_known_row();
-        // Invalidate up front: a `?` early-return below can leave
-        // bytes in the buffer with the cache still claiming `Verified`.
-        self.invalidate_prompt_start_row();
-        let mut row = starting_row;
-        for line in messages {
-            self.stdout.queue(Print(&erase_line))?;
-            // Note: we don't use `print_line` here because we don't want to
-            // flush right now. The subsequent repaint of the prompt will cause
-            // immediate flush anyways. And if we flush here, every external
-            // print causes visible flicker.
-            self.stdout.queue(Print(line))?.queue(Print("\r\n"))?;
-            row = row.saturating_add(1).min(max_row);
-        }
-        // The lines above are only *queued*, so the terminal's cursor has not
-        // moved yet: a row counted forward from `starting_row` names a position
-        // the terminal has not reached. Recorded as `Stale`, the next paint
-        // re-verifies it against the real, still-earlier cursor, reads that as
-        // the prompt having scrolled off the top, and re-anchors by printing a
-        // whole screen of newlines -- wiping the display (#1005).
-        //
-        // Counting was also only as good as its assumption that a message
-        // occupies exactly one row, which fails as soon as one wraps or carries
-        // its own control sequences. Flush and ask instead: one round-trip per
-        // batch of messages, not per message, so the flicker the comment above
-        // guards against is unaffected.
-        self.stdout.flush()?;
-        self.prompt_start_row = match cursor::position() {
-            // Measured, so later paints can skip the drift check.
-            Ok((_, actual)) => PromptStartRow::Verified(actual),
-            // No answer, so all that is left is the count this function stopped
-            // trusting. `Stale` at least keeps the next paint checking it;
-            // `Verified` would skip the check and paint against a row the
-            // terminal may never have reached.
-            Err(_) => PromptStartRow::Stale(row),
-        };
-        Ok(())
     }
 
     /// Queue scroll of `num` lines to `self.stdout`.
@@ -2398,6 +2323,9 @@ mod tests {
     struct TestMenu(String);
 
     impl Menu for TestMenu {
+        fn settings(&self) -> &crate::menu::MenuSettings {
+            unimplemented!()
+        }
         fn menu_string(&self, _available_lines: u16, _use_ansi_coloring: bool) -> String {
             self.0.clone()
         }
@@ -2762,6 +2690,10 @@ mod tests {
             style::{Color as CtColor, SetForegroundColor},
             Command,
         };
+
+        // cash: crossterm writes no colour under `NO_COLOR`, which a developer's shell
+        // may set; the test is about the codes, so it asks for them whatever is set.
+        crossterm::style::force_color_output(true);
 
         fn crossterm_sgr(color: CtColor) -> String {
             let mut buf = String::new();

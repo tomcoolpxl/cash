@@ -1,3 +1,4 @@
+#![expect(clippy::string_slice, reason = "the cut is at the caret")]
 use nu_ansi_term::Style;
 
 use crate::terminal_extensions::semantic_prompt::{PromptKind, SemanticPromptMarkers};

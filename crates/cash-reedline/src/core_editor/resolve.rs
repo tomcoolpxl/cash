@@ -1,3 +1,7 @@
+#![expect(
+    clippy::string_slice,
+    reason = "positions in the editor's buffer are on grapheme boundaries: every caret is committed through `rest_policy::recohere`, and the others come from grapheme or char iteration over the same text"
+)]
 use crate::{
     core_editor::{
         graphemes::{next_grapheme_boundary, prev_grapheme_boundary},
@@ -110,7 +114,6 @@ pub(crate) fn resolve_motion(
         // of the *anchor* it falls, which only `Cursor::put_cursor` can see (the
         // `Extend` dispatch in `Editor` routes this target there). Staying put
         // on a blank line is `resolve_motion` being total, not a special case.
-        #[cfg(feature = "helix")]
         MotionTarget::LineStartNonBlank => {
             span(line::first_non_blank(buf, origin).unwrap_or(origin), false)
         }
@@ -307,7 +310,6 @@ mod tests {
         assert_eq!(m.op_end, m.head);
     }
 
-    #[cfg(feature = "helix")]
     #[test]
     fn resolve_motion_line_start_non_blank_lands_on_the_indent_end() {
         // Same landing from either side, under either geometry: a destination
@@ -325,7 +327,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "helix")]
     #[test]
     fn resolve_motion_stays_put_for_line_start_non_blank_with_nowhere_to_go() {
         // Resting at `origin` keeps `resolve_motion` total, so the blank-line

@@ -1,3 +1,7 @@
+#![expect(
+    clippy::string_slice,
+    reason = "the cuts are where `match_indices` found a line feed"
+)]
 use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;

@@ -1,20 +1,13 @@
+#![expect(
+    clippy::string_slice,
+    reason = "the words cut are bounded by the caret and by positions found in the buffer"
+)]
 use std::{collections::HashMap, ops::ControlFlow, path::PathBuf};
 
 use itertools::Itertools;
 use nu_ansi_term::{Color, Style};
 
 use crate::{enums::ReedlineRawEvent, CursorConfig};
-#[cfg(feature = "bashisms")]
-use crate::{
-    history::SearchFilter,
-    menu_functions::{parse_selection_char, ParseAction},
-};
-#[cfg(feature = "external_printer")]
-use {
-    crate::external_printer::ExternalPrinter,
-    crossbeam::channel::TryRecvError,
-    std::io::{Error, ErrorKind},
-};
 use {
     crate::{
         completion::{Completer, CompletionOrigin, CompletionStatus, DefaultCompleter},
@@ -240,14 +233,8 @@ pub struct Reedline {
     // require periodic processing (external printer, idle callback).
     // Only used when external_printer or idle_callback is configured.
     poll_interval: Duration,
-
-    #[cfg(feature = "external_printer")]
-    external_printer: Option<ExternalPrinter<String>>,
-
     // Callback function that is called periodically while waiting for input.
     // Useful for processing external events (e.g., GUI updates) during idle time.
-    #[cfg(feature = "idle_callback")]
-    idle_callback: Option<Box<dyn FnMut() + Send>>,
 }
 
 struct BufferEditor {
@@ -419,10 +406,6 @@ impl Reedline {
             break_signal: None,
             repaint_signal: None,
             poll_interval: DEFAULT_POLL_INTERVAL,
-            #[cfg(feature = "external_printer")]
-            external_printer: None,
-            #[cfg(feature = "idle_callback")]
-            idle_callback: None,
         }
     }
 
@@ -880,7 +863,7 @@ impl Reedline {
         let history: Vec<_> = self
             .history
             .search(SearchQuery::everything(SearchDirection::Forward, None))
-            .expect("todo: error handling");
+            .map_err(io::Error::other)?;
 
         for (i, entry) in history.iter().enumerate() {
             self.print_line(&format!("{}\t{}", i, entry.command_line))?;
@@ -896,7 +879,7 @@ impl Reedline {
                 SearchDirection::Forward,
                 self.get_history_session_id(),
             ))
-            .expect("todo: error handling");
+            .map_err(io::Error::other)?;
 
         for (i, entry) in history.iter().enumerate() {
             self.print_line(&format!("{}\t{}", i, entry.command_line))?;
@@ -953,7 +936,9 @@ impl Reedline {
     ) -> crate::Result<()> {
         match &self.history_last_run_id {
             Some(Self::FILTERED_ITEM_ID) => {
-                self.history_excluded_item = Some(f(self.history_excluded_item.take().unwrap()));
+                if let Some(item) = self.history_excluded_item.take() {
+                    self.history_excluded_item = Some(f(item));
+                }
                 Ok(())
             }
             Some(r) => self.history.update(*r, f),
@@ -1029,16 +1014,6 @@ impl Reedline {
                 .as_ref()
                 .is_some_and(|sig| Arc::strong_count(&sig.flag) > 1);
 
-        #[cfg(feature = "external_printer")]
-        {
-            poll |= self.external_printer.is_some();
-        }
-
-        #[cfg(feature = "idle_callback")]
-        {
-            poll |= self.idle_callback.is_some();
-        }
-
         poll
     }
 
@@ -1062,14 +1037,6 @@ impl Reedline {
 
         loop {
             // Call idle callback if set (for processing external events like GUI updates)
-            #[cfg(feature = "idle_callback")]
-            if let Some(ref mut callback) = self.idle_callback {
-                callback();
-                // The callback owns stdout while it runs and may have
-                // written or moved the cursor. Re-verify the anchor on
-                // the next paint.
-                self.painter.invalidate_prompt_start_row();
-            }
 
             if let Some(ref signal) = self.break_signal {
                 if signal.swap(false, std::sync::atomic::Ordering::Relaxed) {
@@ -1084,21 +1051,6 @@ impl Reedline {
 
             if self.take_repaint_request() {
                 self.repaint(prompt)?;
-            }
-
-            #[cfg(feature = "external_printer")]
-            if let Some(ref external_printer) = self.external_printer {
-                // get messages from printer as crlf separated "lines"
-                let messages = Self::external_messages(external_printer)?;
-                if !messages.is_empty() {
-                    // print the message(s)
-                    self.painter.print_external_message(
-                        messages,
-                        self.editor.line_buffer(),
-                        prompt,
-                    )?;
-                    self.repaint(prompt)?;
-                }
             }
 
             // Determine if we need to poll (non-blocking) or can block on input.
@@ -1484,18 +1436,18 @@ impl Reedline {
             ReedlineEvent::PreviousHistory | ReedlineEvent::Up | ReedlineEvent::SearchHistory => {
                 self.history_cursor
                     .back(self.history.as_ref())
-                    .expect("todo: error handling");
+                    .map_err(io::Error::other)?;
                 Ok(EventStatus::Handled)
             }
             ReedlineEvent::NextHistory | ReedlineEvent::Down => {
                 self.history_cursor
                     .forward(self.history.as_ref())
-                    .expect("todo: error handling");
+                    .map_err(io::Error::other)?;
                 // Hacky way to ensure that we don't fall of into failed search going forward
                 if self.history_cursor.string_at_cursor().is_none() {
                     self.history_cursor
                         .back(self.history.as_ref())
-                        .expect("todo: error handling");
+                        .map_err(io::Error::other)?;
                 }
                 Ok(EventStatus::Handled)
             }
@@ -1522,7 +1474,6 @@ impl Reedline {
             | ReedlineEvent::MenuPageNext
             | ReedlineEvent::MenuPagePrevious
             | ReedlineEvent::ViChangeMode(_) => Ok(EventStatus::Inapplicable),
-            #[cfg(feature = "helix")]
             ReedlineEvent::HelixChangeMode(_) => Ok(EventStatus::Inapplicable),
         }
     }
@@ -1709,10 +1660,6 @@ impl Reedline {
                 unreachable!()
             }
             ReedlineEvent::Enter => {
-                #[cfg(feature = "bashisms")]
-                if let Some(event) = self.parse_bang_command() {
-                    return self.handle_editor_event(prompt, event);
-                }
                 if let Some(event) = self.try_expand_abbreviation_at_cursor(true) {
                     self.handle_editor_event(prompt, event)?;
                 }
@@ -1728,10 +1675,6 @@ impl Reedline {
                 }
             }
             ReedlineEvent::Submit => {
-                #[cfg(feature = "bashisms")]
-                if let Some(event) = self.parse_bang_command() {
-                    return self.handle_editor_event(prompt, event);
-                }
                 if let Some(event) = self.try_expand_abbreviation_at_cursor(true) {
                     self.handle_editor_event(prompt, event)?;
                 }
@@ -1739,10 +1682,6 @@ impl Reedline {
                 Ok(self.submit_buffer(prompt)?)
             }
             ReedlineEvent::SubmitOrNewline => {
-                #[cfg(feature = "bashisms")]
-                if let Some(event) = self.parse_bang_command() {
-                    return self.handle_editor_event(prompt, event);
-                }
                 if let Some(event) = self.try_expand_abbreviation_at_cursor(true) {
                     self.handle_editor_event(prompt, event)?;
                 }
@@ -1918,7 +1857,6 @@ impl Reedline {
                 Ok(EventStatus::Inapplicable)
             }
             ReedlineEvent::ViChangeMode(_) => Ok(self.change_edit_mode(event)),
-            #[cfg(feature = "helix")]
             ReedlineEvent::HelixChangeMode(_) => Ok(self.change_edit_mode(event)),
             ReedlineEvent::Mouse {
                 column,
@@ -2009,9 +1947,7 @@ impl Reedline {
         }
 
         if !self.history_cursor_on_excluded {
-            self.history_cursor
-                .back(self.history.as_ref())
-                .expect("todo: error handling");
+            let _moved = self.history_cursor.back(self.history.as_ref()).is_ok();
         }
         self.update_buffer_from_history();
         self.editor.move_to_start(false);
@@ -2036,9 +1972,7 @@ impl Reedline {
             self.history_cursor_on_excluded = false;
         } else {
             let cursor_was_on_item = self.history_cursor.string_at_cursor().is_some();
-            self.history_cursor
-                .forward(self.history.as_ref())
-                .expect("todo: error handling");
+            let _moved = self.history_cursor.forward(self.history.as_ref()).is_ok();
 
             if cursor_was_on_item
                 && self.history_cursor.string_at_cursor().is_none()
@@ -2111,9 +2045,7 @@ impl Reedline {
                             self.get_history_session_id(),
                         );
                     }
-                    self.history_cursor
-                        .back(self.history.as_mut())
-                        .expect("todo: error handling");
+                    let _moved = self.history_cursor.back(self.history.as_mut()).is_ok();
                 }
                 EditCommand::Backspace => {
                     let navigation = self.history_cursor.get_navigation();
@@ -2125,9 +2057,7 @@ impl Reedline {
                             HistoryNavigationQuery::SubstringSearch(new_substring.to_string()),
                             self.get_history_session_id(),
                         );
-                        self.history_cursor
-                            .back(self.history.as_mut())
-                            .expect("todo: error handling");
+                        let _moved = self.history_cursor.back(self.history.as_mut()).is_ok();
                     }
                 }
                 _ => {
@@ -2143,14 +2073,12 @@ impl Reedline {
     /// Not used for the separate modal reverse search!
     fn update_buffer_from_history(&mut self) {
         match self.history_cursor.get_navigation() {
-            _ if self.history_cursor_on_excluded => self.editor.set_buffer(
-                self.history_excluded_item
-                    .as_ref()
-                    .unwrap()
-                    .command_line
-                    .clone(),
-                UndoBehavior::HistoryNavigation,
-            ),
+            _ if self.history_cursor_on_excluded => {
+                if let Some(item) = &self.history_excluded_item {
+                    self.editor
+                        .set_buffer(item.command_line.clone(), UndoBehavior::HistoryNavigation);
+                }
+            }
             HistoryNavigationQuery::Normal(original) => {
                 if let Some(buffer_to_paint) = self.history_cursor.string_at_cursor() {
                     self.editor
@@ -2170,7 +2098,13 @@ impl Reedline {
                         .set_buffer(prefix, UndoBehavior::HistoryNavigation);
                 }
             }
-            HistoryNavigationQuery::SubstringSearch(_) => todo!(),
+            // cash: as the prefix search: the line found, or what was typed. Reedline
+            // left it to a `todo!()`, which took the prompt down if it was reached.
+            HistoryNavigationQuery::SubstringSearch(substring) => {
+                let line = self.history_cursor.string_at_cursor().unwrap_or(substring);
+                self.editor
+                    .set_buffer(line, UndoBehavior::HistoryNavigation);
+            }
         }
     }
 
@@ -2357,162 +2291,6 @@ impl Reedline {
         }
 
         None
-    }
-
-    #[cfg(feature = "bashisms")]
-    /// Parses the ! command to replace entries from the history
-    fn parse_bang_command(&mut self) -> Option<ReedlineEvent> {
-        let buffer = self.editor.get_buffer();
-        let parsed = parse_selection_char(buffer, '!');
-        let parsed_prefix = parsed.prefix.unwrap_or_default().to_string();
-        let parsed_marker = parsed.marker.unwrap_or_default().to_string();
-
-        if let Some(last) = parsed.remainder.chars().last() {
-            if last != ' ' {
-                return None;
-            }
-        }
-
-        if !self.highlighter.should_expand_abbr(
-            buffer,
-            parsed.remainder.len(),
-            AbbrExpandContext::BangExpansion,
-        ) {
-            return None;
-        }
-
-        let history_result = parsed
-            .index
-            .zip(parsed.marker)
-            .and_then(|(index, indicator)| match parsed.action {
-                ParseAction::LastCommand => self
-                    .history
-                    .search(SearchQuery {
-                        direction: SearchDirection::Backward,
-                        start_time: None,
-                        end_time: None,
-                        start_id: None,
-                        end_id: None,
-                        limit: Some(1), // fetch the latest one entries
-                        filter: SearchFilter::anything(self.get_history_session_id()),
-                    })
-                    .unwrap_or_else(|_| Vec::new())
-                    .get(index.saturating_sub(1))
-                    .map(|history| {
-                        (
-                            parsed.remainder.len(),
-                            indicator.len(),
-                            history.command_line.clone(),
-                        )
-                    }),
-                ParseAction::BackwardSearch => self
-                    .history
-                    .search(SearchQuery {
-                        direction: SearchDirection::Backward,
-                        start_time: None,
-                        end_time: None,
-                        start_id: None,
-                        end_id: None,
-                        limit: Some(index as i64), // fetch the latest n entries
-                        filter: SearchFilter::anything(self.get_history_session_id()),
-                    })
-                    .unwrap_or_else(|_| Vec::new())
-                    .get(index.saturating_sub(1))
-                    .map(|history| {
-                        (
-                            parsed.remainder.len(),
-                            indicator.len(),
-                            history.command_line.clone(),
-                        )
-                    }),
-                ParseAction::BackwardPrefixSearch => {
-                    let history_search_by_session = self
-                        .history
-                        .search(SearchQuery::last_with_prefix_and_cwd(
-                            parsed.prefix.unwrap().to_string(),
-                            self.cwd.clone().unwrap_or_else(|| {
-                                std::env::current_dir()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                                    .to_string()
-                            }),
-                            self.get_history_session_id(),
-                        ))
-                        .unwrap_or_else(|_| Vec::new())
-                        .get(index.saturating_sub(1))
-                        .map(|history| {
-                            (
-                                parsed.remainder.len(),
-                                parsed_prefix.len() + parsed_marker.len(),
-                                history.command_line.clone(),
-                            )
-                        });
-                    // If we don't find any history searching by session id, then let's
-                    // search everything, otherwise use the result from the session search
-                    if history_search_by_session.is_none() {
-                        self.history
-                            .search(SearchQuery::last_with_prefix(
-                                parsed_prefix.clone(),
-                                self.get_history_session_id(),
-                            ))
-                            .unwrap_or_else(|_| Vec::new())
-                            .get(index.saturating_sub(1))
-                            .map(|history| {
-                                (
-                                    parsed.remainder.len(),
-                                    parsed_prefix.len() + parsed_marker.len(),
-                                    history.command_line.clone(),
-                                )
-                            })
-                    } else {
-                        history_search_by_session
-                    }
-                }
-                ParseAction::ForwardSearch => self
-                    .history
-                    .search(SearchQuery {
-                        direction: SearchDirection::Forward,
-                        start_time: None,
-                        end_time: None,
-                        start_id: None,
-                        end_id: None,
-                        limit: Some((index + 1) as i64), // fetch the oldest n entries
-                        filter: SearchFilter::anything(self.get_history_session_id()),
-                    })
-                    .unwrap_or_else(|_| Vec::new())
-                    .get(index)
-                    .map(|history| {
-                        (
-                            parsed.remainder.len(),
-                            indicator.len(),
-                            history.command_line.clone(),
-                        )
-                    }),
-                ParseAction::LastToken => self
-                    .history
-                    .search(SearchQuery::last_with_search(SearchFilter::anything(
-                        self.get_history_session_id(),
-                    )))
-                    .unwrap_or_else(|_| Vec::new())
-                    .first()
-                    //BUGBUG: This returns the wrong results with paths with spaces in them
-                    .and_then(|history| history.command_line.split_whitespace().next_back())
-                    .map(|token| (parsed.remainder.len(), indicator.len(), token.to_string())),
-            });
-
-        if let Some((start, size, history)) = history_result {
-            let edits = vec![
-                EditCommand::MoveToPosition {
-                    position: start,
-                    select: false,
-                },
-                EditCommand::ReplaceChars(size, history),
-            ];
-
-            Some(ReedlineEvent::Edit(edits))
-        } else {
-            None
-        }
     }
 
     fn open_editor(&mut self) -> Result<()> {
@@ -2738,16 +2516,6 @@ impl Reedline {
         Ok(())
     }
 
-    /// Adds an external printer
-    ///
-    /// ## Required feature:
-    /// `external_printer`
-    #[cfg(feature = "external_printer")]
-    pub fn with_external_printer(mut self, printer: ExternalPrinter<String>) -> Self {
-        self.external_printer = Some(printer);
-        self
-    }
-
     /// Sets the poll interval used when features that require periodic processing
     /// are active (e.g., external printer, idle callback).
     ///
@@ -2770,59 +2538,6 @@ impl Reedline {
     pub fn with_poll_interval(mut self, interval: Duration) -> Self {
         self.poll_interval = interval;
         self
-    }
-
-    /// Sets an idle callback that is called periodically while waiting for user input.
-    ///
-    /// This is useful for applications that need to process external events
-    /// (such as GUI updates, network events, or timer-based operations) while
-    /// the user is typing or the editor is waiting for input.
-    ///
-    /// Use [`with_poll_interval`](Self::with_poll_interval) to control how frequently
-    /// the callback is invoked (default: 100ms).
-    ///
-    /// ## Required feature:
-    /// `idle_callback`
-    ///
-    /// # Example
-    /// ```no_run
-    /// use std::time::Duration;
-    /// use reedline::Reedline;
-    ///
-    /// let editor = Reedline::create()
-    ///     .with_poll_interval(Duration::from_millis(33))
-    ///     .with_idle_callback(Box::new(|| {
-    ///         // Process external events here
-    ///     }));
-    /// ```
-    #[cfg(feature = "idle_callback")]
-    pub fn with_idle_callback(mut self, callback: Box<dyn FnMut() + Send>) -> Self {
-        self.idle_callback = Some(callback);
-        self
-    }
-
-    #[cfg(feature = "external_printer")]
-    fn external_messages(external_printer: &ExternalPrinter<String>) -> Result<Vec<String>> {
-        let mut messages = Vec::new();
-        loop {
-            let result = external_printer.receiver().try_recv();
-            match result {
-                Ok(line) => {
-                    let lines = line.lines().map(String::from).collect::<Vec<_>>();
-                    messages.extend(lines);
-                }
-                Err(TryRecvError::Empty) => {
-                    break;
-                }
-                Err(TryRecvError::Disconnected) => {
-                    return Err(Error::new(
-                        ErrorKind::NotConnected,
-                        TryRecvError::Disconnected,
-                    ));
-                }
-            }
-        }
-        Ok(messages)
     }
 
     fn submit_buffer(&mut self, prompt: &dyn Prompt) -> io::Result<EventStatus> {
@@ -2849,7 +2564,7 @@ impl Reedline {
                 self.history_last_run_id = entry.id;
                 self.history_excluded_item = Some(entry);
             } else {
-                entry = self.history.save(entry).expect("todo: error handling");
+                entry = self.history.save(entry).map_err(io::Error::other)?;
                 self.history_last_run_id = entry.id;
                 self.history_excluded_item = None;
             }
@@ -3067,38 +2782,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "idle_callback")]
-    fn thread_safe_with_idle_callback() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
-
-        fn f<S: Send>(_: S) {}
-
-        let counter = Arc::new(AtomicUsize::new(0));
-        let counter_clone = counter.clone();
-
-        let reedline = Reedline::create()
-            .with_poll_interval(Duration::from_millis(100))
-            .with_idle_callback(Box::new(move || {
-                counter_clone.fetch_add(1, Ordering::SeqCst);
-            }));
-
-        // Verify that Reedline with idle_callback is still Send
-        f(reedline);
-    }
-
-    #[test]
-    #[cfg(feature = "idle_callback")]
-    fn idle_callback_builder_pattern() {
-        // Test that with_idle_callback can be chained with other builder methods
-        let _reedline = Reedline::create()
-            .with_quick_completions(true)
-            .with_poll_interval(Duration::from_millis(33))
-            .with_idle_callback(Box::new(|| {}))
-            .with_partial_completions(true);
-    }
-
-    #[test]
     fn mouse_click_moves_cursor_in_regular_mode() {
         let mut reedline = Reedline::create().with_mouse_click(MouseClickMode::Enabled);
         let prompt = DefaultPrompt::default();
@@ -3172,7 +2855,6 @@ mod tests {
 
     /// `DefaultValidator` reads an unclosed `"` as incomplete, so `Enter` breaks
     /// the line instead of submitting it and leaves the buffer inspectable.
-    #[cfg(feature = "helix")]
     fn helix_engine_with_validator() -> Reedline {
         let mut rl = Reedline::create()
             .with_edit_mode(Box::<crate::Helix>::default())
@@ -3189,7 +2871,6 @@ mod tests {
     // branch the one that can observe it: a submitted buffer is cleared before
     // anything can be asserted about it.
 
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_normal_submit_keeps_the_grapheme_under_the_cursor() {
         let mut rl = helix_engine_with_validator();
@@ -3210,7 +2891,6 @@ mod tests {
         assert_eq!(rl.editor.get_buffer(), "\"abc\n");
     }
 
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_normal_submit_breaks_at_the_cursor_not_past_it() {
         let mut rl = helix_engine_with_validator();
@@ -3237,7 +2917,6 @@ mod tests {
 
     /// Helix rests *on* the line terminator under `BlockOverNewline`, which vi
     /// never does, so a break from there is a case vi's handling never answers.
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_normal_submit_breaks_from_a_terminator() {
         let mut rl = helix_engine_with_validator();
@@ -3260,7 +2939,6 @@ mod tests {
     /// exactly as `i` does. The helix block cursor *is* a one-grapheme
     /// selection, and `insert_char` deletes the selection before inserting, so
     /// without the collapse the first keystroke replaces the covered grapheme.
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_change_mode_into_insert_keeps_the_covered_grapheme() {
         let mut bindings = crate::default_helix_normal_keybindings();
@@ -3338,7 +3016,6 @@ mod tests {
 
     /// The submitted path cannot assert on the buffer (`submit_buffer` clears
     /// it), so pin it through the returned signal instead.
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_normal_submit_returns_the_whole_buffer() {
         let mut rl = Reedline::create().with_edit_mode(Box::<crate::Helix>::default());
@@ -3367,7 +3044,6 @@ mod tests {
 
     /// Two lines, built through the incomplete branch since a bare Enter would
     /// submit. Leaves the caret on the second line, in insert mode.
-    #[cfg(feature = "helix")]
     fn two_line_helix_engine() -> Reedline {
         let mut rl = helix_engine_with_validator();
         drive_until_signal(
@@ -3390,7 +3066,6 @@ mod tests {
         rl
     }
 
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_normal_k_moves_a_line_before_it_reaches_history() {
         let mut rl = two_line_helix_engine();
@@ -3407,7 +3082,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_normal_k_recalls_history_at_the_first_line() {
         let mut rl = seam_engine(Box::<crate::Helix>::default());
@@ -3430,7 +3104,6 @@ mod tests {
         assert_eq!(rl.editor.get_buffer(), "one");
     }
 
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_select_extends_with_arrow_keys() {
         // The original report: `v` then arrows moved the caret but dropped the
@@ -3458,7 +3131,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_select_j_extends_to_the_column_normal_mode_would_land_on() {
         let mut rl = two_line_helix_engine();
@@ -3482,7 +3154,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_tilde_switches_case_and_keeps_the_selection() {
         let mut rl = seam_engine(Box::<crate::Helix>::default());
@@ -3497,7 +3168,6 @@ mod tests {
         assert_eq!(rl.editor.get_buffer(), "ab");
     }
 
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_backtick_lowercases_and_alt_backtick_uppercases() {
         let alt_backtick = KeyEvent::new(KeyCode::Char('`'), KeyModifiers::ALT);
@@ -3516,7 +3186,6 @@ mod tests {
 
     // --- `%`, `A`, `I` ---
 
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_percent_selects_the_whole_buffer() {
         let mut rl = seam_engine(Box::<crate::Helix>::default());
@@ -3529,7 +3198,6 @@ mod tests {
 
     /// Appending has to land *past* the last grapheme: the block cursor rests on
     /// it, while insert mode sits between graphemes.
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_capital_a_appends_past_the_last_grapheme() {
         use crate::PromptHelixMode;
@@ -3550,7 +3218,6 @@ mod tests {
     }
 
     /// The leading space is what separates this from a plain line start.
-    #[cfg(feature = "helix")]
     #[test]
     fn helix_capital_i_inserts_at_the_first_non_blank() {
         let mut rl = seam_engine(Box::<crate::Helix>::default());
@@ -3564,7 +3231,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "helix")]
     fn with_edit_mode_builder_accepts_custom_helix_mode() {
         use crate::PromptHelixMode;
 
@@ -3807,7 +3473,9 @@ mod tests {
             Event::Key(ch('a')),
             Event::Key(ch('b')),
         ];
-        let flow = reedline.process_input_batch(&prompt, batch).expect("batch ok");
+        let flow = reedline
+            .process_input_batch(&prompt, batch)
+            .expect("batch ok");
         assert!(matches!(
             flow,
             ControlFlow::Break(Signal::HostCommand(command)) if command == "bound"
@@ -4064,68 +3732,6 @@ mod tests {
         let _ = step_key(&mut rl, key(KeyCode::Esc)); // vi normal, caret on 'b'
         let _ = step_key(&mut rl, key(KeyCode::Enter)); // incomplete -> insert newline
         assert_eq!(rl.editor.get_buffer(), "ab\n");
-    }
-
-    #[cfg(feature = "bashisms")]
-    fn reedline_with_history_and_string_lit_check(entries: &[&str]) -> Reedline {
-        let mut reedline =
-            Reedline::create().with_highlighter(Box::new(ExampleHighlighter::default()));
-        for entry in entries {
-            reedline
-                .history
-                .save(HistoryItem::from_command_line(*entry))
-                .expect("failed to save history");
-        }
-        reedline
-    }
-
-    #[cfg(feature = "bashisms")]
-    fn reedline_with_history_default(entries: &[&str]) -> Reedline {
-        let mut reedline =
-            Reedline::create().with_highlighter(Box::new(SimpleMatchHighlighter::default()));
-        for entry in entries {
-            reedline
-                .history
-                .save(HistoryItem::from_command_line(*entry))
-                .expect("failed to save history");
-        }
-        reedline
-    }
-
-    #[rstest]
-    #[case("!!", true)]
-    #[case("\"echo !!", false)]
-    #[case("'echo !!", false)]
-    #[case("'echo' !!", true)]
-    #[case("\"echo !git", false)]
-    #[case("'echo !git", false)]
-    #[case("'Сегодня !!", false)]
-    #[case("'今日は !!", false)]
-    #[case("'🔥 !!", false)]
-    #[cfg(feature = "bashisms")]
-    fn bang_string_detection_with_override(#[case] buffer: &str, #[case] should_expand: bool) {
-        let mut reedline = reedline_with_history_and_string_lit_check(&["git status"]);
-        set_buffer_at_end(&mut reedline, buffer);
-        assert_eq!(reedline.parse_bang_command().is_some(), should_expand);
-    }
-
-    #[rstest]
-    #[case("\"echo !!")]
-    #[case("'echo !!")]
-    #[case("'echo' !!")]
-    #[case("\"echo !git")]
-    #[case("'echo !git")]
-    #[case("'Сегодня !!")]
-    #[case("'今日は !!")]
-    #[case("'🔥 !!")]
-    #[cfg(feature = "bashisms")]
-    fn bang_always_expands_without_override(#[case] buffer: &str) {
-        let mut reedline = reedline_with_history_default(&["git status"]);
-        set_buffer_at_end(&mut reedline, buffer);
-        assert!(
-            reedline.parse_bang_command().is_some(),
-            "must expand when highlighter does not override should_expand_abbr"
-        );
     }
 
     #[rstest]

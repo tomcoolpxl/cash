@@ -1257,7 +1257,7 @@ fn conpty_transient_prompt_replaces_an_entered_lines_prompt() {
 }
 
 /// Keys typed right after a `bind -x` key, read in the same batch, reach the next prompt;
-/// the line editor dropped them (vendor/reedline/CASH-PATCHES.md, patch 5).
+/// the line editor dropped them (crates/cash-reedline/README.md, change 5).
 #[test]
 fn conpty_keys_after_a_bound_key_reach_the_next_prompt() {
     let mut session = start_reedline_cash();
@@ -1334,7 +1334,7 @@ fn conpty_alt_arrows_walk_the_folder_history() {
 
 /// The first Tab inserts what the folders share, and the second opens the completion menu
 /// on the folder the history hint leads to, so Enter takes that one rather than the first
-/// (D40; vendor/reedline/CASH-PATCHES.md, patches 6 and 7).
+/// (D40; crates/cash-reedline/README.md, changes 6 and 7).
 #[test]
 fn conpty_tab_over_a_history_hint_opens_the_menu_on_its_folder() {
     let root = tempfile::tempdir().unwrap();

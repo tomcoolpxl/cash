@@ -14,9 +14,6 @@ pub use simple_match::SimpleMatchHighlighter;
 pub enum AbbrExpandContext {
     /// Fish-style word abbreviation
     WordAbbreviation,
-    /// Bashism history expansion
-    #[cfg(feature = "bashisms")]
-    BangExpansion,
 }
 
 /// The syntax highlighting trait. Implementers of this trait will take in the current string and then

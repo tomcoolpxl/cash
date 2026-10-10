@@ -220,7 +220,9 @@ pub fn run_doc_tests(verbose: bool) -> Result<()> {
 }
 
 /// The crates in `vendor/` that carry a patch of cash's with tests of their own.
-const VENDORED_CRATES_WITH_TESTS: [&str; 2] = ["reedline", "crossterm"];
+/// Reedline was one until it became cash's own (`crates/cash-reedline`), whose tests
+/// run with the workspace's.
+const VENDORED_CRATES_WITH_TESTS: [&str; 1] = ["crossterm"];
 
 /// Runs the tests of the vendored crates, among them the tests of cash's patches
 /// (`vendor/*/CASH-PATCHES.md`). They are outside the workspace, so nothing else runs
@@ -228,7 +230,7 @@ const VENDORED_CRATES_WITH_TESTS: [&str; 2] = ["reedline", "crossterm"];
 ///
 /// Each is built in a target folder of its own under `target/`, and the `Cargo.lock` a
 /// run writes into `vendor/` is removed again. `NO_COLOR` is cleared: crossterm honours
-/// it, and a reedline test checks the colours it would have.
+/// it in tests of the colours it writes.
 pub fn run_vendored_tests(verbose: bool) -> Result<()> {
     let sh = Shell::new()?;
     let root = find_workspace_root()?;

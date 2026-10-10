@@ -42,10 +42,12 @@ impl Default for FileBackedHistory {
     ///
     /// If `HISTORY_SIZE == usize::MAX`
     fn default() -> Self {
-        match Self::new(HISTORY_SIZE) {
-            Ok(history) => history,
-            Err(e) => panic!("{}", e),
-        }
+        #[expect(
+            clippy::expect_used,
+            reason = "only a capacity of usize::MAX is refused, and HISTORY_SIZE is not"
+        )]
+        let history = Self::new(HISTORY_SIZE).expect("a history of HISTORY_SIZE");
+        history
     }
 }
 

@@ -268,7 +268,7 @@ impl InputBackend for ReedlineInputBackend {
 
                     // As Bash does for `bind -x`, clear the line before the command runs:
                     // its output starts where the prompt was, and the prompt is redrawn
-                    // after it. The patched Reedline (vendor/reedline) redraws in place
+                    // after it. cash's Reedline (crates/cash-reedline) redraws in place
                     // only when the cursor is back on the cell it left, which a cleared
                     // line no longer is, so the prompt goes below any output.
                     let _ = crossterm::execute!(

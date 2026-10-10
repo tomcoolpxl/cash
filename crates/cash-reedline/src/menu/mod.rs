@@ -76,14 +76,9 @@ pub enum MenuEvent {
 /// Trait that defines how a menu will be printed by the painter
 pub trait Menu: Send {
     /// Get MenuSettings
-    fn settings(&self) -> &MenuSettings {
-        // We panic here, so this function has base implementation
-        // so existing menus will not break.
-        // if a breaking change is ok, this can be removed
-        panic!(
-            "`settings` requires a manual implementation per menu. It has a base implementation to not break existing menus"
-        )
-    }
+    ///
+    /// cash: every menu says, where reedline's default panicked.
+    fn settings(&self) -> &MenuSettings;
 
     /// Menu name
     fn name(&self) -> &str {

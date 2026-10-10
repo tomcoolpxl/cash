@@ -1,4 +1,9 @@
 //! Collection of common functions that can be used to create menus
+
+#![expect(
+    clippy::string_slice,
+    reason = "the cuts come from `find`, `char_indices` and grapheme iteration over the same text, from ASCII markers, from the caret, or from a completer's span, which cash's completers give on character boundaries"
+)]
 use std::borrow::Cow;
 use std::ops::Range;
 use unicase::UniCase;
@@ -85,26 +90,6 @@ pub fn parse_selection_char(buffer: &str, marker: char) -> ParseResult<'_> {
     while let Some(char) = input.next() {
         if char == marker {
             match input.peek() {
-                #[cfg(feature = "bashisms")]
-                Some(&x) if x == marker => {
-                    return ParseResult {
-                        remainder: &buffer[0..index],
-                        index: Some(0),
-                        marker: Some(&buffer[index..index + 2 * marker.len_utf8()]),
-                        action: ParseAction::LastCommand,
-                        prefix: None,
-                    };
-                }
-                #[cfg(feature = "bashisms")]
-                Some(&x) if x == '$' => {
-                    return ParseResult {
-                        remainder: &buffer[0..index],
-                        index: Some(0),
-                        marker: Some(&buffer[index..index + 2]),
-                        action: ParseAction::LastToken,
-                        prefix: None,
-                    };
-                }
                 Some(&x) if x.is_ascii_digit() || x == '-' => {
                     let mut count: usize = 0;
                     let mut size: usize = marker.len_utf8();
@@ -116,8 +101,7 @@ pub fn parse_selection_char(buffer: &str, marker: char) -> ParseResult<'_> {
                         ParseAction::ForwardSearch
                     };
                     while let Some(&c) = input.peek() {
-                        if c.is_ascii_digit() {
-                            let c = c.to_digit(10).expect("already checked if is a digit");
+                        if let Some(c) = c.to_digit(10) {
                             let _ = input.next();
                             count *= 10;
                             count += c as usize;
@@ -138,16 +122,6 @@ pub fn parse_selection_char(buffer: &str, marker: char) -> ParseResult<'_> {
                         marker: Some(&buffer[index..index + size]),
                         action,
                         prefix: None,
-                    };
-                }
-                #[cfg(feature = "bashisms")]
-                Some(&x) if x.is_ascii_alphabetic() => {
-                    return ParseResult {
-                        remainder: &buffer[0..index],
-                        index: Some(0),
-                        marker: Some(&buffer[index..index + marker.len_utf8()]),
-                        action: ParseAction::BackwardPrefixSearch,
-                        prefix: Some(&buffer[index + marker.len_utf8()..buffer.len()]),
                     };
                 }
                 None => {
@@ -960,7 +934,6 @@ pub(crate) fn truncate_with_ansi(s: &str, max_width: usize) -> Cow<'_, str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "helix")]
     use crate::PromptHelixMode;
     use crate::{EditCommand, LineBuffer, PromptEditMode, PromptViMode, Span};
     use nu_ansi_term::Color;
@@ -1029,65 +1002,6 @@ mod tests {
         assert_eq!(res.remainder, "search");
         assert_eq!(res.index, Some(6));
         assert_eq!(res.marker, Some(":6"));
-    }
-
-    #[cfg(feature = "bashisms")]
-    #[test]
-    fn handles_multi_byte_char_as_marker_and_number() {
-        let buffer = "searchは6";
-        let parse_result = parse_selection_char(buffer, 'は');
-
-        assert_eq!(parse_result.remainder, "search");
-        assert_eq!(parse_result.index, Some(6));
-        assert_eq!(parse_result.marker, Some("は6"));
-    }
-
-    #[cfg(feature = "bashisms")]
-    #[test]
-    fn handles_multi_byte_char_as_double_marker() {
-        let buffer = "Testはは";
-        let parse_result = parse_selection_char(buffer, 'は');
-
-        assert_eq!(parse_result.remainder, "Test");
-        assert_eq!(parse_result.index, Some(0));
-        assert_eq!(parse_result.marker, Some("はは"));
-        assert!(matches!(parse_result.action, ParseAction::LastCommand));
-    }
-
-    #[cfg(feature = "bashisms")]
-    #[test]
-    fn handles_multi_byte_char_as_remainder() {
-        let buffer = "Testは!!";
-        let parse_result = parse_selection_char(buffer, '!');
-
-        assert_eq!(parse_result.remainder, "Testは");
-        assert_eq!(parse_result.index, Some(0));
-        assert_eq!(parse_result.marker, Some("!!"));
-        assert!(matches!(parse_result.action, ParseAction::LastCommand));
-    }
-
-    #[cfg(feature = "bashisms")]
-    #[test]
-    fn parse_double_char() {
-        let input = "search!!";
-        let res = parse_selection_char(input, '!');
-
-        assert_eq!(res.remainder, "search");
-        assert_eq!(res.index, Some(0));
-        assert_eq!(res.marker, Some("!!"));
-        assert!(matches!(res.action, ParseAction::LastCommand));
-    }
-
-    #[cfg(feature = "bashisms")]
-    #[test]
-    fn parse_last_token() {
-        let input = "!$";
-        let res = parse_selection_char(input, '!');
-
-        assert_eq!(res.remainder, "");
-        assert_eq!(res.index, Some(0));
-        assert_eq!(res.marker, Some("!$"));
-        assert!(matches!(res.action, ParseAction::LastToken));
     }
 
     #[test]

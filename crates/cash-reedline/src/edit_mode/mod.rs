@@ -1,7 +1,6 @@
 mod base;
 mod cursors;
 mod emacs;
-#[cfg(feature = "helix")]
 mod helix;
 mod keybindings;
 mod vi;
@@ -9,12 +8,11 @@ mod vi;
 pub use base::EditMode;
 pub use cursors::CursorConfig;
 pub use emacs::{default_emacs_keybindings, Emacs};
-#[cfg(feature = "helix")]
 pub use helix::{
     default_helix_insert_keybindings, default_helix_normal_keybindings,
     default_helix_select_keybindings, Helix,
 };
-pub use keybindings::Keybindings;
+pub use keybindings::{KeyCombination, Keybindings};
 pub use vi::{default_vi_insert_keybindings, default_vi_normal_keybindings, Vi};
 
 use crossterm::event::{Event, KeyModifiers, MouseEvent, MouseEventKind};

@@ -41,9 +41,7 @@ where
     /// after the current point
     pub(super) fn insert(&mut self, value: T) {
         if self.index < self.internal_list.len() - 1 {
-            self.internal_list.resize_with(self.index + 1, || {
-                panic!("Impossible state reached: Bug in UndoStack logic")
-            });
+            self.internal_list.truncate(self.index + 1);
         }
         self.internal_list.push(value);
         self.index += 1;
