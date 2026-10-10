@@ -1225,6 +1225,20 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    `buffer_hint.rs`, and `ctrl_c::tee_i_lives_through_ctrl_c`, where `tee -i` keeps what
    the shell before it writes after a Ctrl-C ended its `ping`.
 
+3. **A `TEMP` in 8.3 short form is not under the home folder** (found 2026-10-10 by CI,
+   run 38043418786): Windows sets `TEMP` to `C:\Users\RUNNER~1\AppData\Local\Temp` for
+   a long user name, while `HOME` is `C:/Users/runneradmin`. A folder under `TEMP` then
+   shows whole in `z -i`, the pickers and `tilde_shorten`, never as `~/…`, and two
+   spellings of one folder count as two in the records. Taking `TEMP` and `TMP` to their
+   long form (`GetLongPathNameW`) as cash starts would mend both; check what a program
+   started by cash then gets, and Git Bash's own `TEMP`.
+   Done 2026-10-10: cash takes `TEMP` and `TMP` to their long form (`GetLongPathNameW`,
+   `cash_win32::path::long_form`) first thing in `main`, so `/tmp`, its temporary files,
+   `$TEMP`, `$TMPDIR` and the programs it starts all see the long form. Git Bash shows
+   `$TEMP` as `/tmp`, which `pwd -W` gives in long form, and hands programs the short form
+   it was given; the long one names the same folder. Test: `it/long_temp.rs`, a folder's
+   8.3 name as `TEMP`, under a `HOME` in long form.
+
 ---
 
 ## Found along the way, done

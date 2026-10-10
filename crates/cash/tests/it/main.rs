@@ -153,6 +153,8 @@ mod line_ending_tools;
 mod link_tools;
 // Programs started from a folder too long for Windows to start one in.
 mod long_folders;
+// A `TEMP` in 8.3 form taken to its long form as cash starts.
+mod long_temp;
 mod ls_builtin;
 mod msys_args;
 mod namerefs;

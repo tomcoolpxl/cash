@@ -110,13 +110,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   (`acceptance::an_unpatched_bundled_tool_writes_into_a_write_substitution_through_a_file`)
   is `#[ignore]`d. A fix reads only what was written: hold back the tail of a file that
   grew in one step until the program is done, or give `cp` the pipe as tee's patch did.
-- **A `TEMP` in 8.3 short form is not under the home folder** (found 2026-10-10 by CI,
-  run 38043418786): Windows sets `TEMP` to `C:\Users\RUNNER~1\AppData\Local\Temp` for
-  a long user name, while `HOME` is `C:/Users/runneradmin`. A folder under `TEMP` then
-  shows whole in `z -i`, the pickers and `tilde_shorten`, never as `~/…`, and two
-  spellings of one folder count as two in the records. Taking `TEMP` and `TMP` to their
-  long form (`GetLongPathNameW`) as cash starts would mend both; check what a program
-  started by cash then gets, and Git Bash's own `TEMP`.
 - **Candidate: `sudo` elevating in this terminal by itself** (asked for by the user on
   2026-10-10, not yet chosen): `sudo` is cash's builtin, but the elevation is handed to
   gsudo, else Windows' own `sudo` (Windows 11, once turned on), else a plain UAC

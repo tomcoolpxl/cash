@@ -19,6 +19,7 @@ mod terminal_profile;
 fn main() {
     // Read first, while cash has a single thread, so it can be removed safely.
     let invoked_as = take_invoked_name();
+    long_temp_folders();
 
     // D6's outermost guarantee, installed before anything can spawn.
     let state = cash_win32::session::install_and_leak();
@@ -134,4 +135,18 @@ fn take_invoked_name() -> Option<String> {
     // the environment while it changes.
     unsafe { std::env::remove_var(cash_core::commands::ARGV0_VARIABLE) };
     (!name.is_empty()).then_some(name)
+}
+
+/// `TEMP` and `TMP` in their long form. Windows gives them in 8.3 form for a long user
+/// name (`C:\Users\RUNNER~1\AppData\Local\Temp`) while `HOME` is long, so a folder under
+/// `TEMP` was never under `~` and had two spellings in cash's records. Everything cash
+/// does and starts sees the long form: `/tmp`, temporary files, the variables.
+fn long_temp_folders() {
+    for name in ["TEMP", "TMP"] {
+        if let Some(long) = std::env::var_os(name).and_then(|v| cash_win32::path::long_form(&v)) {
+            // SAFETY: called from the start of `main`, before any other thread exists, so
+            // nothing reads the environment while it changes.
+            unsafe { std::env::set_var(name, long) };
+        }
+    }
 }

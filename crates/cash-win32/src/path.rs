@@ -244,7 +244,8 @@ pub fn process_directory(dir: &Path) -> std::io::Result<PathBuf> {
 }
 
 /// The 8.3 short form of the folder `plain` (backslashes, no `\\?\`), without `\\?\`.
-fn short_name(plain: &str) -> Option<String> {
+#[must_use]
+pub fn short_name(plain: &str) -> Option<String> {
     use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
 
     // A path this long reaches the API only in its extended form.
@@ -271,6 +272,32 @@ fn short_name(plain: &str) -> Option<String> {
     } else {
         short.strip_prefix(r"\\?\").unwrap_or(&short).to_owned()
     })
+}
+
+/// The long form of `path` when it has an 8.3 short name in it (`C:\Users\RUNNER~1\…`),
+/// spelled as given otherwise; `None` when it has none, or names nothing that exists.
+#[must_use]
+pub fn long_form(path: &std::ffi::OsStr) -> Option<std::ffi::OsString> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Storage::FileSystem::GetLongPathNameW;
+
+    if !path.as_encoded_bytes().contains(&b'~') {
+        return None;
+    }
+    let wide = crate::wide::to_wide_nul(path);
+    // SAFETY: a null buffer of length 0 asks for the length needed, NUL included.
+    let needed = unsafe { GetLongPathNameW(wide.as_ptr(), std::ptr::null_mut(), 0) };
+    if needed == 0 {
+        return None;
+    }
+    let mut buffer = vec![0u16; needed as usize];
+    // SAFETY: `buffer` holds `needed` units, the length the call above asked for.
+    let written = unsafe { GetLongPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), needed) };
+    if written == 0 || written >= needed {
+        return None;
+    }
+    let long = std::ffi::OsString::from_wide(&buffer[..written as usize]);
+    (long != path).then_some(long)
 }
 
 /// Whether an absolute path is on the network.
