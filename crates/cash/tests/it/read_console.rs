@@ -143,6 +143,27 @@ impl Script {
         self
     }
 
+    /// Types `keys` until the script finishes, for a program that may not be reading the
+    /// console yet when it shows what asks for a key: on a busy machine a key typed at
+    /// once could be lost. A read that never returns fails the test here.
+    pub(super) fn finish_typing(mut self, keys: &str) -> Left {
+        let started = Instant::now();
+        while started.elapsed() < STUCK {
+            self.session.send(keys).expect("type at the console");
+            if self
+                .session
+                .expect(FINISHED, Duration::from_millis(500))
+                .is_ok()
+            {
+                return self.left();
+            }
+        }
+        panic!(
+            "the script did not finish: its read never returned:\n{}",
+            self.session.output()
+        );
+    }
+
     /// Waits for the script to finish; a read that never returns fails the test here.
     pub(super) fn finish(mut self) -> Left {
         self.session

@@ -216,8 +216,7 @@ fn e_freezes_on_a_failure_and_leaves_with_its_status_after_a_key() {
         r#"watch -n 0.2 -e 'echo failing; exit 3'; echo "rc=$?" >> out.txt"#,
     )
     .when_shown("command exit with a non-zero status, press a key to exit")
-    .type_keys("x")
-    .finish();
+    .finish_typing("x");
 
     assert_eq!(left.out, "rc=3");
 }

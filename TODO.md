@@ -1264,6 +1264,17 @@ day (spec D79, D80). In order:
   `cash-win32`) would let a big sort use more memory and fewer temporary files;
   `physical_memory_bytes` in `crates/cash-uutils/src/sort/buffer_hint.rs` is the place.
   Likewise `tee -i` ignores no Ctrl-C on Windows (uutils' is Unix-only).
+- **`cp src >(cat)` can print zeros** (found 2026-10-10 in the 1.12.0 gate, once in a
+  full run): a `>(...)` handed to a tool not patched for pipes is a temp file read as it
+  grows, and `cp` (through `CopyFileEx`) sizes its target before it writes it, so a read
+  in between passes on NULs. The test
+  (`acceptance::an_unpatched_bundled_tool_writes_into_a_write_substitution_through_a_file`)
+  is `#[ignore]`d. A fix reads only what was written: hold back the tail of a file that
+  grew in one step until the program is done, or give `cp` the pipe as tee's patch did.
+- **Two tests were made robust in the 1.12.0 gate**: the 7z oracle's `u` of `h.tar`
+  took `d/` as changed when its time fell near a second's end (the folders now get whole
+  seconds), and `watch -e`'s key, typed as soon as the message showed, could be lost on a
+  busy machine (the test now types until `watch` ends).
 - **A `TEMP` in 8.3 short form is not under the home folder** (found 2026-10-10 by CI,
   run 38043418786): Windows sets `TEMP` to `C:\Users\RUNNER~1\AppData\Local\Temp` for
   a long user name, while `HOME` is `C:/Users/runneradmin`. A folder under `TEMP` then

@@ -96,7 +96,7 @@ cargo xtask check lint --all-features
 
 `cargo deny` (`cargo binstall cargo-deny`) fails on a crate RustSec lists or that was
 yanked (`deny.toml`); `ci full` runs both lanes of tests (`.config/nextest.toml`) and
-the vendored crates' own tests. The release workflow runs CI's two lanes again on the
+the doc tests. The release workflow runs CI's two lanes again on the
 tag's commit before it builds anything (`release.yml` calls `ci.yml`).
 
 Verify that cash reports the new version:

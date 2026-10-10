@@ -404,6 +404,9 @@ printf 'alpha\n' > d/a.txt
 printf 'beta\n' > d/sub/b.txt
 powershell -NoProfile -Command "New-Item -ItemType HardLink -Path d\\h.txt -Target d\\a.txt | Out-Null; New-Item -ItemType HardLink -Path d\\sub\\h2.txt -Target d\\a.txt | Out-Null"
 cmd /c "mklink /J d\\jn d\\sub" > /dev/null
+# Whole-second folder times: a tar keeps seconds, and a folder made a fraction before a
+# second's end could be taken as changed by the update below, or not.
+touch -d '2026-01-01 12:00:00' d d/sub
 links() { grep -E '^(Path|Size|Mode|Attributes|Symbolic Link|Hard Link) = |^rc='; }
 zd() { z "$@" | sed "s#$dir#DIR#g"; }
 z a -snh -bb3 h.tar d
