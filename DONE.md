@@ -1264,6 +1264,18 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    `common.rs`'s; they use those now, `with_divergence` with its count of 1. 288 lines
    fewer.
 
+6. **cash never runs a user's `command_not_found_handle`** (found building the install
+   hint, 2026-10-06). Bash calls that function, when defined, with the command and its
+   arguments instead of printing `command not found`, and its status becomes the
+   command's. cash prints the message regardless; the hint is suppressed when the function
+   is defined, as decided, but the function itself does not run. Implement Bash's
+   behaviour, with the hint only when no function is defined.
+   Done 2026-10-06, the same day, in phase 25 (942abad4), with its tests
+   (`it/command_not_found_handle.rs`, and `install_hint.rs` for the hint); this item stayed
+   behind. Checked again 2026-10-10 against Git Bash 5.3: the handler's arguments and
+   status, in a substitution and a pipeline, and `command not found` with 127 once it is
+   unset, are the same.
+
 ---
 
 ## Found along the way, done

@@ -82,12 +82,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
   real; until then the page says so.
-- **cash never runs a user's `command_not_found_handle`** (found building the install
-  hint, 2026-10-06). Bash calls that function, when defined, with the command and its
-  arguments instead of printing `command not found`, and its status becomes the
-  command's. cash prints the message regardless; the hint is suppressed when the function
-  is defined, as decided, but the function itself does not run. Implement Bash's
-  behaviour, with the hint only when no function is defined.
 - A test in the full suite leaves `x.lnk` in the repository root: a 0-byte named pipe as
   MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
   during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs
