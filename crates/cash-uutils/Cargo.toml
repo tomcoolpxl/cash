@@ -1,0 +1,55 @@
+[package]
+name = "cash-uutils"
+description = "rm, sort, tee, uniq and shuf for cash, taken from uutils coreutils and made its own"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license = "MIT"
+readme = "README.md"
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+bench = false
+
+[dependencies]
+# Each tool's messages are its own `en-US.ftl`, read with fluent (src/messages.rs).
+fluent = "0.17.0"
+unic-langid = "0.9.6"
+cash-win32 = { workspace = true }
+clap = { workspace = true, features = ["wrap_help", "cargo", "color"] }
+thiserror = { workspace = true }
+uucore = { workspace = true, features = [
+    "fs",
+    "parser",
+    "parser-size",
+    "quoting-style",
+    "signals",
+    "version-cmp",
+    "i18n-decimal",
+    "i18n-collator",
+    "i18n-datetime",
+] }
+# rm
+indicatif = "0.18.0"
+# sort
+bigdecimal = "0.4"
+ctrlc = { version = "3.5.2", features = ["termination"] }
+foldhash = "0.2.0"
+itertools = { workspace = true }
+memchr = "2.7.2"
+rayon = "1.10"
+self_cell = "1.0.4"
+tempfile = { workspace = true }
+# sort and shuf
+rand = { version = "0.10.1", features = ["std_rng"] }
+# shuf
+itoa = "1.0.15"
+rand_chacha = "0.10.0"
+rustc-hash = "2.1.1"
+sha3 = { version = "0.12.0", default-features = false, features = ["alloc"] }
+
+[lints]
+workspace = true

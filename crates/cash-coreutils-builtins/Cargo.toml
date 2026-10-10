@@ -164,19 +164,19 @@ default = []
 'coreutils.pwd' = ["dep:uu_pwd"]
 'coreutils.readlink' = ["dep:uu_readlink"]
 'coreutils.realpath' = ["dep:uu_realpath"]
-'coreutils.rm' = ["dep:uu_rm"]
+'coreutils.rm' = ["dep:cash-uutils"]
 'coreutils.rmdir' = ["dep:uu_rmdir"]
 'coreutils.seq' = ["dep:uu_seq"]
 'coreutils.shred' = ["dep:uu_shred"]
-'coreutils.shuf' = ["dep:uu_shuf"]
+'coreutils.shuf' = ["dep:cash-uutils"]
 'coreutils.sleep' = ["dep:uu_sleep"]
-'coreutils.sort' = ["dep:uu_sort"]
+'coreutils.sort' = ["dep:cash-uutils"]
 'coreutils.split' = ["dep:uu_split"]
 'coreutils.sum' = ["dep:uu_sum"]
 'coreutils.sync' = ["dep:uu_sync"]
 'coreutils.tac' = ["dep:uu_tac"]
 'coreutils.tail' = ["dep:uu_tail"]
-'coreutils.tee' = ["dep:uu_tee"]
+'coreutils.tee' = ["dep:cash-uutils"]
 'coreutils.uptime' = ["dep:uu_uptime"]
 'coreutils.timeout' = ["dep:uu_timeout"]
 'coreutils.test' = ["dep:uu_test"]
@@ -187,7 +187,7 @@ default = []
 'coreutils.tsort' = ["dep:uu_tsort"]
 'coreutils.uname' = ["dep:uu_uname"]
 'coreutils.unexpand' = ["dep:uu_unexpand"]
-'coreutils.uniq' = ["dep:uu_uniq"]
+'coreutils.uniq' = ["dep:cash-uutils"]
 'coreutils.unlink' = ["dep:uu_unlink"]
 'coreutils.vdir' = ["dep:uu_vdir"]
 'coreutils.wc' = ["dep:uu_wc"]
@@ -198,6 +198,8 @@ default = []
 workspace = true
 
 [dependencies]
+# rm, sort, tee, uniq and shuf: uutils' tools made cash's own.
+cash-uutils = { workspace = true, optional = true }
 uucore = { workspace = true, features = [
     "signals",
 ] }
@@ -258,19 +260,15 @@ uu_ptx = { version = "0.12.0", optional = true }
 uu_pwd = { version = "0.12.0", optional = true }
 uu_readlink = { version = "0.12.0", optional = true }
 uu_realpath = { version = "0.12.0", optional = true }
-uu_rm = { version = "0.12.0", optional = true }
 uu_rmdir = { version = "0.12.0", optional = true }
 uu_seq = { version = "0.12.0", optional = true }
 uu_shred = { version = "0.12.0", optional = true }
-uu_shuf = { version = "0.12.0", optional = true }
 uu_sleep = { version = "0.12.0", optional = true }
-uu_sort = { version = "0.12.0", optional = true }
 uu_split = { version = "0.12.0", optional = true }
 uu_sum = { version = "0.12.0", optional = true }
 uu_sync = { version = "0.12.0", optional = true }
 uu_tac = { version = "0.12.0", optional = true }
 uu_tail = { version = "0.12.0", optional = true }
-uu_tee = { version = "0.12.0", optional = true }
 uu_uptime = { version = "0.12.0", optional = true }
 uu_timeout = { version = "0.12.0", optional = true }
 uu_test = { version = "0.12.0", optional = true }
@@ -281,7 +279,6 @@ uu_truncate = { version = "0.12.0", optional = true }
 uu_tsort = { version = "0.12.0", optional = true }
 uu_uname = { version = "0.12.0", optional = true }
 uu_unexpand = { version = "0.12.0", optional = true }
-uu_uniq = { version = "0.12.0", optional = true }
 uu_unlink = { version = "0.12.0", optional = true }
 uu_vdir = { version = "0.12.0", optional = true }
 uu_wc = { version = "0.12.0", optional = true }

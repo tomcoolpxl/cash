@@ -16,4 +16,6 @@ So `ln -s`:
 - for a file, fails otherwise, and says that Developer Mode is the fix. It never falls
   back to a hard link, which would answer `test -L` wrongly.
 
-cash follows symbolic links and junctions as Windows does.
+cash follows symbolic links and junctions as Windows does. `rm -r` on a folder that
+holds one takes the link away, never what it points to, whether that is still there or
+not.

@@ -550,7 +550,7 @@ fn shim_registration<SE: ShellExtensions>(name: &str) -> Registration<SE> {
 }
 
 /// The bundled tools that open a file they are to write as a pipe may be opened, when it
-/// is a `>(...)`: patched for it, see `vendor/uutils/CASH-PATCHES.md` (D17). Every other
+/// is a `>(...)`: cash's own `crates/cash-uutils`, see its README (D17). Every other
 /// one opens it as a new file, which a named pipe does not allow, and is handed a temp file
 /// instead.
 const SUBSTITUTION_PIPES: &[&str] = &["tee", "sort", "uniq", "shuf"];

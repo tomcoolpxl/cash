@@ -13,6 +13,7 @@ members = [
     "crates/cash-awk",
     "crates/cash-bc",
     "crates/cash-sed",
+    "crates/cash-uutils",
     "crates/cash-diffutils",
     "crates/cash-picker",
     "crates/cash-getopt",
@@ -21,7 +22,7 @@ members = [
 ]
 default-members = ["crates/cash"]
 # Upstream code carried with a patch (see its CASH-PATCHES.md), not linted as cash's own.
-exclude = ["vendor/crossterm", "vendor/reedline", "vendor/uutils"]
+exclude = ["vendor/crossterm", "vendor/reedline"]
 
 [workspace.package]
 version = "1.11.0"
@@ -48,6 +49,7 @@ cash-interactive = { version = "1.3.13", path = "crates/cash-interactive" }
 cash-parser = { version = "1.3.13", path = "crates/cash-parser" }
 cash-picker = { version = "1.3.13", path = "crates/cash-picker" }
 cash-sed = { version = "1.3.13", path = "crates/cash-sed" }
+cash-uutils = { version = "1.3.13", path = "crates/cash-uutils" }
 cash-shell = { version = "1.3.13", path = "crates/cash-shell" }
 cash-test-harness = { version = "1.3.13", path = "crates/cash-test-harness" }
 cash-win32 = { version = "1.3.13", path = "crates/cash-win32" }
@@ -252,13 +254,6 @@ strip = "debuginfo"
 # Crossterm 0.29.0 with the patch in vendor/crossterm/CASH-PATCHES.md: console input is
 # read in batches rather than one record per round trip to the console host.
 #
-# The uutils `tee`, `sort`, `uniq` and `shuf` 0.12.0 with the patch in
-# vendor/uutils/CASH-PATCHES.md: a `>(...)` they are to write is opened as the named pipe
-# it is, which cannot be created or truncated (D17).
 [patch.crates-io]
 crossterm = { path = "vendor/crossterm" }
 reedline = { path = "vendor/reedline" }
-uu_shuf = { path = "vendor/uutils/uu_shuf" }
-uu_sort = { path = "vendor/uutils/uu_sort" }
-uu_tee = { path = "vendor/uutils/uu_tee" }
-uu_uniq = { path = "vendor/uutils/uu_uniq" }

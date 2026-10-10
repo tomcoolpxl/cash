@@ -667,6 +667,7 @@ dependencies = [
 name = "cash-coreutils-builtins"
 version = "1.11.0"
 dependencies = [
+ "cash-uutils",
  "uu_arch",
  "uu_b2sum",
  "uu_base32",
@@ -718,7 +719,6 @@ dependencies = [
  "uu_pwd",
  "uu_readlink",
  "uu_realpath",
- "uu_rm",
  "uu_rmdir",
  "uu_seq",
  "uu_sha1sum",
@@ -727,15 +727,12 @@ dependencies = [
  "uu_sha384sum",
  "uu_sha512sum",
  "uu_shred",
- "uu_shuf",
  "uu_sleep",
- "uu_sort",
  "uu_split",
  "uu_sum",
  "uu_sync",
  "uu_tac",
  "uu_tail",
- "uu_tee",
  "uu_test",
  "uu_timeout",
  "uu_touch",
@@ -745,7 +742,6 @@ dependencies = [
  "uu_tsort",
  "uu_uname",
  "uu_unexpand",
- "uu_uniq",
  "uu_unlink",
  "uu_uptime",
  "uu_vdir",
@@ -909,6 +905,32 @@ dependencies = [
  "serde_yaml",
  "strip-ansi-escapes",
  "tokio",
+]
+
+[[package]]
+name = "cash-uutils"
+version = "1.11.0"
+dependencies = [
+ "bigdecimal",
+ "cash-win32",
+ "clap",
+ "ctrlc",
+ "fluent",
+ "foldhash",
+ "indicatif",
+ "itertools 0.15.0",
+ "itoa",
+ "memchr",
+ "rand 0.10.3",
+ "rand_chacha 0.10.0",
+ "rayon",
+ "rustc-hash",
+ "self_cell",
+ "sha3",
+ "tempfile",
+ "thiserror 2.0.21",
+ "unic-langid",
+ "uucore",
 ]
 
 [[package]]
@@ -5606,20 +5628,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "uu_rm"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c16cd2b5f4e7647a10a316c001b804e688a80aba77685578cdf11bdf4b31f780"
-dependencies = [
- "clap",
- "fluent",
- "indicatif",
- "libc",
- "thiserror 2.0.21",
- "uucore",
-]
-
-[[package]]
 name = "uu_rmdir"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5720,21 +5728,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "uu_shuf"
-version = "0.12.0"
-dependencies = [
- "cash-win32",
- "clap",
- "fluent",
- "itoa",
- "rand 0.10.3",
- "rand_chacha 0.10.0",
- "rustc-hash",
- "sha3",
- "uucore",
-]
-
-[[package]]
 name = "uu_sleep"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5742,28 +5735,6 @@ checksum = "015cf50857143f9a946e9194960cdba7da0b4a17cdfae0bec1128b84e6cdb552"
 dependencies = [
  "clap",
  "fluent",
- "uucore",
-]
-
-[[package]]
-name = "uu_sort"
-version = "0.12.0"
-dependencies = [
- "bigdecimal",
- "cash-win32",
- "clap",
- "ctrlc",
- "fluent",
- "foldhash",
- "itertools 0.15.0",
- "libc",
- "memchr",
- "rand 0.10.3",
- "rayon",
- "rustix",
- "self_cell",
- "tempfile",
- "thiserror 2.0.21",
  "uucore",
 ]
 
@@ -5837,17 +5808,6 @@ dependencies = [
  "rustix",
  "uucore",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "uu_tee"
-version = "0.12.0"
-dependencies = [
- "cash-win32",
- "clap",
- "fluent",
- "rustix",
- "uucore",
 ]
 
 [[package]]
@@ -5970,16 +5930,6 @@ dependencies = [
  "fluent",
  "rustix",
  "thiserror 2.0.21",
- "uucore",
-]
-
-[[package]]
-name = "uu_uniq"
-version = "0.12.0"
-dependencies = [
- "cash-win32",
- "clap",
- "fluent",
  "uucore",
 ]
 

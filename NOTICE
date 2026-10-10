@@ -69,10 +69,18 @@ changes are listed in each crate's `README.md`.
 ## Vendored crates
 
 `vendor/` carries patched copies of [reedline](https://github.com/nushell/reedline)
-0.51.0 (© 2021 the Nushell Project), [crossterm](https://github.com/crossterm-rs/crossterm)
-0.29.0 (© 2019 Timon) and the uutils coreutils crates `uu_tee`, `uu_sort`, `uu_uniq`
-and `uu_shuf` 0.12.0 (© the uutils developers), all under the MIT License, whose text is
-in each one's `LICENSE`. Each `CASH-PATCHES.md` lists the changes.
+0.51.0 (© 2021 the Nushell Project) and [crossterm](https://github.com/crossterm-rs/crossterm)
+0.29.0 (© 2019 Timon), both under the MIT License, whose text is in each one's
+`LICENSE`. Each `CASH-PATCHES.md` lists the changes.
+
+## uutils coreutils
+
+`crates/cash-uutils`, the `rm`, `sort`, `tee`, `uniq` and `shuf` cash runs, is taken
+and modified from [uutils coreutils](https://github.com/uutils/coreutils) 0.12.0
+(`uu_rm`, `uu_sort`, `uu_tee`, `uu_uniq`, `uu_shuf`), © the uutils developers, under the
+MIT License, whose text is in
+[crates/cash-uutils/LICENSE](crates/cash-uutils/LICENSE). The changes are listed in
+its `README.md`.
 
 ## lsd
 

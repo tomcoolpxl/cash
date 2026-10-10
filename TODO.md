@@ -1071,9 +1071,25 @@ day (spec D79, D80). In order:
    60 ms. The release workflow runs it on the dist build before packaging, the figures
    in the job summary; over a limit stops the release. The local release build of
    2026-10-07: 50.8 MB, 27.9 ms.
-5. **`rm -rf` on junctions**, from "Found along the way": a junction inside a folder
-   gives "Permission denied", and one whose target went first fails too; both need the
-   link removed as a folder link, never followed (`uu_rm` 0.12.0).
+5. **`rm -rf` on junctions** (done 2026-10-10), from "Found along the way": a junction
+   inside a folder gave "Permission denied", and one whose target went first failed
+   too. `rm` (cash's own since item 6, from `uu_rm` 0.12.0) now takes `RemoveDirectoryW`
+   where it removed a folder link as a file (`DeleteFileW`): the link goes, never
+   followed. Tests: `it/rm_links.rs` (junctions to
+   a folder inside and outside, and a dangling one). `rar_add_links.sh` still takes its
+   junction away with `cmd /c rmdir`, which it may now leave to `rm`.
+6. **The five patched uutils tools become cash's own code** (the user, 2026-10-10, by
+   pick list; done the same day): `rm`, `tee`, `sort`, `uniq` and `shuf` moved from
+   `vendor/uutils` into `crates/cash-uutils`, licence kept, credited in NOTICE, the
+   changes in its README; `vendor/uutils` is gone. Their Unix, Linux and WASI code went.
+   Each reads its own `en-US.ftl`, compiled in, which fixes the message ids a release
+   printed (`it/uutils_messages.rs`). The workspace lints apply, the style ones allowed
+   as for `cash-sed`, the panic ones in full: about 50 sites, each an error the tool
+   now reports or a stated reason it cannot fail.
+7. **reedline becomes cash's own code**, next, its own commit: the line editor (39k
+   lines, 10 changes) as a cash crate, its patch list turned into the crate's history.
+8. **crossterm becomes cash's own code**, after reedline: terminal I/O (12k lines, 2
+   changes).
 
 ---
 
@@ -1112,8 +1128,8 @@ day (spec D79, D80). In order:
   the commits touched only rar. Look at PowerShell's start on the runner (a first-run
   cache?) before raising the wait.
 
-- **`rm -rf` stops at a junction** (found on 2026-10-09 with `rar_add_links.sh`): a
-  folder holding a junction gives "rm: cannot remove 'top\junc': Permission denied",
+- **`rm -rf` stops at a junction** (found on 2026-10-09 with `rar_add_links.sh`; done
+  2026-10-10, phase 34 item 5): a folder holding a junction gave "rm: cannot remove 'top\junc': Permission denied",
   rc 1, in 1.10.0 too. It does not follow the junction (the target's files survive); it
   fails to take away the link itself, which a folder link needs `RemoveDirectoryW` for.
   `rm` is uutils' `uu_rm` 0.12.0 from crates.io: the fix means a near-upstream copy in
@@ -1205,7 +1221,8 @@ day (spec D79, D80). In order:
   is defined, as decided, but the function itself does not run. Implement Bash's
   behaviour, with the hint only when no function is defined.
 - **`rm -rf` fails on a junction whose target it removed first** (found 2026-10-07,
-  phase 31): in `t/` holding `sub/` and `jn` (a junction to `sub`), `rm -rf t` removes
+  phase 31; done 2026-10-10, phase 34 item 5, though `rm`'s other messages still name
+  a path inside the folder with `\`): in `t/` holding `sub/` and `jn` (a junction to `sub`), `rm -rf t` removes
   `sub` and then says `rm: cannot remove 't\jn': Permission denied`, leaving `t` and the
   dangling junction (status 1). `rm -rf t/jn` alone works and keeps `sub`. A junction
   left dangling seems to be removed as a file (`DeleteFileW`, refused) where it is a
@@ -1218,6 +1235,21 @@ day (spec D79, D80). In order:
   MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
   during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs
   with the repository as its folder. Find it and give it a temporary folder.
+- **The vendored uutils print message ids in a release** (found 2026-10-10; done the
+  same day, phase 34 item 6): Scoop's
+  1.10.0 says `sort: sort-cannot-read`, `Usage: tee-usage`, `Usage: shuf-usage`,
+  `Usage: uniq-usage`. uucore's build script embeds a tool's messages from the
+  `uu_<tool>-<version>/locales` folders it finds beside itself in the cargo registry;
+  a tool built from `vendor/` is never unpacked there on a clean machine (CI, the
+  release job), so its messages are missing. A local build looks right only because
+  this machine's registry still holds the upstream copies. No test checks those
+  messages.
+- **`sort` never asks Windows how much memory there is** (found 2026-10-10, making it
+  cash's own): uutils sizes its buffer from `sysinfo` on Linux and gives up elsewhere,
+  so on Windows the buffer is always the fixed default. `GlobalMemoryStatusEx` (through
+  `cash-win32`) would let a big sort use more memory and fewer temporary files;
+  `physical_memory_bytes` in `crates/cash-uutils/src/sort/buffer_hint.rs` is the place.
+  Likewise `tee -i` ignores no Ctrl-C on Windows (uutils' is Unix-only).
 - **A `TEMP` in 8.3 short form is not under the home folder** (found 2026-10-10 by CI,
   run 38043418786): Windows sets `TEMP` to `C:\Users\RUNNER~1\AppData\Local\Temp` for
   a long user name, while `HOME` is `C:/Users/runneradmin`. A folder under `TEMP` then

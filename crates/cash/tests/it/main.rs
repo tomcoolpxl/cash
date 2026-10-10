@@ -187,6 +187,8 @@ mod real_world_tests;
 mod refusals;
 // D3/D7/D8/D34/D35: what cash says it will run vs what it runs.
 mod resolution_honesty;
+// `rm -r` takes a junction inside a folder away as the link it is, its target or not.
+mod rm_links;
 // EXE-07: a script that does not parse runs a complete command at a time, up to the error.
 mod run_by_command;
 // `select`, a bash construct cash could not parse at all.
@@ -228,6 +230,8 @@ mod winpaths;
 mod xxd_builtin;
 // `xz` and its five other names: XZ Utils 5.8's golden output, and the file handling.
 mod xz_builtin;
+// rm, sort, tee, uniq and shuf, taken from uutils: their messages are English, not ids.
+mod uutils_messages;
 // D80: `z`, the folder jump, on a record of folders made for the test; its Tab completion.
 mod z_jump;
 // `zip`, `unzip` and `zipinfo`: Info-ZIP's golden output, Windows' own readers and writers.

@@ -759,8 +759,9 @@ to write in one of those ways: `tee >(cmd)` failed with "The parameter is incorr
 
 - **A builtin gets the named pipe,** as it opens the path as a pipe may be opened
   (`cash_win32::pipe::open_output`, through which cash's own opens go) or not at all.
-  Among the bundled tools, `tee`, `sort`, `uniq` and `shuf` are patched to open their
-  output through it (`vendor/uutils/CASH-PATCHES.md`), and get the pipe too.
+  Among the bundled tools, `tee`, `sort`, `uniq` and `shuf`, cash's own code since
+  2026-10-10 (`crates/cash-uutils`), open their output through it, and get the pipe
+  too.
 - **Everything else gets a temp file**, which every program can create and truncate: a
   program on `PATH`, a bundled tool that is not patched, a builtin that runs another
   command with its arguments or writes a file it is named (`command`, `exec`, `eval`,

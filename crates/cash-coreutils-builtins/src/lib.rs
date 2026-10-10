@@ -35,6 +35,19 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 
+// cash: the tools taken from uutils and made cash's own, under the names their
+// adapters give uucore for its own messages.
+#[cfg(feature = "coreutils.rm")]
+use cash_uutils::rm as uu_rm;
+#[cfg(feature = "coreutils.shuf")]
+use cash_uutils::shuf as uu_shuf;
+#[cfg(feature = "coreutils.sort")]
+use cash_uutils::sort as uu_sort;
+#[cfg(feature = "coreutils.tee")]
+use cash_uutils::tee as uu_tee;
+#[cfg(feature = "coreutils.uniq")]
+use cash_uutils::uniq as uu_uniq;
+
 /// First half of the `uucore::bin!` body: install SIGPIPE handling and
 /// initialize the thread-local Fluent localizer. Without this, `translate!`
 /// calls inside the utility fall back to emitting raw Fluent keys (e.g.,
