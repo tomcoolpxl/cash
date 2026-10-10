@@ -979,13 +979,17 @@ fn conpty_ctrl_r_picks_from_the_history() {
     session.send("\x12").unwrap();
     settle(&mut session);
     session.send("\x12").unwrap();
-    settle(&mut session);
-    let screen = session.screen().text();
-    let header = screen
-        .lines()
-        .find(|row| row.starts_with("History in"))
-        .unwrap_or_else(|| panic!("no list of this folder's commands:\n{screen}"));
-    assert!(header.contains("   0   "), "{screen}");
+    let (empty, screen) = session
+        .wait_for_screen(
+            |screen| {
+                screen
+                    .lines()
+                    .any(|row| row.starts_with("History in") && row.contains("   0   "))
+            },
+            Duration::from_secs(10),
+        )
+        .unwrap();
+    assert!(empty, "this folder's list is not empty:\n{screen}");
     session.send("\x1b").unwrap();
     settle(&mut session);
 
@@ -1049,9 +1053,12 @@ fn conpty_z_jumps_to_folders_a_session_before_went_to() {
         .expect("the list opened");
     session.send("\r").unwrap();
     settle(&mut session);
+    // The list may show the folder whole (where `TEMP` is not under the home folder as
+    // spelled, as on CI's `RUNNER~1`), so count what `pwd` adds.
+    let listed = count(&session, &one);
     session.send("pwd\r").unwrap();
     settle(&mut session);
-    assert_eq!(count(&session, &one), 1, "{}", session.output());
+    assert_eq!(count(&session, &one), listed + 1, "{}", session.output());
 
     // Tab puts the folder on the line.
     session.send("z dee\t").unwrap();
@@ -1070,9 +1077,13 @@ fn conpty_z_jumps_to_folders_a_session_before_went_to() {
         .expect("Alt-H", Duration::from_secs(10))
         .expect("the picker opened");
     session.send("\x1bh").unwrap();
-    settle(&mut session);
-    let screen = session.screen().text();
-    assert!(screen.contains("zeta_three/"), "{screen}");
+    let (shown, screen) = session
+        .wait_for_screen(
+            |screen| screen.contains("zeta_three/"),
+            Duration::from_secs(10),
+        )
+        .unwrap();
+    assert!(shown, "{screen}");
     session.send("\x1b").unwrap();
     settle(&mut session);
 

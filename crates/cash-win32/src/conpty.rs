@@ -415,6 +415,28 @@ impl ConPtySession {
         }
     }
 
+    /// Waits until what the console shows satisfies `shows`, or `timeout` passes: whether
+    /// it did, and the screen's text. A drawing that lands in pieces is read whole, where
+    /// [`Self::settle`] can stop at a pause in the middle of it on a busy machine.
+    pub fn wait_for_screen(
+        &mut self,
+        shows: impl Fn(&str) -> bool,
+        timeout: Duration,
+    ) -> io::Result<(bool, String)> {
+        let start = Instant::now();
+        loop {
+            let _ = self.read_available()?;
+            let text = self.screen().text();
+            if shows(&text) {
+                return Ok((true, text));
+            }
+            if start.elapsed() >= timeout {
+                return Ok((false, text));
+            }
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    }
+
     /// Return the entire accumulated output seen so far.
     #[must_use]
     pub fn output(&self) -> &str {

@@ -1214,6 +1214,13 @@ day (spec D79, D80). In order:
   MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
   during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs
   with the repository as its folder. Find it and give it a temporary folder.
+- **A `TEMP` in 8.3 short form is not under the home folder** (found 2026-10-10 by CI,
+  run 38043418786): Windows sets `TEMP` to `C:\Users\RUNNER~1\AppData\Local\Temp` for
+  a long user name, while `HOME` is `C:/Users/runneradmin`. A folder under `TEMP` then
+  shows whole in `z -i`, the pickers and `tilde_shorten`, never as `~/…`, and two
+  spellings of one folder count as two in the records. Taking `TEMP` and `TMP` to their
+  long form (`GetLongPathNameW`) as cash starts would mend both; check what a program
+  started by cash then gets, and Git Bash's own `TEMP`.
 - **Candidate: `sudo` elevating in this terminal by itself** (asked for by the user on
   2026-10-10, not yet chosen): `sudo` is cash's builtin, but the elevation is handed to
   gsudo, else Windows' own `sudo` (Windows 11, once turned on), else a plain UAC
