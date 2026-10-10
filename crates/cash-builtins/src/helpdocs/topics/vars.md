@@ -21,6 +21,9 @@ The cost: `$Foo` and `$FOO` cannot be two variables.
 - `CASH_PS_ALT`: a prompt on the right side of the line.
 - `CASH_MAX_SUBSHELLS`: how many background jobs and subshells may run at once, read at
   startup; default 256.
+- `CASH_NO_RECORDS`: when set and not empty, an interactive cash keeps no records in
+  `%LOCALAPPDATA%\cash`: not the folder each command ran in (Ctrl-R's list of this
+  folder's commands), nor the folders you go to.
 - `CASH_DEBUG_SESSION`: when set, cash says at startup whether its session job object
   and UTF-8 console are in place.
 - `PID`: cash's process id, read-only; the same as `BASHPID`.

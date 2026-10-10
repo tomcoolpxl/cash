@@ -12,6 +12,7 @@ use std::time::Duration;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::{cursor, queue, terminal};
 
+use crate::list::{self, List};
 use crate::ui::{Key, Outcome, Picker};
 
 /// The fewest rows the picker takes inline.
@@ -40,7 +41,8 @@ pub fn rows_for(setting: Option<&str>, total: usize) -> usize {
 /// after it), and may return the command line as it now reads from the word being
 /// replaced on, which is drawn on the line while the picker stays open; `echo_from` is
 /// how many columns before the cursor that word starts, `None` where the line is not to
-/// be drawn.
+/// be drawn. `pending` holds keys typed before the picker opened, which it reads first;
+/// those it leaves are the line's.
 ///
 /// # Errors
 ///
@@ -49,26 +51,118 @@ pub fn run<W: Write>(
     picker: &mut Picker,
     out: &mut W,
     height: Option<&str>,
+    pending: &mut Vec<Event>,
     echo_from: Option<usize>,
     mut pick: impl FnMut(&Path, bool, bool) -> Option<String>,
 ) -> io::Result<()> {
+    raw(|| {
+        drive(
+            picker,
+            out,
+            height,
+            pending,
+            Picker::frame,
+            Picker::searching,
+            &mut |picker, key, area, out| {
+                let Some(key) = translate(key) else {
+                    return Ok(Flow::Go);
+                };
+                match picker.key(key) {
+                    Outcome::Continue => Ok(Flow::Go),
+                    Outcome::Closed => Ok(Flow::Stop),
+                    Outcome::Picked {
+                        path,
+                        folder,
+                        close,
+                    } => {
+                        let line = pick(&path, folder, close);
+                        if close {
+                            return Ok(Flow::Stop);
+                        }
+                        if let (Some(line), Some(from)) = (line, echo_from) {
+                            area.echo(out, from, &line)?;
+                        }
+                        picker.picked();
+                        Ok(Flow::Go)
+                    }
+                }
+            },
+        )
+    })
+}
+
+/// Runs `list` until it closes, drawing on `out`; the line picked, as its list, its
+/// index there and whether Tab picked it, or `None` when it closed without a pick.
+/// `pending` is as for [`run`].
+///
+/// # Errors
+///
+/// When the terminal cannot be drawn on or read from.
+pub fn run_list<W: Write>(
+    list: &mut List,
+    out: &mut W,
+    height: Option<&str>,
+    pending: &mut Vec<Event>,
+) -> io::Result<Option<(usize, usize, bool)>> {
+    let mut picked = None;
+    raw(|| {
+        drive(
+            list,
+            out,
+            height,
+            pending,
+            List::frame,
+            |_| false,
+            &mut |list, key, _, _| {
+                let Some(key) = translate_list(key) else {
+                    return Ok(Flow::Go);
+                };
+                Ok(match list.key(key) {
+                    list::Outcome::Continue => Flow::Go,
+                    list::Outcome::Closed => Flow::Stop,
+                    list::Outcome::Picked { scope, index, tab } => {
+                        picked = Some((scope, index, tab));
+                        Flow::Stop
+                    }
+                })
+            },
+        )
+    })?;
+    Ok(picked)
+}
+
+/// Runs `body` with the terminal in raw mode, as it was found again afterwards.
+fn raw<R>(body: impl FnOnce() -> io::Result<R>) -> io::Result<R> {
     let was_raw = terminal::is_raw_mode_enabled().unwrap_or(false);
     if !was_raw {
         terminal::enable_raw_mode()?;
     }
-    let result = run_raw(picker, out, height, echo_from, &mut pick);
+    let result = body();
     if !was_raw {
         let _ = terminal::disable_raw_mode();
     }
     result
 }
 
-fn run_raw<W: Write>(
-    picker: &mut Picker,
+/// Whether to read another key or close.
+enum Flow {
+    Go,
+    Stop,
+}
+
+/// Draws `model` in rows below the command line (or on the alternate screen in a small
+/// window) and hands each key to `on_key` until it says to stop: first those in
+/// `pending`, typed before it opened, then those read; what `pending` still holds when it
+/// stops is for the line. `busy` says when to wake to draw what a background search
+/// found.
+fn drive<W: Write, M>(
+    model: &mut M,
     out: &mut W,
     height: Option<&str>,
-    echo_from: Option<usize>,
-    pick: &mut dyn FnMut(&Path, bool, bool) -> Option<String>,
+    pending: &mut Vec<Event>,
+    frame: fn(&mut M, usize, usize) -> Vec<String>,
+    busy: fn(&M) -> bool,
+    on_key: &mut dyn FnMut(&mut M, KeyEvent, &mut Area, &mut W) -> io::Result<Flow>,
 ) -> io::Result<()> {
     let (columns, total) = terminal::size()?;
     let (columns, total) = (usize::from(columns), usize::from(total));
@@ -88,38 +182,27 @@ fn run_raw<W: Write>(
 
     let result = (|| -> io::Result<()> {
         loop {
-            area.draw(out, picker)?;
+            let lines = frame(model, area.columns.saturating_sub(1).max(1), area.rows);
+            area.draw(out, lines)?;
             // While a search runs, wake to show what it found.
-            let wait = if picker.searching() {
+            let wait = if busy(model) {
                 Duration::from_millis(120)
             } else {
                 Duration::from_secs(3600)
             };
-            if !event::poll(wait)? {
-                continue;
-            }
-            match event::read()? {
+            // Keys typed before the picker opened come first.
+            let next = if pending.is_empty() {
+                if !event::poll(wait)? {
+                    continue;
+                }
+                event::read()?
+            } else {
+                pending.remove(0)
+            };
+            match next {
                 Event::Key(key) if key.kind != KeyEventKind::Release => {
-                    let Some(key) = translate(key) else {
-                        continue;
-                    };
-                    match picker.key(key) {
-                        Outcome::Continue => {}
-                        Outcome::Closed => return Ok(()),
-                        Outcome::Picked {
-                            path,
-                            folder,
-                            close,
-                        } => {
-                            let line = pick(&path, folder, close);
-                            if close {
-                                return Ok(());
-                            }
-                            if let (Some(line), Some(from)) = (line, echo_from) {
-                                area.echo(out, from, &line)?;
-                            }
-                            picker.picked();
-                        }
+                    if matches!(on_key(model, key, &mut area, out)?, Flow::Stop) {
+                        return Ok(());
                     }
                 }
                 Event::Resize(new_columns, new_rows) => {
@@ -214,8 +297,7 @@ impl Area {
     /// and all of it as one synchronized update (mode 2026), which the terminal shows
     /// at once. Clearing every row and writing it again, several times a second while
     /// a search ran, made the picker flicker (the user, 2026-10-06).
-    fn draw<W: Write>(&mut self, out: &mut W, picker: &mut Picker) -> io::Result<()> {
-        let lines = picker.frame(self.columns.saturating_sub(1).max(1), self.rows);
+    fn draw<W: Write>(&mut self, out: &mut W, lines: Vec<String>) -> io::Result<()> {
         if lines == self.shown {
             return Ok(());
         }
@@ -307,6 +389,32 @@ const fn translate(key: KeyEvent) -> Option<Key> {
     })
 }
 
+/// The list's key for a key event; `None` for one it ignores. Ctrl-P and Ctrl-N move as
+/// the arrows do, as in Readline; Ctrl-R shows the next list.
+const fn translate_list(key: KeyEvent) -> Option<list::Key> {
+    use list::Key as L;
+    let control = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = key.modifiers.contains(KeyModifiers::ALT);
+    Some(match key.code {
+        KeyCode::Up => L::Up,
+        KeyCode::Down => L::Down,
+        KeyCode::PageUp => L::PageUp,
+        KeyCode::PageDown => L::PageDown,
+        KeyCode::Home => L::Home,
+        KeyCode::End => L::End,
+        KeyCode::Enter => L::Enter,
+        KeyCode::Tab => L::Tab,
+        KeyCode::Esc => L::Esc,
+        KeyCode::Backspace => L::Backspace,
+        KeyCode::Char('c' | 'g') if control => L::Esc,
+        KeyCode::Char('p') if control => L::Up,
+        KeyCode::Char('n') if control => L::Down,
+        KeyCode::Char('r') if control => L::Switch,
+        KeyCode::Char(c) if !control && !alt => L::Char(c),
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,7 +451,7 @@ mod tests {
             shown: Vec::new(),
         };
         let mut first = Vec::new();
-        area.draw(&mut first, &mut picker).unwrap();
+        area.draw(&mut first, picker.frame(59, 8)).unwrap();
         let first = String::from_utf8(first).unwrap();
         assert!(first.contains("one/"), "{first:?}");
         // A whole-line clear (ESC [ 2 K) blanks a row before it is written again.
@@ -351,12 +459,12 @@ mod tests {
         assert!(first.starts_with("\x1b[?2026h") && first.ends_with("\x1b[?2026l"));
 
         let mut again = Vec::new();
-        area.draw(&mut again, &mut picker).unwrap();
+        area.draw(&mut again, picker.frame(59, 8)).unwrap();
         assert!(again.is_empty(), "{:?}", String::from_utf8_lossy(&again));
 
         picker.key(Key::Char('o'));
         let mut changed = Vec::new();
-        area.draw(&mut changed, &mut picker).unwrap();
+        area.draw(&mut changed, picker.frame(59, 8)).unwrap();
         let changed = String::from_utf8(changed).unwrap();
         assert!(changed.contains("> o"), "{changed:?}");
         assert!(changed.len() < first.len(), "{changed:?}");

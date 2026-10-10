@@ -104,6 +104,8 @@ and in the fewest places it can.
   `~/.cash_history`.
 - `\v` and `\V` in a prompt give cash's version; `$BASH_VERSION` is Bash's.
 - Tab completes a typed `*` or `?` as a glob: no Windows file name can hold them.
+- `Ctrl-R` opens a list of the history to pick from, not Readline's search as you type;
+  `bind '"\C-r": reverse-search-history'` puts the search back (see `help keys`).
 - `exec -a NAME` and `exec -l` are refused for programs other than cash: Windows cannot
   give a program an `argv[0]` of its own.
 

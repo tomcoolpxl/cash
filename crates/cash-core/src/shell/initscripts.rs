@@ -62,6 +62,7 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         // interactive shell reads them, since only its line editor expands them.
         if self.options.interactive {
             self.load_kept_abbreviations();
+            self.keep_records();
         }
 
         // As bash does, skip the file if startup files already added entries (e.g. via
@@ -90,6 +91,26 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         }
 
         Ok(())
+    }
+
+    /// Keeps the records of `%LOCALAPPDATA%\cash` from now on (`crate::kept`): the folder
+    /// each command runs in, cut to `HISTFILESIZE` lines as the history file is, and the
+    /// folders visited. `CASH_NO_RECORDS`, set to anything, keeps none.
+    fn keep_records(&mut self) {
+        if self
+            .env_str("CASH_NO_RECORDS")
+            .is_some_and(|value| !value.is_empty())
+        {
+            return;
+        }
+        let localappdata = self.env_str("LOCALAPPDATA").map(|value| value.into_owned());
+        self.records = crate::kept::Records::at(localappdata.as_deref());
+        if let Some(path) = self.records.history_folders_file()
+            && let Some(keep) = self.history_size_limit("HISTFILESIZE")
+            && let Err(error) = crate::kept::commands::trim(path, keep)
+        {
+            tracing::debug!("couldn't cut the command folders: {error}");
+        }
     }
 
     /// Adds the abbreviations of `%APPDATA%\cash\abbreviations` that the rc files did

@@ -24,6 +24,7 @@ pub mod interfaces;
 mod interp;
 mod ioutils;
 pub mod jobs;
+pub mod kept;
 mod keywords;
 pub mod namedoptions;
 // cash: the service table, the sockets `/dev/tcp` and `/dev/udp` redirections open, and

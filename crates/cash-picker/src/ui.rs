@@ -666,7 +666,7 @@ fn branches(rails: &[bool], depth: usize, last: Option<bool>) -> String {
 
 /// How long ago `modified` was, in one short unit: `now`, `5m`, `3h`, `2d`, `6w`, `4mo`,
 /// `2y`.
-fn age(modified: std::time::SystemTime) -> String {
+pub(crate) fn age(modified: std::time::SystemTime) -> String {
     let seconds = std::time::SystemTime::now()
         .duration_since(modified)
         .map_or(0, |since| since.as_secs());
@@ -683,7 +683,7 @@ fn age(modified: std::time::SystemTime) -> String {
 }
 
 /// `text` cut to `width` columns, with `…` where it was cut.
-fn fit(text: &str, width: usize) -> String {
+pub(crate) fn fit(text: &str, width: usize) -> String {
     let total: usize = text.chars().filter_map(char::width).sum();
     if total <= width {
         return text.to_owned();

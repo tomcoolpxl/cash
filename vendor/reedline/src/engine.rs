@@ -836,6 +836,19 @@ impl Reedline {
         self.immediately_accept = immediately_accept;
     }
 
+    /// cash (CASH-PATCHES.md, patch 10): the input read after a host command's key (patch
+    /// 5), taken by the host command itself, as cash's pickers take the keys typed after
+    /// Ctrl-R or Alt-E as their own.
+    pub fn take_pending_input(&mut self) -> Vec<Event> {
+        std::mem::take(&mut self.pending_input)
+    }
+
+    /// cash (CASH-PATCHES.md, patch 10): input a host command read and did not use, read
+    /// first by the next `read_line`, before anything already pending.
+    pub fn give_back_input(&mut self, events: Vec<Event>) {
+        self.pending_input.splice(0..0, events);
+    }
+
     /// A builder that configures an external break signal.
     ///
     /// When the [`AtomicBool`] is set to `true` by an external thread,
@@ -3807,6 +3820,23 @@ mod tests {
             .process_input_batch(&prompt, pending)
             .expect("batch ok");
         assert_eq!(reedline.current_buffer_contents(), "ab");
+    }
+
+    /// cash patch 10: the host command takes the keys read after its key, and what it
+    /// gives back comes first in the next read.
+    #[test]
+    fn a_host_command_takes_the_keys_after_it_and_gives_back_the_rest() {
+        let mut reedline = Reedline::create();
+        reedline.pending_input = vec![Event::Key(ch('a')), Event::Key(ch('b'))];
+        let taken = reedline.take_pending_input();
+        assert_eq!(taken.len(), 2);
+        assert!(reedline.pending_input.is_empty());
+        reedline.pending_input = vec![Event::Key(ch('z'))];
+        reedline.give_back_input(vec![Event::Key(ch('x'))]);
+        assert_eq!(
+            reedline.pending_input,
+            vec![Event::Key(ch('x')), Event::Key(ch('z'))]
+        );
     }
 
     /// cash patch 4: keys read together arrive as one merged edit, whose first command is

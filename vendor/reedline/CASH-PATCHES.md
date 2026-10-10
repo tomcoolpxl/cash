@@ -107,3 +107,11 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
    value; cash's croot picker (spec D73) sets a line like `cd src/` and has it accepted
    by the next `read_line`, which paints it first, on the `Reedline` the input backend
    holds. `set_immediately_accept` does that by reference.
+
+10. **A host command can take the keys typed after its key** (`src/engine.rs`,
+    2026-10-10). Patch 5 keeps the keys read together with a host command's key for the
+    next read; but cash's pickers (Ctrl-R's history, spec D79; Alt-E's, D73) are that
+    host command, and keys typed straight after Ctrl-R belong to their filter, not to
+    the line after the picker closes. `take_pending_input` hands them to the host
+    command, and `give_back_input` returns what it did not use to the next read.
+    Test: `engine::tests::a_host_command_takes_the_keys_after_it_and_gives_back_the_rest`.

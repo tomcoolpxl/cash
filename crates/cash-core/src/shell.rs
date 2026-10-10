@@ -173,6 +173,11 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// The folders the shell has been in, for `prevd`, `nextd` and `cdh`.
     directory_history: crate::dirhistory::DirectoryHistory,
 
+    /// What an interactive shell keeps across sessions: the folder each command ran in,
+    /// and the folders visited (D79, D80).
+    #[cfg_attr(feature = "serde", serde(skip))]
+    records: crate::kept::Records,
+
     /// Last "SECONDS" captured time.
     last_stopwatch_time: std::time::SystemTime,
 
@@ -246,6 +251,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             path_index: self.path_index.clone(),
             abbreviations: self.abbreviations.clone(),
             directory_history: self.directory_history.clone(),
+            records: self.records.clone(),
             last_stopwatch_time: self.last_stopwatch_time,
             last_stopwatch_offset: self.last_stopwatch_offset,
             key_bindings: self.key_bindings.clone(),

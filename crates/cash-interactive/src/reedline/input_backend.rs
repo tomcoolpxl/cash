@@ -242,6 +242,12 @@ impl InputBackend for ReedlineInputBackend {
                         super::picker::on_key(reedline, shell);
                         continue;
                     }
+                    // Ctrl-R (D79): the history below the line; the command picked goes
+                    // on it, and runs at once when picked with Tab.
+                    if command == edit_mode::HISTORY {
+                        super::history_picker::on_key(reedline, shell);
+                        continue;
+                    }
                     // F1 (D75): the help on the alternate screen; the main screen comes
                     // back as it was, and the next read redraws the line in place.
                     if command == edit_mode::HELP {
@@ -361,6 +367,13 @@ fn compose_key_bindings(completion_menu_name: &str) -> reedline::Keybindings {
         reedline::KeyModifiers::ALT,
         reedline::KeyCode::Char('e'),
         reedline::ReedlineEvent::ExecuteHostCommand(edit_mode::PICKER.to_owned()),
+    );
+    // Ctrl-R: the history picker (D79), as `cash-history`, in place of Reedline's reverse
+    // search; `bind '"\C-r": reverse-search-history'` puts that back.
+    key_bindings.add_binding(
+        reedline::KeyModifiers::CONTROL,
+        reedline::KeyCode::Char('r'),
+        reedline::ReedlineEvent::ExecuteHostCommand(edit_mode::HISTORY.to_owned()),
     );
     // F1: the one-screen help (D75), as `cash-help`.
     key_bindings.add_binding(

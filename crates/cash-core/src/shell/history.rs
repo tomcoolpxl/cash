@@ -153,8 +153,23 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                 history.keep_newest(max_items);
             }
         }
+        // cash (D79): where it ran, for Ctrl-R's "this folder".
+        let folder = cash_win32::path::render(self.working_dir());
+        self.records.note_command(&folder, command);
 
         Ok(())
+    }
+
+    /// Counts a visit to the current folder, once a prompt, when it is not the one counted
+    /// last (D80).
+    pub fn note_folder_visit(&mut self) {
+        let folder = cash_win32::path::render(self.working_dir());
+        self.records.note_folder(&folder);
+    }
+
+    /// The records an interactive shell keeps across sessions (D79, D80).
+    pub const fn records(&self) -> &crate::kept::Records {
+        &self.records
     }
 
     /// Whether a pattern of `HISTIGNORE` matches the whole of `command`. The patterns are

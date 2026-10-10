@@ -88,6 +88,7 @@ impl builtins::Command for CrootCommand {
             &mut picker,
             &mut console,
             height.as_deref(),
+            &mut Vec::new(),
             None,
             |path, _, _| {
                 picks.push(path.to_path_buf());

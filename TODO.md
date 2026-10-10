@@ -1038,9 +1038,15 @@ every way of writing a path working, and the prompt's helpers. Design in
 `research/prompt-history-and-jump-design.md`; the choices made by pick list the same
 day (spec D79, D80). In order:
 
-1. **Ctrl-R: a history picker** (D79): Alt-E's inline list over the history, fuzzy,
-   newest first, Enter to the line and Tab to run, Ctrl-R again for what ran in this
-   folder (a folder record of cash's own beside the history file).
+1. **Ctrl-R: a history picker** (D79, done 2026-10-10): Alt-E's inline list over the
+   history, fuzzy, newest first, Enter to the line and Tab to run, Ctrl-R again for what
+   ran in this folder (a folder record of cash's own beside the history file,
+   `%LOCALAPPDATA%\cash\history-folders`; `CASH_NO_RECORDS` keeps none, and the tests set
+   it). Keys typed straight after Ctrl-R or Alt-E now reach the picker, not the line
+   after it (reedline patch 10). The folder list shows only commands still in the
+   history, so `history -c` empties it too. `reverse-search-history` is Reedline's search
+   again, which `bind` can put back on Ctrl-R. Help: `keys`, `history`, `vars`,
+   `differences`, F1, README.
 2. **`z`: the folder jump** (D80): every change of folder ranked across sessions as
    zoxide ranks, `z WORDS`, `z -l`, `z -i`, Tab, and Alt-E's Alt-H on the same record.
 3. **Every way of writing a path, everywhere**: each spelling in each place a path is

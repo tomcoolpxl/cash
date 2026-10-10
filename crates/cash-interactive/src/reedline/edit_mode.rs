@@ -18,6 +18,10 @@ pub(crate) const PICKER: &str = "\0cash:picker";
 /// alternate screen, and the line goes on as it was (spec D75).
 pub(crate) const HELP: &str = "\0cash:help";
 
+/// What `cash-history` (Ctrl-R) carries: the input backend opens the history picker below
+/// the line, and the command picked goes on it (spec D79).
+pub(crate) const HISTORY: &str = "\0cash:history";
+
 /// What `edit-and-execute-command` runs, as Bash's own does (bashline.c): the line goes into
 /// history, then `fc` opens it in `$VISUAL` or `$EDITOR` and runs what is saved. The `fc`
 /// entry added after it stands for the `fc` invocation itself, which `fc` skips and removes.
@@ -724,13 +728,16 @@ fn translate_input_function_to_reedline_event(
         InputFunction::Undo => Some(ReedlineEvent::Edit(vec![EditCommand::Undo])),
         InputFunction::ClearScreen => Some(ReedlineEvent::ClearScreen),
         InputFunction::AcceptLine => Some(ReedlineEvent::Enter),
-        InputFunction::HistorySearchBackward => Some(ReedlineEvent::SearchHistory),
+        InputFunction::ReverseSearchHistory | InputFunction::HistorySearchBackward => {
+            Some(ReedlineEvent::SearchHistory)
+        }
         InputFunction::RedrawCurrentLine => Some(ReedlineEvent::Repaint),
         InputFunction::Complete => Some(ReedlineEvent::Edit(vec![EditCommand::Complete])),
         InputFunction::CashAcceptHint => Some(ReedlineEvent::HistoryHintComplete),
         InputFunction::CashAcceptHintWord => Some(ReedlineEvent::HistoryHintWordComplete),
         InputFunction::CashPicker => Some(ReedlineEvent::ExecuteHostCommand(PICKER.to_owned())),
         InputFunction::CashHelp => Some(ReedlineEvent::ExecuteHostCommand(HELP.to_owned())),
+        InputFunction::CashHistory => Some(ReedlineEvent::ExecuteHostCommand(HISTORY.to_owned())),
         _ => None,
     }
 }
@@ -890,7 +897,7 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
             Some(KeyAction::DoInputFunction(InputFunction::NextScreenLine))
         }
         reedline::ReedlineEvent::SearchHistory => Some(KeyAction::DoInputFunction(
-            InputFunction::HistorySearchBackward,
+            InputFunction::ReverseSearchHistory,
         )),
         reedline::ReedlineEvent::Repaint => {
             Some(KeyAction::DoInputFunction(InputFunction::RedrawCurrentLine))
@@ -969,6 +976,9 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
         reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == HELP => {
             Some(KeyAction::DoInputFunction(InputFunction::CashHelp))
         }
+        reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == HISTORY => {
+            Some(KeyAction::DoInputFunction(InputFunction::CashHistory))
+        }
         reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == EDIT_AND_EXECUTE_COMMAND => {
             Some(KeyAction::DoInputFunction(
                 InputFunction::EditAndExecuteCommand,
@@ -1023,6 +1033,37 @@ mod tests {
 
         bindings.set_vi(false);
         assert_eq!(bindings.edit_mode(), reedline::PromptEditMode::Emacs);
+    }
+
+    #[test]
+    fn reverse_search_history_on_ctrl_r_puts_reedlines_search_back() {
+        let mut emacs = reedline::default_emacs_keybindings();
+        emacs.add_binding(
+            KeyModifiers::CONTROL,
+            KeyCode::Char('r'),
+            reedline::ReedlineEvent::ExecuteHostCommand(HISTORY.to_owned()),
+        );
+        let mut bindings = UpdatableBindings::new(emacs);
+        let ctrl_r = KeyStroke {
+            control: true,
+            alt: false,
+            shift: false,
+            key: Key::Character('r'),
+        };
+        assert!(matches!(
+            bindings.parse_event(key(KeyCode::Char('r'), KeyModifiers::CONTROL)),
+            reedline::ReedlineEvent::ExecuteHostCommand(command) if command == HISTORY
+        ));
+        bindings
+            .bind(
+                ctrl_r.into(),
+                KeyAction::DoInputFunction(InputFunction::ReverseSearchHistory),
+            )
+            .unwrap();
+        assert!(matches!(
+            bindings.parse_event(key(KeyCode::Char('r'), KeyModifiers::CONTROL)),
+            reedline::ReedlineEvent::SearchHistory
+        ));
     }
 
     #[test]

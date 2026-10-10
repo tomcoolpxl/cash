@@ -36,6 +36,16 @@ impl Default for Fuzzy {
 }
 
 impl Fuzzy {
+    /// A matcher for text that is not a path, such as a command line: no part weighed
+    /// more for following a `/`.
+    #[must_use]
+    pub fn plain() -> Self {
+        Self {
+            matcher: Matcher::new(Config::DEFAULT),
+            ..Self::default()
+        }
+    }
+
     /// Sets what was typed; case is ignored, as Windows ignores it in names.
     pub fn set(&mut self, typed: &str) {
         if typed != self.typed {

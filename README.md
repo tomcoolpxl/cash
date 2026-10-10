@@ -99,6 +99,9 @@ The prompt borrows what fish does well, without giving up Bash's language:
   the disk (spec D59). `--enable-highlighting=false`, or `syntax-highlighting = false`
   under `[ui]` in `%APPDATA%\cash\config.toml`, turns it off.
 - **Suggestions from history** appear dimmed as you type; → accepts one.
+- **A history picker**: Ctrl-R lists the history below the line, each command once,
+  newest first; typing filters it, Enter puts the command on the line and Tab runs it.
+  Ctrl-R again shows what ran in the current folder (D79).
 - **Alt-.** inserts the previous command's last argument (again: the one before), and
   **Ctrl-X Ctrl-E** opens the line in `$VISUAL`/`$EDITOR` and runs what you save, as in
   Bash.

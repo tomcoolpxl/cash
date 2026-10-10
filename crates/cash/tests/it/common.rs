@@ -3,7 +3,8 @@
 //!
 //! A test runs cash as a user would, but not with the user's settings: without the
 //! developer's `%APPDATA%\cash\config.toml` (`--no-config`, and an empty `APPDATA` for
-//! the cash it starts in turn), and without the variables
+//! the cash it starts in turn), without the records an interactive shell keeps in
+//! `%LOCALAPPDATA%\cash` (`CASH_NO_RECORDS`), and without the variables
 //! that make a non-interactive shell run code or behave differently before the script
 //! starts (`BASH_ENV`, `ENV`, `FUNCNEST`, `CDPATH`, `GLOBIGNORE`). Before this module,
 //! 43 modules had a run helper of their own and most passed the developer's environment
@@ -51,17 +52,19 @@ pub fn cash_command() -> Command {
 }
 
 /// The environment `cash_command()` gives cash, on a command built some other way: no
-/// [`ISOLATED_VARIABLES`], and the empty `APPDATA`.
+/// [`ISOLATED_VARIABLES`], the empty `APPDATA`, and no records kept.
 pub fn isolate(command: &mut Command) -> &mut Command {
     for name in ISOLATED_VARIABLES {
         command.env_remove(name);
     }
-    command.env("APPDATA", no_appdata())
+    command
+        .env("APPDATA", no_appdata())
+        .env("CASH_NO_RECORDS", "1")
 }
 
 /// Calls `start` with the environment `cash_command()` gives cash, for a cash started some
 /// other way, as on a pseudo terminal, which takes a whole environment block: the test's
-/// own, without [`ISOLATED_VARIABLES`] and with the empty `APPDATA`.
+/// own, without [`ISOLATED_VARIABLES`], with the empty `APPDATA` and no records kept.
 pub fn with_isolated_environment<R>(start: impl FnOnce(&[(&str, &str)]) -> R) -> R {
     let appdata = no_appdata().to_string_lossy().into_owned();
     let vars: Vec<(String, String)> = std::env::vars()
@@ -77,6 +80,7 @@ pub fn with_isolated_environment<R>(start: impl FnOnce(&[(&str, &str)]) -> R) ->
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
     env.push(("APPDATA", &appdata));
+    env.push(("CASH_NO_RECORDS", "1"));
     start(&env)
 }
 

@@ -70,6 +70,8 @@ pub enum InputFunction {
     CashAcceptHintWord,
     /// cash: the one-screen help on F1 (spec D75).
     CashHelp,
+    /// cash: the history picker on Ctrl-R (spec D79).
+    CashHistory,
     /// cash: the file and folder picker, croot (spec D73).
     CashPicker,
     CharacterSearch,

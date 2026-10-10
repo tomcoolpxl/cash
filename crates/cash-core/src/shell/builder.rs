@@ -278,6 +278,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             path_index: crate::pathindex::PathIndex::default(),
             abbreviations: crate::abbreviations::Abbreviations::default(),
             directory_history: crate::dirhistory::DirectoryHistory::default(),
+            records: crate::kept::Records::default(),
             last_stopwatch_time: std::time::SystemTime::now(),
             last_stopwatch_offset: 0,
             key_bindings: None,

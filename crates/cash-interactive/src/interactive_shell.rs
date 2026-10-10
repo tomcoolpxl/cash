@@ -436,6 +436,10 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
         shell: &mut cash_core::Shell<SE>,
         options: &InteractiveOptions,
     ) -> Result<ControlFlow<cash_core::ExecutionResult>, ShellError> {
+        // The folder the prompt comes back in counts a visit, for `z` (D80): once a prompt,
+        // as zoxide's hook counts it, so a subshell's or a function's moves leave no trace.
+        shell.note_folder_visit();
+
         // precmd hooks first: bash-preexec prepends its dispatcher to PROMPT_COMMAND.
         if let ControlFlow::Break(exit) = crate::zsh_hooks::run_precmd(shell, options).await? {
             return Ok(ControlFlow::Break(exit));

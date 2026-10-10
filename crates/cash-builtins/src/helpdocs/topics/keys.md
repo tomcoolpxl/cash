@@ -15,7 +15,13 @@ work as in Bash.
 ## History and suggestions
 
 - `Up`, `Down` (`Ctrl-P`, `Ctrl-N`): walk the history, or move in the completion menu.
-- `Ctrl-R`: search the history as you type; `Ctrl-R` or `Up` again for older matches.
+- `Ctrl-R`: pick a command from the history, in a list below the line. Each command
+  shows once, newest first, with its age; typing filters it, and what was on the line
+  is the filter it opens with. `Enter` puts the command on the line to edit, `Tab` runs
+  it. `Ctrl-R` in the list switches to what ran in this folder and back. `Esc` clears
+  the filter, then closes the list. Reedline's search as you type is the Readline
+  function `reverse-search-history`: `bind '"\C-r": reverse-search-history'` puts it
+  back on `Ctrl-R`.
 - A dimmed suggestion from the history follows the cursor. `Right`, `End`, `Ctrl-F` or
   `Ctrl-E` take all of it; `Ctrl-Right` or `Alt-F` one word.
 - `Alt-.` (`Alt-_`): insert the previous command's last word; again for older ones.

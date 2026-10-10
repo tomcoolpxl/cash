@@ -35,7 +35,11 @@ pub(crate) fn on_key(
 ) {
     let line = reedline.current_buffer_contents().to_owned();
     let cursor = reedline.current_insertion_point();
-    let (new_line, new_cursor, run) = match open(&line, cursor, shell) {
+    // Keys typed straight after Alt-E are the picker's; the rest go back to the line.
+    let mut pending = reedline.take_pending_input();
+    let picked = open(&line, cursor, shell, &mut pending);
+    reedline.give_back_input(pending);
+    let (new_line, new_cursor, run) = match picked {
         None => return,
         Some(After::Edit { line, cursor }) => (line, cursor, false),
         Some(After::Run(line)) => {
@@ -54,12 +58,13 @@ pub(crate) fn on_key(
     reedline.set_immediately_accept(run);
 }
 
-/// Opens the picker for `line` with the cursor at byte `cursor`; `None` when it closed
-/// without a pick, which leaves the line as it was.
+/// Opens the picker for `line` with the cursor at byte `cursor`, reading the keys in
+/// `pending` first; `None` when it closed without a pick, which leaves the line as it was.
 fn open(
     line: &str,
     cursor: usize,
     shell: &crate::ShellRef<impl cash_core::ShellExtensions>,
+    pending: &mut Vec<crossterm::event::Event>,
 ) -> Option<After> {
     let from_shell = {
         let shell = tokio::task::block_in_place(|| {
@@ -121,6 +126,7 @@ fn open(
         &mut picker,
         &mut std::io::stdout().lock(),
         from_shell.height.as_deref(),
+        pending,
         Some(echo_from),
         |path, folder, _close| {
             picks.push(written(path, folder));

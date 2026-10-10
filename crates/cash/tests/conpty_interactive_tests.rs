@@ -16,7 +16,7 @@
 )]
 
 use cash_win32::conpty::ConPtySession;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
@@ -188,6 +188,8 @@ impl ConsoleStateSession {
                 ("SystemRoot", &system_root),
                 ("PATH", &path),
                 ("LOCALAPPDATA", &local),
+                // PowerShell needs the real one; cash keeps no records in it.
+                ("CASH_NO_RECORDS", "1"),
                 ("USERPROFILE", &profile),
             ]),
         )
@@ -861,6 +863,147 @@ fn conpty_alt_e_inserts_a_file_and_stays_open_for_other_commands() {
 
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);
+}
+
+/// An interactive reedline cash that keeps its records in `local`, as its
+/// `%LOCALAPPDATA%`, rather than nowhere.
+fn start_cash_keeping_records(local: &Path) -> ConPtySession {
+    let temp = std::env::temp_dir();
+    let temp = temp.to_string_lossy();
+    let local = local.to_string_lossy();
+    ConPtySession::start(
+        &PathBuf::from(CASH),
+        &[
+            "--noprofile",
+            "--norc",
+            "--no-config",
+            "--disable-color",
+            "--input-backend=reedline",
+            "-i",
+        ],
+        Some(&[
+            ("HISTFILE", ""),
+            ("PS1", "PROMPT$ "),
+            ("CASH_NO_OFFER", "1"),
+            ("TEMP", &temp),
+            ("LOCALAPPDATA", &local),
+        ]),
+    )
+    .expect("failed to start cash.exe attached to Win32 ConPTY")
+}
+
+/// Waits for `session` to go quiet for 400 ms, at most 5 s.
+fn settle(session: &mut ConPtySession) {
+    session
+        .settle(Duration::from_millis(400), Duration::from_secs(5))
+        .unwrap();
+}
+
+/// Ctrl-R opens the history below the line (D79): typing filters it, Enter puts the
+/// command picked on the line and Tab runs it at once; Ctrl-R in the picker shows what ran
+/// in this folder, from the record kept in `%LOCALAPPDATA%\cash`.
+#[test]
+fn conpty_ctrl_r_picks_from_the_history() {
+    let local = tempfile::tempdir().unwrap();
+    let here = tempfile::tempdir().unwrap();
+    let mut session = start_cash_keeping_records(local.path());
+    let count = |session: &ConPtySession, text: &str| session.output().matches(text).count();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+
+    // Two commands in the start folder, one in another, then one more in the start folder.
+    let start = std::env::current_dir().unwrap();
+    let start = cash_win32::path::render(&start);
+    let place = cash_win32::path::render(here.path());
+    for line in [
+        "echo alpha_hist | tr a-z A-Z".to_owned(),
+        "echo beta_hist | tr a-z A-Z".to_owned(),
+        format!("cd '{place}'"),
+        "echo gamma_hist | tr a-z A-Z".to_owned(),
+        format!("cd '{start}'"),
+        "echo delta_hist | tr a-z A-Z".to_owned(),
+    ] {
+        session.send(&format!("{line}\r")).unwrap();
+        settle(&mut session);
+    }
+    assert_eq!(count(&session, "BETA_HIST"), 1, "{}", session.output());
+
+    // Ctrl-R, `beta`, Enter: the command is on the line; Enter runs it.
+    session.send("\x12").unwrap();
+    session
+        .expect("Enter edit  Tab run", Duration::from_secs(10))
+        .expect("the picker opened");
+    session.send("beta").unwrap();
+    settle(&mut session);
+    session.send("\r").unwrap();
+    settle(&mut session);
+    assert_eq!(
+        count(&session, "BETA_HIST"),
+        1,
+        "Enter ran the command at once"
+    );
+    session.send("\r").unwrap();
+    settle(&mut session);
+    assert_eq!(count(&session, "BETA_HIST"), 2, "{}", session.output());
+
+    // Tab runs it at once.
+    session.send("\x12alpha").unwrap();
+    settle(&mut session);
+    session.send("\t").unwrap();
+    settle(&mut session);
+    assert_eq!(count(&session, "ALPHA_HIST"), 2, "{}", session.output());
+
+    // In the other folder, Ctrl-R twice: what ran there only. `echo` there is gamma's,
+    // where the whole history's newest `echo` is the one just run.
+    session.send(&format!("cd '{place}'\r")).unwrap();
+    settle(&mut session);
+    session.send("\x12").unwrap();
+    settle(&mut session);
+    session.send("\x12").unwrap();
+    session
+        .expect("History in", Duration::from_secs(10))
+        .expect("the picker switched to this folder");
+    session.send("echo").unwrap();
+    settle(&mut session);
+    session.send("\r").unwrap();
+    settle(&mut session);
+    session.send("\r").unwrap();
+    settle(&mut session);
+    assert_eq!(count(&session, "GAMMA_HIST"), 2, "{}", session.output());
+
+    // What `history -c` took out is gone from this folder's list too, though the record
+    // still holds it.
+    session.send("history -c\r").unwrap();
+    settle(&mut session);
+    session.send("\x12").unwrap();
+    settle(&mut session);
+    session.send("\x12").unwrap();
+    settle(&mut session);
+    let screen = session.screen().text();
+    let header = screen
+        .lines()
+        .find(|row| row.starts_with("History in"))
+        .unwrap_or_else(|| panic!("no list of this folder's commands:\n{screen}"));
+    assert!(header.contains("   0   "), "{screen}");
+    session.send("\x1b").unwrap();
+    settle(&mut session);
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+
+    // The record holds each command with the folder it ran in.
+    let ran = std::fs::read_to_string(local.path().join("cash").join("history-folders"))
+        .expect("the folders of the commands were kept");
+    let folder_of = |needle: &str| {
+        ran.lines()
+            .find(|line| line.contains(needle))
+            .and_then(|line| line.split('\t').nth(1))
+            .unwrap_or_default()
+            .to_lowercase()
+    };
+    assert_eq!(folder_of("gamma_hist"), place.to_lowercase(), "{ran}");
+    assert_eq!(folder_of("delta_hist"), start.to_lowercase(), "{ran}");
 }
 
 /// `set -o vi` edits the next line with vi keys: Esc leaves insert mode, `x` deletes the

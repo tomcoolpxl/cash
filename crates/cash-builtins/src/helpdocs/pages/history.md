@@ -16,3 +16,8 @@ N` deletes an entry, `-w` writes the file, `-s LINE` adds a line.
 - While `HISTSIZE` and `HISTFILESIZE` are unset, nothing is cut: Bash would cut both to
   500.
 - To clear it: `history -c; history -w`.
+- An interactive cash also notes the folder each command ran in, in
+  `%LOCALAPPDATA%\cash\history-folders`, for `Ctrl-R`'s list of what ran in this folder
+  (see `help keys`). When `HISTFILESIZE` is set, it is cut to that many lines as cash
+  starts; a command no longer in the history is not shown from it. `CASH_NO_RECORDS`
+  keeps it from being written.
