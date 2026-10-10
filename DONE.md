@@ -1197,6 +1197,20 @@ day (spec D79, D80). In order:
    run with the workspace's, and `vendor/` and xtask's vendored-test step are gone.
    Left for later: the 2021 edition, as for reedline.
 
+## Phase 35. Small fixes, `command_not_found_handle`, and `sudo` in this terminal
+
+Asked by the user on 2026-10-10, after 1.12.0: the small items of "Found along
+the way", Bash's `command_not_found_handle`, then a start on `sudo` elevating in
+the terminal it was typed in. Each item as TODO.md had it, then what was done.
+
+1. **`pwd -W` is refused though the usage offers it** (found 2026-10-07): `pwd -W` says
+   "-W: invalid option" then "usage: pwd [-LPW]". MSYS2's Bash has `-W` (the Windows
+   path); either take it (cash's paths are Windows paths already) or drop it from the
+   usage.
+   Done 2026-10-10: `pwd -W` is taken and prints what `pwd` prints, with `-L` and `-P` as
+   before. `pwd -P` printed the resolved folder as `\\?\C:\…`; it is `C:/…` now, as every
+   path cash prints. Tests: `it/pwd_forms.rs`.
+
 ---
 
 ## Found along the way, done

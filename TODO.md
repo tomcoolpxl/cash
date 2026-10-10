@@ -99,10 +99,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   command's. cash prints the message regardless; the hint is suppressed when the function
   is defined, as decided, but the function itself does not run. Implement Bash's
   behaviour, with the hint only when no function is defined.
-- **`pwd -W` is refused though the usage offers it** (found 2026-10-07): `pwd -W` says
-  "-W: invalid option" then "usage: pwd [-LPW]". MSYS2's Bash has `-W` (the Windows
-  path); either take it (cash's paths are Windows paths already) or drop it from the
-  usage.
 - A test in the full suite leaves `x.lnk` in the repository root: a 0-byte named pipe as
   MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
   during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs

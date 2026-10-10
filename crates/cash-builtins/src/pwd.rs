@@ -12,6 +12,10 @@ pub(crate) struct PwdCommand {
     /// Print $PWD if it names the current working directory.
     #[arg(short = 'L', overrides_with = "physical")]
     allow_symlinks: bool,
+
+    /// Print the directory in Windows form, which cash always does (MSYS2 Bash's -W).
+    #[arg(short = 'W')]
+    windows: bool,
 }
 
 impl builtins::Command for PwdCommand {
@@ -33,7 +37,8 @@ impl builtins::Command for PwdCommand {
             cwd = cwd.canonicalize()?.into();
         }
 
-        writeln!(context.stdout(), "{}", cwd.to_string_lossy())?;
+        // The resolved folder comes back as `\\?\C:\…`; cash prints `C:/…` (D3).
+        writeln!(context.stdout(), "{}", cash_win32::path::render(&cwd))?;
 
         Ok(ExecutionResult::success())
     }

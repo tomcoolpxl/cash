@@ -180,6 +180,8 @@ mod process_substitution_words;
 // D48: `ps`, which uutils does not carry.
 mod ps_builtin;
 mod pure_bash_corpus;
+// `pwd -W`, MSYS2 Bash's, and `pwd -P` in cash's spelling.
+mod pwd_forms;
 // `read -t`, `-d`, `-n` and `-s` at a console, which collects a line unless told not to.
 mod read_console;
 mod real_world_tests;
