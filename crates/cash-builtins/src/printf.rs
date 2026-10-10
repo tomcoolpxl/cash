@@ -116,12 +116,28 @@ impl builtins::Command for PrintfCommand {
             )
             .await?;
         } else {
-            format_via_uucore(fmt, &zone, args.iter().cloned(), context.stdout(), &mut say)?;
+            print_formatted(fmt, &zone, args.iter().cloned(), context.stdout(), &mut say)?;
             context.stdout().flush()?;
         }
 
         Ok(status)
     }
+}
+
+/// `format_via_uucore` into `stdout`, each pass of the format held and written at once,
+/// as bash's printf writes a line: a program reading a pipe a write at a time sees
+/// `v\n` whole, not `v` and then an empty line.
+fn print_formatted(
+    format_string: &str,
+    zone: &Zone,
+    args: impl Iterator<Item = impl Into<OsString>>,
+    stdout: impl Write,
+    before_pass: &mut dyn FnMut(usize) -> Result<(), Error>,
+) -> Result<(), cash_core::Error> {
+    let mut out = std::io::BufWriter::with_capacity(64 * 1024, stdout);
+    format_via_uucore(format_string, zone, args, &mut out, before_pass)?;
+    out.flush()?;
+    Ok(())
 }
 
 fn has_count_spec(fmt: &str) -> bool {
@@ -690,6 +706,45 @@ mod tests {
     #[test]
     fn test_sprintf_with_cycles() -> Result<()> {
         assert_eq!(sprintf_via_uucore("%s|", ["x", "y"].iter())?, "x|y|");
+
+        Ok(())
+    }
+
+    /// The writes a writer was given, each kept apart.
+    struct Writes(Vec<Vec<u8>>);
+
+    impl Write for &mut Writes {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.push(buf.to_vec());
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_pass_of_the_format_is_one_write() -> Result<()> {
+        let mut writes = Writes(Vec::new());
+        print_formatted(
+            r"v\n",
+            &Zone::Local,
+            std::iter::empty::<&str>(),
+            &mut writes,
+            &mut |_| Ok(()),
+        )?;
+        assert_eq!(writes.0, [b"v\n".to_vec()]);
+        // Each pass apart, as the messages of a pass come before its output.
+        let mut writes = Writes(Vec::new());
+        print_formatted(
+            r"%s=%d\n",
+            &Zone::Local,
+            ["a", "1", "b", "2"].iter(),
+            &mut writes,
+            &mut |_| Ok(()),
+        )?;
+        assert_eq!(writes.0, [b"a=1\n".to_vec(), b"b=2\n".to_vec()]);
 
         Ok(())
     }

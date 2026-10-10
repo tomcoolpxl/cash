@@ -5,7 +5,8 @@
 # -hp on encrypted headers, and a file that is no RAR archive given to each command.
 #
 # rar reads a pipe a buffer at a time, so `slow` gives the answers a line at a time, a
-# second apart, each in one write (echo's; cash's printf writes a line's end apart).
+# second apart, each in one write (echo's; cash 1.10.0's printf wrote a line's end
+# apart).
 # As in rar_write.sh, `z` keeps standard output and standard error apart
 # and turns CRLF and `\` into LF and `/`. A trial WinRAR's "Evaluation copy" line is kept
 # in the golden file and taken out by the test.

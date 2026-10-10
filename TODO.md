@@ -1033,11 +1033,10 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 ## Found along the way
 
 - **cash's `printf` writes a line's end in a write of its own** (found on 2026-10-09
-  with `rar_passwords.sh`): `printf 'v\n'` into a pipe whose reader is waiting gives it
-  `v`, then `\n` (a Python ReadFile loop showed both, under 1.10.0 and now); `echo v` and
-  `cat` write the line at once, as bash's printf does. A program reading a line per
-  read sees an empty one: Rar.exe took it for a cancelled password and stopped with 255.
-  printf should gather its output and write it once.
+  with `rar_passwords.sh`): done 2026-10-10. `printf 'v\n'` into a pipe whose reader
+  was waiting gave it `v`, then `\n`, and Rar.exe took the empty line for a cancelled
+  password. Each pass of the format is now held and written at once, as bash's printf
+  writes it (a Python reader sees `v\n` whole; unit test in `printf.rs`).
 
 - **WinRAR matches an archived name typed with `/` to nothing** (found on 2026-10-09
   with `rar d`): Rar.exe 7.23 on Windows takes `\` alone between folders in the names
