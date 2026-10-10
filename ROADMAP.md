@@ -29,12 +29,12 @@ Feature work follows the sequence below.
 | 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | **Complete** | Section 16 below; spec D65 |
 | 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, folder history, carapace completions | **Complete** | Section 17 below; spec D59–D63 |
 | 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** (Scoop since 1.1.0; the per-user installer, the portable zip's first-prompt offer and `cash --update` since 1.6.0; winget manifests validated, submission to come) | [Packaging evaluation and decisions](research/packaging-evaluation.md); section 18 below; spec D38, D65 |
-| 19 | Console, clipboard and the remaining small tools: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `xdg-open`, `pbcopy`/`pbpaste`, `watch`, `free`, `nice`/`renice`, `flock`, `nc` | **Complete** (1.5.0, 2026-10-06) | Section 19 below; spec D74; TODO.md phase 21 |
-| 20 | `grep`, `diff` and `cmp`: the standing rule reversed under "install cash, have everything" | **Active** (built 2026-10-06, for 1.7.0) | TODO.md phase 23; spec D76 |
-| 21 | `gzip`, `gunzip` and `zcat` in pure Rust | **Active** (built 2026-10-06, for 1.8.0) | TODO.md phase 24; spec D77 |
-| 22 | Compatibility corners: `/dev/tcp`, `command_not_found_handle`, kept `abbr`, kinder refusals, `getconf`, `locale` | **Active** (built 2026-10-06, for 1.8.0) | TODO.md phase 25; spec D77 |
-| 23 | Archive and compression tools on shared parts: `bzip2`, `xz`, `zstd` and their names, `tar`, `zip`/`unzip`/`zipinfo` | **Done** (2026-10-07: the compressors, `tar`, and `zip`, `unzip`, `zipinfo`) | [Design](research/archive-tools-design.md); TODO.md phases 29–30; spec D78 |
-| 24 | The prompt and paths: a Ctrl-R history picker, the `z` folder jump, every path spelling everywhere, and a guard on size and speed | **Active** (decided 2026-10-10) | [Design](research/prompt-history-and-jump-design.md); TODO.md phase 34; spec D79, D80 |
+| 19 | Console, clipboard and the remaining small tools: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `xdg-open`, `pbcopy`/`pbpaste`, `watch`, `free`, `nice`/`renice`, `flock`, `nc` | **Complete** (1.5.0, 2026-10-06) | Section 19 below; spec D74; DONE.md phase 21 |
+| 20 | `grep`, `diff` and `cmp`: the standing rule reversed under "install cash, have everything" | **Complete** (1.7.0, 2026-10-06) | DONE.md phase 23; spec D76 |
+| 21 | `gzip`, `gunzip` and `zcat` in pure Rust | **Complete** (1.8.0, 2026-10-06) | DONE.md phase 24; spec D77 |
+| 22 | Compatibility corners: `/dev/tcp`, `command_not_found_handle`, kept `abbr`, kinder refusals, `getconf`, `locale` | **Complete** (1.8.0, 2026-10-06) | DONE.md phase 25; spec D77 |
+| 23 | Archive and compression tools on shared parts: `bzip2`, `xz`, `zstd` and their names, `tar`, `zip`/`unzip`/`zipinfo` | **Complete** (1.9.0, 2026-10-07: the compressors, `tar`, and `zip`, `unzip`, `zipinfo`) | [Design](research/archive-tools-design.md); DONE.md phases 29–30; spec D78 |
+| 24 | The prompt and paths: a Ctrl-R history picker, the `z` folder jump, every path spelling everywhere, and a guard on size and speed | **Complete** (1.12.0, 2026-10-10) | [Design](research/prompt-history-and-jump-design.md); DONE.md phase 34; spec D79, D80 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -482,7 +482,7 @@ Work, in order:
    made from Scoop's bucket template, carries `bucket/cash.json` at 1.1.0, and its
    Excavator workflow updates it from new releases. `scoop bucket add tomcoolpxl
    https://github.com/tomcoolpxl/scoop-bucket` then `scoop install cash` installs it.
-7. **Decided 2026-10-06, next** (TODO.md phase 22, spec D75): the Inno Setup per-user
+7. **Decided 2026-10-06, next** (DONE.md phase 22, spec D75): the Inno Setup per-user
    installer on the releases page, with Scoop's versioned layout and `current` junction,
    the tool links on PATH by default, `cash --update` for upgrades on request, and the
    winget submission from that installer. Unsigned; signing is postponed (no paid
@@ -505,7 +505,7 @@ the [BusyBox gap analysis](research/busybox-gap-analysis.md) adopted its tier 1 
 program in System32, and each either has to agree with something cash owns (the console
 modes, encoding, the clipboard, the descriptor table, process ids, command resolution)
 or is cheap and collides with nothing. Chosen by the user on 2026-10-06; the decisions
-are spec D74 and the plan TODO.md phase 21.
+are spec D74 and the plan DONE.md phase 21.
 
 1. `tput` and `stty`: the console, with ncurses' sequences and GNU's words;
 2. `iconv`: every Windows code page, glibc's options and messages;

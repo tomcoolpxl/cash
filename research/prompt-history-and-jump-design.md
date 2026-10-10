@@ -3,7 +3,7 @@
 Asked by the user on 2026-10-10, after 1.11.0: what they like most in cash is that it is
 small and fast, that every way of writing a path works, and the prompt's helpers
 (Alt-←/→, Alt-E). Four things were proposed in that spirit and all four asked for, then
-`rm -rf` on junctions (TODO.md phase 34). This is the design; the choices the user made by pick list
+`rm -rf` on junctions (DONE.md phase 34). This is the design; the choices the user made by pick list
 on 2026-10-10 are marked (spec D79, D80).
 
 ## 1. Ctrl-R: the history picker (D79)

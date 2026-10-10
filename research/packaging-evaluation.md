@@ -20,7 +20,7 @@ the user, by pick list:
 
 Not asked, so left as it is: x64 only; an ARM64 build waits for a machine to test it on.
 
-**Second round, 2026-10-06** (spec D75, TODO.md phase 22), chosen by the user by pick
+**Second round, 2026-10-06** (spec D75, DONE.md phase 22), chosen by the user by pick
 list, with Velopack and a per-user MSI as the alternatives weighed:
 
 | Question | Decision |

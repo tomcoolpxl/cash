@@ -2520,7 +2520,7 @@ and a broot config of its own). After two weeks they want it in cash, as a picke
 only: broot takes up to two seconds to open, being a separate program that loads its
 config and builds its tree, and it does far more than pick a path. Built in, the picker
 is drawn by the shell that is already running, from one folder read. Every choice
-below is the user's, made by pick lists on 2026-10-05 (TODO.md phase 20).
+below is the user's, made by pick lists on 2026-10-05 (DONE.md phase 20).
 
 **Where and how it draws.** Inline, below the command line, which stays visible with
 the scrollback above it, as fzf's `--height` does: 40% of the window, at least 8 rows,
@@ -2594,7 +2594,7 @@ mouse input.
 
 ### D74 — Console, clipboard and the remaining small tools
 
-**Status: asked for by the user on 2026-10-06** (TODO.md phase 21), after a second look at
+**Status: asked for by the user on 2026-10-06** (DONE.md phase 21), after a second look at
 what a clean Windows machine with cash still lacks. The first look
 ([the BusyBox gap analysis](research/busybox-gap-analysis.md), 2026-09-25) adopted the
 process tools, `getopt`, `rev`, `clear`, `reset`, `bc` and `ping`, and left its tier 2
@@ -2655,7 +2655,7 @@ analysis lists as not applicable.
 
 ### D75 — A per-user installer, `cash --update`, and winget
 
-**Status: chosen by the user on 2026-10-06**, by pick list (TODO.md phase 22). The aim is
+**Status: chosen by the user on 2026-10-06**, by pick list (DONE.md phase 22). The aim is
 that installing cash gives a complete native Bash with the tools scripts need, without
 Scoop. Scoop remains a channel (D38, D65, the packaging evaluation); the installer is the
 second, on the releases page; winget is made from the installer.
@@ -2735,7 +2735,7 @@ most common failure on a bare machine and `diff` the second.
 
 ### D78 — Archive and compression tools, on shared parts
 
-**Status: chosen by the user on 2026-10-07**, by pick lists (TODO.md phases 26 to 30;
+**Status: chosen by the user on 2026-10-07**, by pick lists (DONE.md phases 26 to 30;
 the design is `research/archive-tools-design.md`). Reopens D77's "xz and bzip2 stay with
 Windows' `tar.exe`". Asked for first as `tar` alone; the user then asked for "a common
 thing" for tar, zip and the rest, designed before anything is built.
@@ -2776,7 +2776,7 @@ thing" for tar, zip and the rest, designed before anything is built.
 
 ### D77 — `gzip`, `gunzip` and `zcat`, and the compatibility corners
 
-**Status: chosen by the user on 2026-10-06**, by pick list (TODO.md phases 24 and 25).
+**Status: chosen by the user on 2026-10-06**, by pick list (DONE.md phases 24 and 25).
 
 - **The gzip family only**, pure Rust (`flate2`/`miniz_oxide`), with GNU gzip's
   interface and messages, oracle-tested; `xz` and `bzip2` stay with Windows' `tar.exe`,
@@ -2792,7 +2792,7 @@ thing" for tar, zip and the rest, designed before anything is built.
 
 ### D79 — Ctrl-R: a history picker
 
-**Status: chosen by the user on 2026-10-10**, by pick list (TODO.md phase 34;
+**Status: chosen by the user on 2026-10-10**, by pick list (DONE.md phase 34;
 `research/prompt-history-and-jump-design.md`).
 
 Ctrl-R opens a list of the history below the command line, drawn as Alt-E's picker
@@ -2809,7 +2809,7 @@ Bash's reverse search stays a Readline function `bind` can put back on a key.
 
 ### D80 — `z`: the folder jump
 
-**Status: chosen by the user on 2026-10-10**, by pick list (TODO.md phase 34;
+**Status: chosen by the user on 2026-10-10**, by pick list (DONE.md phase 34;
 `research/prompt-history-and-jump-design.md`).
 
 Every change of folder counts a visit to the folder arrived in, kept across sessions in

@@ -25,7 +25,7 @@ Q3, Q5–Q8 concern tools that were not adopted in this round and stay open.
 
 A second look at this machine, with Git for Windows' `usr/bin` off the Windows `PATH`
 and BusyBox uninstalled, resolved about 90 candidate names under cash. The user chose to
-build the tier-2 tools below (TODO.md phase 21, spec D74, ROADMAP item 19), plus four
+build the tier-2 tools below (DONE.md phase 21, spec D74, ROADMAP item 19), plus four
 names this analysis did not measure: `tput` (`tput setaf` 130k shell-script hits on
 GitHub, `tput cols` 27k), `column` (`column -t` 27k), `xdg-open` (79k) and `pbcopy` (39k).
 

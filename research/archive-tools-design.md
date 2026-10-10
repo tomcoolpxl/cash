@@ -1,6 +1,6 @@
 # Archive and compression tools: one design
 
-Status: **decided by the user on 2026-10-07** (section 7), nothing built yet; TODO.md
+Status: **decided by the user on 2026-10-07** (section 7), built for 1.9.0; DONE.md
 phases 26 to 30 and spec D78. It replaced a tar-only plan with one design for the whole
 family, as the user asked: "try to make a common thing … think about this properly."
 
