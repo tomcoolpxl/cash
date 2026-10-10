@@ -1304,6 +1304,15 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    Ctrl-C, and keys (`it/sudo_in_terminal.rs`, ignored in the suites as they ask UAC).
    Not built: the environment through a handle; `-E` still passes `NAME=value` words.
 
+8. **`sudo -u USER` and `su USER` without gsudo** (the user, 2026-10-11, by pick list;
+   built the same day, its probes with a second account left for later): cash asks
+   USER's password at the console, echo off, lets USER open its process, and starts the
+   `--sudo-attach` cash as USER with `CreateProcessWithLogonW`, which takes the terminal
+   as the elevated one does (`research/sudo-in-terminal-design.md` section 8). gsudo and
+   `runas` are no longer used; `cash_win32::gsudo` is gone; `sudo -v`, `-k` and `-K` are
+   kept for scripts with no cache behind them. Test:
+   `sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing`.
+
 ---
 
 ## Found along the way, done

@@ -173,12 +173,8 @@ pub fn maybe_dispatch() -> Option<i32> {
         ));
     }
 
-    if name_str == SUDO_ELEVATE {
-        let Some(own) = self_exe() else {
-            eprintln!("sudo: cash cannot find its own executable");
-            return Some(1);
-        };
-        return Some(cash_win32::elevate::run_elevated_here(own, args));
+    if name_str == SUDO_ELEVATE || name_str == SUDO_AS {
+        return Some(sudo_caller(name_str, args));
     }
 
     // The elevated side: the caller's terminal taken, then the command it carries, a
@@ -267,6 +263,32 @@ const SUDO_OWNER: &str = "--sudo-owner";
 /// [`cash_win32::elevate::run_elevated_here`]: `cash --invoke-bundled --sudo-elevate
 /// COMMAND...`, where COMMAND is a bundled command line, `--sudo-owner SID PROGRAM ...`.
 const SUDO_ELEVATE: &str = "--sudo-elevate";
+
+/// The caller's side of `sudo -u USER` and `su USER`,
+/// [`cash_win32::elevate::run_as_user_here`]: `cash --invoke-bundled --sudo-as WHO USER
+/// COMMAND...`, COMMAND as for [`SUDO_ELEVATE`].
+const SUDO_AS: &str = "--sudo-as";
+
+/// The caller's side of `sudo`, [`SUDO_ELEVATE`] or [`SUDO_AS`]: its status.
+fn sudo_caller(name: &str, args: &[OsString]) -> i32 {
+    let Some(own) = self_exe() else {
+        eprintln!("sudo: cash cannot find its own executable");
+        return 1;
+    };
+    if name == SUDO_ELEVATE {
+        return cash_win32::elevate::run_elevated_here(own, args);
+    }
+    let [who, user, command @ ..] = args else {
+        eprintln!("cash: {DISPATCH_FLAG} {SUDO_AS} requires a name, a user and a command");
+        return exit_code(ExecutionExitCode::InvalidUsage);
+    };
+    cash_win32::elevate::run_as_user_here(
+        own,
+        &who.to_string_lossy(),
+        &user.to_string_lossy(),
+        command,
+    )
+}
 
 /// The elevated side, [`cash_win32::elevate::take_callers_terminal`]: `cash
 /// --invoke-bundled --sudo-attach PID ATTACH IN OUT ERR DIR COMMAND...`.

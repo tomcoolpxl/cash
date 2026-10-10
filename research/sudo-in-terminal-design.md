@@ -162,3 +162,42 @@ the mechanism of section 3 built into a debug cash (`cash_win32::elevate`):
 
 Not built yet: the environment through a handle (section 3, item 4). `-E` still passes
 the exported variables as `NAME=value` words, within Windows' 32,000 characters.
+
+## 8. As another account, without gsudo
+
+Asked for by the user on 2026-10-11, by pick list: `sudo -u USER` and `su USER` by cash
+itself too, so gsudo is not needed for anything; built at once, the probes with a second
+account left for later.
+
+gsudo starts its own helper as USER with USER's password, read at the console
+(`ProcessFactory.StartWithCredentials`, .NET's `Process.Start` with a user name, which is
+`CreateProcessWithLogonW`), and the helper attaches to the caller's console. cash does
+the same with the mechanism of section 3:
+
+1. `sudo` starts `cash --invoke-bundled --sudo-as WHO USER COMMAND...`, a program like any
+   other to the shell.
+2. That cash asks `Password for USER: ` on the console (`CONIN$` and `CONOUT$`, as Unix's
+   `su` asks on the terminal whatever is redirected), echo off; Ctrl-C there ends it with
+   130 and runs nothing. Without a console, `sudo: a terminal is required to read the
+   password`.
+3. It lets USER open its process (an entry in the process's own access list for
+   `PROCESS_DUP_HANDLE`, the two query rights and `SYNCHRONIZE`), as another account may
+   not open it otherwise; the entry goes with the process.
+4. It starts the `--sudo-attach` cash as USER with `CreateProcessWithLogonW`
+   (`LOGON_WITH_PROFILE`, `CREATE_NO_WINDOW`, USER's own environment), in the shell's
+   folder, and wipes the password. That cash takes the terminal and handles as in
+   section 3 and runs the command under `--sudo-owner -`, which changes no owner. An
+   administrator's account gets its filtered token: its usual level, as gsudo's `-i
+   Medium` gave it.
+5. The status comes back as the elevated command's does.
+
+Limits: Windows takes a command line of 1,024 characters here, which `-E` can pass;
+USER must be able to read cash.exe and enter the folder (both refused with a message);
+a program with windows, run as USER, may not show, as USER has no rights on this
+desktop (gsudo has the same limit).
+
+Seen so far: the prompt, and Ctrl-C at it
+(`sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing`, in the suites). Not seen
+yet: a command run as a second account
+(`sudo_in_terminal::sudo_u_runs_the_command_as_the_account`, ignored; it needs the
+account and its password).

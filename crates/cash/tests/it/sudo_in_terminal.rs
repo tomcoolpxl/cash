@@ -2,7 +2,7 @@
 //! elevated cash takes the console of the cash that asked, so the command gets the keys
 //! typed at it and the Ctrl-C, as Unix's `sudo` gives them through the terminal.
 //!
-//! Each test asks UAC, which someone has to approve: they are ignored in the suites and
+//! The tests that ask UAC, which someone has to approve, are ignored in the suites and
 //! run by hand, `--run-ignored only -E 'test(/^sudo_in_terminal::/)'`.
 
 #![allow(
@@ -58,6 +58,74 @@ fn ends(session: &mut ConPtySession) -> u32 {
         );
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// `sudo -u USER` asks USER's password at the console, and Ctrl-C there runs nothing, as
+/// Unix's `su` ends. The test's own account, whose password is never typed.
+#[test]
+fn ctrl_c_at_the_password_prompt_runs_nothing() {
+    let user = std::env::var("USERNAME").expect("USERNAME is set on Windows");
+    let (mut session, dir) = start(
+        "password",
+        &format!("sudo -u '{user}' cmd /c 'echo ran> ran.txt'\necho \"rc=$?\" >> out.txt\n"),
+    );
+    session
+        .expect(&format!("Password for {user}:"), AFTER)
+        .expect("sudo asks the password at the console");
+    session.send("\x03").expect("type Ctrl-C");
+    let status = ends(&mut session);
+
+    let out = std::fs::read_to_string(dir.join("out.txt")).unwrap_or_default();
+    assert!(!dir.join("ran.txt").exists(), "the command ran");
+    assert!(
+        status == 130 || out.trim_end() == "rc=130",
+        "status {status}, out {out:?}:\n{}",
+        session.screen().text()
+    );
+}
+
+/// `sudo -u USER` runs the command as USER, in this terminal, with the redirection the
+/// shell made. Needs an account to run as: its name in `CASH_TEST_USER` and its password in
+/// `CASH_TEST_PASSWORD`, which the test types at the prompt. That account must be able to
+/// read the cash under test, which lies in your profile:
+/// `icacls target\debug\cash.exe /grant NAME:RX` lets it. The command runs in
+/// `C:\Users\Public`, where every account may be.
+#[test]
+#[ignore = "needs a second account and its password"]
+fn sudo_u_runs_the_command_as_the_account() {
+    let (Ok(user), Ok(password)) = (
+        std::env::var("CASH_TEST_USER"),
+        std::env::var("CASH_TEST_PASSWORD"),
+    ) else {
+        eprintln!("skipped: CASH_TEST_USER and CASH_TEST_PASSWORD name no account");
+        return;
+    };
+    let (mut session, dir) = start(
+        "as-user",
+        &format!(
+            r#"here=$PWD; cd C:/Users/Public
+sudo -u '{user}' cmd /c 'echo %USERNAME%' > "$here/who.txt"
+echo "rc=$?" >> "$here/out.txt"
+"#
+        ),
+    );
+    session
+        .expect(&format!("Password for {user}:"), AFTER)
+        .expect("sudo asks the password at the console");
+    session
+        .send(&format!("{password}\r"))
+        .expect("type the password");
+    let status = ends(&mut session);
+
+    let out = std::fs::read_to_string(dir.join("out.txt")).unwrap_or_default();
+    let who = std::fs::read_to_string(dir.join("who.txt")).unwrap_or_default();
+    let name = user.rsplit('\\').next().unwrap_or(&user);
+    assert_eq!(
+        (status, out.trim_end(), who.trim_end().to_lowercase()),
+        (0, "rc=0", name.to_lowercase()),
+        "{}",
+        session.screen().text()
+    );
 }
 
 #[test]

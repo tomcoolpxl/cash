@@ -16,19 +16,19 @@ C:/Windows/System32/drivers/etc/hosts`.
   exported variables go with it.
 - `-n`: fail at once with `sudo: a password is required` when approval would be asked
   for, unless the shell is elevated.
-- `-v` opens gsudo's credentials cache, which `-u` goes through; `-k` and `-K` close it
-  (`-k COMMAND` closes it, then runs the command).
-- `-l`: who you are, whether you are an administrator, what elevates here, the cache,
-  and whether other accounts can run `cash.exe`.
+- `-v`, `-k` and `-K` are kept for scripts: there is no credentials cache, as UAC asks
+  for each elevation (`-k COMMAND` runs the command).
+- `-l`: who you are, whether you are an administrator, what elevates here, and whether
+  other accounts can run `cash.exe`.
 - `-e FILE...` is `sudoedit`. `-h` shows the usage. Any other option is refused.
 
 ## What runs, and what elevates it
 
 cash elevates the command itself, in this terminal: UAC asks each time, and the command
 gets this terminal's keys, output and Ctrl-C, redirections and pipes work, and its status
-comes back (see `help elevation`). No other tool is needed. With `-u`, gsudo runs the
-command as that account where it is installed; else Windows' `runas` starts it in a new
-window.
+comes back (see `help elevation`). With `-u USER`, cash asks USER's password at the
+console, not shown, and runs the command as USER the same way. No other tool is
+needed.
 
 cash chooses what runs, as the shell would: `sudo ls` is cash's `ls` in an elevated cash,
 `sudo bash` is cash (Windows' `sudo.exe` found WSL's `bash.exe`), and a script or a batch
@@ -43,10 +43,8 @@ that is already elevated, the command simply runs here.
   files and ~ are theirs`.
 - Declining UAC's prompt, or leaving it until it gives up, runs nothing: `sudo: not
   run: the request to run it as an administrator was declined`, status 1.
-- Where the command is started but not waited for (`runas`, for `-u` without gsudo), sudo
-  says so: the status says only that it started, not how it ended.
 - In a folder on a mapped network drive, the elevated command still finds it, by the
-  folder's network path; gsudo maps the drives. An elevated process has none of your
+  folder's network path. An elevated process, or another account's, has none of your
   drive letters.
 - `sudo -u USER` is refused before any password is asked when that account cannot read
   the program: cash installed under `~/scoop` is readable only by you and the

@@ -33,10 +33,9 @@ which attaches to this terminal and takes the command's redirections and pipes a
 are: the command reads the keys you type, prints here, gets your Ctrl-C, and its status
 comes back. Declining the prompt runs nothing, and `sudo` says so.
 
-As another account (`sudo -u USER`, `su USER`), gsudo runs the command where it is
-installed (`scoop install gsudo`, `winget install gerardog.gsudo`), with its credentials
-cache (`sudo -v` opens it, `sudo -k` closes it); without gsudo, Windows' `runas` starts
-it in a new window, not waited for, and `sudo` says so.
+As another account (`sudo -u USER`, `su USER`), cash asks USER's password at the
+console, not shown, and runs the command as USER the same way, at that account's
+usual level. There is no credentials cache: UAC, or the password, is asked each time.
 
 `sudo -l` says how this machine elevates, and `cash doctor` reports it too.
 
@@ -61,7 +60,7 @@ and ~ are theirs`.
 
 Drive letters are mapped per logon, and an elevated process has none of yours. In a
 folder on a mapped drive, the elevated command starts in the folder's network path
-(`\\server\share\...`); gsudo maps the drives for `sudo -u`.
+(`\\server\share\...`).
 
 ## What escapes cash's job
 
@@ -75,8 +74,8 @@ warning.
 
 ## Other accounts
 
-Running as another account needs that account's password (gsudo asks for it, or Windows'
-`runas` in a new window), and that account must be able to read the program. cash
+Running as another account needs that account's password, which cash asks at the
+console, and that account must be able to read the program. cash
 installed under `~/scoop` is readable only by you and the administrators, so `su USER`
 and `sudo -u USER` refuse at once, before any password, and say so. `scoop install -g
 cash`, or an install under Program Files, makes it readable to every account; `sudo -l`

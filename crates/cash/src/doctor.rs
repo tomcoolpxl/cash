@@ -129,7 +129,7 @@ pub fn run() -> u8 {
     check_program_shadows(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_platform(&mut findings);
     check_carapace(&mut findings, &entries, &pathext, &cwd);
-    check_sudo(&mut findings, &entries, &pathext, &cwd);
+    check_sudo(&mut findings);
     check_session(&mut findings);
     let header = install_header(&mut findings);
 
@@ -468,36 +468,13 @@ fn check_own_path(findings: &mut Vec<Finding>) {
     });
 }
 
-/// What cash's `sudo` elevates through: cash itself, in this terminal, UAC asking each
-/// time; gsudo, where it is installed, for `sudo -u USER` and its credentials cache.
-fn check_sudo(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[String], cwd: &Path) {
+/// What cash's `sudo` runs through: cash itself, in this terminal, UAC asking each time,
+/// or another account's password for `sudo -u USER`.
+fn check_sudo(findings: &mut Vec<Finding>) {
     findings.push(Finding::ok(
-        "sudo elevates in this terminal by itself; UAC asks each time",
+        "sudo elevates, and runs as another account, in this terminal by itself",
     ));
-    if let Some(gsudo) = resolve("gsudo", entries, pathext, cwd) {
-        check_gsudo(findings, gsudo.target());
-    }
     check_sudo_accounts(findings);
-}
-
-/// gsudo, which `sudo -u USER` goes through, with its credentials cache: while a session
-/// is open, what it runs runs without asking. The cache belongs to the shell that opened
-/// it, so `cash doctor`, a process of its own, counts the sessions rather than asking
-/// whether it may use one.
-fn check_gsudo(findings: &mut Vec<Finding>, gsudo: &Path) {
-    let sessions = cash_win32::gsudo::status(gsudo, "CacheSessionsCount")
-        .and_then(|count| count.parse::<u32>().ok());
-    findings.push(Finding::ok("sudo -u USER through gsudo, in this terminal"));
-    if let Some(count) = sessions.filter(|count| *count > 0) {
-        findings.push(Finding::note(
-            format!(
-                "gsudo's credentials cache is open ({count} session{}): sudo -u runs without \
-                 asking in the shell that opened it",
-                if count == 1 { "" } else { "s" }
-            ),
-            Some(format!("{} closes it", unbroken("sudo -k"))),
-        ));
-    }
 }
 
 /// What `sudo` and `su` depend on beyond the tool: whether this account is an

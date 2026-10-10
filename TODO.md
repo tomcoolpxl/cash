@@ -40,11 +40,24 @@ What the phases now in DONE.md left open, each where its phase says more.
   taking it out is a change of its own.
 - **The 2024 edition for `cash-reedline` and crossterm** (phase 34): both keep the 2021
   edition they came with.
+- **`sudo -u USER` not yet run as a second account** (phase 35): built, and the prompt
+  and Ctrl-C at it tested, but no command has run as another account yet.
+  `sudo_in_terminal::sudo_u_runs_the_command_as_the_account` (ignored) does it with an
+  account named in `CASH_TEST_USER`, its password in `CASH_TEST_PASSWORD`, and read
+  access to the cash under test; then check a program with windows, which may not show
+  without rights on the desktop.
 - **`sudo -E`'s variables through a handle** (phase 35,
   `research/sudo-in-terminal-design.md` section 3 item 4): they still go as `NAME=value`
   words on the elevated cash's command line, within Windows' 32,000 characters; an
   anonymous pipe the elevated cash takes with `DuplicateHandle`, as it takes the
   standard handles, would lift the limit.
+- **UAC's prompt for `sudo` often only blinks in the taskbar** (phase 35, 2026-10-10):
+  when the asking process is not in front, Windows shows the consent dialog as a
+  flashing shield, and the user missed three prompts that way; left long enough, a
+  prompt counts as declined. gsudo (MIT) brings it forward: for a second after asking,
+  `FindWindow("Credential Dialog Xaml Host")` every 100 ms, then `SetForegroundWindow`
+  (`src/gsudo/Helpers/UACWindowFocusHelper.cs`). Do the same in
+  `cash_win32::elevate::run_elevated_here`.
 - **A bundled tool outlived its script and its pseudo console** (2026-10-10): after a
   `sudo_in_terminal` probe timed out and dropped its pseudo console, the script's last
   command, `cash.exe --invoke-bundled cat got.txt` (PID 26528, its parent gone, no

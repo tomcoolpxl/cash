@@ -42,8 +42,6 @@ pub mod exit;
 pub mod filelock;
 pub mod fold;
 pub mod fs;
-/// What gsudo reports of itself: its credentials cache.
-pub mod gsudo;
 mod handle;
 pub mod handles;
 /// ICMP echo through the IP Helper API, for `ping`.

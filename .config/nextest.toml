@@ -58,7 +58,7 @@ filter = 'package(crossterm) and test(/_winapi/)'
 test-group = 'console-buffer'
 
 [[profile.default.overrides]]
-filter = 'binary(conpty-interactive-tests) or (binary(it) and test(/^(read_console|ctrl_c|f1_help)::/))'
+filter = 'binary(conpty-interactive-tests) or (binary(it) and test(/^(read_console|ctrl_c|f1_help|sudo_in_terminal)::/))'
 test-group = 'conpty'
 
 # Tests that are slow by nature, rather than stuck: each gets three periods.

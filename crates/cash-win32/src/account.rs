@@ -105,7 +105,7 @@ impl Sid {
     }
 
     /// The SID as the pointer Windows' calls take; they only read through it.
-    const fn as_psid(&self) -> PSID {
+    pub(crate) const fn as_psid(&self) -> PSID {
         self.words.as_ptr().cast_mut().cast()
     }
 }

@@ -8,7 +8,7 @@
 //! | `detach` | D6's escape hatch: start something meant to outlive the shell |
 //! | `elevate` | So cash sees a UAC elevation rather than having it happen behind its back, and can register it for D42's tracking |
 //! | `start` | The Windows `xdg-open` |
-//! | `sudo` | A command elevated in this terminal, through gsudo or Windows' `sudo`, with cash choosing what runs |
+//! | `sudo` | A command elevated, or run as another account, in this terminal, by cash itself |
 //! | `su` | Unix's `su`: a shell elevated, or as another account, through what `sudo` uses |
 //! | `sudoedit` | Unix's `sudoedit`: your editor on copies, the writing back elevated |
 
@@ -312,21 +312,21 @@ const SUDO_HELP: &str = "\
 Options:
   -i, --login             a login shell in the account's home folder, or COMMAND run by one
   -s, --shell             a shell in this folder, or COMMAND run by one
-  -u, --user USER         as USER, at that account's usual level (gsudo asks the password);
+  -u, --user USER         as USER, at that account's usual level (USER's password is asked);
                           `-u root` is elevation
   -E, --preserve-env      the shell's exported variables go with the command
   -n, --non-interactive   fail at once when approval would be asked for
   -e, --edit FILE...      edit files as `sudoedit` does
   -l, --list              who you are, and how sudo elevates here
-  -v, --validate          open gsudo's credentials cache, which `-u` goes through
-  -k, --reset-timestamp   close gsudo's cache; with COMMAND, then run it
-  -K, --remove-timestamp  close gsudo's cache
+  -v, --validate          kept for scripts: there is no credentials cache to open
+  -k, --reset-timestamp   kept for scripts: nothing to close; with COMMAND, then run it
+  -K, --remove-timestamp  kept for scripts: nothing to close
   -h, --help              this help
   NAME=value              a variable for the command
 
-cash elevates the command itself, in this terminal: UAC asks each time, and the command
-gets this terminal's keys, output and Ctrl-C, and the status comes back. gsudo, where it
-is installed, serves `-u USER` and its credentials cache (`-v`, `-k`). What runs is what
+cash runs the command itself, in this terminal: UAC asks each time, or with `-u` USER's
+password, and the command gets this terminal's keys, output and Ctrl-C, and the status
+comes back. No other tool is needed. What runs is what
 the shell would run: `sudo ls` is cash's `ls`, `sudo bash` is cash, a script runs through
 cash. A file an elevated command creates is yours when you approve with your own
 account. In a shell already elevated, the command runs here.
@@ -341,8 +341,8 @@ Examples:
 
 /// Run a command elevated, or as another user, in this terminal, as a Unix `sudo` does.
 ///
-/// cash elevates the command itself, in this terminal (`cash_win32::elevate`); gsudo, where
-/// it is installed, serves `-u USER`. cash chooses what runs, as the shell would: `sudo bash` is cash,
+/// cash runs the command itself, elevated or as another account, in this terminal
+/// (`cash_win32::elevate`). cash chooses what runs, as the shell would: `sudo bash` is cash,
 /// where `sudo.exe` looked `bash` up itself and found WSL's; `sudo ls` is cash's `ls`,
 /// run by an elevated cash, where there is no `ls.exe` to run; a batch file or a script
 /// goes through cash too. A function is not run, as a Unix `sudo` runs none. In a shell
@@ -626,8 +626,8 @@ fn sudo_itself<SE: cash_core::ShellExtensions>(
         writeln!(context.stderr(), "sudo: -K takes no command")?;
         return Ok(Some(ExecutionResult::new(1)));
     }
+    // No cache to close; `-k COMMAND` still runs the command.
     if options.remove || options.reset {
-        reset_cache(context.shell);
         if words.is_empty() && !(options.validate || options.login || options.shell) {
             return Ok(Some(ExecutionResult::success()));
         }
@@ -661,41 +661,23 @@ fn login_words(cash: &str, command: &[String]) -> Vec<String> {
     all
 }
 
-/// `sudo -k`: gsudo's credentials cache closed, every session of it; without gsudo there
-/// is none, and nothing to do.
-fn reset_cache(shell: &cash_core::Shell<impl cash_core::ShellExtensions>) {
-    if let Some(gsudo) = shell.resolve_command_in_path("gsudo") {
-        cash_win32::gsudo::reset(&gsudo);
-    }
-}
-
-/// `sudo -v`: gsudo's credentials cache opened for this shell, which asks for approval
-/// once; it serves what goes through gsudo, `sudo -u`. cash's own elevation keeps none.
+/// `sudo -v`: there is no credentials cache, so nothing to open; kept, as scripts call it
+/// before the commands they elevate.
 fn validate<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     elevated: bool,
 ) -> Result<ExecutionResult, cash_core::Error> {
-    if elevated {
-        return Ok(ExecutionResult::success());
+    if !elevated {
+        writeln!(
+            context.stderr(),
+            "sudo: there is no credentials cache: UAC asks for each elevation"
+        )?;
     }
-    if let Some(gsudo) = context.shell.resolve_command_in_path("gsudo") {
-        let gsudo = gsudo.to_string_lossy().into_owned();
-        return run_program(
-            context,
-            &gsudo,
-            "gsudo",
-            &["cache".to_owned(), "on".to_owned()],
-        );
-    }
-    writeln!(
-        context.stderr(),
-        "sudo: there is no credentials cache: UAC asks for each elevation"
-    )?;
     Ok(ExecutionResult::success())
 }
 
-/// `sudo -l`: who you are, whether you are an administrator, what elevates, gsudo's
-/// cache, and whether other accounts can run this cash.
+/// `sudo -l`: who you are, whether you are an administrator, what elevates, and whether
+/// other accounts can run this cash.
 fn list<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
 ) -> Result<ExecutionResult, cash_core::Error> {
@@ -718,16 +700,8 @@ fn list<SE: cash_core::ShellExtensions>(
         None => "unknown",
     };
     writeln!(out, "Administrator: {admin}")?;
-    let route = route(context.shell, false);
+    let route = route(false);
     writeln!(out, "Elevates with: {}", route.describe())?;
-    if let Route::Gsudo(gsudo) = &route {
-        let cache = match cash_win32::gsudo::cache_open(Path::new(gsudo)) {
-            Some(true) => "open: commands run without asking (`sudo -k` closes it)",
-            Some(false) => "closed (`sudo -v` opens it)",
-            None => "unknown",
-        };
-        writeln!(out, "gsudo cache:   {cache}")?;
-    }
     let cash = own_exe();
     let shared = match account::may_execute(Path::new(&cash), None) {
         Some(true) => "runs for every account: `su USER` and `sudo -u USER` can start it",
@@ -748,45 +722,33 @@ fn list<SE: cash_core::ShellExtensions>(
 
 /// What elevates a command here, or runs it as another account.
 enum Route {
-    /// cash itself: an elevated cash that takes this terminal, waited for.
+    /// An elevated cash that takes this terminal, waited for.
     Own,
-    /// gsudo, at this path: another account, in this terminal, waited for.
-    Gsudo(String),
-    /// `runas`, at this path: another account, in a new window, not waited for.
-    Runas(String),
+    /// A cash as another account that takes this terminal, waited for.
+    OwnUser,
 }
 
 impl Route {
     /// Whether the command's end, and its status, come back to the shell.
     const fn waits(&self) -> bool {
-        matches!(self, Self::Own | Self::Gsudo(_))
+        matches!(self, Self::Own | Self::OwnUser)
     }
 
     /// What `sudo -l` says of it.
-    fn describe(&self) -> String {
-        let render = |path: &str| cash_win32::path::render(Path::new(path));
+    const fn describe(&self) -> &'static str {
         match self {
-            Self::Own => "cash itself, in this terminal; UAC asks each time".into(),
-            Self::Gsudo(path) => format!("gsudo ({}), in this terminal", render(path)),
-            Self::Runas(path) => format!("runas ({}), in a new window", render(path)),
+            Self::Own => "cash itself, in this terminal; UAC asks each time",
+            Self::OwnUser => {
+                "cash itself, in this terminal; the account's password is asked each time"
+            }
         }
     }
 }
 
-/// What runs `sudo`'s commands here: cash itself, elevating in this terminal (the user's
-/// pick, 2026-10-10); as another account, gsudo where it is installed, else `runas`.
-fn route(shell: &cash_core::Shell<impl cash_core::ShellExtensions>, as_user: bool) -> Route {
-    if !as_user {
-        return Route::Own;
-    }
-    if let Some(gsudo) = shell.resolve_command_in_path("gsudo") {
-        return Route::Gsudo(gsudo.to_string_lossy().into_owned());
-    }
-    let system32 = shell.env_str("SystemRoot").map_or_else(
-        || r"C:\Windows\System32".to_owned(),
-        |root| format!(r"{root}\System32"),
-    );
-    Route::Runas(format!(r"{system32}\runas.exe"))
+/// What runs `sudo`'s commands here: cash itself, elevated or as another account, in this
+/// terminal (the user's picks, 2026-10-10 and 2026-10-11).
+const fn route(as_user: bool) -> Route {
+    if as_user { Route::OwnUser } else { Route::Own }
 }
 
 /// How [`run_as`] runs a command.
@@ -797,18 +759,6 @@ struct Elevation<'a> {
     preserve_env: bool,
     /// The builtin, for messages.
     who: &'a str,
-}
-
-/// The UNC form of `dir` when it is on a mapped network drive, which an elevated process
-/// does not have: drive letters are mapped per logon.
-fn mapped_drive_unc(dir: &Path) -> Option<String> {
-    let text = dir.to_string_lossy();
-    let on_drive = text.as_bytes().get(1) == Some(&b':');
-    if on_drive && cash_win32::path::is_on_network(dir) {
-        cash_win32::path::universal_name(dir)
-    } else {
-        None
-    }
 }
 
 /// The shell's exported variables as `NAME=value` words, for a cash that exports them
@@ -860,15 +810,13 @@ fn may_run_as<SE: cash_core::ShellExtensions>(
 }
 
 /// Run `target` elevated, or as a user, and give its status, as [`route`] chooses: cash
-/// itself elevated in this terminal, or as a user gsudo, else `runas`.
+/// itself in this terminal, either way.
 ///
-/// gsudo keeps the command in this terminal, runas never. `-d` keeps gsudo from looking at its parent, cash, to decide which
-/// shell should run the command: the command is a program, run as it is. As a user, the
-/// account's own token at its usual level (`-i Medium`), as Unix's `su` and `sudo -u`
-/// give that user's rights, not an administrator's; that account must be able to read
-/// the program. Elevated, the command runs under `cash --invoke-bundled --sudo-owner`,
-/// which makes the files it creates the user's when the user approved with their own
-/// account, and says so when another account approved.
+/// As a user, the account's own token at its usual level, as Unix's `su` and `sudo -u`
+/// give that user's rights, not an administrator's; that account must be able to read the
+/// program. Elevated, the command runs under `cash --invoke-bundled --sudo-owner`, which
+/// makes the files it creates the user's when the user approved with their own account,
+/// and says so when another account approved.
 fn run_as<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     target: &[String],
@@ -882,10 +830,10 @@ fn run_as<SE: cash_core::ShellExtensions>(
         return Ok(ExecutionResult::new(1));
     }
 
-    let route = route(context.shell, how.user.is_some());
+    let route = route(how.user.is_some());
     let mut target = target.to_vec();
-    // UAC gives the elevated cash the account's own environment, and gsudo passes none when
-    // another account approves: the exported variables go as `NAME=value` words.
+    // UAC gives the elevated cash the account's own environment, as does a logon as another
+    // account: the exported variables go as `NAME=value` words.
     if how.preserve_env {
         target = with_assignments(&cash, &exported_assignments(context.shell), &target);
     }
@@ -910,8 +858,6 @@ fn run_as<SE: cash_core::ShellExtensions>(
         return Ok(ExecutionResult::new(1));
     }
 
-    let dir = context.shell.working_dir().to_path_buf();
-    let unc = mapped_drive_unc(&dir);
     match &route {
         // An unelevated cash, started as any program is, asks UAC for an elevated one that
         // takes its terminal and handles (cash_win32::elevate).
@@ -928,27 +874,21 @@ fn run_as<SE: cash_core::ShellExtensions>(
             }
             run_program(context, &own_exe(), "cash", &args)
         }
-        Route::Gsudo(gsudo) => {
-            let mut args = vec!["-d".to_owned()];
-            // The elevated token has none of the user's drive letters; gsudo maps them.
-            if unc.is_some() {
-                args.push("--copyns".to_owned());
-            }
-            if let Some(user) = how.user {
-                args.extend(["-u", user, "-i", "Medium"].map(String::from));
-            }
-            args.extend(target);
-            run_program(context, gsudo, "gsudo", &args)
-        }
-        Route::Runas(runas) => {
+        // The same, with USER's password asked at the console instead of UAC.
+        Route::OwnUser => {
             let user = how.user.unwrap_or_default();
-            writeln!(
-                context.stderr(),
-                "{who}: without gsudo, runas starts it as {user} in a new window, and it is \
-                 not waited for (`scoop install gsudo` keeps it here)"
-            )?;
-            let args = [format!("/user:{user}"), quoted_arguments(&target)];
-            run_program(context, runas, "runas", &args)
+            let mut args = [
+                "--invoke-bundled",
+                "--sudo-as",
+                who,
+                user,
+                "--sudo-owner",
+                "-",
+            ]
+            .map(String::from)
+            .to_vec();
+            args.extend(target);
+            run_program(context, &own_exe(), "cash", &args)
         }
     }
 }
@@ -1199,7 +1139,7 @@ fn edit_files<SE: cash_core::ShellExtensions>(
         let result = run_program(context, &cash, &cash, write_back.get(1..).unwrap_or(&[]))?;
         (result, true)
     } else {
-        let waited = route(context.shell, user.is_some()).waits();
+        let waited = route(user.is_some()).waits();
         let result = run_as(
             context,
             &write_back,
@@ -1284,7 +1224,7 @@ Options:
 
 Without USER, or as root, the shell is this account elevated, as `sudo -s` gives it:
 Windows has no root account and no root password. With USER, it is that account, at its
-usual level, whose password gsudo asks for; that account must be able to read cash.exe
+usual level, whose password is asked for; that account must be able to read cash.exe
 (`scoop install -g cash` installs it where every account can). The shell is a new cash:
 Windows raises no process that is already running.
 
@@ -1299,7 +1239,7 @@ Examples:
 ///
 /// Without a user (or as `root`) the shell is this account elevated, as `sudo -i` gives
 /// it: Windows has no root account and no root password. With one, it is that account,
-/// whose password gsudo asks for. `-`, `-l` or `--login` make it a login shell started in
+/// whose password is asked for. `-`, `-l` or `--login` make it a login shell started in
 /// the account's home folder; `-c COMMAND` runs a command instead of a shell. It reaches
 /// the same tools as `sudo`, and the same limits: an elevated shell or one as another
 /// user is outside cash's job object (D42). The shell is a new cash; the one `su` runs in
