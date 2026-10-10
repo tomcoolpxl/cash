@@ -10,15 +10,17 @@
 //! `runas` verb, which `CreateProcessW` has no equivalent of.
 
 use std::io;
+use std::os::windows::io::{FromRawHandle, OwnedHandle};
 use std::path::Path;
 
 use windows_sys::Win32::System::Com::{
     COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
 };
 use windows_sys::Win32::UI::Shell::{
-    SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, ShellExecuteExW,
+    SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+    ShellExecuteExW,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+use windows_sys::Win32::UI::WindowsAndMessaging::{SW_HIDE, SW_SHOWNORMAL};
 
 use crate::wide::to_wide_nul;
 
@@ -30,7 +32,7 @@ use crate::wide::to_wide_nul;
 /// want a single-threaded apartment, and a thread of the shell's runtime must not be
 /// turned into one.
 pub fn open(target: &str, directory: &Path) -> io::Result<()> {
-    execute(None, target, None, directory)
+    execute(None, target, None, directory, false).map(drop)
 }
 
 /// Starts `program` elevated, through UAC's consent, with `parameters` as the rest of its
@@ -46,16 +48,33 @@ pub fn open(target: &str, directory: &Path) -> io::Result<()> {
 /// * `parameters` - Its arguments, already quoted as the program parses them.
 /// * `directory` - The folder it starts in.
 pub fn run_elevated(program: &str, parameters: &str, directory: &Path) -> io::Result<()> {
-    execute(Some("runas"), program, Some(parameters), directory)
+    execute(Some("runas"), program, Some(parameters), directory, false).map(drop)
+}
+
+/// [`run_elevated`], with the window Windows gives a console program hidden, and the
+/// elevated process's handle given back to wait on and read its status from.
+///
+/// # Errors
+///
+/// The consent was refused (`ERROR_CANCELLED`), or the program could not be started.
+pub fn start_elevated_hidden(
+    program: &str,
+    parameters: &str,
+    directory: &Path,
+) -> io::Result<OwnedHandle> {
+    execute(Some("runas"), program, Some(parameters), directory, true)?
+        .ok_or_else(|| io::Error::other("Windows gave no handle to the elevated process"))
 }
 
 /// `ShellExecuteExW` with `verb` (its default when `None`), on a thread of its own.
+/// `hidden` hides the window of what it starts and asks for its process handle.
 fn execute(
     verb: Option<&str>,
     target: &str,
     parameters: Option<&str>,
     directory: &Path,
-) -> io::Result<()> {
+    hidden: bool,
+) -> io::Result<Option<OwnedHandle>> {
     let verb = verb.map(to_wide_nul);
     let target = to_wide_nul(target);
     let parameters = parameters.map(to_wide_nul);
@@ -63,7 +82,13 @@ fn execute(
     std::thread::Builder::new()
         .name("cash-shell-open".into())
         .spawn(move || {
-            open_on_this_thread(verb.as_deref(), &target, parameters.as_deref(), &directory)
+            open_on_this_thread(
+                verb.as_deref(),
+                &target,
+                parameters.as_deref(),
+                &directory,
+                hidden,
+            )
         })?
         .join()
         .unwrap_or_else(|_| Err(io::Error::other("opening it failed unexpectedly")))
@@ -75,7 +100,8 @@ fn open_on_this_thread(
     target: &[u16],
     parameters: Option<&[u16]>,
     directory: &[u16],
-) -> io::Result<()> {
+    hidden: bool,
+) -> io::Result<Option<OwnedHandle>> {
     let apartment = (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE).cast_unsigned();
     // SAFETY: the reserved pointer is null, as required, and this new thread has no
     // apartment of its own yet.
@@ -83,22 +109,28 @@ fn open_on_this_thread(
 
     let mut info = SHELLEXECUTEINFOW {
         cbSize: u32::try_from(size_of::<SHELLEXECUTEINFOW>()).unwrap_or(u32::MAX),
-        fMask: SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI,
+        fMask: SEE_MASK_NOASYNC
+            | SEE_MASK_FLAG_NO_UI
+            | if hidden { SEE_MASK_NOCLOSEPROCESS } else { 0 },
         lpVerb: verb.map_or(std::ptr::null(), <[u16]>::as_ptr),
         lpFile: target.as_ptr(),
         lpParameters: parameters.map_or(std::ptr::null(), <[u16]>::as_ptr),
         lpDirectory: directory.as_ptr(),
-        nShow: SW_SHOWNORMAL,
+        nShow: if hidden { SW_HIDE } else { SW_SHOWNORMAL },
         ..Default::default()
     };
     // SAFETY: `info` carries its own size, and its strings are NUL-terminated or null and
-    // outlive the call. No process handle is asked for, so none needs closing.
+    // outlive the call.
     let opened = unsafe { ShellExecuteExW(&raw mut info) } != 0;
     // Read before anything else can change the thread's last error.
-    let result = if opened {
-        Ok(())
-    } else {
+    let result = if !opened {
         Err(io::Error::last_os_error())
+    } else if info.hProcess.is_null() {
+        Ok(None)
+    } else {
+        // SAFETY: asked for with `SEE_MASK_NOCLOSEPROCESS`, the handle is this process's
+        // to close, and nothing else owns it.
+        Ok(Some(unsafe { OwnedHandle::from_raw_handle(info.hProcess) }))
     };
 
     if initialized {

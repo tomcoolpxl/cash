@@ -58,7 +58,8 @@ and in the fewest places it can.
 - Elevated and `detach`ed programs, and GUI programs on an orderly exit, outlive cash;
   everything else it started does not. `disown` forgets a job
   but cannot take it out of cash's job object.
-- `sudo`, `su` and `sudoedit` are cash's own, over gsudo, Windows' `sudo` or UAC: there
+- `sudo`, `su` and `sudoedit` are cash's own, elevating in this terminal by themselves
+  (gsudo or `runas` as another account): there
   is no root account, `root` means this account elevated, and an elevated or other
   user's shell is always a new cash, as Windows raises no running process (see
   `help elevation`).

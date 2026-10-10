@@ -33,6 +33,8 @@ pub mod conpty;
 pub mod console;
 pub mod ctrl_z;
 pub mod devices;
+// `sudo` elevating in this terminal by itself: the caller and the elevated cash.
+pub mod elevate;
 pub mod endless;
 pub mod env;
 pub mod exit;

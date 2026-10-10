@@ -60,7 +60,7 @@ fn sudo_refuses_before_asking() {
         out.stderr
     );
     assert!(out.stderr.contains("-K takes no command"), "{}", out.stderr);
-    // Elevated, or with gsudo's cache open, it runs; else it says so at once.
+    // Elevated, it runs; else it says so at once, as UAC asks for each elevation.
     assert!(
         lines.get(3) == Some(&"rc 0") || out.stderr.contains("sudo: a password is required"),
         "{}\n{}",

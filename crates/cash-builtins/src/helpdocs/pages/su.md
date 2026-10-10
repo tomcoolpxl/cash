@@ -20,7 +20,8 @@ elevated; `su USER` gives that account, at its usual level, after its password.
 - The shell is always a new cash (or the `-s` shell): Windows raises no process that is
   already running, so the shell you typed `su` in stays as it was. In a shell that is
   already elevated, `su` starts the new shell here, without asking.
-- `su` goes through what `sudo` uses (gsudo, Windows' sudo, UAC; see `help elevation`),
+- `su` goes through what `sudo` uses (cash's own elevation; gsudo or `runas` as another
+  account; see `help elevation`),
   with the same checks: files created elevated are yours when you approve with your own
   account, and `su USER` is refused at once when USER cannot read `cash.exe`
   (`scoop install -g cash` installs it where every account can).

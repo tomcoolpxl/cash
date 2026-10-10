@@ -1276,6 +1276,34 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    status, in a substitution and a pipeline, and `command not found` with 127 once it is
    unset, are the same.
 
+7. **Candidate: `sudo` elevating in this terminal by itself** (asked for by the user on
+   2026-10-10, not yet chosen): `sudo` is cash's builtin, but the elevation is handed to
+   gsudo, else Windows' own `sudo` (Windows 11, once turned on), else a plain UAC
+   request, which runs the command in a new window that cash does not wait for: no
+   output here and no status. In-terminal elevation is what gsudo adds: an elevated
+   helper that attaches to the caller's console. cash could do it itself: start an
+   elevated copy of `cash.exe` through UAC with a hidden helper argument, which
+   `AttachConsole`s to the calling cash's console (or relays it over a pipe), runs the
+   command there and returns its status, so `sudo CMD` needs no other tool. To find
+   out, by observation: whether an elevated process may attach to an unelevated
+   console on Windows 11 (gsudo's "attached" mode says so); Ctrl-C and the console
+   modes across the two; how the job object (spec D42) sees the elevated helper; and a
+   credentials cache, as `sudo -v` gives with gsudo, if it is wanted at all. Design
+   with a pick list before any code.
+   Done 2026-10-10, designed in `research/sudo-in-terminal-design.md` with the user's
+   picks: cash's own elevation, always (gsudo only for `-u USER` and its cache), and the
+   command reads the terminal. `sudo` starts `cash --invoke-bundled --sudo-elevate`, an
+   ordinary program to the shell, which asks UAC (`ShellExecuteExW`, `runas`, its window
+   hidden) for `cash --invoke-bundled --sudo-attach`; that one attaches to the caller's
+   console, takes its other standard handles with `DuplicateHandle`, changes to its
+   folder, ends when the caller ends, and runs the command under `--sudo-owner` as before.
+   Declined, `sudo: not run: the request to run it as an administrator was declined`, 1.
+   Windows' sudo and UAC's new window are no longer used by `sudo`; `sudo -n` fails unless
+   elevated; `cash doctor`, `sudo -l`, the help pages and the spec say so. Seen by hand,
+   with the user at UAC's prompts: the status, the console, the folder, files in and out,
+   Ctrl-C, and keys (`it/sudo_in_terminal.rs`, ignored in the suites as they ask UAC).
+   Not built: the environment through a handle; `-E` still passes `NAME=value` words.
+
 ---
 
 ## Found along the way, done

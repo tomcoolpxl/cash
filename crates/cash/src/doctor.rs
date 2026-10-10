@@ -468,68 +468,35 @@ fn check_own_path(findings: &mut Vec<Finding>) {
     });
 }
 
-/// What cash's `sudo` elevates through: gsudo where it is installed, else Windows' own
-/// `sudo`, whose new-window mode keeps a command's output in another window.
+/// What cash's `sudo` elevates through: cash itself, in this terminal, UAC asking each
+/// time; gsudo, where it is installed, for `sudo -u USER` and its credentials cache.
 fn check_sudo(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[String], cwd: &Path) {
-    use cash_win32::sysinfo::WindowsSudo;
-
-    let gsudo = resolve("gsudo", entries, pathext, cwd);
-    if let Some(gsudo) = &gsudo {
+    findings.push(Finding::ok(
+        "sudo elevates in this terminal by itself; UAC asks each time",
+    ));
+    if let Some(gsudo) = resolve("gsudo", entries, pathext, cwd) {
         check_gsudo(findings, gsudo.target());
-    } else {
-        findings.push(match cash_win32::sysinfo::windows_sudo() {
-            WindowsSudo::Inline => Finding::ok("sudo through Windows' sudo, in this terminal"),
-            WindowsSudo::InputClosed => Finding::note(
-                "sudo goes through Windows' sudo, in this terminal but with its input closed",
-                Some(format!(
-                    "{}, in an elevated shell, gives it its input",
-                    unbroken("sudo config --enable normal")
-                )),
-            ),
-            WindowsSudo::NewWindow => Finding::note(
-                "sudo goes through Windows' sudo, which opens a new window: the output stays \
-                 there",
-                Some(format!(
-                    "{}, or {} in an elevated shell",
-                    unbroken("scoop install gsudo"),
-                    unbroken("sudo config --enable normal")
-                )),
-            ),
-            WindowsSudo::Off => Finding::note(
-                "no gsudo and no Windows sudo: sudo asks UAC, which opens a new window and \
-                 does not wait",
-                Some(format!(
-                    "{}, or turn on sudo in Settings > System > For developers",
-                    unbroken("scoop install gsudo")
-                )),
-            ),
-        });
     }
     check_sudo_accounts(findings);
 }
 
-/// gsudo, with its credentials cache: while a session is open, what it elevates runs
-/// without asking. The cache belongs to the shell that opened it, so `cash doctor`, a
-/// process of its own, counts the sessions rather than asking whether it may use one.
+/// gsudo, which `sudo -u USER` goes through, with its credentials cache: while a session
+/// is open, what it runs runs without asking. The cache belongs to the shell that opened
+/// it, so `cash doctor`, a process of its own, counts the sessions rather than asking
+/// whether it may use one.
 fn check_gsudo(findings: &mut Vec<Finding>, gsudo: &Path) {
     let sessions = cash_win32::gsudo::status(gsudo, "CacheSessionsCount")
         .and_then(|count| count.parse::<u32>().ok());
-    match sessions {
-        Some(0) => findings.push(Finding::ok(
-            "sudo through gsudo, in this terminal; each sudo asks",
-        )),
-        Some(count) => {
-            findings.push(Finding::ok("sudo through gsudo, in this terminal"));
-            findings.push(Finding::note(
-                format!(
-                    "gsudo's credentials cache is open ({count} session{}): sudo runs without \
-                     asking in the shell that opened it",
-                    if count == 1 { "" } else { "s" }
-                ),
-                Some(format!("{} closes it", unbroken("sudo -k"))),
-            ));
-        }
-        None => findings.push(Finding::ok("sudo through gsudo, in this terminal")),
+    findings.push(Finding::ok("sudo -u USER through gsudo, in this terminal"));
+    if let Some(count) = sessions.filter(|count| *count > 0) {
+        findings.push(Finding::note(
+            format!(
+                "gsudo's credentials cache is open ({count} session{}): sudo -u runs without \
+                 asking in the shell that opened it",
+                if count == 1 { "" } else { "s" }
+            ),
+            Some(format!("{} closes it", unbroken("sudo -k"))),
+        ));
     }
 }
 

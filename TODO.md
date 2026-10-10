@@ -40,6 +40,17 @@ What the phases now in DONE.md left open, each where its phase says more.
   taking it out is a change of its own.
 - **The 2024 edition for `cash-reedline` and crossterm** (phase 34): both keep the 2021
   edition they came with.
+- **`sudo -E`'s variables through a handle** (phase 35,
+  `research/sudo-in-terminal-design.md` section 3 item 4): they still go as `NAME=value`
+  words on the elevated cash's command line, within Windows' 32,000 characters; an
+  anonymous pipe the elevated cash takes with `DuplicateHandle`, as it takes the
+  standard handles, would lift the limit.
+- **A bundled tool outlived its script and its pseudo console** (2026-10-10): after a
+  `sudo_in_terminal` probe timed out and dropped its pseudo console, the script's last
+  command, `cash.exe --invoke-bundled cat got.txt` (PID 26528, its parent gone, no
+  path readable), was still there and held `target\debug\cash.exe`, so the next build
+  could not replace it. Find what it waits on (a write to the closed console?) and why
+  the script's job did not end it.
 
 ## Found along the way
 
@@ -93,21 +104,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   (`acceptance::an_unpatched_bundled_tool_writes_into_a_write_substitution_through_a_file`)
   is `#[ignore]`d. A fix reads only what was written: hold back the tail of a file that
   grew in one step until the program is done, or give `cp` the pipe as tee's patch did.
-- **Candidate: `sudo` elevating in this terminal by itself** (asked for by the user on
-  2026-10-10, not yet chosen): `sudo` is cash's builtin, but the elevation is handed to
-  gsudo, else Windows' own `sudo` (Windows 11, once turned on), else a plain UAC
-  request, which runs the command in a new window that cash does not wait for: no
-  output here and no status. In-terminal elevation is what gsudo adds: an elevated
-  helper that attaches to the caller's console. cash could do it itself: start an
-  elevated copy of `cash.exe` through UAC with a hidden helper argument, which
-  `AttachConsole`s to the calling cash's console (or relays it over a pipe), runs the
-  command there and returns its status, so `sudo CMD` needs no other tool. To find
-  out, by observation: whether an elevated process may attach to an unelevated
-  console on Windows 11 (gsudo's "attached" mode says so); Ctrl-C and the console
-  modes across the two; how the job object (spec D42) sees the elevated helper; and a
-  credentials cache, as `sudo -v` gives with gsudo, if it is wanted at all. Design
-  with a pick list before any code.
-
 ---
 
 ## Decided, written down so it is not decided twice

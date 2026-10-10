@@ -173,6 +173,38 @@ pub fn maybe_dispatch() -> Option<i32> {
         ));
     }
 
+    if name_str == SUDO_ELEVATE {
+        let Some(own) = self_exe() else {
+            eprintln!("sudo: cash cannot find its own executable");
+            return Some(1);
+        };
+        return Some(cash_win32::elevate::run_elevated_here(own, args));
+    }
+
+    // The elevated side: the caller's terminal taken, then the command it carries, a
+    // bundled command line of its own (`--sudo-owner SID PROGRAM ...`).
+    let (name, name_str, args) = if name_str == SUDO_ATTACH {
+        let [pid, attach, stdin, stdout, stderr, dir, command @ ..] = args else {
+            eprintln!("cash: {DISPATCH_FLAG} {SUDO_ATTACH} requires the caller and a command");
+            return Some(exit_code(ExecutionExitCode::InvalidUsage));
+        };
+        let caller = cash_win32::elevate::Caller {
+            pid,
+            attach,
+            handles: [stdin, stdout, stderr],
+            dir,
+        };
+        if let Err(status) = cash_win32::elevate::take_callers_terminal(&caller) {
+            return Some(status);
+        }
+        let Some((name, args)) = command.split_first() else {
+            return Some(exit_code(ExecutionExitCode::InvalidUsage));
+        };
+        (name, name.to_str().unwrap_or_default(), args)
+    } else {
+        (name, name_str, args)
+    };
+
     if name_str == SUDO_OWNER {
         let [sid, program, rest @ ..] = args else {
             eprintln!("cash: {DISPATCH_FLAG} {SUDO_OWNER} requires a SID and a program");
@@ -230,6 +262,15 @@ const MSYS_RELAY: &str = "--msys-relay";
 /// of `sudo`: `cash --invoke-bundled --sudo-owner SID PROGRAM [ARGS...]`. Not a utility
 /// either; `cash_builtins` builds the command line.
 const SUDO_OWNER: &str = "--sudo-owner";
+
+/// The caller's side of `sudo` elevating in this terminal by itself,
+/// [`cash_win32::elevate::run_elevated_here`]: `cash --invoke-bundled --sudo-elevate
+/// COMMAND...`, where COMMAND is a bundled command line, `--sudo-owner SID PROGRAM ...`.
+const SUDO_ELEVATE: &str = "--sudo-elevate";
+
+/// The elevated side, [`cash_win32::elevate::take_callers_terminal`]: `cash
+/// --invoke-bundled --sudo-attach PID ATTACH IN OUT ERR DIR COMMAND...`.
+const SUDO_ATTACH: &str = "--sudo-attach";
 
 /// `argv` for a bundled `env` or `timeout` whose command is a bare `sh`, `bash` or
 /// `cash`, with cash itself in its place, as every other way of running those names

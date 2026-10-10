@@ -181,7 +181,9 @@ mod process_identity;
 mod process_substitution_words;
 // D48: `ps`, which uutils does not carry.
 mod ps_builtin;
+// `sudo` elevating in this terminal by itself; asks UAC, so run by hand.
 mod pure_bash_corpus;
+mod sudo_in_terminal;
 // `pwd -W`, MSYS2 Bash's, and `pwd -P` in cash's spelling.
 mod pwd_forms;
 // `read -t`, `-d`, `-n` and `-s` at a console, which collects a line unless told not to.

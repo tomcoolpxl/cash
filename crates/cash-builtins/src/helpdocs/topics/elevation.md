@@ -28,21 +28,21 @@ user, is always a new cash, and the shell you typed the command in stays as it w
 
 ## What does the elevating
 
-cash elevates nothing itself; it chooses what runs and hands it to one of these, the
-first that is there:
+cash does it itself, with no other tool. `sudo` asks UAC, each time, for an elevated cash,
+which attaches to this terminal and takes the command's redirections and pipes as they
+are: the command reads the keys you type, prints here, gets your Ctrl-C, and its status
+comes back. Declining the prompt runs nothing, and `sudo` says so.
 
-- gsudo (`scoop install gsudo`, `winget install gerardog.gsudo`): output in this
-  terminal, a credentials cache (`sudo -v` opens it, `sudo -k` closes it, and `sudo -n`
-  then runs without asking), and running as other users;
-- Windows' own `sudo`, in recent Windows 11 once it is turned on in Settings (For
-  developers): inline, the output is here; in its new-window mode it stays in that
-  window, and `sudo config --enable normal` in an elevated shell changes that;
-- UAC's request, as `elevate` makes it: a new window, not waited for. As another user
-  without gsudo, Windows' `runas` in a new window.
+As another account (`sudo -u USER`, `su USER`), gsudo runs the command where it is
+installed (`scoop install gsudo`, `winget install gerardog.gsudo`), with its credentials
+cache (`sudo -v` opens it, `sudo -k` closes it); without gsudo, Windows' `runas` starts
+it in a new window, not waited for, and `sudo` says so.
 
-`sudo -l` says which one this machine uses, and `cash doctor` reports it too. When the
-command is started but not waited for, `sudo` says so: its status says only that the
-command started.
+`sudo -l` says how this machine elevates, and `cash doctor` reports it too.
+
+As with gsudo and Windows' own `sudo` in its inline mode, another program of yours
+running unelevated on the same console could type into the elevated command; UAC on the
+same desktop is a convenience, not a security boundary.
 
 What runs is what the shell would run: `sudo ls` is cash's `ls`, run by an elevated cash;
 `sudo bash` is cash, not WSL's `bash.exe`; a script or a batch file runs through cash. A
@@ -60,16 +60,18 @@ and ~ are theirs`.
 ## Network drives
 
 Drive letters are mapped per logon, and an elevated process has none of yours. In a
-folder on a mapped drive, gsudo maps the drives for the command, and Windows' sudo is
-given the folder's network path (`\\server\share\...`).
+folder on a mapped drive, the elevated command starts in the folder's network path
+(`\\server\share\...`); gsudo maps the drives for `sudo -u`.
 
 ## What escapes cash's job
 
 Everything cash starts lives in its job object and ends with it. An elevated
 program cannot: Windows will not let a normal process put an elevated one in its job or
-end it. So an elevated program, or a shell as another user, outlives cash, and is
-not stopped by Ctrl-C to the job or by `kill %1` as a job of yours would be. `elevate`
-warns about it; `-q` drops the warning.
+end it. `sudo`'s elevated cash watches the shell that asked and ends the command when
+that shell ends; Ctrl-C reaches the command through the terminal. A program `elevate`
+starts, or a shell as another user, outlives cash, and is not stopped by Ctrl-C to the
+job or by `kill %1` as a job of yours would be. `elevate` warns about it; `-q` drops the
+warning.
 
 ## Other accounts
 

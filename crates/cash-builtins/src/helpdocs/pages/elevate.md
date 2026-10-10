@@ -4,9 +4,8 @@ see: sudo su detach elevation
 ## Description
 
 `elevate COMMAND` asks UAC to start a command elevated, in a new window, and returns
-without waiting for it. It needs no other tool, which makes it the way to elevate on a
-machine with neither gsudo nor Windows' `sudo`, and it is what `sudo` and `su` fall back
-to there. For output in this terminal, use `sudo`.
+without waiting for it, for a program that should have a window of its own. For output
+in this terminal, and the command's status, use `sudo`.
 
 ## Windows notes
 

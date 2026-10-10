@@ -90,6 +90,12 @@ threads-required = "num-test-threads"
 filter = 'package(cash-archive) and (binary(rar) or test(/^rar::/))'
 slow-timeout = { period = "60s", terminate-after = 3 }
 
+# `sudo` elevating in this terminal: each waits for someone to approve UAC's prompt, up to
+# three minutes (APPROVAL in sudo_in_terminal.rs). Ignored, run by hand.
+[[profile.default.overrides]]
+filter = 'binary(it) and test(/^sudo_in_terminal::/)'
+slow-timeout = { period = "60s", terminate-after = 4 }
+
 # Each starts PowerShell once or twice, and each compiles a C# helper: 2 to 5 s on an idle
 # machine.
 [[profile.default.overrides]]
