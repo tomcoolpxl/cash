@@ -5,6 +5,7 @@ mod check;
 mod ci;
 mod common;
 mod generate;
+mod perf;
 mod test;
 
 use anyhow::Result;
@@ -42,6 +43,8 @@ enum Command {
     /// Generate documentation, completions, and schemas.
     #[clap(subcommand)]
     Gen(generate::GenCommand),
+    /// Measure a build's size and start time against perf-budget.toml.
+    Perf(perf::PerfArgs),
     /// Run tests.
     Test(Box<test::TestCommand>),
 }
@@ -56,5 +59,6 @@ fn main() -> Result<()> {
         Command::Check(cmd) => check::run(cmd, verbose),
         Command::Test(cmd) => test::run(cmd, verbose),
         Command::Ci(cmd) => ci::run(cmd, verbose),
+        Command::Perf(args) => perf::run(args, verbose),
     }
 }

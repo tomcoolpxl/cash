@@ -1,0 +1,12 @@
+# What a release of cash may cost, checked by `cargo xtask perf` on the dist build, which
+# the release workflow runs before it publishes. A release that needs more raises a limit
+# here, in a commit of its own that says why, so that growth is a choice written down.
+# `key = number` lines only; `_` may group digits.
+
+# The dist cash.exe, in bytes: 1.11.0's 48_838_656 plus 2 MiB.
+max_bytes = 50_935_808
+
+# cash's own start, in milliseconds: the median of 30 `cash -c true` less the median of
+# 30 bare `cmd /c exit`. About 25 ms on a developer machine; a GitHub runner is slower
+# and noisier.
+max_own_start_ms = 60

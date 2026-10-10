@@ -1065,8 +1065,12 @@ day (spec D79, D80). In order:
    `C:/` for a word typed `C:\` (now kept); Alt-E took a `C:\…` word's backslashes for
    escapes. `winpaths` now covers `\\server\share` too (the user's pick, spec D53).
    `/c/…` given to a program stays as written, with the warning, as documented.
-4. **A guard on size and speed**: `cargo xtask perf`, `perf-budget.toml`, run by the
-   release workflow before it publishes.
+4. **A guard on size and speed** (done 2026-10-10): `cargo xtask perf` measures a
+   build's size and cash's own start (median of 30 `cash -c true` less that of a bare
+   `cmd /c exit`) against `perf-budget.toml`: 1.11.0's 48,838,656 bytes plus 2 MiB, and
+   60 ms. The release workflow runs it on the dist build before packaging, the figures
+   in the job summary; over a limit stops the release. The local release build of
+   2026-10-07: 50.8 MB, 27.9 ms.
 5. **`rm -rf` on junctions**, from "Found along the way": a junction inside a folder
    gives "Permission denied", and one whose target went first fails too; both need the
    link removed as a folder link, never followed (`uu_rm` 0.12.0).

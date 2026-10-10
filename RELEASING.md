@@ -132,16 +132,22 @@ When a tag matching `v*.*.*` is pushed, the [Release Workflow](.github/workflows
    --profile dist --bin cash`: fat LTO, one codegen unit) and checks that it imports no C
    runtime DLL. The `release` profile, for local builds, trades a little speed for a much
    quicker build.
-2. Bundles `cash.exe`, `README.md`, `LICENSE`, `NOTICE`, `licenses/` and
+2. Measures it against [`perf-budget.toml`](perf-budget.toml) with `cargo xtask perf`:
+   its size, and cash's own start (the median of 30 `cash -c true` less that of a bare
+   `cmd /c exit`). The figures go in the job's summary; a build over a limit stops the
+   release. A release that needs more raises the limit in a commit of its own that says
+   why. `cargo xtask perf --exe target/release/cash.exe` gives the same figures locally,
+   for a less optimized build.
+3. Bundles `cash.exe`, `README.md`, `LICENSE`, `NOTICE`, `licenses/` and
    `THIRD-PARTY-LICENSES.html` (written by `cargo about` from
    [`.github/about`](.github/about)) into `cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`.
-3. Computes the SHA-256 checksum file.
-4. Compiles the per-user installer, `cash-vX.Y.Z-setup.exe`, from the same files with
+4. Computes the SHA-256 checksum file.
+5. Compiles the per-user installer, `cash-vX.Y.Z-setup.exe`, from the same files with
    Inno Setup ([`packaging/inno/cash.iss`](packaging/inno/cash.iss)), with its own
    `.sha256`. It installs under `%LOCALAPPDATA%\Programs\cash\X.Y.Z` and runs
    `cash --install-finish`; `cash --update` on an installed cash fetches the next
    release's zip from the same page, so the zip's name must stay as it is.
-5. Creates a new GitHub Release whose notes are the commits since the previous tag,
+6. Creates a new GitHub Release whose notes are the commits since the previous tag,
    grouped by type ([`.github/scripts/release-notes.ps1`](.github/scripts/release-notes.ps1)),
    and attaches the zip, the installer and both checksums.
 
