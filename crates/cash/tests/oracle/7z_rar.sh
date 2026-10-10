@@ -245,4 +245,14 @@ xt rar50/alt_streams.rar s/a.txt
 echo "== ACLs: a file's NT Security, as 7-Zip shows a descriptor"
 z l -slt rar50/nt_security_crafted.rar | grep '^Path = f\|^Characteristics\|^NT Security'
 
+echo "== an archive after other bytes, as after an SFX's module, found by its signature:"
+echo "== named .exe and no PE, a warning; named .rar, not looked for"
+{ printf 'MZ%01022d' 0; cat rar50/multifile.rar; } > sfx.exe
+z l sfx.exe
+xt sfx.exe
+cp sfx.exe sfx.dat
+z t sfx.dat
+cp sfx.exe sfx.rar
+z l sfx.rar
+
 cd / && rm -rf "$dir"

@@ -871,12 +871,12 @@ struct HeaderReader {
 }
 
 impl HeaderReader {
-    fn new(mut file: File) -> io::Result<Self> {
+    fn new(mut file: File, start: u64) -> io::Result<Self> {
         let end = file.seek(SeekFrom::End(0))?;
-        file.seek(SeekFrom::Start(0))?;
+        file.seek(SeekFrom::Start(start))?;
         Ok(Self {
             file,
-            position: 0,
+            position: start,
             end,
             keys: None,
             buf: Vec::new(),
@@ -1030,8 +1030,8 @@ impl HeaderReader {
         if marker != MARKER {
             return Ok(false);
         }
-        self.position = MARKER.len() as u64;
-        info.start_pos = 0;
+        info.start_pos = self.position;
+        self.position += MARKER.len() as u64;
         let Read5::Header(mut h) = self.read_block_header()? else {
             return Ok(false);
         };
@@ -1173,12 +1173,17 @@ pub(super) enum Failure {
 }
 
 impl Rar5 {
-    /// `Open2`: the volumes from the one named on, their items read.
+    /// `Open2`: the volumes from the one named on, their items read; the first one's
+    /// archive starts at `start` (after an SFX's module), the others' at theirs.
     #[expect(
         clippy::too_many_lines,
         reason = "7-Zip's Open2, volume by volume and item by item"
     )]
-    pub(super) fn open(path: &Path, password: Option<&str>) -> io::Result<Result<Self, Failure>> {
+    pub(super) fn open(
+        path: &Path,
+        password: Option<&str>,
+        start: u64,
+    ) -> io::Result<Result<Self, Failure>> {
         let mut rar = Self {
             volumes: Vec::new(),
             infos: Vec::new(),
@@ -1229,7 +1234,8 @@ impl Rar5 {
                 volume
             };
             let file = File::open(&volume)?;
-            let mut reader = HeaderReader::new(file)?;
+            let first = rar.infos.is_empty();
+            let mut reader = HeaderReader::new(file, if first { start } else { 0 })?;
             let end = reader.end;
             let mut info = ArcInfo::default();
             let opened = reader.open(password, &mut info)?;

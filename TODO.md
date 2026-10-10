@@ -683,8 +683,14 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      for a descriptor (owner, group, `s:`/`d:` entry counts, size; not SDDL as this
      line said), checked on 48 made-up descriptors (`nt_security_crafted.rar`). Left:
      `x -sni`, which 7-Zip uses to set the ACLs on what it extracts.
-   - An SFX's archive inside its `.exe` (7-Zip opens an `.exe` as PE first, which
-     cash's 7z does not read).
+   - An SFX's archive inside its `.exe`: done 2026-10-10. A file that opens as nothing
+     at its start (a tar whose first checksum is wrong does not), and is not named as
+     RAR, is searched for a RAR 5 signature starting at most 8 MiB in (7-Zip's limit,
+     to the byte), opened there, and listed with `Offset`; a `.exe`, `.dll` or `.sys`
+     that is no PE adds 7-Zip's "Cannot open the file as [PE] archive" warning. A RAR
+     name is tried as RAR only, as 7-Zip does (no tar or lzma guess after it). Left: a
+     RAR 1.5 to 4 SFX (WinRAR 7.23 writes none to observe), and other formats after an
+     SFX module (7z's own `.sfx`, zip's).
 2. **`rar` and `unrar` builtins** with RARLAB's console interface, reading and writing:
    designed in `research/archive-tools-design.md` 3.15 and picked by the user on
    2026-10-07/08 (the fuller set, RAR 5, Scoop's WinRAR 7.23 as the oracle, built by

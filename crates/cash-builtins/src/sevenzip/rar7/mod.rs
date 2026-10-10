@@ -88,13 +88,15 @@ impl Rar {
     }
 }
 
-/// Opens a RAR 5 archive and the volumes after it.
+/// Opens a RAR 5 archive, starting `start` bytes into its file (after an SFX's
+/// module), and the volumes after it.
 pub(super) fn open5(
     path: &Path,
     password: Option<&str>,
     zone: &cash_core::timefmt::Zone,
+    start: u64,
 ) -> Result<Opening, OpenFailure> {
-    let rar = match rar5::Rar5::open(path, password).map_err(OpenFailure::Io)? {
+    let rar = match rar5::Rar5::open(path, password, start).map_err(OpenFailure::Io)? {
         Ok(rar) => rar,
         Err(rar5::Failure::PasswordNeeded) => return Err(OpenFailure::PasswordNeeded),
         Err(rar5::Failure::WrongPassword) => return Err(OpenFailure::WrongPassword),

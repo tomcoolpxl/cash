@@ -240,8 +240,7 @@ pub(super) fn archive_props(found: &Found, opened: &Opened) -> String {
     if let Some(named) = opened.type_warning {
         let _ = writeln!(
             text,
-            "Open WARNING: Cannot open the file as [{}] archive",
-            named.name()
+            "Open WARNING: Cannot open the file as [{named}] archive"
         );
     }
     let _ = writeln!(text, "Type = {}", opened.kind.name());
@@ -254,6 +253,9 @@ pub(super) fn archive_props(found: &Found, opened: &Opened) -> String {
     let warnings = opened.warnings();
     if !warnings.is_empty() {
         let _ = writeln!(text, "WARNINGS:\n{}", warnings.join("\n"));
+    }
+    if opened.offset != 0 {
+        let _ = writeln!(text, "Offset = {}", opened.offset);
     }
     if let Some(size) = opened.physical_size {
         let _ = writeln!(text, "Physical Size = {size}");
@@ -518,7 +520,7 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
         console.so(&format!(
             "WARNING:\n{}\nCannot open the file as [{}] archive\nThe file is open as [{}] archive\n\n",
             archive.name.replace('\\', "/"),
-            named.name(),
+            named,
             opened.kind.name()
         ));
         console.flush_so();

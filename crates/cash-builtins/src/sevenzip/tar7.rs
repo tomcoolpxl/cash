@@ -213,6 +213,25 @@ pub(super) fn looks_like_tar(head: &[u8]) -> bool {
         && octal32(&head[148..156], false).is_some()
 }
 
+/// Whether the first header's checksum is right, as opening checks it (summed as
+/// unsigned bytes or, as old tars did, signed ones).
+pub(super) fn header_sum_ok(head: &[u8]) -> bool {
+    let (Some(record), Some(checksum)) = (head.get(..512), head.get(148..156)) else {
+        return false;
+    };
+    let Some(checksum) = octal32(checksum, false) else {
+        return false;
+    };
+    let mut buf = record.to_vec();
+    buf[148..156].fill(b' ');
+    let sum: u32 = buf.iter().map(|&b| u32::from(b)).sum();
+    #[expect(clippy::cast_possible_wrap, reason = "old tars sum signed bytes")]
+    let signed: i32 = buf.iter().map(|&b| i32::from(b as i8)).sum();
+    #[expect(clippy::cast_sign_loss, reason = "compared as 7-Zip compares")]
+    let signed = signed as u32;
+    sum == checksum || signed == checksum
+}
+
 /// `OctalToNumber`: spaces, octal digits, then a space or NUL.
 fn octal(field: &[u8], allow_empty: bool) -> Option<u64> {
     let end = field.iter().position(|&b| b == 0).unwrap_or(field.len());

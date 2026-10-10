@@ -8385,3 +8385,114 @@ NT Security = S-1-5 Domains d:1 84
 Path = f47.txt
 Characteristics = ACL CRC
 NT Security = ERROR
+== an archive after other bytes, as after an SFX's module, found by its signature:
+== named .exe and no PE, a warning; named .rar, not looked for
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5413 bytes (6 KiB)
+
+Listing archive: sfx.exe
+
+--
+Path = sfx.exe
+Open WARNING: Cannot open the file as [PE] archive
+Type = Rar5
+Offset = 1024
+Physical Size = 4389
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:01 ....A           30           30  hello.txt
+2026-04-27 05:23:01 ....A            9            9  tiny.txt
+2026-04-27 05:23:01 ....A         4096         4096  random_4k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:01               4135         4135  3 files
+
+Warnings: 1
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5413 bytes (6 KiB)
+
+Extracting archive: sfx.exe
+WARNING:
+sfx.exe
+Cannot open the file as [PE] archive
+The file is open as [Rar5] archive
+
+--
+Path = sfx.exe
+Open WARNING: Cannot open the file as [PE] archive
+Type = Rar5
+Offset = 1024
+Physical Size = 4389
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Archives with Warnings: 1
+Files: 3
+Size:       4135
+Compressed: 5413
+rc=0
+./hello.txt 3232419072 30
+./random_4k.bin 3580297721 4096
+./tiny.txt 2558135348 9
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5413 bytes (6 KiB)
+
+Testing archive: sfx.dat
+--
+Path = sfx.dat
+Type = Rar5
+Offset = 1024
+Physical Size = 4389
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 3
+Size:       4135
+Compressed: 5413
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5413 bytes (6 KiB)
+
+Listing archive: sfx.rar
+
+
+Errors: 1
+
+ERROR: sfx.rar : Cannot open the file as archive
+
+
+rc=2

@@ -474,7 +474,9 @@ pub(super) struct Opened {
     pub(super) physical_size: Option<u64>,
     /// The format its name says, when it opened as another (7-Zip's
     /// `ErrorFormatIndex`).
-    pub(super) type_warning: Option<Kind>,
+    pub(super) type_warning: Option<&'static str>,
+    /// Where the archive starts in its file, after an SFX module (`kpidOffset`).
+    pub(super) offset: u64,
     /// What `Print_OpenArchive_Props` shows after the physical size.
     pub(super) props: Vec<(&'static str, String)>,
     /// The properties a technical listing shows for each item.
@@ -605,6 +607,22 @@ fn open_at(
     // The format -t names; else the one the name's extension names, then the one the
     // first bytes say, then lzma, which has no signature (7-Zip's `CArc::OpenStream`).
     let by_name = Kind::by_extension(path);
+    // Nothing that opens at the start (a tar whose first checksum is wrong does not): a
+    // RAR 5 archive after other bytes, as after an SFX's module, unless the name says
+    // RAR, whose handlers looked at the start only.
+    // A name RAR's handlers claim is tried as RAR only: nor tar, nor lzma, nor further on.
+    let named_rar = Kind::for_update(path) == Some(Kind::Rar);
+    let tar = super::tar7::looks_like_tar(head) && !named_rar;
+    let embedded = if forced.is_none()
+        && sniffed.is_none()
+        && !(tar && super::tar7::header_sum_ok(head))
+        && !named_rar
+    {
+        find_rar5(&mut file).map_err(OpenFailure::Io)?
+    } else {
+        None
+    };
+    let start = embedded.unwrap_or(0);
     let (kind, type_warning) = match forced {
         Some(forced) if forced == Kind::Lzma && super::streams::signature(Kind::Lzma, head) => {
             (forced, None)
@@ -613,13 +631,25 @@ fn open_at(
         Some(forced) if sniffed.is_some_and(|s| s.named_by(forced)) => (forced, None),
         Some(forced) => return Err(not_archive(Some(forced))),
         None => match (by_name, sniffed) {
-            (_, Some(sniffed)) => (sniffed, by_name.filter(|&n| !sniffed.named_by(n))),
-            (by_name, None) if super::tar7::looks_like_tar(head) => {
-                (Kind::Tar, by_name.filter(|&n| n != Kind::Tar))
+            (_, Some(sniffed)) => (
+                sniffed,
+                by_name.filter(|&n| !sniffed.named_by(n)).map(Kind::name),
+            ),
+            (by_name, None) if embedded.is_some() => {
+                let not_pe = pe_named(path) && !is_pe(head);
+                (
+                    Kind::Rar5,
+                    by_name.map(Kind::name).or_else(|| not_pe.then_some("PE")),
+                )
             }
-            (by_name, None) if super::streams::signature(Kind::Lzma, head) => {
-                (Kind::Lzma, by_name.filter(|&n| n != Kind::Lzma))
-            }
+            (by_name, None) if tar => (
+                Kind::Tar,
+                by_name.filter(|&n| n != Kind::Tar).map(Kind::name),
+            ),
+            (by_name, None) if !named_rar && super::streams::signature(Kind::Lzma, head) => (
+                Kind::Lzma,
+                by_name.filter(|&n| n != Kind::Lzma).map(Kind::name),
+            ),
             (by_name, None) => return Err(not_archive(by_name)),
         },
     };
@@ -630,7 +660,7 @@ fn open_at(
         let opening = if kind == Kind::Rar {
             super::rar7::open4(path, password, zone)?
         } else {
-            super::rar7::open5(path, password, zone)?
+            super::rar7::open5(path, password, zone, start)?
         };
         let sizes: Vec<u64> = opening
             .volumes
@@ -642,13 +672,14 @@ fn open_at(
             kind,
             physical_size: Some(opening.physical_size),
             type_warning: None,
+            offset: start,
             props: opening.props,
             item_props: opening.item_props,
             items: opening.items,
             tail: if opening.volumes.len() > 1 {
                 0
             } else {
-                len.saturating_sub(opening.physical_size)
+                len.saturating_sub(start + opening.physical_size)
             },
             error_flags: opening.error_flags,
             warning_flags: opening.warning_flags,
@@ -675,6 +706,7 @@ fn open_at(
             kind,
             physical_size: Some(opening.physical_size),
             type_warning: None,
+            offset: 0,
             props: opening.props,
             item_props: super::zip7::ITEM_PROPS.to_vec(),
             items: opening.items,
@@ -697,6 +729,7 @@ fn open_at(
             kind,
             physical_size: Some(opening.physical_size),
             type_warning: None,
+            offset: 0,
             props: opening.props,
             item_props: super::tar7::ITEM_PROPS.to_vec(),
             items: opening.items,
@@ -720,6 +753,7 @@ fn open_at(
             kind,
             physical_size: opening.physical_size,
             type_warning: None,
+            offset: 0,
             props: opening.props,
             item_props: opening.item_props,
             items: vec![opening.item],
@@ -756,6 +790,44 @@ fn read_up_to(file: &mut impl Read, buf: &mut [u8]) -> io::Result<usize> {
         }
     }
     Ok(done)
+}
+
+/// How far into a file 7-Zip looks for an archive's signature, as after an SFX's
+/// module: one starting at 8 MiB is found, one a byte further is not.
+const MAX_START: u64 = 1 << 23;
+
+/// Where a RAR 5 signature starts within the first `MAX_START` bytes of the file, as
+/// 7-Zip's `FindSignatureInStream` finds it.
+fn find_rar5(file: &mut (impl Read + Seek)) -> io::Result<Option<u64>> {
+    const MARKER: &[u8] = b"Rar!\x1a\x07\x01\x00";
+    file.seek(SeekFrom::Start(0))?;
+    let mut data = Vec::new();
+    file.by_ref()
+        .take(MAX_START + MARKER.len() as u64)
+        .read_to_end(&mut data)?;
+    file.seek(SeekFrom::Start(0))?;
+    Ok(data
+        .windows(MARKER.len())
+        .position(|w| w == MARKER)
+        .map(|at| at as u64))
+}
+
+/// Whether the name is one 7-Zip's PE handler claims.
+fn pe_named(path: &Path) -> bool {
+    path.extension().is_some_and(|e| {
+        ["exe", "dll", "sys"]
+            .iter()
+            .any(|pe| e.eq_ignore_ascii_case(pe))
+    })
+}
+
+/// Whether the first bytes are a PE image's: `MZ`, and `PE\0\0` where its header says.
+fn is_pe(head: &[u8]) -> bool {
+    let Some(at) = head.get(0x3C..0x40) else {
+        return false;
+    };
+    let at = u32::from_le_bytes([at[0], at[1], at[2], at[3]]) as usize;
+    head.starts_with(b"MZ") && head.get(at..at + 4) == Some(b"PE\0\0")
 }
 
 fn open_7z(mut file: Source, password: Option<&str>) -> Result<Opened, OpenFailure> {
@@ -824,6 +896,7 @@ fn open_7z(mut file: Source, password: Option<&str>) -> Result<Opened, OpenFailu
         kind: Kind::SevenZ,
         physical_size: Some(physical_size),
         type_warning: None,
+        offset: 0,
         props,
         item_props,
         items,
@@ -1169,6 +1242,35 @@ impl Opened {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_rar5_signature_is_found_up_to_8_mib_in() {
+        const MARKER: &[u8] = b"Rar!\x1a\x07\x01\x00";
+        let at = |start: usize| {
+            let mut data = vec![0u8; start];
+            data.extend_from_slice(MARKER);
+            find_rar5(&mut io::Cursor::new(data)).unwrap()
+        };
+        assert_eq!(at(0), Some(0));
+        assert_eq!(at(480_768), Some(480_768));
+        assert_eq!(at(1 << 23), Some(1 << 23));
+        assert_eq!(at((1 << 23) + 1), None);
+    }
+
+    #[test]
+    fn a_pe_has_its_header_where_mz_says() {
+        let mut head = vec![0u8; 0x200];
+        head[..2].copy_from_slice(b"MZ");
+        head[0x3C] = 0x80;
+        assert!(!is_pe(&head));
+        head[0x80..0x84].copy_from_slice(b"PE\0\0");
+        assert!(is_pe(&head));
+        head[0x3C] = 0xF0;
+        head.truncate(0xF2);
+        assert!(!is_pe(&head));
+        assert!(pe_named(Path::new("setup.EXE")));
+        assert!(!pe_named(Path::new("setup.dat")));
+    }
 
     #[test]
     fn dictionaries_as_7_zip_names_them() {
