@@ -118,9 +118,6 @@ pub enum TestSubcommand {
     /// Run every test of the workspace, both lanes in one run.
     #[clap(alias = "integration")]
     All(LaneArgs),
-
-    /// Run the tests of the patched crates in `vendor/`, which are outside the workspace.
-    Vendored,
 }
 
 /// Arguments for a lane's tests.
@@ -162,7 +159,6 @@ pub fn run(cmd: &TestCommand, verbose: bool) -> Result<()> {
         TestSubcommand::Quick(args) => run_lane(&sh, &cmd.binary_args, Lane::Quick, args, verbose),
         TestSubcommand::Slow(args) => run_lane(&sh, &cmd.binary_args, Lane::Slow, args, verbose),
         TestSubcommand::All(args) => run_lane(&sh, &cmd.binary_args, Lane::All, args, verbose),
-        TestSubcommand::Vendored => run_vendored_tests(verbose),
     }
 }
 
@@ -216,53 +212,6 @@ pub fn run_doc_tests(verbose: bool) -> Result<()> {
         .run()
         .context("Doc tests failed")?;
     eprintln!("Doc tests passed.");
-    Ok(())
-}
-
-/// The crates in `vendor/` that carry a patch of cash's with tests of their own.
-/// Reedline was one until it became cash's own (`crates/cash-reedline`), whose tests
-/// run with the workspace's.
-const VENDORED_CRATES_WITH_TESTS: [&str; 1] = ["crossterm"];
-
-/// Runs the tests of the vendored crates, among them the tests of cash's patches
-/// (`vendor/*/CASH-PATCHES.md`). They are outside the workspace, so nothing else runs
-/// them.
-///
-/// Each is built in a target folder of its own under `target/`, and the `Cargo.lock` a
-/// run writes into `vendor/` is removed again. `NO_COLOR` is cleared: crossterm honours
-/// it in tests of the colours it writes.
-pub fn run_vendored_tests(verbose: bool) -> Result<()> {
-    let sh = Shell::new()?;
-    let root = find_workspace_root()?;
-    sh.change_dir(&root);
-    for name in VENDORED_CRATES_WITH_TESTS {
-        let manifest = format!("vendor/{name}/Cargo.toml");
-        let target_dir = format!("target/vendor-{name}");
-        let lock = root.join("vendor").join(name).join("Cargo.lock");
-        let lock_was_there = lock.exists();
-        eprintln!("Running the tests of vendor/{name}...");
-        if verbose {
-            eprintln!(
-                "Running: cargo test --manifest-path {manifest} --lib --target-dir {target_dir} \
-                 -- --test-threads=1"
-            );
-        }
-        // One thread: crossterm's `test_no_color` sets `NO_COLOR` for the whole process,
-        // which its colour tests read through a memoised `Once`, and run beside them it
-        // made `test_format_reset_bg_color` fail on CI (2026-10-04).
-        let result = cmd!(
-            sh,
-            "cargo test --manifest-path {manifest} --lib --target-dir {target_dir} -- --test-threads=1"
-        )
-        .env_remove("NO_COLOR")
-        .run()
-        .with_context(|| format!("The tests of vendor/{name} failed"));
-        if !lock_was_there {
-            let _ = std::fs::remove_file(&lock);
-        }
-        result?;
-    }
-    eprintln!("The vendored crates' tests passed.");
     Ok(())
 }
 

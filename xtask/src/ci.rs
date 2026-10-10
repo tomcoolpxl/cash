@@ -10,7 +10,6 @@
 //! 3. **Documentation** - `cargo doc`, which fails on a link to something that is not there
 //! 4. **Quick lane** - Every crate's own tests (`.config/nextest.toml`)
 //! 5. **Doc tests** - The examples in documentation comments, which nextest does not run
-//! 6. **Vendored crates' tests** - reedline's and crossterm's own, outside the workspace
 //!
 //! ## Full workflow (`cargo xtask ci full`)
 //!
@@ -37,7 +36,7 @@ type Step<'a> = (&'a str, Box<dyn Fn() -> Result<()> + 'a>);
 #[derive(Parser)]
 pub enum CiCommand {
     /// Run what CI runs on every push but the slow lane: fmt, lint, the documentation,
-    /// the quick lane's tests, doc tests, the vendored crates' tests.
+    /// the quick lane's tests, doc tests.
     ///
     /// Use this for rapid iteration during development.
     Quick(QuickArgs),
@@ -121,10 +120,6 @@ fn steps(lane: Lane, verbose: bool) -> Vec<Step<'static>> {
             }),
         ),
         ("Doc tests", Box::new(move || test::run_doc_tests(verbose))),
-        (
-            "Vendored crates' tests",
-            Box::new(move || test::run_vendored_tests(verbose)),
-        ),
     ]
 }
 

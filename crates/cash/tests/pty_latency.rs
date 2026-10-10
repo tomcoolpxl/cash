@@ -2,8 +2,8 @@
 //!
 //! A measurement, not a pass/fail test: it prints what it finds, and fails only when a
 //! shell leaves the screen wrong. It answered `open-issues.md` item 1 and is here to answer
-//! it again, after a Reedline or Crossterm upgrade for instance (see their
-//! `CASH-PATCHES.md`). Run it from the repository root:
+//! it again, after a change to the line editor or crossterm for instance (see
+//! `crates/cash-reedline` and `crates/cash-crossterm`). Run it from the repository root:
 //!
 //! ```text
 //! cargo test --profile dist -p cash --test pty-latency -- --ignored --nocapture

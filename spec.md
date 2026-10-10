@@ -2478,7 +2478,7 @@ before every prompt, silently (`cash_win32::console::repair_before_prompt`).
 - **Keys typed ahead** while a program had VT input on reach the console as VT text
   (key-downs with no virtual key, `\r` for Enter, `\x7f` for Backspace, `ESC [ A` for
   Up), and stay that way after the repair. The line editor decodes them as crossterm
-  decodes a terminal's bytes on Unix (`vendor/crossterm/CASH-PATCHES.md`, patch 2);
+  decodes a terminal's bytes on Unix (`crates/cash-crossterm/README.md`, change 2);
   before, the command typed ahead needed a second Enter, and Backspace and the arrows
   typed `\x7f`, `[` and `A`.
 

@@ -66,11 +66,13 @@ changes are listed in each crate's `README.md`.
 [crates/cash-sed/LICENSE](crates/cash-sed/LICENSE). The changes are listed in
 `research/uutils-sed-evaluation.md`.
 
-## Vendored crates
+## crossterm
 
-`vendor/` carries a patched copy of [crossterm](https://github.com/crossterm-rs/crossterm)
-0.29.0 (© 2019 Timon), under the MIT License, whose text is in its `LICENSE`. Its
-`CASH-PATCHES.md` lists the changes.
+`crates/cash-crossterm`, the terminal I/O under cash's line editor, is taken and
+modified from [crossterm](https://github.com/crossterm-rs/crossterm) 0.29.0, © 2019
+T. Post and the crossterm contributors, under the MIT License, whose text is in
+[crates/cash-crossterm/LICENSE](crates/cash-crossterm/LICENSE). The changes are
+listed in its `README.md`.
 
 ## reedline
 

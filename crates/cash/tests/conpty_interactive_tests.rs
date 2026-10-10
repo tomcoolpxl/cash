@@ -393,7 +393,7 @@ fn conpty_a_program_that_took_the_mouse_gives_it_back() {
 }
 
 /// Keys typed ahead while a program had VT input on reach the console as VT text: the
-/// line editor decodes them (vendor/crossterm/CASH-PATCHES.md, patch 2), so the typed-ahead
+/// line editor decodes them (crates/cash-crossterm/README.md, change 2), so the typed-ahead
 /// command runs without a second Enter, and Backspace and the arrows edit it.
 #[test]
 fn conpty_a_program_that_had_vt_input_on_does_not_eat_keys_typed_ahead() {
@@ -413,7 +413,7 @@ fn conpty_a_program_that_had_vt_input_on_does_not_eat_keys_typed_ahead() {
 }
 
 // Keys that arrive after Enter belong to the command Enter starts. The line editor reads
-/// the console in batches (vendor/crossterm/CASH-PATCHES.md), and a batch that ran past
+/// the console in batches (crates/cash-crossterm/README.md), and a batch that ran past
 /// Enter would keep the answer below from `read`, handing it to the next prompt instead.
 #[test]
 fn conpty_keys_after_enter_reach_the_command_it_runs() {

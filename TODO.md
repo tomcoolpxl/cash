@@ -1097,8 +1097,13 @@ day (spec D79, D80). In order:
    with the workspace's; the patch list is the README's "changes made while it was a
    patched copy". Left for later: Helix mode (on by default, so compiled in, never
    offered by cash; its code runs through the core editor) and the 2021 edition.
-8. **crossterm becomes cash's own code**, after reedline: terminal I/O (12k lines, 2
-   changes).
+8. **crossterm becomes cash's own code** (done 2026-10-10): `vendor/crossterm` moved to
+   `crates/cash-crossterm`, keeping crossterm's name and version so the `[patch]` still
+   gives `uu_more` cash's copy. Its Unix code and the `event-stream` and `osc52`
+   features went (with `libc`, `rustix`, `mio`, `signal-hook`, `futures-core`,
+   `base64`); the workspace lints apply, every unsafe block with its reason; its tests
+   run with the workspace's, and `vendor/` and xtask's vendored-test step are gone.
+   Left for later: the 2021 edition, as for reedline.
 
 ---
 

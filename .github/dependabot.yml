@@ -10,9 +10,9 @@ updates:
       cargo:
         patterns: ["*"]
     ignore:
-      # Patched copies in vendor/ ([patch.crates-io] in Cargo.toml): a new version needs
-      # cash's patch carried over by hand (vendor/*/CASH-PATCHES.md), and the other uutils
-      # crates move with the patched ones, on the same uucore.
+      # crossterm is cash's own (crates/cash-crossterm), kept at 0.29.0 for uu_more through
+      # [patch.crates-io]; the uutils crates move together, on one uucore, with the
+      # tools cash made its own (crates/cash-uutils).
       - dependency-name: crossterm
       - dependency-name: "uu_*"
       - dependency-name: uucore

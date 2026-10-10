@@ -56,8 +56,8 @@ jobs:
         run: cargo deny check advisories
 
       # The same command as a local run: format check, clippy, the documentation, the
-      # quick lane's tests (each in a process of its own, through nextest), the doc tests
-      # and the vendored crates' own tests.
+      # quick lane's tests (each in a process of its own, through nextest) and the doc
+      # tests.
       - name: Check and test
         run: cargo xtask ci quick
 
