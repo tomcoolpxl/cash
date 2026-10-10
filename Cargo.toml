@@ -24,7 +24,7 @@ default-members = ["crates/cash"]
 exclude = ["vendor/crossterm", "vendor/reedline", "vendor/uutils"]
 
 [workspace.package]
-version = "1.10.0"
+version = "1.11.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/tomcoolpxl/cash"
