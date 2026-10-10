@@ -181,6 +181,13 @@ slow-timeout = { period = "30s", terminate-after = 3 }
 filter = 'binary(it) and test(/^rar_builtin::rar_(lists|tests_extracts_and_prints|adds_updates_moves_and_deletes|comments_renames_locks_and_changes|finds_strings|repairs|reconstructs_volumes|extracts_by_switches|keeps_versions|extracts_links|keeps_times|adds_by_name|names_by_date|logs_names|cuts_volumes_with_recovery_records|adds_links|asks_passwords|repacks_solid_archives)_as_winrar_7_23_does$/)'
 slow-timeout = { period = "30s", terminate-after = 3 }
 
+# Run the column and diff oracle scripts, cases of builtins one after another: 8 s alone
+# on an idle machine, and past 15 s in the full lane, where both timed out once and passed
+# on the retry (2026-10-10).
+[[profile.default.overrides]]
+filter = 'binary(it) and test(/^(column_builtin::column_matches_util_linux|diff_builtin::diff_matches_gnu_diffutils)$/)'
+slow-timeout = { period = "30s", terminate-after = 3 }
+
 # Runs the grep oracle script, some 900 grep cases, many in `| od | sed` pipelines of
 # builtins, one after another: 12 s beside a build on an idle machine (2026-10-06).
 [[profile.default.overrides]]
