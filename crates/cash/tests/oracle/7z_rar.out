@@ -7847,3 +7847,218 @@ Enter password (will not be echoed):
 
 Break signaled
 rc=255
+== a link decoded inside a solid stream: the file after it fails, half written
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8765 bytes (9 KiB)
+
+Extracting archive: rar50/copy_links_mid_stream.rar
+--
+Path = rar50/copy_links_mid_stream.rar
+Type = Rar5
+Physical Size = 8765
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 2
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+ERROR: Data Error : t/f.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+./t/a.bin 392560148 3000
+./t/b.bin 2067975252 2000
+./t/c.bin 1400315925 2000
+./t/d.bin 1671016491 3000
+./t/e.bin 392560148 3000
+./t/f.bin 3077620036 115
+== damaged: rar50/m3_default.rar at 1090
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10007 bytes (10 KiB)
+
+Extracting archive: dmg.rar
+--
+Path = dmg.rar
+Type = Rar5
+Physical Size = 10007
+Characteristics = Locator QuickOpen:9882
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+ERROR: Data Error : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+./bigtext_64k.bin 1323238986 65536
+== damaged: rar50/m3_default.rar at 1284
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10007 bytes (10 KiB)
+
+Extracting archive: dmg.rar
+--
+Path = dmg.rar
+Type = Rar5
+Physical Size = 10007
+Characteristics = Locator QuickOpen:9882
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+ERROR: CRC Failed : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+./bigtext_64k.bin 1662419875 65536
+== damaged: rar50/solid_text.rar at 1535
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 7265 bytes (8 KiB)
+
+Extracting archive: dmg.rar
+--
+Path = dmg.rar
+Type = Rar5
+Physical Size = 7265
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = -
+Volumes = 1
+
+ERROR: Data Error : s/t1.txt
+ERROR: CRC Failed : s/t2.txt
+ERROR: CRC Failed : s/t3.txt
+
+Sub items Errors: 3
+
+Archives with Errors: 1
+
+Sub items Errors: 3
+rc=2
+./s/t1.txt 4104340465 9031
+./s/t2.txt 1563233346 9019
+./s/t3.txt 3162986898 8993
+== damaged: rar50/solid_text.rar at 4487
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 7265 bytes (8 KiB)
+
+Extracting archive: dmg.rar
+--
+Path = dmg.rar
+Type = Rar5
+Physical Size = 7265
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = -
+Volumes = 1
+
+ERROR: Data Error : s/t2.txt
+ERROR: CRC Failed : s/t3.txt
+
+Sub items Errors: 2
+
+Archives with Errors: 1
+
+Sub items Errors: 2
+rc=2
+./s/t1.txt 1078583284 9034
+./s/t2.txt 3656549164 9005
+./s/t3.txt 3849487837 8993
+== damaged: rar50/filter_e8.rar at 120
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 891 bytes (1 KiB)
+
+Extracting archive: dmg.rar
+--
+Path = dmg.rar
+Type = Rar5
+Physical Size = 891
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:256K:m5
+Multivolume = -
+Volumes = 1
+
+ERROR: Unsupported Method : x86_e8_stream.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+./x86_e8_stream.bin 2942661240 196608
+== damaged: rar50/filter_e8.rar at 135
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 891 bytes (1 KiB)
+
+Extracting archive: dmg.rar
+--
+Path = dmg.rar
+Type = Rar5
+Physical Size = 891
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:256K:m5
+Multivolume = -
+Volumes = 1
+
+ERROR: Data Error : x86_e8_stream.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+./x86_e8_stream.bin 3067148647 131072

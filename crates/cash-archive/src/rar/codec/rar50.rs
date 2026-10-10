@@ -469,6 +469,17 @@ pub fn read_table_lengths(input: &[u8], algorithm_version: u8) -> Result<(TableL
     )
 }
 
+/// Whether code lengths of at most 15 bits fill their code space exactly, or are all
+/// zero, as 7-Zip's finish mode asks of each table.
+fn complete_code(lengths: &[u8]) -> bool {
+    let filled = lengths
+        .iter()
+        .filter(|&&length| length != 0)
+        .map(|&length| 1u32 << (15 - u32::from(length.min(15))))
+        .sum::<u32>();
+    filled == 1 << 15 || filled == 0
+}
+
 fn read_table_lengths_with_allowance<B: Budget>(
     input: &[u8],
     algorithm_version: u8,
@@ -3272,6 +3283,31 @@ impl Unpack50Decoder {
             state: ReaderState::new(&Allowance::default()),
         }
     }
+
+    /// 7-Zip 26.03's finish mode for `decode_member_with_filters_to_sink`, as its RAR 5
+    /// decoder reads damaged data:
+    /// - each table must be a complete code, or empty;
+    /// - a match before the data, or a repeat of a distance never set, gives zeros and
+    ///   fails the member at its end;
+    /// - a symbol read past its block's bytes is read from the bytes after it, and
+    ///   stops the member; one read into the last byte's unused bits, or an unused bit
+    ///   set, fails the member at its end;
+    /// - a filter of no known type, starting or reaching more than 4 MiB on, or
+    ///   starting inside the last one's range is skipped (`unsupported_filter`), its
+    ///   range the last one's still; one past the member's end is kept;
+    /// - the data is decoded to its last block, what goes past the size kept in the
+    ///   window only, and a member of another size than its data fails;
+    /// - what decoded before a failure is handed over, the window and the tables kept
+    ///   for the next member, which starts where this one's size ends at the soonest.
+    pub const fn set_finish_mode(&mut self, finish: bool) {
+        self.state.finish = finish;
+    }
+
+    /// Whether the member last decoded in finish mode had a filter 7-Zip skips as an
+    /// unsupported method.
+    pub const fn unsupported_filter(&self) -> bool {
+        self.state.unsupported
+    }
     #[cfg(test)]
     #[cfg(feature = "write")]
     fn copy_match(
@@ -3410,6 +3446,14 @@ pub(crate) struct ReaderState<B: Budget> {
     reps: [usize; 4],
     last_length: usize,
     history: Buffer<u8, B>,
+    /// 7-Zip's finish mode, for the streaming decoder (`set_finish_mode`).
+    finish: bool,
+    /// In finish mode, for the member decoded: where the last filter read ends, whether
+    /// one was skipped as unsupported, and whether a block was read into its last byte's
+    /// unused bits or left one set.
+    filters_end: usize,
+    unsupported: bool,
+    bad_padding: bool,
 }
 
 impl<B: Budget> ReaderState<B> {
@@ -3423,6 +3467,10 @@ impl<B: Budget> ReaderState<B> {
             reps: [0; 4],
             last_length: 0,
             history: Buffer::new(allowance),
+            finish: false,
+            filters_end: 0,
+            unsupported: false,
+            bad_padding: false,
         }
     }
 
@@ -3437,6 +3485,10 @@ impl<B: Budget> ReaderState<B> {
             reps: self.reps,
             last_length: self.last_length,
             history: Buffer::copied(&self.history, &self.history.allowance())?,
+            finish: self.finish,
+            filters_end: self.filters_end,
+            unsupported: self.unsupported,
+            bad_padding: self.bad_padding,
         })
     }
     pub fn decode_member(
@@ -3701,7 +3753,7 @@ impl<B: Budget> ReaderState<B> {
     ) -> std::result::Result<(), StreamDecodeError<E>> {
         self.read_control.check_codec()?;
         let control = self.read_control.clone();
-        let input = &mut control.reader(input);
+        let input = &mut Lookahead::new(control.reader(input));
         if dictionary_size == 0 {
             return Err(Error::InvalidData("RAR 5 dictionary size is zero").into());
         }
@@ -3727,7 +3779,76 @@ impl<B: Budget> ReaderState<B> {
             dictionary_size,
             history_limit,
         )?;
+        output.finish = self.finish;
+        self.filters_end = 0;
+        self.unsupported = false;
+        self.bad_padding = false;
 
+        let decoded = self.decode_blocks(
+            input,
+            algorithm_version,
+            output_size,
+            &mut output,
+            &mut sink,
+            &mut filters,
+        );
+        if let Err(StreamDecodeError::Sink(error)) = decoded {
+            return Err(StreamDecodeError::Sink(error));
+        }
+        if !self.finish {
+            decoded?;
+            if output.written() != output_size {
+                return Err(Error::NeedMoreInput.into());
+            }
+            output.finish(&mut sink)?;
+            self.history = output.into_history();
+            return Ok(());
+        }
+        // What decoded before a failure is handed over too, as 7-Zip writes it, and the
+        // window kept for the solid stream's next member.
+        let flushed = output.finish(&mut sink);
+        let (written, out_of_window) = (output.written(), output.out_of_window);
+        self.history = output.into_history();
+        // 7-Zip's next member starts where this one's size ends, or where its data did:
+        // what did not decode is zeros in the window.
+        if written < output_size {
+            let gap = (output_size - written).min(history_limit);
+            let keep = self.history.len().min(history_limit - gap);
+            let mut history = Buffer::with_capacity(keep + gap, &self.history.allowance())?;
+            history
+                .extend_from_slice(&self.history[self.history.len() - keep..])
+                .map_err(Into::into)?;
+            history.resize(keep + gap, 0)?;
+            self.history = history;
+        }
+        decoded?;
+        flushed?;
+        if out_of_window {
+            return Err(Error::InvalidData("RAR 5 match reaches before the data").into());
+        }
+        if self.bad_padding {
+            return Err(Error::InvalidData("RAR 5 block ends inside its unused bits").into());
+        }
+        if written == output_size {
+            Ok(())
+        } else if written > output_size {
+            Err(Error::InvalidData("RAR 5 data goes on past its size").into())
+        } else {
+            Err(Error::NeedMoreInput.into())
+        }
+    }
+
+    /// The blocks of a member, decoded into `output` until its last block, or outside
+    /// finish mode its size.
+    fn decode_blocks<E>(
+        &mut self,
+        input: &mut Lookahead<impl Read>,
+        algorithm_version: u8,
+        output_size: usize,
+        output: &mut StreamingOutput<B>,
+        mut sink: &mut impl FnMut(DecodedChunk<'_>) -> std::result::Result<(), E>,
+        filters: &mut Option<&mut dyn FnMut(PendingFilter) -> std::result::Result<(), E>>,
+    ) -> std::result::Result<(), StreamDecodeError<E>> {
         loop {
             let block = read_compressed_block_with_allowance(input, &output.history.allowance())?;
             let payload = &*block.payload;
@@ -3738,29 +3859,87 @@ impl<B: Budget> ReaderState<B> {
                     algorithm_version,
                     &block.payload.allowance(),
                 )?;
+                if self.finish {
+                    let (level, _) = read_level_lengths(payload)?;
+                    if [
+                        &level[..],
+                        &lengths.main[..],
+                        &lengths.distance[..],
+                        &lengths.align[..],
+                        &lengths.length[..],
+                    ]
+                    .iter()
+                    .any(|table| !complete_code(table))
+                    {
+                        return Err(Error::InvalidData("RAR 5 Huffman table is incomplete").into());
+                    }
+                }
                 self.tables = Some(ReaderTables::from_lengths(
                     &lengths,
                     &block.payload.allowance(),
                 )?);
                 payload_bit_pos = table_bits;
             }
-            let tables = self
-                .tables
-                .take()
-                .ok_or(Error::InvalidData("RAR 5 block reuses missing tables"))?;
-            let mut bits = BitReader::new(payload);
+            // Outside finish mode the tables are taken, and lost when the block fails; in
+            // it they are borrowed, and kept for the next member, as 7-Zip keeps them.
+            let mut taken = None;
+            let tables = if self.finish {
+                self.tables.as_ref()
+            } else {
+                taken = self.tables.take();
+                taken.as_ref()
+            }
+            .ok_or(Error::InvalidData("RAR 5 block reuses missing tables"))?;
+            // In finish mode, a symbol that crosses the block's end is read from the
+            // bytes after it, as 7-Zip reads it, before the block fails.
+            let extended;
+            let source = if self.finish {
+                extended = input
+                    .extended(payload, LOOKAHEAD)
+                    .map_err(Error::from_read_error)?;
+                &extended[..]
+            } else {
+                payload
+            };
+            let mut bits = BitReader::new(source);
             bits.bit_pos = payload_bit_pos;
 
             let mut poller = self.read_control.poller();
-            while bits.bit_pos < block.header.payload_bits && output.written() < output_size {
+            // Where the last main symbol's code ended, for finish mode's end checks.
+            let mut main_end = 0;
+            while bits.bit_pos < block.header.payload_bits
+                && (self.finish || output.written() < output_size)
+            {
                 poller.check_codec(output.written())?;
                 let symbol = tables.main.decode(&mut bits)?;
+                main_end = bits.bit_pos;
                 match symbol {
                     0..=255 => output.push(symbol as u8, &mut sink)?,
                     256 => {
                         let Some(filters) = filters.as_mut() else {
                             return Err(StreamDecodeError::FilteredMember);
                         };
+                        if self.finish {
+                            // 7-Zip skips a filter it cannot take, and the member is an
+                            // unsupported method unless its data fails; one past the
+                            // member's end is kept, and fails it at the end.
+                            match read_filter_of_any_type(&mut bits, output.written())? {
+                                Some(filter)
+                                    if filter.start >= self.filters_end
+                                        && filter.start - output.written() <= MAX_FILTER_SPAN
+                                        && filter.length <= MAX_FILTER_SPAN =>
+                                {
+                                    self.filters_end = filter.start.saturating_add(filter.length);
+                                    filters(filter).map_err(StreamDecodeError::Sink)?;
+                                }
+                                Some(filter) => {
+                                    self.filters_end = filter.start.saturating_add(filter.length);
+                                    self.unsupported = true;
+                                }
+                                None => self.unsupported = true,
+                            }
+                            continue;
+                        }
                         let filter = read_filter(&mut bits, output.written())?;
                         if filter
                             .start
@@ -3781,7 +3960,9 @@ impl<B: Budget> ReaderState<B> {
                     258..=261 => {
                         let rep_index = symbol - 258;
                         let distance = self.reps[rep_index];
-                        if distance == 0 {
+                        // In finish mode, a distance never set reaches before the data
+                        // (`copy_match` flags it), as 7-Zip goes on with it.
+                        if distance == 0 && !self.finish {
                             return Err(Error::InvalidData(
                                 "RAR 5 repeat distance is not initialized",
                             )
@@ -3827,19 +4008,32 @@ impl<B: Budget> ReaderState<B> {
                     }
                 }
             }
-
-            self.tables = Some(tables);
-            if block.header.is_last || output.written() >= output_size {
-                break;
+            if let Some(tables) = taken {
+                self.tables = Some(tables);
             }
-        }
 
-        if output.written() == output_size {
-            output.finish(&mut sink)?;
-            self.history = output.into_history();
-            Ok(())
-        } else {
-            Err(Error::NeedMoreInput.into())
+            if self.finish {
+                // A main symbol's code past the block's end, or a symbol read to the end
+                // of its bytes, stops the member; extra bits read into the last byte's
+                // unused bits, or those bits not zero, fail it at its end.
+                let end = block.header.payload_bits;
+                if bits.bit_pos > end && (main_end > end || bits.bit_pos >= payload.len() * 8) {
+                    return Err(Error::InvalidData("RAR 5 block is read past its end").into());
+                }
+                let unused = (8 - end % 8) % 8;
+                if bits.bit_pos > end
+                    || (unused != 0
+                        && payload
+                            .last()
+                            .is_some_and(|&last| last & ((1 << unused) - 1) != 0))
+                {
+                    self.bad_padding = true;
+                }
+            }
+            // In finish mode the data is decoded to its last block whatever its size.
+            if block.header.is_last || (!self.finish && output.written() >= output_size) {
+                return Ok(());
+            }
         }
     }
 
@@ -3942,6 +4136,55 @@ fn reader_history_capacity(current: usize, required: usize, limit: usize) -> usi
     }
 }
 
+/// How many bytes after a block a symbol crossing its end may read, in finish mode.
+const LOOKAHEAD: usize = 16;
+
+/// A member's input, the bytes after a block looked at ahead: 7-Zip's decoder reads a
+/// symbol that crosses its block's end from them.
+struct Lookahead<R> {
+    inner: R,
+    ahead: Vec<u8>,
+}
+
+impl<R: Read> Lookahead<R> {
+    const fn new(inner: R) -> Self {
+        Self {
+            inner,
+            ahead: Vec::new(),
+        }
+    }
+
+    /// `payload` and the `n` bytes after it, zeros where the input ends.
+    fn extended(&mut self, payload: &[u8], n: usize) -> std::io::Result<Vec<u8>> {
+        while self.ahead.len() < n {
+            let mut buf = [0u8; LOOKAHEAD];
+            let want = (n - self.ahead.len()).min(buf.len());
+            let got = self.inner.read(&mut buf[..want])?;
+            if got == 0 {
+                break;
+            }
+            self.ahead.extend_from_slice(&buf[..got]);
+        }
+        let mut out = Vec::with_capacity(payload.len() + n);
+        out.extend_from_slice(payload);
+        out.extend_from_slice(&self.ahead[..self.ahead.len().min(n)]);
+        out.resize(payload.len() + n, 0);
+        Ok(out)
+    }
+}
+
+impl<R: Read> Read for Lookahead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.ahead.is_empty() {
+            return self.inner.read(buf);
+        }
+        let n = buf.len().min(self.ahead.len());
+        buf[..n].copy_from_slice(&self.ahead[..n]);
+        self.ahead.drain(..n);
+        Ok(n)
+    }
+}
+
 struct StreamingOutput<B: Budget = Allowance> {
     history: super::workspace::Deque<u8, B>,
     pending: Buffer<u8, B>,
@@ -3950,6 +4193,14 @@ struct StreamingOutput<B: Budget = Allowance> {
     dictionary_size: usize,
     history_limit: usize,
     all_zero: bool,
+    /// 7-Zip's finish mode: what decodes past `output_limit` goes on into the window
+    /// only, not refused, and a match reaching before the data is noted, not refused.
+    finish: bool,
+    /// The bytes handed to the sink, at most `output_limit` in finish mode.
+    sent: usize,
+    /// Whether a match reached before the data, which 7-Zip's finish mode fails at the
+    /// end (the bytes zeros meanwhile).
+    out_of_window: bool,
 }
 
 impl<B: Budget> StreamingOutput<B> {
@@ -3971,6 +4222,9 @@ impl<B: Budget> StreamingOutput<B> {
             output_limit,
             dictionary_size,
             history_limit,
+            finish: false,
+            sent: 0,
+            out_of_window: false,
         })
     }
 
@@ -3983,7 +4237,7 @@ impl<B: Budget> StreamingOutput<B> {
         byte: u8,
         sink: &mut impl FnMut(DecodedChunk<'_>) -> std::result::Result<(), E>,
     ) -> std::result::Result<(), StreamDecodeError<E>> {
-        if self.written >= self.output_limit {
+        if !self.finish && self.written >= self.output_limit {
             return Err(Error::InvalidData("RAR 5 match exceeds output limit").into());
         }
         if byte != 0 {
@@ -4003,10 +4257,11 @@ impl<B: Budget> StreamingOutput<B> {
         mut count: usize,
         sink: &mut impl FnMut(DecodedChunk<'_>) -> std::result::Result<(), E>,
     ) -> std::result::Result<(), StreamDecodeError<E>> {
-        if self
-            .written
-            .checked_add(count)
-            .is_none_or(|end| end > self.output_limit)
+        if !self.finish
+            && self
+                .written
+                .checked_add(count)
+                .is_none_or(|end| end > self.output_limit)
         {
             return Err(Error::InvalidData("RAR 5 match exceeds output limit").into());
         }
@@ -4059,7 +4314,9 @@ impl<B: Budget> StreamingOutput<B> {
         length: usize,
         sink: &mut impl FnMut(DecodedChunk<'_>) -> std::result::Result<(), E>,
     ) -> std::result::Result<(), StreamDecodeError<E>> {
-        if self.all_zero && distance <= self.written + self.history.len() {
+        // In finish mode the window holds every byte, zeros too, so that a match out
+        // of it is told apart.
+        if !self.finish && self.all_zero && distance <= self.written + self.history.len() {
             return self.push_zeroes(length, sink);
         }
         // Zero-fill out-of-window matches, as the buffered decoder does.
@@ -4067,12 +4324,14 @@ impl<B: Budget> StreamingOutput<B> {
             || distance > self.dictionary_size
             || distance > self.history.len() + self.pending.len()
         {
+            self.out_of_window = true;
             return self.push_repeated(0, length, sink);
         }
-        if self
-            .written
-            .checked_add(length)
-            .is_none_or(|end| end > self.output_limit)
+        if !self.finish
+            && self
+                .written
+                .checked_add(length)
+                .is_none_or(|end| end > self.output_limit)
         {
             return Err(Error::InvalidData("RAR 5 match exceeds output limit").into());
         }
@@ -4106,7 +4365,17 @@ impl<B: Budget> StreamingOutput<B> {
         if self.pending.is_empty() {
             return Ok(());
         }
-        sink(DecodedChunk::Bytes(&self.pending)).map_err(StreamDecodeError::Sink)?;
+        let send = if self.finish {
+            self.pending
+                .len()
+                .min(self.output_limit.saturating_sub(self.sent))
+        } else {
+            self.pending.len()
+        };
+        if send != 0 {
+            sink(DecodedChunk::Bytes(&self.pending[..send])).map_err(StreamDecodeError::Sink)?;
+            self.sent += send;
+        }
         let incoming = &self.pending[self.pending.len().saturating_sub(self.history_limit)..];
         let keep = self.history.len().min(self.history_limit - incoming.len());
         let required = keep + incoming.len();
@@ -4303,6 +4572,37 @@ fn read_filter(bits: &mut BitReader<'_>, current_pos: usize) -> Result<PendingFi
         filter_type,
         channels,
     })
+}
+
+/// The largest offset and length of a filter that 7-Zip's finish mode takes.
+const MAX_FILTER_SPAN: usize = 1 << 22;
+
+/// `read_filter`, a type past ARM read as none (its record read whole), as 7-Zip skips
+/// it.
+fn read_filter_of_any_type(
+    bits: &mut BitReader<'_>,
+    current_pos: usize,
+) -> Result<Option<PendingFilter>> {
+    let offset = read_filter_data(bits)? as usize;
+    let length = read_filter_data(bits)? as usize;
+    let filter_type = match bits.read_bits(3)? {
+        0 => FilterType::Delta,
+        1 => FilterType::E8,
+        2 => FilterType::E8E9,
+        3 => FilterType::Arm,
+        _ => return Ok(None),
+    };
+    let channels = if filter_type == FilterType::Delta {
+        bits.read_bits(5)? as usize + 1
+    } else {
+        0
+    };
+    Ok(current_pos.checked_add(offset).map(|start| PendingFilter {
+        start,
+        length,
+        filter_type,
+        channels,
+    }))
 }
 
 fn read_filter_data(bits: &mut BitReader<'_>) -> Result<u32> {
@@ -11061,6 +11361,32 @@ mod tests {
             writer.write_bits(0, 1); // length slot 0
         }
         writer.finish()
+    }
+
+    #[test]
+    fn finish_mode_takes_complete_or_empty_tables_only() {
+        assert!(complete_code(&[1, 1]));
+        assert!(complete_code(&[2, 0, 2, 1, 0]));
+        assert!(complete_code(&[0; 16]));
+        assert!(complete_code(&[]));
+        assert!(!complete_code(&[1]));
+        assert!(!complete_code(&[2, 2, 2]));
+        assert!(complete_code(&[4; 16]));
+        assert!(!complete_code(&[4; 15]));
+    }
+
+    #[test]
+    fn lookahead_lends_the_bytes_after_a_block_and_reads_them_still() {
+        let mut input = Lookahead::new(&b"abcdef"[..]);
+        let mut first = [0u8; 2];
+        input.read_exact(&mut first).unwrap();
+        assert_eq!(&first, b"ab");
+        assert_eq!(input.extended(b"xy", 3).unwrap(), b"xycde");
+        // Past the end, zeros.
+        assert_eq!(input.extended(b"", 6).unwrap(), b"cdef\0\0");
+        let mut rest = Vec::new();
+        input.read_to_end(&mut rest).unwrap();
+        assert_eq!(rest, b"cdef");
     }
 
     fn control_only_block(symbol: usize) -> Vec<u8> {

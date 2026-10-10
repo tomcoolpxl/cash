@@ -649,8 +649,32 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      own slips are kept: a link decoded inside a solid stream breaks the file after it,
      and a link to a solid file that no stream goes on from comes out empty, "Everything
      is Ok" (`copy_links_*.rar` in `7z_rar.sh`).
-   - Output on a data error: 7-Zip has written what decoded before it, rar's RAR 1.5 to
-     4 decoders hand over nothing (`compressed_multivol_prng_rar300.r02`).
+   - Output on a data error, RAR 5: done 2026-10-10. The RAR 5 decoder has 7-Zip's
+     finish mode (`Unpack50Decoder::set_finish_mode`), found by damaging one byte of
+     WinRAR archives at a time and comparing 7z with 7-Zip's verdict, bytes and
+     checksum:
+     - what decoded before the fault is written;
+     - tables must be complete codes or empty;
+     - a match before the data, or a repeat never set, gives zeros and fails the file;
+     - a main code past a block's end, or a symbol read to the end of its bytes,
+       stops; extra bits in the last byte's unused bits, or those bits set, fail the
+       file at its end;
+     - the data is decoded to its last block, past the size into the window only;
+     - a filter of no known type, more than 4 MiB on, or inside the last filter's range
+       is skipped as "Unsupported Method" (a data error wins over it, it over CRC);
+     - a filter past the file's end is kept, and nothing from its start is written;
+     - in a solid stream the window and tables carry on after a fault, the next file
+       starting at the size's end at the soonest.
+
+     Every offset of the sweeps matches (text, an executable with E8 filters, Delta,
+     ARM, solid; `7z_rar.sh` keeps a handful). The rar builtin keeps the old decoding:
+     WinRAR's own on damaged data is not observed.
+   - Output on a data error, RAR 1.5 to 4: closed 2026-10-10 by the user's rule that a
+     faulty archive needs a faulty status, not 7-Zip's exact bytes. Both give one;
+     7-Zip's old decoders flush their window in large chunks, so a small damaged file
+     gets nothing written in either, and the error word differs on some offsets (CRC
+     against data error, both ways; 5 of 30 offsets of `rarvm/filter_bsdcat_exe.rar`
+     and `rar250/unpack20_keep_tables.rar`).
    - Alternate streams (`STM`) and ACLs, whose `NT Security` 7-Zip shows as the
      descriptor's SDDL text.
    - An SFX's archive inside its `.exe` (7-Zip opens an `.exe` as PE first, which

@@ -531,7 +531,11 @@ pub(super) fn work5(
                     };
                     let dict = usize::try_from(item.dict_size()).unwrap_or(usize::MAX);
                     let slot = usize::from(item.is_service());
-                    let decoder = decoders[slot].get_or_insert_with(Unpack50Decoder::new);
+                    let decoder = decoders[slot].get_or_insert_with(|| {
+                        let mut decoder = Unpack50Decoder::new();
+                        decoder.set_finish_mode(true);
+                        decoder
+                    });
                     rardata::decode5(
                         decoder,
                         &mut input,
@@ -549,6 +553,7 @@ pub(super) fn work5(
             match result {
                 Ok(()) => {}
                 Err(error) if stopped(&error) => halted = true,
+                Err(DecodeError::Unsupported) => decoded = Err(Problem::UnsupportedMethod),
                 Err(_) => decoded = Err(Problem::Data),
             }
             if decoded.is_ok()

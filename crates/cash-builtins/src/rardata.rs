@@ -309,6 +309,8 @@ pub(crate) enum DecodeError {
     Sink(io::Error),
     /// The data does not decode.
     Data,
+    /// The data decodes, but for a filter 7-Zip's finish mode skips as unsupported.
+    Unsupported,
 }
 
 /// The copy method: the packed bytes as they are.
@@ -453,11 +455,19 @@ pub(crate) fn decode5(
     let mut f = filtered.borrow_mut();
     match result {
         Ok(()) => {
-            let flushed = f.release_all();
-            if f.failed || !f.pending.is_empty() {
+            // A filter the data does not fill (in 7-Zip's finish mode, one past the
+            // member's end) has none of its range written.
+            let complete = f.pending.is_empty();
+            let flushed = if complete { f.release_all() } else { Ok(()) };
+            if f.failed || !complete {
                 Err(DecodeError::Data)
             } else {
-                flushed.map_err(DecodeError::Sink)
+                flushed.map_err(DecodeError::Sink)?;
+                if decoder.unsupported_filter() {
+                    Err(DecodeError::Unsupported)
+                } else {
+                    Ok(())
+                }
             }
         }
         Err(StreamDecodeError::Sink(e)) => Err(DecodeError::Sink(e)),

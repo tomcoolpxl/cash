@@ -221,4 +221,17 @@ echo "== a link to an encrypted file asks for the password"
 xt -ppassword rar50/copy_links_password.rar s/d.bin
 xt rar50/copy_links_password.rar s/d.bin
 
+# Damaged RAR 5 data, one byte of an archive set to U (0x55): what decoded before the
+# fault is written, a filter 7-Zip cannot take is an unsupported method, and a solid
+# stream goes on after a damaged file.
+dmg() { { head -c "$2" "$1"; printf 'U'; tail -c +$(($2 + 2)) "$1"; } > dmg.rar; }
+echo "== a link decoded inside a solid stream: the file after it fails, half written"
+xt rar50/copy_links_mid_stream.rar
+for case in m3_default:1090 m3_default:1284 solid_text:1535 solid_text:4487 filter_e8:120 \
+    filter_e8:135; do
+  echo "== damaged: rar50/${case%:*}.rar at ${case#*:}"
+  dmg "rar50/${case%:*}.rar" "${case#*:}"
+  xt dmg.rar
+done
+
 cd / && rm -rf "$dir"
