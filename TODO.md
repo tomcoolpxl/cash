@@ -1024,9 +1024,10 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    scratch files are opened delete-on-close, a spool keeping that handle while it lives,
    and a writer with no temp folder named spools in the system's, not the process's
    working folder. `rar a` passes `-w`'s folder when given.
-5. **rar's AES key schedules are not wiped**: rars cleared them through the `aes`
-   crate's `zeroize` feature; the passwords, keys and IVs are cleared by `crypto::wipe`,
-   the `Aes128`/`Aes256` round keys are not. Wipe them, or say why not.
+5. **rar's AES key schedules are not wiped**: done 2026-10-10, the user's pick (a
+   download of `zeroize`, in the end found in cargo's cache). The `aes` crate's
+   `zeroize` feature is on, so `Aes128`/`Aes256` wipe their round keys when dropped,
+   for zip and 7z as well as RAR; the passwords, keys and IVs stay `crypto::wipe`'s.
 
 ---
 
@@ -1042,8 +1043,8 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
   with `rar d`): Rar.exe 7.23 on Windows takes `\` alone between folders in the names
   after the archive's, so `t`, `p`, `e`, `x` and `d` given `src/a.txt`, `*/a.txt` or
   `src/*` say no files and return 10, where `src\a.txt` works. cash's rar takes both,
-  which in a shell where `/` is typed is what a user means. Whether cash should follow
-  Rar.exe here is **yours**; the oracles use `\`.
+  which in a shell where `/` is typed is what a user means. Kept so, the user's pick
+  on 2026-10-10; the oracles use `\`.
 - **`ch -amr` on a saved name differing only in case deletes the archive in Rar.exe**
   (found on 2026-10-09): `M2.RAR` saved as `m2.rar` is asked about as taken (it is
   itself), and on Yes or `-o+` Rar.exe deletes it, then cannot rename it ("Cannot

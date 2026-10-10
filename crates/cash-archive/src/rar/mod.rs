@@ -5,7 +5,8 @@
 //! Apache License 2.0 (`licenses/rars-Apache-2.0.txt`); changed for cash from there on,
 //! as `NOTICE` lists. Every file of this module came from it. Its features (`write`,
 //! `parallel`, `recovery`, `encryption`) are cash-archive's, all on; its secrets are
-//! cleared by `crypto::wipe` where rars used the `zeroize` crate.
+//! cleared by `crypto::wipe` where rars used the `zeroize` crate, and the AES ciphers'
+//! round keys by the `aes` crate's own `zeroize` feature.
 
 // Taken from rars, written to other rules: the style lints it was not written to are
 // allowed rather than rewritten (as for sevenz). The lints for code that can panic apply

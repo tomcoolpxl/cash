@@ -26,7 +26,8 @@ ruzstd = "0.9.0"
 deflate64 = "0.1.12"
 # zip: WinZip's AES encryption, as 7-Zip and WinZip write it (PBKDF2 with HMAC-SHA1 for
 # the keys, AES in counter mode, an HMAC-SHA1 check); RustCrypto's pure-Rust crates.
-aes = "0.9"
+# `zeroize` wipes a cipher's round keys when it is dropped, for zip, 7z and RAR alike.
+aes = { version = "0.9", features = ["zeroize"] }
 hmac = "0.13"
 pbkdf2 = "0.13"
 sha1 = "0.11"
