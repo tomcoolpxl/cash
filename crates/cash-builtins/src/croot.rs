@@ -63,14 +63,7 @@ impl builtins::Command for CrootCommand {
                 Shows::Folders
             },
             then: Then::Close,
-            history: context
-                .shell
-                .directory_history()
-                .back()
-                .iter()
-                .rev()
-                .cloned()
-                .collect(),
+            history: context.shell.folders_to_offer(),
             home,
             colours: if colour {
                 Colours::new(

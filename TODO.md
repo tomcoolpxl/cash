@@ -1047,8 +1047,13 @@ day (spec D79, D80). In order:
    history, so `history -c` empties it too. `reverse-search-history` is Reedline's search
    again, which `bind` can put back on Ctrl-R. Help: `keys`, `history`, `vars`,
    `differences`, F1, README.
-2. **`z`: the folder jump** (D80): every change of folder ranked across sessions as
-   zoxide ranks, `z WORDS`, `z -l`, `z -i`, Tab, and Alt-E's Alt-H on the same record.
+2. **`z`: the folder jump** (D80, done 2026-10-10): every change of folder ranked across
+   sessions as zoxide ranks, `z WORDS`, `z -l`, `z -i`, Tab, and Alt-E's Alt-H (and
+   `croot`'s) on the same record, `%LOCALAPPDATA%\cash\folders`. A gone folder is
+   skipped and forgotten after 90 days without a visit, as zoxide does, rather than at
+   once (an unplugged drive keeps its folders). Tab replaces all the words typed, since
+   a full path would not match them in turn. Tests: `it/z_jump.rs`, and two sessions in
+   `conpty_z_jumps_to_folders_a_session_before_went_to`.
 3. **Every way of writing a path, everywhere**: each spelling in each place a path is
    typed or written, as a table of tests; what fails fixed.
 4. **A guard on size and speed**: `cargo xtask perf`, `perf-budget.toml`, run by the
@@ -1200,6 +1205,20 @@ day (spec D79, D80). In order:
   MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
   during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs
   with the repository as its folder. Find it and give it a temporary folder.
+- **Candidate: `sudo` elevating in this terminal by itself** (asked for by the user on
+  2026-10-10, not yet chosen): `sudo` is cash's builtin, but the elevation is handed to
+  gsudo, else Windows' own `sudo` (Windows 11, once turned on), else a plain UAC
+  request, which runs the command in a new window that cash does not wait for: no
+  output here and no status. In-terminal elevation is what gsudo adds: an elevated
+  helper that attaches to the caller's console. cash could do it itself: start an
+  elevated copy of `cash.exe` through UAC with a hidden helper argument, which
+  `AttachConsole`s to the calling cash's console (or relays it over a pipe), runs the
+  command there and returns its status, so `sudo CMD` needs no other tool. To find
+  out, by observation: whether an elevated process may attach to an unelevated
+  console on Windows 11 (gsudo's "attached" mode says so); Ctrl-C and the console
+  modes across the two; how the job object (spec D42) sees the elevated helper; and a
+  credentials cache, as `sudo -v` gives with gsudo, if it is wanted at all. Design
+  with a pick list before any code.
 
 ---
 

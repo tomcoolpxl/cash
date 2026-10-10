@@ -1109,6 +1109,9 @@ impl Config {
         if let Some(completions) = self.sudo_completions(shell, input, position).await? {
             return Ok(completions);
         }
+        if let Some(completions) = z_completions(shell, input, position) {
+            return Ok(completions);
+        }
 
         let cursor = position;
         let mut preceding_token = None;
@@ -1917,6 +1920,75 @@ fn after_sudo(input: &str, position: usize) -> Option<usize> {
             at = user_start + user_len;
         }
     }
+}
+
+/// Whether cash completes `command`'s words itself, so that no other completer is asked:
+/// its builtin `z` (D80), unless a `z` function (zoxide's) or a `complete` spec for `z`
+/// is there to come first.
+pub fn completes_itself(shell: &Shell<impl extensions::ShellExtensions>, command: &str) -> bool {
+    command == "z"
+        && shell.funcs().get("z").is_none()
+        && shell.completion_config().get("z").is_none()
+}
+
+/// Completions for the words after `z` (D80): the recorded folders those typed so far
+/// match, best first, each replacing all of them, since a folder's path is not a word
+/// `z` would match in turn. `None` for a line that is not `z`'s, a word that is a path
+/// being typed (which completes as any path does), or no folder found.
+fn z_completions(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    input: &str,
+    position: usize,
+) -> Option<Completions> {
+    let before = input.get(..position)?;
+    let words = plain_words(before);
+    let (_, command) = words.first()?;
+    if !completes_itself(shell, command) {
+        return None;
+    }
+    let typed: Vec<(usize, &str)> = words[1..]
+        .iter()
+        .filter(|(_, word)| !matches!(*word, "-l" | "-i" | "--list" | "--interactive" | "--"))
+        .copied()
+        .collect();
+    let in_a_word = !before.ends_with(char::is_whitespace);
+    if typed
+        .iter()
+        .any(|(_, word)| word.contains(['\'', '"', '\\', '$', '`']))
+        || (in_a_word
+            && typed.last().is_some_and(|(_, word)| {
+                word.contains('/') || word.starts_with(['.', '~']) || word.ends_with(':')
+            }))
+    {
+        return None;
+    }
+    let start = typed.first().map_or(position, |(start, _)| *start);
+    let record = shell.folder_record()?;
+    let here = cash_win32::path::render(shell.working_dir());
+    let words: Vec<&str> = typed.iter().map(|(_, word)| *word).collect();
+    let found = crate::kept::folders::find(&record, &words, crate::kept::now(), Some(&here));
+    if found.is_empty() {
+        return None;
+    }
+    let options = ProcessingOptions {
+        treat_as_filenames: true,
+        ..ProcessingOptions::default()
+    };
+    let candidates = autoquote_candidates(
+        found.into_iter().map(|(folder, _)| folder.path).collect(),
+        before.get(start..).unwrap_or_default(),
+        &options,
+        |name| Path::new(name).is_dir(),
+    );
+    Some(Completions {
+        insertion_index: start,
+        delete_count: position - start,
+        candidates,
+        options: ProcessingOptions {
+            no_autoquote_filenames: true,
+            ..options
+        },
+    })
 }
 
 /// The words of `input` with where each starts, split at whitespace.

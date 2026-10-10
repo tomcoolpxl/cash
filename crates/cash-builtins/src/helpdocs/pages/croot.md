@@ -1,5 +1,5 @@
 ---
-see: cd cdh prevd keys
+see: cd cdh prevd z keys
 ---
 ## Description
 
@@ -18,7 +18,9 @@ It shows a tree of the folder it starts in, several levels deep, trimmed to fit 
   the ones shown too. `Backspace` edits the filter.
 - `Enter`: pick. `Ctrl-Enter`: pick and close.
 - `Esc`: clear the filter; on an empty filter, close without a pick.
-- `Alt-F`: folders only, or files too. `Alt-H`: the folders you were in recently.
+- `Alt-F`: folders only, or files too. `Alt-H`: the folders you go to most, best first,
+  from the record `z` uses (see `help z`); while none are recorded, the folders this
+  session was in, most recent first.
 - `Alt-S`: newest first, with each entry's age (`3h`, `2d`), or back to names.
 - `Alt-.`: show hidden entries. `Alt-I`: show entries a `.gitignore` leaves out.
 

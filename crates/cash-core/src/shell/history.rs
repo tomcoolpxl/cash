@@ -172,6 +172,25 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         &self.records
     }
 
+    /// The record of the folders visited, for `z` and Alt-E's Alt-H (D80): the one an
+    /// interactive shell keeps, or, in a script, the one it would keep, read only; `None`
+    /// when `CASH_NO_RECORDS` is set or `%LOCALAPPDATA%` is not.
+    pub fn folder_record(&self) -> Option<PathBuf> {
+        if let Some(file) = self.records.folders_file() {
+            return Some(file.to_path_buf());
+        }
+        if self
+            .env_str("CASH_NO_RECORDS")
+            .is_some_and(|value| !value.is_empty())
+        {
+            return None;
+        }
+        let localappdata = self.env_str("LOCALAPPDATA").map(|value| value.into_owned());
+        crate::kept::Records::at(localappdata.as_deref())
+            .folders_file()
+            .map(std::path::Path::to_path_buf)
+    }
+
     /// Whether a pattern of `HISTIGNORE` matches the whole of `command`. The patterns are
     /// separated by colons (`\:` is a colon in one), and `&` stands for the previous entry.
     fn history_ignores(&self, command: &str, previous: Option<&str>) -> Result<bool, error::Error> {

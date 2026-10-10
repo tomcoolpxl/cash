@@ -226,6 +226,8 @@ mod winpaths;
 mod xxd_builtin;
 // `xz` and its five other names: XZ Utils 5.8's golden output, and the file handling.
 mod xz_builtin;
+// D80: `z`, the folder jump, on a record of folders made for the test; its Tab completion.
+mod z_jump;
 // `zip`, `unzip` and `zipinfo`: Info-ZIP's golden output, Windows' own readers and writers.
 mod zip_builtin;
 // `zstd`, `unzstd` and `zstdcat`: zstd 1.5.7's golden output, and the file handling.

@@ -248,6 +248,9 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
 
         // cash (D73): the file and folder picker, also on Alt-E at the prompt.
         m.insert("croot".into(), builtin::<croot::CrootCommand, SE>());
+
+        // cash (D80): zoxide's folder jump, on the folders an interactive cash records.
+        m.insert("z".into(), builtin::<z::ZCommand, SE>());
     }
 
     // cash (D45): Windows-specific builtins. Not feature-gated per builtin — each is the

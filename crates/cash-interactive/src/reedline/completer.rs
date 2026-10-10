@@ -79,7 +79,10 @@ impl<SE: cash_core::ShellExtensions> ReedlineCompleter<SE> {
     ) -> Option<CarapaceRequest> {
         let (mut words, word_start) = carapace::command_words(line, pos)?;
         let config = shell.completion_config();
-        if config.get(&words[0]).is_some() || config.default.is_some() {
+        if config.get(&words[0]).is_some()
+            || config.default.is_some()
+            || cash_core::completion::completes_itself(shell, &words[0])
+        {
             return None;
         }
         words[0] = self.carapace.get(shell)?.completes(&words[0])?;

@@ -114,6 +114,9 @@ The prompt borrows what fish does well, without giving up Bash's language:
   `CASH_TRANSIENT_PS1='$(starship module character --status="$STARSHIP_CMD_STATUS")'`.
 - **Folder history**: on an empty line, Alt-← and Alt-→ step back and forward through the
   folders you have been in; `prevd`, `nextd` and `cdh` do it by name (D62).
+- **A folder jump**: `z cash` goes to the folder matching `cash` you go to most, ranked
+  across sessions as zoxide ranks them; `z -i` picks from a list, Tab after `z` offers
+  the matches, and Alt-E's Alt-H lists the same folders (D80).
 - **croot, a file and folder picker**: Alt-E opens a tree below the command line. Typing
   filters it, the arrows walk it, and Enter picks: on an empty line or after `cd` it
   goes there, after any other command it inserts the path. `croot` does the same from

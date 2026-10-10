@@ -384,15 +384,33 @@ pub mod folders {
         found
     }
 
-    /// Forgets `folder`, gone since it was visited, in the record at `path`.
-    pub fn forget(path: &Path, folder: &str) {
-        if let Ok(mut record) = load(path) {
-            let before = record.len();
-            record.retain(|known| !same_folder(&known.path, folder));
-            if record.len() != before {
-                let _ = save(path, &record);
+    /// How long a folder that is gone stays in the record, in seconds since its last
+    /// visit: 90 days, as zoxide keeps one, so a drive unplugged for a while is not lost.
+    pub const GONE_FOR: i64 = 90 * 86_400;
+
+    /// The folders of the record at `path` that match `words` and are there, best first.
+    ///
+    /// Each comes with its score at `now`; `here` is left out. One that is gone is
+    /// skipped, and forgotten when it was last visited more than [`GONE_FOR`] ago.
+    #[must_use]
+    pub fn find(path: &Path, words: &[&str], now: i64, here: Option<&str>) -> Vec<(Folder, f64)> {
+        let Ok(mut record) = load(path) else {
+            return Vec::new();
+        };
+        let mut found = Vec::new();
+        let mut expired = Vec::new();
+        for folder in ranked(&record, words, now, here) {
+            if Path::new(&folder.path).is_dir() {
+                found.push((folder.clone(), score(folder, now)));
+            } else if now.saturating_sub(folder.last) > GONE_FOR {
+                expired.push(folder.path.clone());
             }
         }
+        if !expired.is_empty() {
+            record.retain(|known| !expired.contains(&known.path));
+            let _ = save(path, &record);
+        }
+        found
     }
 }
 
@@ -510,6 +528,37 @@ mod tests {
         let found = folders::ranked(&record, &["cash"], 10, Some("c:/C/cash"));
         let paths: Vec<&str> = found.iter().map(|f| f.path.as_str()).collect();
         assert_eq!(paths, ["C:/b/cash", "C:/a/cash"]);
+    }
+
+    #[test]
+    fn finding_skips_a_gone_folder_and_forgets_it_after_ninety_days() {
+        let dir = scratch("find");
+        let there = dir.join("there");
+        fs::create_dir(&there).unwrap();
+        let there = there.to_string_lossy().replace('\\', "/");
+        let path = dir.join("folders");
+        let now = 1_000_000_000;
+        let folder = |path: &str, last: i64| folders::Folder {
+            path: path.to_owned(),
+            rank: 1.0,
+            last,
+        };
+        let record = vec![
+            folder(&there, now),
+            folder("C:/gone-lately/there", now - 86_400),
+            folder("C:/gone-long-ago/there", now - folders::GONE_FOR - 1),
+        ];
+        folders::save(&path, &record).unwrap();
+        let found = folders::find(&path, &["there"], now, None);
+        let paths: Vec<&str> = found.iter().map(|(f, _)| f.path.as_str()).collect();
+        assert_eq!(paths, [there.as_str()]);
+        let kept: Vec<String> = folders::load(&path)
+            .unwrap()
+            .into_iter()
+            .map(|f| f.path)
+            .collect();
+        assert_eq!(kept, [there, "C:/gone-lately/there".to_owned()]);
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

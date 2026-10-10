@@ -81,6 +81,7 @@ an entry or page names no builtin.
 - `nextd`: Go forward through the folder history.
 - `prevd`: Go back through the folder history.
 - `which`: Say what cash would run for a name, as a runnable path.
+- `z`: Jump to a folder you often go to, from a word of its path.
 
 ## Terminal and clipboard
 

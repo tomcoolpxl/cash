@@ -76,13 +76,7 @@ fn open(
             home: var("HOME")
                 .filter(|home| !home.is_empty())
                 .map(|home| cash_win32::path::accept_path(&home)),
-            history: shell
-                .directory_history()
-                .back()
-                .iter()
-                .rev()
-                .cloned()
-                .collect(),
+            history: shell.folders_to_offer(),
             ls_colors: var("LS_COLORS"),
             picker_colors: var("CASH_PICKER_COLORS"),
             height: var("CASH_PICKER_HEIGHT"),

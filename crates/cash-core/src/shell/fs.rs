@@ -111,6 +111,31 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         &self.directory_history
     }
 
+    /// The folders a picker's Alt-H offers (D80): those recorded across sessions, best
+    /// first, without the current one; the folders this session has been in, newest
+    /// first, while none are recorded.
+    pub fn folders_to_offer(&self) -> Vec<PathBuf> {
+        let here = cash_win32::path::render(self.working_dir());
+        let recorded: Vec<PathBuf> = self
+            .folder_record()
+            .map(|record| {
+                crate::kept::folders::find(&record, &[], crate::kept::now(), Some(&here))
+                    .into_iter()
+                    .map(|(folder, _)| PathBuf::from(folder.path))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !recorded.is_empty() {
+            return recorded;
+        }
+        self.directory_history
+            .back()
+            .iter()
+            .rev()
+            .cloned()
+            .collect()
+    }
+
     /// Tilde-shortens the given string, replacing the user's home directory with a tilde.
     ///
     /// # Arguments

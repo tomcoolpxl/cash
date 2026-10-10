@@ -85,7 +85,8 @@ pub struct Setup {
     pub shows: Shows,
     /// What a pick does.
     pub then: Then,
-    /// The folder history, most recent first, for Alt-H.
+    /// The folders Alt-H lists, in their order: those recorded across sessions, best
+    /// first, or the session's folder history, most recent first.
     pub history: Vec<PathBuf>,
     /// The home folder, shown as `~`.
     pub home: Option<PathBuf>,

@@ -52,7 +52,8 @@ work as in Bash.
 
 `Alt-E` opens croot, a file and folder picker, below the line: on an empty line or after
 `cd` it goes to the folder you pick, after any other command it inserts the path (see
-`help croot`).
+`help croot`). In it, `Alt-H` lists the folders you go to most, across sessions, best
+first: the ones `z` jumps to (see `help z`), and Tab after `z WORDS` offers them too.
 
 On an empty line, `Alt-Left` runs `prevd` and `Alt-Right` runs `nextd`: back and
 forward through the folders you were in, and the prompt redraws. On a line with

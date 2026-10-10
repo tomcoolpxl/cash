@@ -2809,14 +2809,17 @@ Every change of folder counts a visit to the folder arrived in, kept across sess
 `%LOCALAPPDATA%\cash\folders` (this machine's paths, so local, not roaming). A folder's
 rank is zoxide's: its visits weighted by the last one's age (×4 within the hour, ×2
 the day, ×½ the week, ×¼ older); when visits add up past 10,000 all are scaled by 0.9
-and those under 1 forgotten, and a folder that is gone is forgotten when a jump meets
-it. `z foo bar` goes to the best folder whose path holds `foo` and then `bar`, the last
-word in its last part, case aside; a word that is a folder is `cd`'s; `z` alone goes
-home and `z -` back; no match is status 1. `z -l` lists the matches with their ranks,
-`z -i` opens Alt-E's picker on them, and Tab completes from the record. A `z` function,
-zoxide's included, comes before the builtin. Alt-E's Alt-H shows this record, best
-first, in place of the session's 25 folders; Alt-←/→ stay the session's back and
-forward.
+and those under 1 forgotten; a folder that is gone is skipped, and forgotten once it has
+gone 90 days without a visit, as zoxide forgets one, so an unplugged drive keeps its
+folders. `z foo bar` goes to the best folder whose path holds `foo` and then `bar`, the
+last word in its last part, case aside, the current folder left out; a word that is a
+folder is `cd`'s; `z` alone goes home and `z -` back; no match is status 1. `z -l`
+lists the matches with their scores, `z -i` opens a list of them below the line, and
+Tab after `z WORDS` offers them, best first, in place of the words. A script's `z`
+reads the record and adds nothing to it. A `z` function, zoxide's included, comes
+before the builtin. Alt-E's Alt-H (and `croot`'s) shows this record, best first, in
+place of the session's 25 folders while it holds any; Alt-←/→ stay the session's back
+and forward.
 
 ### D72 — `help` from one catalogue
 

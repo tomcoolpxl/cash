@@ -1006,6 +1006,80 @@ fn conpty_ctrl_r_picks_from_the_history() {
     assert_eq!(folder_of("delta_hist"), start.to_lowercase(), "{ran}");
 }
 
+/// The folders an interactive cash goes to are recorded (D80), and the next cash jumps to
+/// them: `z WORD`, `z -i` and its list, Tab after `z`, and Alt-E's Alt-H.
+#[test]
+fn conpty_z_jumps_to_folders_a_session_before_went_to() {
+    let local = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let one = root.path().join("zeta_one");
+    let deep = root.path().join("zeta_two").join("deep");
+    let three = root.path().join("zeta_three");
+    for folder in [&one, &deep, &three] {
+        std::fs::create_dir_all(folder).unwrap();
+    }
+    let [one, deep, three] = [&one, &deep, &three].map(|path| cash_win32::path::render(path));
+
+    // The first session goes to all three; the second never goes to `zeta_three`.
+    let mut first = start_cash_keeping_records(local.path());
+    first
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+    for folder in [&one, &three, &deep] {
+        first.send(&format!("cd '{folder}'\r")).unwrap();
+        settle(&mut first);
+    }
+    first.send("exit 0\r").unwrap();
+    assert_eq!(first.wait().expect("process did not exit"), 0);
+
+    let mut session = start_cash_keeping_records(local.path());
+    let count = |session: &ConPtySession, text: &str| session.output().matches(text).count();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+    session.send("z deep && pwd\r").unwrap();
+    settle(&mut session);
+    assert_eq!(count(&session, &deep), 1, "{}", session.output());
+
+    // `z -i`: a list of the matches; Enter goes to the one picked, `zeta_one`, as good as
+    // `zeta_three` and recorded first.
+    session.send("z -i zeta\r").unwrap();
+    session
+        .expect("Enter go", Duration::from_secs(10))
+        .expect("the list opened");
+    session.send("\r").unwrap();
+    settle(&mut session);
+    session.send("pwd\r").unwrap();
+    settle(&mut session);
+    assert_eq!(count(&session, &one), 1, "{}", session.output());
+
+    // Tab puts the folder on the line.
+    session.send("z dee\t").unwrap();
+    settle(&mut session);
+    session.send("\r").unwrap();
+    settle(&mut session);
+    session.send("pwd\r").unwrap();
+    settle(&mut session);
+    assert!(count(&session, &deep) >= 3, "{}", session.output());
+
+    // Alt-E's Alt-H: the recorded folders, though this session has been in few.
+    session.send("\x0c").unwrap();
+    settle(&mut session);
+    session.send("\x1be").unwrap();
+    session
+        .expect("Alt-H", Duration::from_secs(10))
+        .expect("the picker opened");
+    session.send("\x1bh").unwrap();
+    settle(&mut session);
+    let screen = session.screen().text();
+    assert!(screen.contains("zeta_three/"), "{screen}");
+    session.send("\x1b").unwrap();
+    settle(&mut session);
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}
+
 /// `set -o vi` edits the next line with vi keys: Esc leaves insert mode, `x` deletes the
 /// character under the cursor, and Enter runs the line from normal mode.
 #[test]

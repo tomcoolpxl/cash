@@ -22,6 +22,8 @@ mod uuidgen;
 mod abbr;
 // cash (D62): fish's folder history — prevd, nextd, cdh.
 mod dirhistory;
+// cash (D80): `z`, zoxide's folder jump.
+mod z;
 
 // cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
 // pids that `kill` cannot use.

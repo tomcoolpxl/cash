@@ -1,6 +1,6 @@
 ---
 names: prevd nextd cdh
-see: cd pushd dirs keys
+see: cd pushd dirs z keys
 ---
 ## Description
 
