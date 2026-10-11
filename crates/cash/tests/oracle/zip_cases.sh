@@ -62,6 +62,13 @@ zip -o o2.zip src/a.txt; rc; stat -c %Y o2.zip
 echo "== show files"; zip -sf a2.zip src/a.txt; rc; zip -q a2.zip src/a.txt src/sub/b.txt; zip -sf a2.zip; rc; zip -sf a2.zip src/a.txt src/big.txt; rc
 echo "== dates and names from input"; zip -t 01012021 tt.zip src/a.txt; rc; zip -tt 2021-01-01 tt.zip src/a.txt; rc; printf 'src/a.txt\nsrc/sub/b.txt\n' | zip at.zip -@; rc
 echo "== verbose"; zip -v -0 v.zip src/a.txt src/big.txt; rc
+# The space before the tab is where zip's progress dots would start, once it asks for input
+# a second time: storing for any member but an empty one, deflate from 65,274 bytes (its
+# 64 KiB window less the 262 it keeps ahead), bzip2 from 64 KiB. Without the compressed
+# sizes, which differ between deflate encoders.
+zv() { zip -v "$@" | sed 's/(out=[0-9]*)/(out=-)/; s/compressed=[0-9]*/compressed=-/'; }
+for n in 65273 65274 65535 65536; do head -c $n /dev/zero | tr '\0' a > v$n; done; : > v0
+zv vd.zip v65273 v65274; rc; zv -0 v0.zip v0; rc; zv -Z bzip2 vb.zip v65535 v65536; rc
 echo "== line ends"; printf 'one\ntwo\n' > lf.txt; printf 'dos\r\nlines\r\n' > crlf.txt; stamp lf.txt crlf.txt
 zip -l le.zip lf.txt crlf.txt src/bin.dat; rc; unzip -p le.zip lf.txt | od -An -c; unzip -p le.zip crlf.txt | od -An -c; unzip -v le.zip | sed -n 4,6p | cut -c1-58
 zip -ll ll.zip lf.txt crlf.txt; rc; unzip -p ll.zip crlf.txt | od -An -c; zip -l -0 l0.zip lf.txt; unzip -v l0.zip | sed -n 4p | cut -c1-58

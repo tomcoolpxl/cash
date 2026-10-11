@@ -88,9 +88,6 @@ What the phases now in DONE.md left open, each where its phase says more.
 - **`TAR_OPTIONS` and the command line** (phase 29, 2026-10-07): GNU tar drops the
   `TAR_OPTIONS` side of `--one-top-level` against `-P` given on the command line; cash
   refuses the pair wherever they come from.
-- **zip -v's space before the tab** (phase 30, 2026-10-07): zip prints it where its
-  progress dots would start; cash prints it for a stored member and for one of 64 KiB
-  or more, which matched every case tried. A file between those may differ.
 - **zstd compresses at ruzstd's fast level only** (phase 28, 2026-10-07): every level
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be

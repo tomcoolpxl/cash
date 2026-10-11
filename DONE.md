@@ -1432,3 +1432,10 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
 
   Two blocks of 74 MiB cost the tar 3.4%, those of 128 and 20 MiB 0.4%: what a block
   boundary costs depends on where it falls in the data. Real 7-Zip tests every archive.
+- **zip -v's space before the tab** (phase 30, 2026-10-07; done 2026-10-11): zip prints it
+  where its progress dots would start; cash printed it for a stored member and for one of
+  64 KiB or more, which matched every case tried. Bisected under Info-ZIP's zip 3.0: it
+  starts at 65,274 bytes for deflate at every level and any content (the 64 KiB window
+  less the 262 bytes deflate keeps ahead), at 65,536 for bzip2, and storing prints it for
+  every member but an empty one. Cash missed it from 65,274 to 65,535 bytes and printed
+  it for an empty stored member; `zip_cases.sh` now has the four edges.

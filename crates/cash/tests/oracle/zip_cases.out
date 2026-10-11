@@ -301,6 +301,17 @@ rc=0
   adding: src/big.txt 	(in=3000) (out=3000) (stored 0%)
 total bytes=3006, compressed=3006 -> 0% savings
 rc=0
+  adding: v65273	(in=65273) (out=-) (deflated 100%)
+  adding: v65274 	(in=65274) (out=-) (deflated 100%)
+total bytes=130547, compressed=- -> 100% savings
+rc=0
+  adding: v0	(in=0) (out=-) (stored 0%)
+total bytes=0, compressed=- -> 0% savings
+rc=0
+  adding: v65535	(in=65535) (out=-) (bzipped 100%)
+  adding: v65536 	(in=65536) (out=-) (bzipped 100%)
+total bytes=131071, compressed=- -> 100% savings
+rc=0
 == line ends
   adding: lf.txt (stored 0%)
   adding: crlf.txt (deflated 7%)

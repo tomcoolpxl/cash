@@ -1400,13 +1400,16 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
         };
         if speak {
             if self.options.verbose > 0 {
-                // zip shows a space where its progress dots would start: once it has
-                // read a second buffer, which storing always does.
-                let space = if method == method::STORED || added.size >= 65_536 {
-                    " "
-                } else {
-                    ""
+                // zip shows a space where its progress dots would start, once it asks
+                // for input a second time: storing for any member but an empty one,
+                // deflate from 65,274 bytes (its 64 KiB window less the 262 it keeps
+                // ahead), bzip2 from 64 KiB.
+                let second_read = match method {
+                    method::STORED => added.size > 0,
+                    method::BZIP2 => added.size >= 65_536,
+                    _ => added.size >= 65_274,
                 };
+                let space = if second_read { " " } else { "" };
                 self.note(&format!(
                     "{space}\t(in={}) (out={}) ({how} {pct}%)\n",
                     added.size, added.compressed_size
