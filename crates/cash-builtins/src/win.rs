@@ -31,13 +31,12 @@ enum Form {
 
 /// Convert between path spellings.
 ///
-/// D4 says cash never rewrites arguments on its own — no guessing which ones are paths,
-/// because that is where MSYS2 needed `MSYS2_ARG_CONV_EXCL`. When a DOS-lineage tool
-/// really does need backslashes, you convert deliberately:
-///
-/// ```text
-/// some-old-tool.exe "$(winpath -w "$dir")"
-/// ```
+/// cash never changes a program's arguments by itself, so a tool that needs backslashes
+/// gets them when asked: `winpath -w ~/src` prints `C:\Users\me\src`, which
+/// `tool.exe "$(winpath -w ~/src)"` passes on. `-u` prints `/c/Users/me/src`, and `-c`,
+/// the default, `C:/Users/me/src`.
+// D4: no guessing which arguments are paths, which is where MSYS2 needed
+// `MSYS2_ARG_CONV_EXCL`.
 #[derive(Parser)]
 pub(crate) struct WinPathCommand {
     /// Output Windows form with backslashes: `C:\foo`.
@@ -163,19 +162,17 @@ fn quoted_arguments(args: &[String]) -> String {
         .join(" ")
 }
 
-/// Run a command elevated, via UAC.
+/// Run a command elevated, via UAC, in a new window, without waiting for it.
 ///
-/// A first-class verb rather than shelling out to an external helper, so cash knows the
-/// elevation happened. D42 records why that matters: an elevated child cannot be
-/// assigned to cash's job object — a medium-integrity process cannot acquire
-/// `PROCESS_SET_QUOTA` on a high-integrity one — so D6's containment guarantee stops at
-/// the integrity boundary, and cash should say so rather than imply otherwise.
-///
-/// The command starts in the shell's folder, found on the shell's `PATH`, with its
-/// arguments as written. It used to go through PowerShell's `Start-Process`, which
-/// started it in the folder cash was started in and split an argument with a space
-/// (BI-19). It starts from the user's own environment: UAC takes none, so the shell's
-/// exported variables do not follow it.
+/// An elevated program cannot join cash's job object, so it runs outside it and is not
+/// ended when cash exits; elevate says so before it asks UAC (-q keeps quiet). The
+/// command starts in the shell's folder, found on the shell's `PATH`, with its arguments
+/// as written, from the user's own environment: UAC takes none, so the shell's exported
+/// variables do not follow it. `sudo` runs a command elevated in this terminal instead.
+// D42: a medium-integrity process cannot acquire `PROCESS_SET_QUOTA` on a high-integrity
+// one, so D6's containment stops at the integrity boundary. PowerShell's `Start-Process`,
+// used before, started the command in the folder cash was started in and split an
+// argument with a space (BI-19).
 #[derive(Parser)]
 pub(crate) struct ElevateCommand {
     /// Suppress the warning that the elevated process escapes cash's containment.
@@ -203,8 +200,8 @@ impl builtins::Command for ElevateCommand {
             writeln!(
                 context.stderr(),
                 "elevate: the elevated process runs outside cash's job object and will \
-                 not be reaped when cash exits (see D42); it is not waited for, so the \
-                 status says only that it started, not how it ended"
+                 not be ended when cash exits; it is not waited for, so the status says \
+                 only that it started, not how it ended"
             )?;
         }
 
@@ -245,13 +242,10 @@ fn elevation_request(
 
 /// Start a command that is meant to outlive the shell.
 ///
-/// D6's deliberate escape hatch. Everything cash starts is normally reaped when cash
-/// exits; `detach` is how you say that this one should not be.
-///
-/// D45 records the cost: for a child to leave the session job, that job must be created
-/// with `JOB_OBJECT_LIMIT_BREAKAWAY_OK`, which means *any* child can then request
-/// breakaway. Having this builtin therefore weakens D6's guarantee slightly for
-/// everything — accepted as the price of an explicit escape hatch.
+/// Everything cash starts is normally ended when cash exits; `detach` says that this
+/// one should not be: it leaves cash's job object and runs on after the shell.
+// D6's escape hatch; D45 records its cost: the session job must allow breakaway
+// (`JOB_OBJECT_LIMIT_BREAKAWAY_OK`), so any child may ask for it.
 #[derive(Parser)]
 pub(crate) struct DetachCommand {
     /// The command and its arguments.
