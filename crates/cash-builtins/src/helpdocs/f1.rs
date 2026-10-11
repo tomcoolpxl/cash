@@ -422,7 +422,7 @@ mod tests {
             paint(palette.example, "cd C:/Users/me/src"),
             paint(palette.note, "forward slashes need no quotes"),
             paint(palette.example, "cd /c/Users/me"),
-            paint(palette.example, r#"tool.exe "$(winpath -w "$d")""#),
+            paint(palette.example, r"winpath -w ~/src"),
             paint(palette.accent, "KEYS"),
             paint(palette.key, "Alt-E"),
             paint(palette.key, "Ctrl-X Ctrl-E"),
