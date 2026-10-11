@@ -65,6 +65,10 @@ type(scope): description
 - A subject without a known type still appears, under **Other**. History from before
   this convention is mostly like that.
 
+A commit taken back by a later one before a release would still be listed; put its hash
+in [`.github/release-notes-skip.txt`](.github/release-notes-skip.txt), with `#` and why,
+and the notes leave it out.
+
 To preview the notes of the next release, before tagging:
 
 ```powershell

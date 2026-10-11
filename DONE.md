@@ -1456,3 +1456,7 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   to three seconds, and brings it to the front; `elevate` gets it too, through the same
   `runas` call. Checked by the user from the app's terminal panel: the dialog came up and
   was approved.
+- **The next release's notes listed a speed-up that was undone** (2026-10-11; done the
+  same day): `cf74f601` `perf(7z): split a file past one dictionary across the threads`
+  was taken back by the commit after it. `release-notes.ps1` now leaves out the commits
+  listed in `.github/release-notes-skip.txt`, and that one is there.

@@ -94,10 +94,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   (`acceptance::an_unpatched_bundled_tool_writes_into_a_write_substitution_through_a_file`)
   is `#[ignore]`d. A fix reads only what was written: hold back the tail of a file that
   grew in one step until the program is done, or give `cp` the pipe as tee's patch did.
-- **The next release's notes list a speed-up that was undone** (2026-10-11): `cf74f601`
-  `perf(7z): split a file past one dictionary across the threads` was taken back by the
-  commit after it, which keeps 7-Zip's block size. Drop its line from the notes
-  `release-notes.ps1` writes, before the release is published.
 - **Questions left open in the research documents** (found 2026-10-11, gathering
   decisions.md), some perhaps answered since: `builtin-option-gaps.md` (2026-09-24) on
   `xargs -P` and `-I{}`, `declare -t`, `bind -m vi-*`, `complete -o bashdefault` and

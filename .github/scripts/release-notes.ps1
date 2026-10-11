@@ -7,7 +7,8 @@
 # "fix(kill): stop TERM from reaching the console" lands under "Bug fixes" as
 # "**kill:** stop TERM from reaching the console"; a "!" before the colon also lists it
 # under "Breaking changes". Subjects without a known type go under "Other", so history
-# from before the convention still appears. See RELEASING.md, "Commit messages".
+# from before the convention still appears. A commit a later one took back is left out
+# when its hash is in .github/release-notes-skip.txt. See RELEASING.md, "Commit messages".
 
 param(
     [Parameter(Mandatory)][string]$Tag,
@@ -51,11 +52,21 @@ $entries = [ordered]@{ 'Breaking changes' = @() }
 foreach ($name in $sections.Keys) { $entries[$name] = @() }
 $entries['Other'] = @()
 
+# Commits taken back by a later one: a hash (or its start) per line, then `#` and why.
+$skipFile = Join-Path $PSScriptRoot '..' 'release-notes-skip.txt'
+$skip = @()
+if (Test-Path $skipFile) {
+    $skip = Get-Content $skipFile |
+        ForEach-Object { ($_ -replace '#.*$', '').Trim() } |
+        Where-Object { $_ }
+}
+
 $pattern = '^(?<type>[a-z]+)(?:\((?<scope>[^)]+)\))?(?<bang>!)?:\s*(?<desc>.+)$'
-$log = git log --no-merges --reverse --format='%h%x09%s' $range
+$log = git log --no-merges --reverse --format='%H%x09%h%x09%s' $range
 foreach ($line in $log) {
     if (-not $line) { continue }
-    $hash, $subject = $line -split "`t", 2
+    $full, $hash, $subject = $line -split "`t", 3
+    if ($skip | Where-Object { $full.StartsWith($_) }) { continue }
     $match = [regex]::Match($subject, $pattern)
     if ($match.Success -and $sectionOf.ContainsKey($match.Groups['type'].Value)) {
         # Kept as written: a description often starts with a command name (`ps`, `ls`),

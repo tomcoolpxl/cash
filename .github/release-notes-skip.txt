@@ -1,0 +1,1 @@
+cf74f601 # perf(7z): split a file past one dictionary; taken back by 19b0c1aa, which keeps 7-Zip's block size
