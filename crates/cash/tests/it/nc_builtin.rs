@@ -63,6 +63,17 @@ fn free_port() -> u16 {
         .port()
 }
 
+/// [`free_port`] for UDP. Windows reserves UDP ranges of its own (Hyper-V and WSL take
+/// hundreds of ports, `netsh int ipv4 show excludedportrange protocol=udp`), so a free TCP
+/// port can be one no UDP socket may bind, and `nc -u -l` on it never answers.
+fn free_udp_port() -> u16 {
+    UdpSocket::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port()
+}
+
 /// Reads from `stream` until it closes, or `limit` passes.
 fn read_all(stream: &mut TcpStream, limit: Duration) -> Vec<u8> {
     stream.set_read_timeout(Some(limit)).unwrap();
@@ -362,7 +373,7 @@ fn u_sends_a_datagram() {
 
 #[test]
 fn u_l_prints_datagrams_and_answers_the_sender() {
-    let port = free_port();
+    let port = free_udp_port();
     let mut child = cash_command()
         .args(["-c", &format!("nc -u -l -q 1 127.0.0.1 {port}")])
         .stdin(Stdio::piped())
