@@ -772,6 +772,27 @@ fn conpty_alt_dot_yanks_the_last_argument() {
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
 
+/// A key binding in a vi keymap is refused, where it was dropped in silence: cash's vi mode
+/// keeps its own keys.
+#[test]
+fn conpty_bind_in_a_vi_keymap_is_refused() {
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+    session
+        .send("bind -m vi-insert '\"\\C-x\": \"hi\"'; echo \"st=$?\"\r")
+        .unwrap();
+    session
+        .expect("vi keymaps are not supported", Duration::from_secs(10))
+        .expect("bind -m vi-insert did not say it is not supported");
+    session
+        .expect("st=1", Duration::from_secs(10))
+        .expect("bind -m vi-insert did not fail");
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}
+
 /// Alt-E opens croot below the line (D73): after `cd `, folders only; Enter picks the
 /// selected one and the `cd` runs at once.
 #[test]

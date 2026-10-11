@@ -260,12 +260,19 @@ impl BindCommand {
             }
         }
 
-        if !self.key_seq_bindings.is_empty() {
-            if self.keymap.as_ref().is_some_and(|k| k.is_vi()) {
-                // NOTE(vi): Quietly ignore since we don't support vi mode.
-                return Ok(ExecutionResult::success());
-            }
+        // cash's vi mode keeps its own keys: a binding in a vi keymap is refused, not
+        // accepted and dropped.
+        let binds = !self.key_seq_bindings.is_empty() || (self.key_sequence.is_some() && !listing);
+        if binds && self.keymap.as_ref().is_some_and(|k| k.is_vi()) {
+            writeln!(
+                context.stderr(),
+                "{}: key bindings in the vi keymaps are not supported",
+                context.command_name
+            )?;
+            return Ok(ExecutionResult::general_error());
+        }
 
+        if !self.key_seq_bindings.is_empty() {
             for key_seq_and_command in &self.key_seq_bindings {
                 let (key_seq, command) = parse_key_sequence_and_shell_command(key_seq_and_command)?;
                 bind_key_sequence_to_shell_cmd(&mut *bindings, key_seq, command)?;
@@ -273,11 +280,6 @@ impl BindCommand {
         }
 
         if let Some(key_sequence) = self.key_sequence.as_ref().filter(|_| !listing) {
-            if self.keymap.as_ref().is_some_and(|k| k.is_vi()) {
-                // NOTE(vi): Quietly ignore since we don't support vi mode.
-                return Ok(ExecutionResult::success());
-            }
-
             let (key_seq, target) = parse_key_sequence_and_readline_target(key_sequence.as_str())?;
             bind_key_sequence_to_readline_target(&mut *bindings, key_seq, target)?;
         }
