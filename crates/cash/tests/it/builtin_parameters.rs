@@ -1388,6 +1388,28 @@ fn bind_lists_readline_functions_and_variables() {
     assert_eq!(out_vars.code, 0);
 }
 
+#[test]
+fn declare_t_is_refused_by_name() {
+    // Function tracing was accepted and did nothing; `+t` has nothing to undo.
+    let out = cash(
+        "f() { :; }; declare -t f; echo \"st=$?\"; declare +t f; echo \"plus=$?\"; \
+         g() { local -t x; echo \"local=$?\"; }; g",
+    );
+    assert_eq!(out.stdout, "st=1\nplus=0\nlocal=1", "{}", out.stderr);
+    assert!(
+        out.stderr
+            .contains("declare: -t: function tracing is not supported"),
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr
+            .contains("local: -t: function tracing is not supported"),
+        "{}",
+        out.stderr
+    );
+}
+
 // ===========================================================================
 // 39. history built-in
 // ===========================================================================
