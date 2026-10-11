@@ -1310,7 +1310,10 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    with `CreateProcessWithLogonW`, handing it this console and these standard handles by
    inheritance (`STARTF_USESTDHANDLES`; `research/sudo-in-terminal-design.md` section 8).
    Unlike the elevated side, USER's cash never opens the caller, which another account may
-   not do (`Access denied`); the first try did, and failed. gsudo and `runas` are no
+   not do (`Access denied`); the first try did, and failed. It is put in a kill-on-close
+   job before it runs, so a shell killed mid-run takes it too; and USER is granted the
+   window station and desktop while the command runs (`winstation.rs`), put back after, so
+   a windowed program can show (`runas`'s and the docs' recipe). gsudo and `runas` are no
    longer used; `cash_win32::gsudo` is gone; `sudo -v`, `-k` and `-K` are kept for scripts
    with no cache behind them. Tests:
    `sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing` (in the suites) and

@@ -40,14 +40,10 @@ What the phases now in DONE.md left open, each where its phase says more.
   taking it out is a change of its own.
 - **The 2024 edition for `cash-reedline` and crossterm** (phase 34): both keep the 2021
   edition they came with.
-- **`sudo -u USER` with a program that has windows** (phase 35): a command run as another
-  account that opens a window may not show it, as USER has no rights on this desktop
-  (gsudo has the same limit); not tried. The console cases are done and tested.
-- **`sudo -u USER`'s cash outlives a killed shell** (phase 35): USER's cash is started
-  with `CreateProcessWithLogonW` and is outside the shell's job (a job cannot hold another
-  account's process), so a shell killed while `sudo -u` runs leaves it behind. The
-  elevated side ends with the caller through a watcher in `take_callers_terminal`; the
-  as-user side has none (it does not open the caller). Give it one another way.
+- **`sudo -u USER` with a windowed program, not visually checked** (phase 35): cash now
+  grants USER the window station and desktop while the command runs (`winstation.rs`),
+  which should let a window show, and puts the grant back after; a GUI run as another
+  account has not been watched on screen. Try `sudo -u USER notepad` and see it open.
 - **`sudo -E`'s variables through a handle** (phase 35,
   `research/sudo-in-terminal-design.md` section 3 item 4): they still go as `NAME=value`
   words on the started cash's command line (Windows' 32,000 characters for the elevated

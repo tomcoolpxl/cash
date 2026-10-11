@@ -35,9 +35,10 @@ use windows_sys::Win32::System::Console::{
     SetConsoleCtrlHandler, SetConsoleMode, SetStdHandle,
 };
 use windows_sys::Win32::System::Threading::{
-    CREATE_UNICODE_ENVIRONMENT, CreateProcessWithLogonW, GetCurrentProcess, GetExitCodeProcess,
-    INFINITE, LOGON_WITH_PROFILE, OpenProcess, PROCESS_DUP_HANDLE, PROCESS_INFORMATION,
-    PROCESS_SYNCHRONIZE, STARTF_USESTDHANDLES, STARTUPINFOW, WaitForSingleObject,
+    CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateProcessWithLogonW, GetCurrentProcess,
+    GetExitCodeProcess, INFINITE, LOGON_WITH_PROFILE, OpenProcess, PROCESS_DUP_HANDLE,
+    PROCESS_INFORMATION, PROCESS_SYNCHRONIZE, ResumeThread, STARTF_USESTDHANDLES, STARTUPINFOW,
+    WaitForSingleObject,
 };
 use windows_sys::core::BOOL;
 
@@ -180,6 +181,11 @@ pub fn run_as_user_here(own: &Path, who: &str, user: &str, command: &[OsString])
     // SAFETY: `ignore` is a valid handler for the life of the process and touches nothing.
     unsafe { SetConsoleCtrlHandler(Some(ignore), TRUE) };
 
+    // Let USER onto this desktop while the command runs, so a windowed program can show its
+    // window; the grant is put back when `_desktop` drops at the end. Best-effort: a
+    // console command needs none of it, and the lookup or the grant may fail.
+    let _desktop = crate::account::lookup_user(user).map(|sid| crate::winstation::share_with(&sid));
+
     // The command runs as USER right here: a cash started as USER, which inherits this
     // console and these standard handles (`start_as`) and runs the command under
     // `--sudo-owner`. Unlike the elevated side, it never opens this process, which another
@@ -204,14 +210,17 @@ pub fn run_as_user_here(own: &Path, who: &str, user: &str, command: &[OsString])
         );
         return 1;
     }
-    let process = match start_as(&own_text, &command_line, &dir, user, &password) {
-        Ok(process) => process,
+    let (process, _job) = match start_as(&own_text, &command_line, &dir, user, &password) {
+        Ok(started) => started,
         Err(err) => {
             eprintln!("{who}: {err}");
             return 1;
         }
     };
     drop(password);
+    // `_job` holds USER's cash (and the command under it) for as long as this process
+    // lives: a shell killed while the command runs takes this process with it (the session
+    // job), closing the job handle, and the kernel then ends USER's cash too.
     report(who, wait_for(&process))
 }
 
@@ -228,19 +237,26 @@ fn logon_name(user: &str) -> (&str, Option<&str>) {
 }
 
 /// Starts `command_line` as `user`, with `password`, in `dir`, inheriting this console and
-/// its standard handles, with the account's own environment and profile.
+/// its standard handles, with the account's own environment and profile; gives its process
+/// and the job that ends it with this one.
 ///
 /// `CreateProcessWithLogonW` hands the standard handles to the child even across the
 /// account boundary (`STARTF_USESTDHANDLES`, the handles made inheritable), so the command
 /// reads and writes this terminal, or the shell's redirections, as its own. No window is
 /// forced, so the child shares this console rather than opening one of its own.
+///
+/// It is made suspended and put in a kill-on-close job before it runs, so that when this
+/// process ends — including killed with the shell by the session job — the job handle
+/// closes and the kernel ends USER's cash too. The elevated side's watcher opens the
+/// caller for this; another account's process may not, so the job does it from here. The
+/// job is best-effort: without it the command still runs, only an orphan is possible.
 fn start_as(
     program: &str,
     command_line: &str,
     dir: &Path,
     user: &str,
     password: &Secret,
-) -> io::Result<OwnedHandle> {
+) -> io::Result<(OwnedHandle, Option<crate::job::JobObject>)> {
     let (name, domain) = logon_name(user);
     let name = crate::wide::to_wide_nul(name);
     let domain = domain.map(crate::wide::to_wide_nul);
@@ -278,7 +294,7 @@ fn start_as(
             LOGON_WITH_PROFILE,
             program.as_ptr(),
             line.as_mut_ptr(),
-            CREATE_UNICODE_ENVIRONMENT,
+            CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
             std::ptr::null(),
             dir.as_ptr(),
             &raw const startup,
@@ -288,10 +304,21 @@ fn start_as(
     if ok == 0 {
         return Err(io::Error::last_os_error());
     }
-    // SAFETY: the thread handle is this process's, owned here only to close it.
-    drop(unsafe { OwnedHandle::from_raw_handle(info.hThread) });
     // SAFETY: the process handle is this process's to close, and nothing else owns it.
-    Ok(unsafe { OwnedHandle::from_raw_handle(info.hProcess) })
+    let process = unsafe { OwnedHandle::from_raw_handle(info.hProcess) };
+
+    // Put the suspended process in a kill-on-close job before it runs. This process holds
+    // the only handle to the job, and has full rights on the process it just made (so the
+    // elevated-child hole of D42 does not apply here).
+    let job = crate::job::JobObject::for_pipeline().ok();
+    if let Some(job) = &job {
+        let _ = job.assign_process(info.hProcess);
+    }
+    // SAFETY: the thread handle is this process's; resumed, then closed.
+    unsafe { ResumeThread(info.hThread) };
+    // SAFETY: as above, owned here only to close it.
+    drop(unsafe { OwnedHandle::from_raw_handle(info.hThread) });
+    Ok((process, job))
 }
 
 /// A password, NUL-terminated UTF-16, wiped when dropped.

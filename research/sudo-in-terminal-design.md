@@ -187,14 +187,22 @@ run-as do it:
    `su` asks on the terminal whatever is redirected), echo off; Ctrl-C there ends it with
    130 and runs nothing. Without a console, `sudo: a terminal is required to read the
    password`.
-3. It starts `cash --invoke-bundled --sudo-owner - COMMAND` as USER with
+3. It grants USER the window station and the current desktop while the command runs, so a
+   windowed program can show (`winstation.rs`; `runas` does the same, `CreateProcessWithLogonW`
+   documents the need). The grant is put back when the command ends.
+4. It starts `cash --invoke-bundled --sudo-owner - COMMAND` as USER with
    `CreateProcessWithLogonW` (`LOGON_WITH_PROFILE`, USER's own environment), in the
    shell's folder, and wipes the password. Its own standard handles — this console's, or
    the shell's redirections — are made inheritable and handed over (`STARTF_USESTDHANDLES`);
    no `CREATE_NO_WINDOW`, so USER's cash shares this console rather than opening one. No
    `--sudo-attach`: nothing opens the caller. An administrator's account gets its filtered
    token: its usual level, as gsudo's `-i Medium` gave it.
-4. USER's cash runs the command under `--sudo-owner -`, which changes no owner (the files
+5. The process is made suspended and put in a kill-on-close job before it runs (the
+   `--sudo-as` cash holds the only handle and has full rights on the process it made), so a
+   shell killed while the command runs takes the `--sudo-as` cash with it (the session job)
+   and the kernel then ends USER's cash too. The elevated side's watcher opens the caller
+   for this; another account's cash may not, so the job does it from here.
+6. USER's cash runs the command under `--sudo-owner -`, which changes no owner (the files
    are USER's), inheriting the handed-over handles, and the status comes back.
 
 An inherited file or pipe handle keeps the access it was opened with, so USER writes the
@@ -202,10 +210,9 @@ shell's `> out.txt` though the file is the caller's; the DACL was checked when t
 opened it, not at each write.
 
 Limits: Windows takes a command line of 1,024 characters here, which `-E` can fill;
-USER must be able to read cash.exe and enter the folder (both refused with a message);
-a program with windows, run as USER, may not show, as USER has no rights on this
-desktop (gsudo has the same limit). USER's cash is outside the shell's job and is not
-ended if the shell is killed while it runs (TODO.md).
+USER must be able to read cash.exe and enter the folder (both refused with a message).
+The desktop grant is best-effort: a program with windows shows when it takes, and falls
+back to gsudo's old limit (no window) when it does not.
 
 Seen, with a test account and its password (2026-10-11): the prompt and Ctrl-C at it
 (`sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing`, in the suites), and a

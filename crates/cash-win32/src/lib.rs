@@ -89,5 +89,7 @@ pub mod userpath;
 #[cfg(any(test, feature = "pseudo-console"))]
 pub mod vtscreen;
 pub mod wide;
+// Letting another account onto this desktop for `sudo -u USER` with a windowed program.
+pub mod winstation;
 
 pub use job::{JobConfig, JobObject};
