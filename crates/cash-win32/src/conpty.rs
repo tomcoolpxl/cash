@@ -17,7 +17,8 @@ use windows_sys::Win32::System::Pipes::{CreatePipe, PeekNamedPipe};
 use windows_sys::Win32::System::Threading::{
     CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DeleteProcThreadAttributeList,
     EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, INFINITE, InitializeProcThreadAttributeList,
-    PROCESS_INFORMATION, STARTUPINFOEXW, UpdateProcThreadAttribute, WaitForSingleObject,
+    PROCESS_INFORMATION, STARTUPINFOEXW, TerminateProcess, UpdateProcThreadAttribute,
+    WaitForSingleObject,
 };
 
 /// Win32 thread attribute ID for pseudo console.
@@ -69,6 +70,12 @@ impl ConPtyChild {
         } else {
             Ok(Some(code))
         }
+    }
+
+    /// Terminate the process at once, as a kill from Task Manager would — not a Ctrl-C.
+    pub fn terminate(&self) {
+        // SAFETY: a valid process handle this struct owns.
+        unsafe { TerminateProcess(self.process.as_raw_handle(), 1) };
     }
 }
 
@@ -490,6 +497,17 @@ impl ConPtySession {
     /// Check if child process has exited without blocking.
     pub fn try_wait(&self) -> io::Result<Option<u32>> {
         self.child.try_wait()
+    }
+
+    /// The process id of the child (the top of the session).
+    #[must_use]
+    pub const fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    /// Terminate the child at once, as a kill from Task Manager would.
+    pub fn terminate(&self) {
+        self.child.terminate();
     }
 }
 

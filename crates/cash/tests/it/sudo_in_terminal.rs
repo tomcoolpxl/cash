@@ -88,8 +88,10 @@ fn ctrl_c_at_the_password_prompt_runs_nothing() {
 /// shell made. Needs an account to run as: its name in `CASH_TEST_USER` and its password in
 /// `CASH_TEST_PASSWORD`, which the test types at the prompt. That account must be able to
 /// read the cash under test, which lies in your profile:
-/// `icacls target\debug\cash.exe /grant NAME:RX` lets it. The command runs in
-/// `C:\Users\Public`, where every account may be.
+/// `icacls target\debug\cash.exe /grant NAME:RX` lets it. The command runs from the test's
+/// own folder, under your profile, which the account cannot enter — so it also exercises
+/// the fallback to the system temp. The redirected file is written through the inherited
+/// handle regardless of the folder.
 #[test]
 #[ignore = "needs a second account and its password"]
 fn sudo_u_runs_the_command_as_the_account() {
@@ -103,9 +105,8 @@ fn sudo_u_runs_the_command_as_the_account() {
     let (mut session, dir) = start(
         "as-user",
         &format!(
-            r#"here=$PWD; cd C:/Users/Public
-sudo -u '{user}' cmd /c 'echo %USERNAME%' > "$here/who.txt"
-echo "rc=$?" >> "$here/out.txt"
+            r#"sudo -u '{user}' cmd /c 'echo %USERNAME%' > who.txt
+echo "rc=$?" >> out.txt
 "#
         ),
     );
@@ -126,6 +127,105 @@ echo "rc=$?" >> "$here/out.txt"
         "{}",
         session.screen().text()
     );
+}
+
+/// `sudo -u USER` with a console command writing to the terminal (no redirection): its
+/// output shows in this terminal, not a window of its own. Needs the account, as above.
+#[test]
+#[ignore = "needs a second account and its password"]
+fn sudo_u_shows_console_output_in_this_terminal() {
+    let (Ok(user), Ok(password)) = (
+        std::env::var("CASH_TEST_USER"),
+        std::env::var("CASH_TEST_PASSWORD"),
+    ) else {
+        eprintln!("skipped: CASH_TEST_USER and CASH_TEST_PASSWORD name no account");
+        return;
+    };
+    let (mut session, dir) = start(
+        "as-user-console",
+        &format!("sudo -u '{user}' cmd /c 'echo CASSMARK-%USERNAME%'\necho \"rc=$?\" >> out.txt\n"),
+    );
+    session
+        .expect(&format!("Password for {user}:"), AFTER)
+        .expect("sudo asks the password at the console");
+    session
+        .send(&format!("{password}\r"))
+        .expect("type the password");
+    // The marker appears on this console, with the account's name, not in a window of its
+    // own; it shows while the command still runs, so wait for the script to finish before
+    // the status it then writes is read.
+    session
+        .expect("CASSMARK-", AFTER)
+        .expect("the console command's output shows in this terminal");
+    let status = ends(&mut session);
+    let out = std::fs::read_to_string(dir.join("out.txt")).unwrap_or_default();
+    assert_eq!(
+        (status, out.trim_end()),
+        (0, "rc=0"),
+        "{}",
+        session.screen().text()
+    );
+}
+
+/// How many `PING.EXE` processes `account` owns, asked of Windows.
+fn pings_owned_by(account: &str) -> usize {
+    let script = format!(
+        "@(Get-CimInstance Win32_Process -Filter \"Name='PING.EXE'\" | \
+         Where-Object {{ (Invoke-CimMethod -InputObject $_ -MethodName GetOwner).User -eq '{account}' }}).Count"
+    );
+    std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .output()
+        .ok()
+        .and_then(|out| String::from_utf8_lossy(&out.stdout).trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// `sudo -u USER`'s command dies when the shell that started it is killed, not left behind.
+/// Needs the account, as above.
+#[test]
+#[ignore = "needs a second account and its password"]
+fn sudo_u_dies_when_the_shell_is_killed() {
+    let (Ok(user), Ok(password)) = (
+        std::env::var("CASH_TEST_USER"),
+        std::env::var("CASH_TEST_PASSWORD"),
+    ) else {
+        eprintln!("skipped: CASH_TEST_USER and CASH_TEST_PASSWORD name no account");
+        return;
+    };
+    let account = user.rsplit('\\').next().unwrap_or(&user).to_string();
+    // Windows' ping: cash's own is Unix's, whose `-t` is the TTL.
+    let (mut session, _dir) = start(
+        "orphan",
+        &format!("sudo -u '{user}' ping.exe -t 127.0.0.1\n"),
+    );
+    session
+        .expect(&format!("Password for {user}:"), AFTER)
+        .expect("sudo asks the password at the console");
+    session
+        .send(&format!("{password}\r"))
+        .expect("type the password");
+    // The relay shows the account's ping replying in this terminal, so it is running.
+    session
+        .expect("Reply from 127.0.0.1", AFTER)
+        .expect("the account's ping replies in this terminal");
+    assert!(
+        pings_owned_by(&account) >= 1,
+        "no ping is running as {account}"
+    );
+
+    // Kill the shell outright, as from Task Manager — not a Ctrl-C.
+    session.terminate();
+
+    // The account's ping must die with it, through the kill-on-close job, within a moment.
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(15) {
+        if pings_owned_by(&account) == 0 {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    panic!("the account's ping outlived the killed shell");
 }
 
 #[test]

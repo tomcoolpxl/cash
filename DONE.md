@@ -1307,18 +1307,20 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
 8. **`sudo -u USER` and `su USER` without gsudo** (the user, 2026-10-11, by pick list;
    built and seen with a test account the same day): cash asks USER's password at the
    console, echo off, then starts `cash --invoke-bundled --sudo-owner - COMMAND` as USER
-   with `CreateProcessWithLogonW`, handing it this console and these standard handles by
-   inheritance (`STARTF_USESTDHANDLES`; `research/sudo-in-terminal-design.md` section 8).
-   Unlike the elevated side, USER's cash never opens the caller, which another account may
-   not do (`Access denied`); the first try did, and failed. It is put in a kill-on-close
-   job before it runs, so a shell killed mid-run takes it too; and USER is granted the
-   window station and desktop while the command runs (`winstation.rs`), put back after, so
-   a windowed program can show (`runas`'s and the docs' recipe). gsudo and `runas` are no
-   longer used; `cash_win32::gsudo` is gone; `sudo -v`, `-k` and `-K` are kept for scripts
-   with no cache behind them. Tests:
-   `sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing` (in the suites) and
-   `::sudo_u_runs_the_command_as_the_account` (ignored; a second account and its
-   password).
+   with `CreateProcessWithLogonW` (`research/sudo-in-terminal-design.md` section 8). Unlike
+   the elevated side, USER's cash cannot open the caller or attach to this console (both
+   `Access denied`), so a redirected handle is handed over by inheritance
+   (`STARTF_USESTDHANDLES`) and a console handle is relayed: USER's cash reads and writes a
+   pipe, the caller relays the bytes to and from the real console on threads of its own, as
+   gsudo does. It is put in a kill-on-close job before it runs, so a shell killed mid-run
+   takes it too (seen); and USER is granted the window station and desktop while the command
+   runs (`winstation.rs`), put back after, so a windowed program can show. When the shell's
+   folder is under the caller's profile, which USER cannot enter, the command runs from the
+   system temp instead, with a note. gsudo and `runas` are no longer used; `cash_win32::gsudo`
+   is gone; `sudo -v`, `-k` and `-K` are kept for scripts with no cache behind them. Tests:
+   `sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing` (in the suites),
+   `::sudo_u_runs_the_command_as_the_account`, `::sudo_u_shows_console_output_in_this_terminal`
+   and `::sudo_u_dies_when_the_shell_is_killed` (ignored; a second account and its password).
 
 9. **`net user NAME * /add` fails: the star becomes the folder's files** (the user,
    2026-10-11, by pick list; built the same day): a line that works in cmd and PowerShell

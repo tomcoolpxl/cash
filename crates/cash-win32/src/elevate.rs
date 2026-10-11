@@ -19,10 +19,12 @@ use std::io::{self, Write as _};
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
 
 use windows_sys::Win32::Foundation::{
-    DUPLICATE_SAME_ACCESS, DuplicateHandle, ERROR_CANCELLED, GENERIC_READ, GENERIC_WRITE, HANDLE,
-    HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, SetHandleInformation, TRUE, WAIT_OBJECT_0,
+    DUPLICATE_SAME_ACCESS, DuplicateHandle, ERROR_CANCELLED, ERROR_DIRECTORY, GENERIC_READ,
+    GENERIC_WRITE, HANDLE, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, SetHandleInformation, TRUE,
+    WAIT_OBJECT_0,
 };
 use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
 use windows_sys::Win32::Storage::FileSystem::{
@@ -91,6 +93,46 @@ fn start_folder() -> PathBuf {
     } else {
         dir
     }
+}
+
+/// Folders any account may start in, when USER cannot use the shell's, best first: the
+/// system temp (`%SystemRoot%\Temp`, where every account may create and traverse), then the
+/// system drive's root as a last resort. Tried in turn, as the temp's access may be
+/// tightened on some machines.
+fn fallback_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(temp) = system_temp() {
+        dirs.push(temp);
+    }
+    dirs.push(drive_root());
+    dirs
+}
+
+/// `%SystemRoot%\Temp`, with the Windows directory read from the OS (`GetWindowsDirectoryW`),
+/// not an environment variable or a hard-coded path; `None` if the call will not say.
+fn system_temp() -> Option<PathBuf> {
+    use windows_sys::Win32::System::SystemInformation::GetWindowsDirectoryW;
+
+    let mut buffer = [0u16; 260];
+    // SAFETY: `buffer` holds `len` units; the call writes at most that and returns the count.
+    let written = unsafe {
+        GetWindowsDirectoryW(
+            buffer.as_mut_ptr(),
+            u32::try_from(buffer.len()).unwrap_or(0),
+        )
+    };
+    let len = written as usize;
+    if written == 0 || len > buffer.len() {
+        return None;
+    }
+    let windir = String::from_utf16_lossy(buffer.get(..len)?);
+    Some(PathBuf::from(windir).join("Temp"))
+}
+
+/// The system drive's root (`C:\`), which every account can enter.
+fn drive_root() -> PathBuf {
+    let drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_owned());
+    PathBuf::from(format!("{drive}\\"))
 }
 
 /// The started cash's arguments: `--invoke-bundled --sudo-attach PID ATTACH IN OUT ERR
@@ -186,12 +228,14 @@ pub fn run_as_user_here(own: &Path, who: &str, user: &str, command: &[OsString])
     // console command needs none of it, and the lookup or the grant may fail.
     let _desktop = crate::account::lookup_user(user).map(|sid| crate::winstation::share_with(&sid));
 
-    // The command runs as USER right here: a cash started as USER, which inherits this
-    // console and these standard handles (`start_as`) and runs the command under
-    // `--sudo-owner`. Unlike the elevated side, it never opens this process, which another
-    // account may not do; `CreateProcessWithLogonW` hands it everything instead.
+    // The command runs as USER right here: a cash started as USER that runs the command
+    // under `--sudo-owner`. Unlike the elevated side, it never opens this process, which
+    // another account may not do. A redirected standard handle is handed over by inheritance
+    // (`start_as`); a console handle becomes a pipe that this process relays to and from the
+    // real console, since another account cannot attach to it.
     let dir = start_folder();
     let own_text = own.to_string_lossy();
+    let (handles, mask) = std_handles_and_mask();
     let mut words = vec![own_text.clone().into_owned(), "--invoke-bundled".to_owned()];
     words.extend(
         command
@@ -210,7 +254,40 @@ pub fn run_as_user_here(own: &Path, who: &str, user: &str, command: &[OsString])
         );
         return 1;
     }
-    let (process, _job) = match start_as(&own_text, &command_line, &dir, user, &password) {
+    // The shell's folder is often under the caller's profile, which USER cannot enter, and
+    // `CreateProcessWithLogonW` then fails with ERROR_DIRECTORY. Fall back to a folder every
+    // account may use, and say which, rather than refuse the command.
+    let mut started = start_as(
+        &own_text,
+        &command_line,
+        &dir,
+        user,
+        &password,
+        handles,
+        &mask,
+    );
+    if matches!(&started, Err(err) if err.raw_os_error() == Some(ERROR_DIRECTORY.cast_signed())) {
+        for fallback in fallback_dirs() {
+            started = start_as(
+                &own_text,
+                &command_line,
+                &fallback,
+                user,
+                &password,
+                handles,
+                &mask,
+            );
+            if started.is_ok() {
+                eprintln!(
+                    "{who}: {user} cannot use {} as the folder; running in {}",
+                    crate::path::render(&dir),
+                    crate::path::render(&fallback)
+                );
+                break;
+            }
+        }
+    }
+    let (process, _job, relays) = match started {
         Ok(started) => started,
         Err(err) => {
             eprintln!("{who}: {err}");
@@ -218,10 +295,16 @@ pub fn run_as_user_here(own: &Path, who: &str, user: &str, command: &[OsString])
         }
     };
     drop(password);
-    // `_job` holds USER's cash (and the command under it) for as long as this process
-    // lives: a shell killed while the command runs takes this process with it (the session
-    // job), closing the job handle, and the kernel then ends USER's cash too.
-    report(who, wait_for(&process))
+    // `_job` holds USER's cash (and the command under it) for as long as this process lives:
+    // a shell killed while the command runs takes this process with it (the session job),
+    // closing the job handle, and the kernel then ends USER's cash too.
+    let code = wait_for(&process);
+    // Let the output relay drain the last of the command's output to the console before the
+    // status is reported and this process exits.
+    for relay in relays {
+        let _ = relay.join();
+    }
+    report(who, code)
 }
 
 /// `user` as `CreateProcessWithLogonW` takes it: a name and a domain, the local machine
@@ -236,18 +319,51 @@ fn logon_name(user: &str) -> (&str, Option<&str>) {
     }
 }
 
-/// Starts `command_line` as `user`, with `password`, in `dir`, inheriting this console and
-/// its standard handles, with the account's own environment and profile; gives its process
-/// and the job that ends it with this one.
+/// This process's standard handles and a mask of what each is, in the order in/out/err:
+/// `c` the console (relayed through a pipe), `f` a valid handle the child inherits, `-`
+/// none.
+fn std_handles_and_mask() -> ([HANDLE; 3], String) {
+    let mut handles: [HANDLE; 3] = [std::ptr::null_mut(); 3];
+    let mut mask = String::with_capacity(3);
+    for (slot, which) in handles.iter_mut().zip(STD) {
+        // SAFETY: a plain query; the handle is this process's, or null.
+        let handle = unsafe { GetStdHandle(which) };
+        *slot = handle;
+        if handle.is_null() || handle == INVALID_HANDLE_VALUE {
+            mask.push('-');
+        } else {
+            let mut mode = 0;
+            // SAFETY: a plain query on a handle this process holds.
+            let is_console = unsafe { GetConsoleMode(handle, &raw mut mode) } != 0;
+            mask.push(if is_console { 'c' } else { 'f' });
+        }
+    }
+    (handles, mask)
+}
+
+/// Marks `handle` inheritable, so `CreateProcessWithLogonW` hands it to the child.
+fn make_inheritable(handle: HANDLE) {
+    if !handle.is_null() && handle != INVALID_HANDLE_VALUE {
+        // SAFETY: a handle this process holds; this short-lived process exits soon after.
+        unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) };
+    }
+}
+
+/// Starts `command_line` as `user`, with `password`, in `dir`, giving it standard handles
+/// from `handles` and `mask`, with the account's own environment and profile; gives its
+/// process, the job that ends it with this one, and the output relay threads.
 ///
-/// `CreateProcessWithLogonW` hands the standard handles to the child even across the
-/// account boundary (`STARTF_USESTDHANDLES`, the handles made inheritable), so the command
-/// reads and writes this terminal, or the shell's redirections, as its own. No window is
-/// forced, so the child shares this console rather than opening one of its own.
+/// A redirected handle (`f` in the mask) is handed to the child by inheritance
+/// (`STARTF_USESTDHANDLES`), so a file or pipe reaches the command as its own. A console
+/// handle (`c`) cannot cross to another account — an inherited console handle is no use to
+/// it, and it may not attach to this console (access denied) — so it becomes a pipe: the
+/// command reads and writes the pipe, and this process relays the bytes to and from the
+/// real console, as gsudo does for another account. Full-screen console apps lose their
+/// fidelity this way (no VT screen, plain byte relay), as in gsudo's piped mode.
 ///
-/// It is made suspended and put in a kill-on-close job before it runs, so that when this
-/// process ends — including killed with the shell by the session job — the job handle
-/// closes and the kernel ends USER's cash too. The elevated side's watcher opens the
+/// The process is made suspended and put in a kill-on-close job before it runs, so that
+/// when this process ends — including killed with the shell by the session job — the job
+/// handle closes and the kernel ends USER's cash too. The elevated side's watcher opens the
 /// caller for this; another account's process may not, so the job does it from here. The
 /// job is best-effort: without it the command still runs, only an orphan is possible.
 fn start_as(
@@ -256,29 +372,64 @@ fn start_as(
     dir: &Path,
     user: &str,
     password: &Secret,
-) -> io::Result<(OwnedHandle, Option<crate::job::JobObject>)> {
+    handles: [HANDLE; 3],
+    mask: &str,
+) -> io::Result<(
+    OwnedHandle,
+    Option<crate::job::JobObject>,
+    Vec<JoinHandle<()>>,
+)> {
     let (name, domain) = logon_name(user);
     let name = crate::wide::to_wide_nul(name);
     let domain = domain.map(crate::wide::to_wide_nul);
     let program = crate::wide::to_wide_nul(program);
     let mut line = crate::wide::to_wide_nul(command_line);
-    let dir = crate::wide::to_wide_nul(dir);
+    let dir_wide = crate::wide::to_wide_nul(dir);
 
-    // SAFETY: each is a standard handle this process holds, or null.
-    let handles = STD.map(|which| unsafe { GetStdHandle(which) });
-    for handle in handles {
-        if !handle.is_null() && handle != INVALID_HANDLE_VALUE {
-            // SAFETY: a handle this process holds; made inheritable for the child, which
-            // this short-lived process exits right after starting.
-            unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) };
+    // Build the child's three standard handles. A redirected handle is inherited as is; a
+    // console handle becomes a pipe end, the other end kept here to relay to the console.
+    let mut child: [HANDLE; 3] = [std::ptr::null_mut(); 3];
+    let mut child_side: Vec<OwnedHandle> = Vec::new();
+    let mut out_reader: Option<io::PipeReader> = None;
+    let mut err_reader: Option<io::PipeReader> = None;
+    let mut in_writer: Option<io::PipeWriter> = None;
+    let bytes = mask.as_bytes();
+    for i in 0..3 {
+        match bytes.get(i).copied() {
+            Some(b'c') if i == 0 => {
+                // stdin: this process writes, the child reads.
+                let (reader, writer) = io::pipe()?;
+                make_inheritable(reader.as_raw_handle() as HANDLE);
+                child[0] = reader.as_raw_handle() as HANDLE;
+                child_side.push(OwnedHandle::from(reader));
+                in_writer = Some(writer);
+            }
+            Some(b'c') => {
+                // stdout/stderr: the child writes, this process reads.
+                let (reader, writer) = io::pipe()?;
+                make_inheritable(writer.as_raw_handle() as HANDLE);
+                child[i] = writer.as_raw_handle() as HANDLE;
+                child_side.push(OwnedHandle::from(writer));
+                if i == 1 {
+                    out_reader = Some(reader);
+                } else {
+                    err_reader = Some(reader);
+                }
+            }
+            Some(b'f') => {
+                make_inheritable(handles[i]);
+                child[i] = handles[i];
+            }
+            _ => {}
         }
     }
+
     let startup = STARTUPINFOW {
         cb: u32::try_from(size_of::<STARTUPINFOW>()).unwrap_or(u32::MAX),
         dwFlags: STARTF_USESTDHANDLES,
-        hStdInput: handles[0],
-        hStdOutput: handles[1],
-        hStdError: handles[2],
+        hStdInput: child[0],
+        hStdOutput: child[1],
+        hStdError: child[2],
         ..Default::default()
     };
     let mut info = PROCESS_INFORMATION::default();
@@ -296,7 +447,7 @@ fn start_as(
             line.as_mut_ptr(),
             CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
             std::ptr::null(),
-            dir.as_ptr(),
+            dir_wide.as_ptr(),
             &raw const startup,
             &raw mut info,
         )
@@ -314,11 +465,39 @@ fn start_as(
     if let Some(job) = &job {
         let _ = job.assign_process(info.hProcess);
     }
+
+    // The child inherited its own copies of the pipe ends; drop this process's so a closed
+    // pipe reaches end-of-file when the child exits, then start the relays before the child
+    // runs so none of its output is lost.
+    drop(child_side);
+    let mut relays = Vec::new();
+    if let Some(mut reader) = out_reader {
+        relays.push(std::thread::spawn(move || {
+            let mut out = io::stdout();
+            let _ = io::copy(&mut reader, &mut out);
+            let _ = out.flush();
+        }));
+    }
+    if let Some(mut reader) = err_reader {
+        relays.push(std::thread::spawn(move || {
+            let mut err = io::stderr();
+            let _ = io::copy(&mut reader, &mut err);
+            let _ = err.flush();
+        }));
+    }
+    if let Some(mut writer) = in_writer {
+        // Detached: it blocks on console input and ends when the process does.
+        std::thread::spawn(move || {
+            let mut input = io::stdin();
+            let _ = io::copy(&mut input, &mut writer);
+        });
+    }
+
     // SAFETY: the thread handle is this process's; resumed, then closed.
     unsafe { ResumeThread(info.hThread) };
     // SAFETY: as above, owned here only to close it.
     drop(unsafe { OwnedHandle::from_raw_handle(info.hThread) });
-    Ok((process, job))
+    Ok((process, job, relays))
 }
 
 /// A password, NUL-terminated UTF-16, wiped when dropped.

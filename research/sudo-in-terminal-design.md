@@ -171,14 +171,14 @@ account left for later.
 
 gsudo starts its own helper as USER with USER's password, read at the console
 (`ProcessFactory.StartWithCredentials`, .NET's `Process.Start` with a user name, which is
-`CreateProcessWithLogonW`), and the helper shares the caller's console. cash does the
-same, but **not** by the section 3 mechanism: the elevated side there has the command's
-cash open the caller and pull its handles, which works only because an elevated process
-may open an unelevated one. Another account may not — a process started as USER opening
-the caller's for `DuplicateHandle` is `Access denied`, DACL grant or no (and an elevated
-caller blocks it outright by the integrity policy). So USER's cash is **handed** the
-terminal instead, by inheritance, as `CreateProcessWithLogonW` and .NET's redirected
-run-as do it:
+`CreateProcessWithLogonW`), and relays the helper's I/O. cash does the same. The section 3
+mechanism does not carry: the elevated side there has the command's cash open the caller
+and pull its handles, which works only because an elevated process may open an unelevated
+one. Another account may not — opening the caller for `DuplicateHandle` is `Access denied`,
+DACL grant or no (an elevated caller blocks it outright by the integrity policy), and a
+process started as USER may not `AttachConsole` to this console either (also `Access
+denied`, seen 2026-10-11). So a redirected handle is inherited and a console handle is
+relayed:
 
 1. `sudo` starts `cash --invoke-bundled --sudo-as WHO USER COMMAND...`, a program like any
    other to the shell. Its standard handles are the command's, the shell's redirections
@@ -191,32 +191,45 @@ run-as do it:
    windowed program can show (`winstation.rs`; `runas` does the same, `CreateProcessWithLogonW`
    documents the need). The grant is put back when the command ends.
 4. It starts `cash --invoke-bundled --sudo-owner - COMMAND` as USER with
-   `CreateProcessWithLogonW` (`LOGON_WITH_PROFILE`, USER's own environment), in the
-   shell's folder, and wipes the password. Its own standard handles — this console's, or
-   the shell's redirections — are made inheritable and handed over (`STARTF_USESTDHANDLES`);
-   no `CREATE_NO_WINDOW`, so USER's cash shares this console rather than opening one. No
-   `--sudo-attach`: nothing opens the caller. An administrator's account gets its filtered
-   token: its usual level, as gsudo's `-i Medium` gave it.
+   `CreateProcessWithLogonW` (`LOGON_WITH_PROFILE`, USER's own environment), in the shell's
+   folder, and wipes the password. Each standard handle is handed over by its kind: a
+   redirected file or pipe is made inheritable and passed (`STARTF_USESTDHANDLES`), reaching
+   the command as its own; a console handle becomes an anonymous pipe, USER's cash holding
+   the pipe end and this process relaying the bytes to and from the real console on threads
+   of its own (stdout and stderr to the console, console input to stdin), since USER can
+   neither use an inherited console handle nor attach to the console. An administrator's
+   account gets its filtered token: its usual level, as gsudo's `-i Medium` gave it.
 5. The process is made suspended and put in a kill-on-close job before it runs (the
    `--sudo-as` cash holds the only handle and has full rights on the process it made), so a
    shell killed while the command runs takes the `--sudo-as` cash with it (the session job)
    and the kernel then ends USER's cash too. The elevated side's watcher opens the caller
    for this; another account's cash may not, so the job does it from here.
 6. USER's cash runs the command under `--sudo-owner -`, which changes no owner (the files
-   are USER's), inheriting the handed-over handles, and the status comes back.
+   are USER's), with the handed-over handles, and the status comes back once the relay has
+   drained the last of the output.
 
 An inherited file or pipe handle keeps the access it was opened with, so USER writes the
 shell's `> out.txt` though the file is the caller's; the DACL was checked when the caller
-opened it, not at each write.
+opened it, not at each write. The console relay is a byte relay, as gsudo's piped mode:
+ordinary output and input work; a full-screen console app (one that drives the screen with
+VT or the console API) does not get a true console and loses that fidelity.
 
 Limits: Windows takes a command line of 1,024 characters here, which `-E` can fill;
-USER must be able to read cash.exe and enter the folder (both refused with a message).
-The desktop grant is best-effort: a program with windows shows when it takes, and falls
-back to gsudo's old limit (no window) when it does not.
+USER must be able to read cash.exe (refused with a message). The shell's folder is often
+under the caller's profile, which USER cannot enter, and `CreateProcessWithLogonW` then
+fails with `ERROR_DIRECTORY`; cash falls back to the system temp (`%SystemRoot%\Temp`, the
+Windows directory read from the OS, not an env variable or a hard-coded path), else the
+system drive's root, and says which, rather than refuse the command. The desktop grant is
+best-effort: a program with windows shows when it takes, and falls back to gsudo's old
+limit (no window) when it does not.
 
 Seen, with a test account and its password (2026-10-11): the prompt and Ctrl-C at it
-(`sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing`, in the suites), and a
-command run as the account, its `%USERNAME%` and a redirected file
-(`sudo_in_terminal::sudo_u_runs_the_command_as_the_account`, ignored; needs the account
-in `CASH_TEST_USER`, its password in `CASH_TEST_PASSWORD`, and read access to the cash
-under test).
+(`sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing`, in the suites); a command
+run as the account, its `%USERNAME%` and a redirected file
+(`::sudo_u_runs_the_command_as_the_account`); a console command's output shown in this
+terminal through the relay (`::sudo_u_shows_console_output_in_this_terminal`); and the
+command dying with a killed shell (`::sudo_u_dies_when_the_shell_is_killed`). The last
+three are ignored and need the account in `CASH_TEST_USER`, its password in
+`CASH_TEST_PASSWORD`, and read access to the cash under test
+(`icacls target\debug\cash.exe /grant NAME:RX`). A windowed program run as the account was
+seen by hand (`sudo -u casstest notepad`).
