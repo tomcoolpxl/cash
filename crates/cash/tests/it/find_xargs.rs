@@ -592,6 +592,41 @@ fn xargs_runs_each_line_as_it_is_read() {
     );
 }
 
+/// `-P 2` runs two commands at once: each makes its file and waits for the other's, so run
+/// one after the other the first waits out its five seconds and fails, 123. They ran one at
+/// a time, as `-P` is a maximum (decisions.md).
+#[test]
+fn xargs_p_runs_the_commands_at_once() {
+    let sandbox = Sandbox::new("xargs-p");
+    let wait_for_the_other = r#"touch "$1.ready"; n=0
+        while [ ! -e "$2.ready" ] && [ $n -lt 50 ]; do sleep 0.1; n=$((n+1)); done
+        [ -e "$2.ready" ]"#;
+    // Appended (`-n 2`), and substituted (`-I`, a line each: `c d`, `d c`).
+    let out = sandbox.run(&format!(
+        "echo a b b a | xargs -n 2 -P 2 sh -c '{wait_for_the_other}' _; echo \"n $?\"\n\
+         printf 'c d\\nd c\\n' | xargs -I % -P 2 sh -c 'set -- %; {wait_for_the_other}'\n\
+         echo \"I $?\""
+    ));
+    assert_eq!(out.stdout, "n 0\nI 0", "{}", out.stderr);
+}
+
+/// With `-P`, a command still starts as soon as its line is read: the writer gives `b`
+/// only once the command for `a` has run.
+#[test]
+fn xargs_p_starts_each_command_as_its_line_is_read() {
+    let sandbox = Sandbox::new("xargs-p-stream");
+    let out = sandbox.run(
+        r#"{ echo a; n=0; while [ ! -e ran-a ] && [ $n -lt 100 ]; do sleep 0.1; n=$((n+1)); done; echo b; } |
+           xargs -n 1 -P 2 sh -c 'touch "ran-$0"; echo "$0"' | sort
+           [ -e ran-a ] && echo "a ran while the writer waited""#,
+    );
+    assert_eq!(
+        out.stdout, "a\nb\na ran while the writer waited",
+        "{}",
+        out.stderr
+    );
+}
+
 /// A quote left open ends the input: what came before runs, GNU's message, status 1. It
 /// ran the quote across the line as one item (BI-18).
 #[test]

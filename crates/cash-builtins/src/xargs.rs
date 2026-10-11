@@ -14,13 +14,16 @@
 //! - a backslash escapes the next character in the input, so a Windows-spelled path fed
 //!   in raw loses its separators. That is why cash renders every path it prints through
 //!   D3 (§4 #1) — `find | xargs` is safe because `find` prints `C:/src`, not `C:\src`;
-//! - `-P N` is a *maximum*, so running the commands one at a time honours it. Parallelism
-//!   is not implemented, and nothing has to be refused to say so.
+//! - `-P N` runs up to N commands at once, `-P 0` as many as there are lines; their output
+//!   interleaves as it comes, as GNU's does.
 
 use std::io::Write;
+use std::task::Poll;
 
 use cash_core::{ExecutionExitCode, ExecutionResult, builtins};
 use clap::Parser;
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 
 /// Windows caps a command line at 32,767 characters; leave room for the program name and
 /// the terminator rather than finding out at the boundary.
@@ -53,8 +56,7 @@ pub(crate) struct XargsCommand {
     #[arg(short = 's', long = "max-chars", value_name = "COUNT")]
     max_chars: Option<usize>,
 
-    /// Run at most this many commands at once. cash runs them one at a time, which the
-    /// maximum allows.
+    /// Run at most this many commands at once; 0 runs as many as possible.
     #[arg(short = 'P', long = "max-procs", value_name = "COUNT")]
     max_procs: Option<usize>,
 
@@ -66,6 +68,7 @@ pub(crate) struct XargsCommand {
 impl builtins::Command for XargsCommand {
     type Error = cash_core::Error;
 
+    #[expect(clippy::too_many_lines)]
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
@@ -88,6 +91,32 @@ impl builtins::Command for XargsCommand {
         };
         let mut worst = ExecutionResult::success();
 
+        // The commands running at once, at most `limit` of them (`-P`).
+        let limit = match self.max_procs {
+            Some(0) => usize::MAX,
+            Some(n) => n,
+            None => 1,
+        };
+        let shared = &context;
+        let start = move |argv: Vec<String>| async move { self.run(shared, &argv).await };
+        let mut running = FuturesUnordered::new();
+        // Queues a command line and starts it at once, so it runs before more input is
+        // read, which may not have been written yet; then, with every slot taken, waits
+        // for one to free.
+        macro_rules! admit {
+            ($argv:expr) => {
+                running.push(start($argv));
+                if let Poll::Ready(Some(result)) = futures::poll!(running.next()) {
+                    note(&mut worst, result?);
+                }
+                while running.len() >= limit {
+                    if let Some(result) = running.next().await {
+                        note(&mut worst, result?);
+                    }
+                }
+            };
+        }
+
         if let Some(token) = &self.replace {
             // `-I` substitutes rather than appends, and runs once per item.
             while let Some(item) = items.next()? {
@@ -95,10 +124,10 @@ impl builtins::Command for XargsCommand {
                     .iter()
                     .map(|part| part.replace(token.as_str(), item.as_str()))
                     .collect();
-                let result = self.run(&context, &argv).await?;
-                if !result.is_success() {
-                    worst = result;
-                }
+                admit!(argv);
+            }
+            while let Some(result) = running.next().await {
+                note(&mut worst, result?);
             }
             return Ok(worst);
         }
@@ -140,15 +169,15 @@ impl builtins::Command for XargsCommand {
             // quote left open stops it, after what came before has run.
             let nothing = taken == 0 && (ran || self.skip_if_empty || items.unmatched.is_some());
             if !nothing {
-                let result = self.run(&context, &argv).await?;
+                admit!(argv);
                 ran = true;
-                if !result.is_success() {
-                    worst = result;
-                }
             }
             if at_end {
                 break;
             }
+        }
+        while let Some(result) = running.next().await {
+            note(&mut worst, result?);
         }
 
         if let Some(quote) = items.unmatched {
@@ -162,6 +191,13 @@ impl builtins::Command for XargsCommand {
             return Ok(ExecutionResult::general_error());
         }
         Ok(worst)
+    }
+}
+
+/// Keeps the status of a command that failed, the last one when several do.
+const fn note(worst: &mut ExecutionResult, result: ExecutionResult) {
+    if !result.is_success() {
+        *worst = result;
     }
 }
 
