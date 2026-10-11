@@ -1460,3 +1460,7 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   same day): `cf74f601` `perf(7z): split a file past one dictionary across the threads`
   was taken back by the commit after it. `release-notes.ps1` now leaves out the commits
   listed in `.github/release-notes-skip.txt`, and that one is there.
+- **A test in the full suite left `x.lnk` in the repository root** (found 2026-10-06; closed
+  2026-10-11): a 0-byte named pipe as MSYS2's `mkfifo` makes them. `mkfifo` became a
+  builtin that refuses the same day, and the 1.14.0 gate's full run, all 8,533 tests,
+  left no `x.lnk`, as none of the nine release gates between had.

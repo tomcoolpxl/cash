@@ -83,10 +83,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
   real; until then the page says so.
-- A test in the full suite leaves `x.lnk` in the repository root: a 0-byte named pipe as
-  MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
-  during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs
-  with the repository as its folder. Find it and give it a temporary folder.
 - **`cp src >(cat)` can print zeros** (found 2026-10-10 in the 1.12.0 gate, once in a
   full run): a `>(...)` handed to a tool not patched for pipes is a temp file read as it
   grows, and `cp` (through `CopyFileEx`) sizes its target before it writes it, so a read
