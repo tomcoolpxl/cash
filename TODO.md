@@ -80,12 +80,13 @@ What the phases now in DONE.md left open, each where its phase says more.
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against
   Scoop's programs and WSL2's). Ahead: gzip (0.09 s against 0.4–0.5 s, 0.3 s against
   2 s), bzip2 (0.16 s against 1 s, 0.5 s against 3.3 s), zip and gzip decompressing.
-  Behind, worth work: **7z compresses a file of one dictionary or less at half 7-Zip's
-  speed** (32 MiB at `-mx5`; 10.1 s against 4.4 s on a 31 MB tar, 2026-10-11, the same
-  size): 7-Zip's LZMA2 runs its match finder on a thread of its own, which lzma-rust2
-  cannot. A larger file is now split into blocks across the threads (DONE.md), which
-  costs 2–4% in size where 7-Zip loses none; a match-finder thread (7-Zip's
-  `MatchFinderMt`) in lzma-rust2 would close both; **zstd writes files 1.5×
+  Behind, worth work: **7z compresses at half 7-Zip's speed** at the same size (again
+  2026-10-11: 10.1 s against 4.4 s on a 31 MB tar, 20.5 s against 9.3 s on a 49 MB
+  `cash.exe`): 7-Zip's LZMA2 runs its match finder on a thread of its own, which
+  lzma-rust2 cannot, so cash is on one thread for each block of four dictionaries.
+  Smaller blocks (`c=`) are as fast as 7-Zip or faster, but 2–4% larger, and the user
+  wants the smaller archives (DONE.md); a match-finder thread (7-Zip's `MatchFinderMt`)
+  in lzma-rust2 would give both; **zstd writes files 1.5×
   zstd's size, at half its speed** (ruzstd's fastest level, 5.9 MB against 4.0 MB);
   **xz is 20% slower on one block** (6.5 s against 5.4 s; lzma-rust2's encoder) and
   decodes at two thirds of XZ Utils' speed; zip on one large member has no parallelism
@@ -114,6 +115,10 @@ What the phases now in DONE.md left open, each where its phase says more.
   (`acceptance::an_unpatched_bundled_tool_writes_into_a_write_substitution_through_a_file`)
   is `#[ignore]`d. A fix reads only what was written: hold back the tail of a file that
   grew in one step until the program is done, or give `cp` the pipe as tee's patch did.
+- **The next release's notes list a speed-up that was undone** (2026-10-11): `cf74f601`
+  `perf(7z): split a file past one dictionary across the threads` was taken back by the
+  commit after it, which keeps 7-Zip's block size. Drop its line from the notes
+  `release-notes.ps1` writes, before the release is published.
 ---
 
 ## Decided, written down so it is not decided twice
@@ -124,6 +129,10 @@ What the phases now in DONE.md left open, each where its phase says more.
   is the Windows subset described in ROADMAP item 9"; help pages had 122 such
   references. Point to a `help` page instead.
 
+- **7z's archives are as small as 7-Zip's before they are fast** (the user, 2026-10-11):
+  LZMA2 keeps 7-Zip's block of four dictionaries by default, though a block per
+  dictionary across the threads compresses a 155 MB tar in 12 s instead of 47 s; it
+  made the archives 2–4% larger. `c=` gives the speed to whoever asks for it.
 - **An elevated `ss -i` switches statistics collection on** (the user, 2026-10-05):
   Windows keeps per-connection TCP statistics (rtt, rto, cwnd, bytes, retransmits,
   queues) only for connections an administrator switched collection on for; unelevated,

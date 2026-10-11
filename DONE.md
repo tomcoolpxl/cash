@@ -1417,12 +1417,18 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   took `d/` as changed when its time fell near a second's end (the folders now get whole
   seconds), and `watch -e`'s key, typed as soon as the message showed, could be lost on a
   busy machine (the test now types until `watch` ends).
-- **7z compressed at half 7-Zip's speed** (the 1.10.0 benchmark in TODO.md; done
-  2026-10-11 for files past one dictionary): LZMA2 used one thread up to four
-  dictionaries (128 MiB at `-mx5`). It now splits a file past one dictionary into equal
-  blocks, one per dictionary and no more than the threads, each block's dictionary cut
-  to the block, as 7-Zip does for its `c=`; `c=` sets the block size as in 7-Zip
-  (`-m0=lzma2:c=128m` gives 1.13.0's archives). Best of two, 16 threads, one run against
-  7-Zip 26.03: a 49 MB `cash.exe` 20.5 s → 10.8 s (7-Zip 9.3 s), 2.0% larger; a 155 MB
-  tar of Git's mingw64 47.2 s → 12.1 s (7-Zip 28.9 s), 4.1% larger. Real 7-Zip tests
-  every archive. A file of one dictionary or less is unchanged (TODO.md).
+- **LZMA2's `c=` sets the block size, as in 7-Zip** (2026-10-11, from the 1.10.0
+  benchmark in TODO.md): a bare number is a power of two, as for `d`, and each block's
+  dictionary is cut to the block (`Lzma2EncProps_Normalize`); the blocks go to the
+  threads, so a smaller block is faster and larger. The default stays 7-Zip's block of
+  four dictionaries (128 MiB at `-mx5`), the same bytes as 1.13.0: splitting every file
+  past one dictionary was tried, and the user chose smaller archives. Best of two on 16
+  threads, one run against 7-Zip 26.03:
+
+  | | 7-Zip | default | `c=` one block per dictionary |
+  | --- | --- | --- | --- |
+  | 49 MB `cash.exe` | 9.3 s, 11.55 MB | 20.5 s, 11.55 MB | 10.8 s, 11.79 MB (`c=24m`) |
+  | 155 MB tar of Git's mingw64 | 28.9 s, 31.41 MB | 47.2 s, 31.47 MB | 12.1 s, 32.76 MB (`c=30m`) |
+
+  Two blocks of 74 MiB cost the tar 3.4%, those of 128 and 20 MiB 0.4%: what a block
+  boundary costs depends on where it falls in the data. Real 7-Zip tests every archive.
