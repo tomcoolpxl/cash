@@ -153,6 +153,8 @@ mod kill_targets;
 mod kill_term;
 mod line_ending_tools;
 mod link_tools;
+// `logger`: to the Application event log, read back with wevtutil; util-linux's -s line.
+mod logger_builtin;
 // Programs started from a folder too long for Windows to start one in.
 mod long_folders;
 // A `TEMP` in 8.3 form taken to its long form as cash starts.

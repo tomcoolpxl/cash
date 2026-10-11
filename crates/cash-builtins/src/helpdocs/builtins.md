@@ -111,6 +111,7 @@ an entry or page names no builtin.
 - `free`: Show the machine's memory: used, free, cache and the page files, as procps' `free` does.
 - `fuser`: Show the processes using files or sockets.
 - `killall`: Signal every process with a given name.
+- `logger`: Write a message to the system log: the Application event log.
 - `lsof`: List the files and sockets processes have open.
 - `nc`: Connect to, listen on or scan TCP and UDP ports, as OpenBSD's netcat does.
 - `nice`: Run a command at a lower (or higher) priority, or print the current niceness.

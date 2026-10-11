@@ -94,9 +94,9 @@ const EXPECTED: &[(&str, &str)] = &[];
 /// but it is the opposite question from EXPECTED, and gets the opposite advice.
 const CARRIED: &[&str] = &[
     "ps", "top", "find", "xargs", "less", "more", "which", "kill", "cat", "mktemp", "hostname",
-    "chmod", "chown", "chgrp", "id", "groups", "awk", "sed", "stat", "tty", "nohup", "who",
-    "users", "pinky", "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos", "fuser",
-    "lsof", "ss", "ping", "stty", "tput", "iconv", "column", "xxd", "hexdump", "uuidgen",
+    "chmod", "chown", "chgrp", "logger", "id", "groups", "awk", "sed", "stat", "tty", "nohup",
+    "who", "users", "pinky", "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos",
+    "fuser", "lsof", "ss", "ping", "stty", "tput", "iconv", "column", "xxd", "hexdump", "uuidgen",
     "xdg-open", "pbcopy", "pbpaste", "flock", "watch", "free", "nice", "renice", "nc", "diff",
     "cmp", "grep", "suspend", "mkfifo", "stdbuf", "getconf", "locale", "gzip", "gunzip", "zcat",
     "bzip2", "bunzip2", "bzcat", "xz", "unxz", "xzcat", "lzma", "unlzma", "lzcat", "zstd",

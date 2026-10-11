@@ -37,6 +37,8 @@ pub mod devices;
 pub mod elevate;
 pub mod endless;
 pub mod env;
+// Writing to the Application event log, for `logger`.
+pub mod eventlog;
 pub mod exit;
 // Byte-range locks on an open file, for `flock`.
 pub mod filelock;

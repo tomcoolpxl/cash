@@ -32,6 +32,8 @@ mod z;
 mod bzip2;
 // cash: `column`, util-linux's, checked against 2.42.3 case by case.
 mod column;
+// cash: `logger`, util-linux's, writing to the Application event log.
+mod logger;
 // cash: what the compressors share (D78): where output goes, byte counts, the console.
 mod compress;
 mod croot;

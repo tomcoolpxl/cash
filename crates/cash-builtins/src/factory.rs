@@ -308,6 +308,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("xxd".into(), builtin::<xxd::XxdCommand, SE>());
     m.insert("hexdump".into(), builtin::<hexdump::HexdumpCommand, SE>());
     m.insert("column".into(), builtin::<column::ColumnCommand, SE>());
+    m.insert("logger".into(), builtin::<logger::LoggerCommand, SE>());
     m.insert("clear".into(), builtin::<screen::ClearCommand, SE>());
     m.insert("reset".into(), builtin::<screen::ResetCommand, SE>());
     m.insert("tput".into(), builtin::<tput::TputCommand, SE>());
