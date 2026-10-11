@@ -125,15 +125,8 @@ without asking, and any process of the user's could try to be the one it grants 
 
 ## 6. The choices
 
-Made by the user on 2026-10-10, by pick list:
-
-1. **Which comes first: cash's own, always.** One behaviour on every machine, no other
-   tool needed; gsudo only for `-u USER` and its cache (`-v`, `-k`, `-K`). Windows' sudo
-   and UAC's new window are no longer used by `sudo`. (Not chosen: gsudo first, then
-   cash's own; cash's own only where neither gsudo nor Windows' sudo is.)
-2. **Input: the command reads the terminal**, as Unix's `sudo`, gsudo's default and
-   Windows' inline mode do. (Not chosen: the input closed; a way to close it.)
-3. **The probes of section 4: at once**, with the user at the UAC prompts.
+Made by the user on 2026-10-10, by pick list, and amended on 2026-10-11 (section 8); they
+are in [decisions.md](../decisions.md), under sudo and elevation.
 
 ## 7. What the probes showed
 
@@ -165,9 +158,8 @@ the exported variables as `NAME=value` words, within Windows' 32,000 characters.
 
 ## 8. As another account, without gsudo
 
-Asked for by the user on 2026-10-11, by pick list: `sudo -u USER` and `su USER` by cash
-itself too, so gsudo is not needed for anything; built at once, the probes with a second
-account left for later.
+Asked for by the user on 2026-10-11, by pick list ([decisions.md](../decisions.md), sudo
+and elevation).
 
 gsudo starts its own helper as USER with USER's password, read at the console
 (`ProcessFactory.StartWithCredentials`, .NET's `Process.Start` with a user name, which is

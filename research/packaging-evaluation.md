@@ -5,31 +5,10 @@
 **Decided 2026-09-28** (ROADMAP item 18, refining spec D38 and D65). The question
 started as "is `cash --link-tools` tested, and should cash put its folder on PATH?" and
 widened to how cash gets installed at all, as a normal user without admin. Decided with
-the user, by pick list:
-
-| Question | Decision |
-|---|---|
-| Channels, and their order | **Scoop only, for now**, from a bucket of the author's own. winget later; Chocolatey not planned |
-| Installer for the later winget package | **Inno Setup**, per-user (`PrivilegesRequired=lowest`) |
-| The tool links folder on PATH | **Opt-in**, and when chosen, at the **front of the user PATH** |
-| Who writes PATH | **cash itself** (a `--link-tools` option and its undo), so every channel shares one tested implementation |
-| Public download URLs | **Make `tomcoolpxl/cash` public** |
-| Where the bucket lives | **`tomcoolpxl/scoop-bucket`**, one personal bucket, updated by its own scheduled action |
-| Code signing | **Unsigned now**; apply to the SignPath Foundation once cash has visible users |
-| Windows Terminal profile | **Written on every install** (a JSON fragment), removed on uninstall, as D38 said |
-
-Not asked, so left as it is: x64 only; an ARM64 build waits for a machine to test it on.
-
-**Second round, 2026-10-06** (spec D75, DONE.md phase 22), chosen by the user by pick
-list, with Velopack and a per-user MSI as the alternatives weighed:
-
-| Question | Decision |
-|---|---|
-| A second channel beside Scoop | **Yes: a per-user installer on the releases page**, and winget made from it. The aim: install cash and have a complete native Bash with its tools, no Scoop needed |
-| Installer technology | **Inno Setup, per-user**, as this document proposed; Scoop's versioned folders and `current` junction so a running `cash.exe` is never overwritten |
-| Upgrades | **`cash --update` on request** (releases API, `.sha256`, new folder, junction), plus re-running the installer or winget; nothing automatic |
-| Defaults | **The tool links on PATH on by default**, with a task to opt out |
-| Signing | **Still unsigned**: no paid certificate, SignPath Foundation not wanted; the SmartScreen prompt on a browser download is documented |
+the user by pick list, and again on 2026-10-06 (DONE.md phase 22) with Velopack and a
+per-user MSI weighed; the decisions are in [decisions.md](../decisions.md) (D38, D65,
+D75). Not asked, so left as it is: x64 only; an ARM64 build waits for a machine to test
+it on.
 
 **Implemented 2026-09-28**, items 1 to 5 of [What follows](#what-follows-from-the-decisions):
 the static C runtime and its release check, the icon and version resource, `--add-to-path`

@@ -1,44 +1,18 @@
 # BusyBox gap analysis
 
-> **Discussion document, partly decided.** The decisions taken are listed below; the
-> remaining sections are the analysis they were based on.
+> **Discussion document, partly decided.** The decisions taken are in
+> [decisions.md](../decisions.md); this is the analysis they were based on.
 
 Already planned elsewhere and not re-proposed here: `dos2unix`/`unix2dos` (ROADMAP 7),
 `fuser` and an `lsof` subset (ROADMAP 8), and an `ss` subset (ROADMAP 9).
 
-## Decisions (2026-09-25)
+## Decisions
 
-The tier-1 questions were put to the user; the rest of this document is the evidence.
-
-| Question | Decision |
-|---|---|
-| Small tier-1 tools | Adopt `pkill`, `pidof`, `killall`, `getopt`, `rev`, `clear`, `reset` |
-| Larger tier-1 tools | Adopt `bc` only. `grep`/`egrep`/`fgrep`, `cmp`/`diff` and `gzip`/`gunzip`/`zcat` are **not** adopted; the "cash does not carry grep or diff" rule stands |
-| Q2 kill-family matching | Case-insensitive, `.exe` optional, same rules as `pgrep`; access-denied and system processes skipped (reported with `-v`); `pkill` uses `kill`'s TERM escalation |
-| Q4 `bc` scope | POSIX only (posixutils-rs import, hardened); no `dc` |
-| Q9 `ping` | A Linux-flag `ping` builtin that shadows `ping.exe`, with pure iputils flags (`-t` is TTL, `-n` numeric); `ping.exe` stays reachable by path |
-| Q10 doctor | Flag BusyBox shims only for tools whose BusyBox versions are known to break scripts (curated list) |
-
-Q3, Q5–Q8 concern tools that were not adopted in this round and stay open.
-
-## Decisions, second round (2026-10-06)
-
-A second look at this machine, with Git for Windows' `usr/bin` off the Windows `PATH`
-and BusyBox uninstalled, resolved about 90 candidate names under cash. The user chose to
-build the tier-2 tools below (DONE.md phase 21, spec D74, ROADMAP item 19), plus four
-names this analysis did not measure: `tput` (`tput setaf` 130k shell-script hits on
-GitHub, `tput cols` 27k), `column` (`column -t` 27k), `xdg-open` (79k) and `pbcopy` (39k).
-
-| Question | Decision |
-|---|---|
-| Tier 2 | Adopt `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `free`, `watch`, `nice`/`renice`, `flock`, `nc`; add `xdg-open` (as `start`) and `pbcopy`/`pbpaste` |
-| Q5 `flock` | One byte far past the end of the file, so readers of the lock file are not blocked; the lock lives on the shell's handle, for the command's lifetime or until the descriptor closes; directories refused; `flock FD` through cash's table only |
-| Q6 `nice` | `-20…-11` HIGH, `-10…-1` ABOVE_NORMAL, `0` NORMAL, `1…10` BELOW_NORMAL, `11…19` IDLE; never REALTIME; bare `nice` maps the class back |
-| Q7 `free` | `Swap:` is the page file; no `Commit:` row, since scripts parse `free` by `Mem:` and `Swap:` |
-| Q8 `nc` | OpenBSD's flags; `-e`/`-c` refused |
-| Q3 compressors | **gzip, gunzip and zcat adopted, 2026-10-06** (spec D77, TODO phase 24): pure Rust `flate2`, GNU gzip's interface; `xz` and `bzip2` stay with `tar.exe`. On this machine `gunzip` and `zcat` resolved to nothing even with Scoop's gzip installed |
-| `grep`, `diff`, `cmp` | **Adopted after all, 2026-10-06** (spec D76, TODO phase 23): the rule was made for a cash beside Git Bash, and under the "install cash, have everything" aim `grep` is the commonest failure on a bare machine. `grep` on ripgrep's library crates with GNU's interface, `fancy-regex` for backreferences; `diff`/`cmp` from uutils diffutils |
-| `patch`, `strings` | Still not adopted |
+The tier-1 questions were put to the user on 2026-09-25, the tier-2 ones on 2026-10-06
+(DONE.md phase 21), after a second look at this machine with Git for Windows' `usr/bin`
+off `PATH` and BusyBox uninstalled. What was chosen is in
+[decisions.md](../decisions.md) (D54 to D57, D74, D76, D77); the rest of this document is
+the evidence.
 
 ## Method
 

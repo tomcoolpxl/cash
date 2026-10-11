@@ -2,17 +2,9 @@
 
 ## Status
 
-**Decided and implemented 2026-09-25** (ROADMAP item 9, spec D51). The evaluation below was written as a discussion document; the
-decisions taken on it are:
-
-| Question | Decision |
-|---|---|
-| Build `ss` at all, and when | Yes, after `fuser`/`lsof`, reusing their socket layer (ROADMAP item 8) |
-| Implementation | Directly on `windows-sys` in `cash-win32`; `netstat2` and Portview's `windows.rs` are references only |
-| `Recv-Q` / `Send-Q` | Printed as `0`, keeping Linux column positions; documented in the spec as a divergence |
-| `-p` on svchost | Adds a `service=NAME` field inside `users:((...))` |
-| netstat flags (`ss -ano`) | Refused as usual (status 1) plus a one-line hint giving the `ss` spelling (`ss -tuanp`) |
-| `-i` | Refused in the first version |
+**Decided and implemented 2026-09-25** (ROADMAP item 9). The evaluation below was written
+as a discussion document; the decisions taken on it are D51 in
+[decisions.md](../decisions.md), and `-i`, refused at first, came in phase 19.
 
 The rest of the document records what the four suggested projects could contribute and
 what the shared socket-table layer for `ss`, `fuser`, and an `lsof` subset looks like.

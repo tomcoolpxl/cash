@@ -189,21 +189,8 @@ Keep the corpus growing and fix new mismatches with focused regressions.
 
 The corpus showed that the classic dos2unix one-liners (`sed 's/\r$//'`, `sed 's/.$//'`)
 cannot work with Cash's sed, which strips the CR before matching and restores it on output.
-Agreed design:
-
-1. **Default (unchanged in spirit):** CRLF input stays CRLF on output and `$` matches before
-   the CR, so ordinary edits of Windows files work. When a command's pattern explicitly names
-   a carriage return (`\r`, `\x0D`, a literal CR), it is matched against the real line
-   including the CR, so the dos2unix one-liners do what they say.
-2. **Linux mode:** CR is ordinary data and only LF ends a line, exactly as GNU sed on Linux.
-   Selected per run with `-b`/`--binary` (the option GNU sed's Windows builds use for this),
-   or for a whole session or script through an environment variable.
-3. **`dos2unix` and `unix2dos` builtins,** following the real tools' manual: in-place
-   conversion by default, `-n INFILE OUTFILE` pairs, stdin-to-stdout filtering, `-k` (keep the
-   date), `-q`, `-f`, skipping binary files unless forced, and their BOM defaults. A bundled
-   builtin shadows Git for Windows' `usr/bin/dos2unix.exe` when that is on `PATH`, so
-   `type`, `cash doctor` and `enable -n` must report and allow the fallback honestly.
-   `mac2unix`/`unix2mac` (CR-only files) are not planned.
+The design agreed is D49 in [decisions.md](decisions.md), with `dos2unix` and `unix2dos`
+following the real tools' manual.
 
 **Status: complete.** sed and awk implement the policy with the shared `CASH_EOL=lf`
 switch (spec D49); an explicit CR in the program is detected per run rather than per
@@ -214,24 +201,13 @@ code-page and UTF-16 conversion are refused with a pointer to `enable -n`. Tests
 
 ## 8. `fuser` and an `lsof` subset
 
-Agreed scope: `fuser` in full, `lsof` as a documented subset.
+Agreed scope: `fuser` in full, `lsof` as a documented subset; the sources and what is
+refused are D50 in [decisions.md](decisions.md).
 
-1. `fuser FILE` and `lsof FILE` through the Restart Manager (`RmStartSession`,
-   `RmRegisterResources`, `RmGetList`), the documented API behind Explorer's
-   "file in use" dialog;
-2. `fuser PORT/tcp|udp` and `lsof -i[:PORT]` through `GetExtendedTcpTable` and
-   `GetExtendedUdpTable` (IPv4 and IPv6, owning PID);
-3. `lsof -p PID` limited to what those sources answer, `fuser -k` on the existing `kill`
-   support, and `-v` listings;
-4. anything needing a system-wide handle walk (undocumented `NtQuerySystemInformation`
-   handle enumeration) is refused with a clear message rather than approximated.
-   Superseded on 2026-10-04 (TODO phase 17): `lsof` walks the handles as handle.exe does,
-   for bare `lsof` and the open files of `-p`, `-c` and `-u` (spec D50).
-
-**Status: complete.** Decisions taken while building it: a directory argument means the
-files below it (the Restart Manager cannot see working directories); lsof keeps all nine
-columns with `-` where Windows has no value; `lsof -p` shows the executable, modules and
-sockets with a note on standard error. The socket layer is `cash_win32::net`, ready for
+**Status: complete.** A directory argument means the files below it (the Restart Manager
+cannot see working directories); lsof keeps all nine columns with `-` where Windows has
+no value; `lsof -p` shows the executable, modules and sockets with a note on standard
+error. The socket layer is `cash_win32::net`, ready for
 item 9. Tests: `crates/cash/tests/fuser_lsof.rs`, plus unit tests in `cash-win32` (`net`,
 `restart`, `process`) and `cash-builtins` (`fileuse`). Found on the way and filed
 separately: after `exec 3>file`, external commands fail (D26 over-applies).
@@ -254,19 +230,10 @@ unit tests in `cash-builtins`.
 
 ## 10. BusyBox-gap tools
 
-From the [BusyBox gap analysis](research/busybox-gap-analysis.md), the agreed set:
-
-1. `pkill`, `pidof`, `killall` on the existing `pgrep` matcher and `kill` signal path:
-   case-insensitive names, `.exe` optional, access-denied and system processes skipped;
-2. `getopt` (util-linux interface; its output quoted for Cash's parser), `rev` (keeps a
-   trailing CR), `clear` and `reset`;
-3. POSIX `bc`, imported from posixutils-rs and hardened like `awk`;
-4. a Linux-flag `ping` over the ICMP helper APIs, with pure iputils flags; it shadows
-   `ping.exe` deliberately, so `type`, `cash doctor` and `enable -n` must report it;
-5. `cash doctor` flags BusyBox shims on `PATH` for the tools whose BusyBox versions are
-   known to break scripts.
-
-Not adopted: `grep`, `cmp`/`diff` and the gzip family; Cash still does not carry grep or diff.
+From the [BusyBox gap analysis](research/busybox-gap-analysis.md), the agreed set, D54 to
+D57 and D35 in [decisions.md](decisions.md): 1 `pkill`, `pidof`, `killall`; 2 `getopt`,
+`rev`, `clear`, `reset`; 3 POSIX `bc`; 4 a Linux-flag `ping`; 5 `cash doctor` flagging
+BusyBox shims that break scripts.
 
 **Status: 1 done** (spec D54), checked against procps-ng 4.0.7 and psmisc 23.7 in WSL;
 `pgrep` now shares the family's name rules. Building it exposed that `kill -TERM` (and
@@ -382,25 +349,10 @@ installer running as admin can put the links where they may run, next to `cash.e
 `Program Files`. The links have the same hash and signature as `cash.exe`, so rules
 allowing cash by hash or signer allow its links.
 
-Decided:
+Decided: D65 in [decisions.md](decisions.md); `PATH` was at first never changed, and
+later changed on request and by the installer's default (D75).
 
-- **Folder:** DIR, or `bin` next to `cash.exe`, created when missing; an existing `bin`
-  is used as it is (busybox-w32 `--install` likewise defaults to its own folder).
-- **A name already taken:** a link cash made earlier is refreshed to this `cash.exe`,
-  so re-running after an upgrade updates them; any other file is left alone and listed
-  as skipped. Cash knows its own links by a list it keeps in the folder.
-- **Windows' names:** all 126 tools are linked (125 when this was decided; `where`
-  came later, D66). The nine that share a System32 name (`expand find hostname ping
-  reset sort timeout where whoami`) get a note: put the folder
-  after System32 on PATH, or `.bat` files calling `find` or `sort` get cash's.
-- **PATH:** never changed; the command prints the folder and how to add it to the
-  user PATH.
-
-Also: a DIR on another drive cannot hold hard links to `cash.exe`, so that is an error
-naming the reason; `which` prints a tool's link, when one is on PATH, in place of the
-virtual path; and `cash doctor` reports links left pointing at an older `cash.exe`.
-
-Done as decided (spec D65). Two things surfaced on the way. Windows looks for a program
+Done as decided. Two things surfaced on the way. Windows looks for a program
 started by a bare name in the starting exe's own folder first, so cash, coming up as any
 tool in a links folder, started the `whoami.exe` beside it for the user's SID, which was
 cash again: every start started another. cash now starts the Windows programs it uses by
@@ -412,26 +364,11 @@ attached, as the command to run.
 ## 17. What fish has at the prompt
 
 A comparison with fish (Garuda's default interactive shell) listed what it offers at the
-prompt that cash did not. Decided, in this order:
-
-1. **Syntax highlighting on by default** (D59). It existed, off; turning it on needed a
-   background `PATH` listing, since probing `PATH` for a missing name took 127 ms a
-   keystroke.
-2. **Bash's own Alt-. and Ctrl-X Ctrl-E**: `yank-last-arg` was defined but bound to
-   nothing, and `edit-and-execute-command` had no editor behind it. Bash parity, not fish.
-3. **`abbr`, fish-style**: `abbr -a gco git checkout`; the command word expands on Space
-   or Enter, so history keeps the full command. A cash-only builtin (D45, D60).
-4. **A collapsing prompt**: off unless `CASH_TRANSIENT_PS1` is set; it takes PS1's
-   escapes. For Starship, `$(starship module character --status="$STARSHIP_CMD_STATUS")`,
-   about 30 ms a prompt (D61).
-5. **Folder history**: Alt-← and Alt-→ on an empty line step through visited folders, as
-   in fish, with `prevd`, `nextd` and `cdh`. Windows Terminal takes Alt-arrows while
-   panes are split (D62).
-6. **Completions from carapace, when it is installed**: for a command with no completion
-   of its own, with carapace's descriptions in the menu. Not bundled: carapace is Go, 90 MB
-   unpacked. Measured here, a Tab costs 85–100 ms for carapace's static completers and
-   220–450 ms where it runs the tool (git, docker), no slower than the tools' own bash
-   scripts; nothing runs per keystroke (D63).
+prompt that cash did not. Decided, in this order: syntax highlighting on by default
+(D59); Bash's own Alt-. and Ctrl-X Ctrl-E, bound; `abbr` (D60); a collapsing prompt
+(D61); folder history on Alt-← and Alt-→ (D62); completions from carapace (D63), all in
+[decisions.md](decisions.md). A carapace Tab measured 85–100 ms for its static
+completers and 220–450 ms where it runs the tool, no slower than the tools' own scripts.
 
 **Status: complete.** Found on the way, each fixed with a regression test:
 
@@ -451,20 +388,8 @@ Closed by item 18: the Scoop manifest offers carapace at install time through `s
 The question began with `cash --link-tools`: is it tested, and should cash put its folder
 on PATH? It widened to installing cash as a normal user, without admin. The research,
 with sources, is in [the packaging evaluation](research/packaging-evaluation.md).
-Decided with the user, 2026-09-28:
-
-- **Scoop only, for now**, from `tomcoolpxl/scoop-bucket`, a bucket of the author's own
-  that its scheduled action keeps current. winget follows, with an **Inno Setup**
-  per-user installer: a portable winget package cannot upgrade while `cash.exe` runs,
-  and the installer type cannot change once published. Chocolatey is not planned; its
-  normal setup needs admin.
-- **The tool links on PATH are opt-in**, and go at the **front of the user PATH**, where
-  they win over Scoop's BusyBox shims while System32's `find`, `sort` and `timeout` still
-  win for `.bat` files. **cash writes PATH itself**, keeping `REG_EXPAND_SZ` and `%VAR%`
-  entries, in place of the PowerShell line it printed, which flattened them.
-- **A Windows Terminal profile** is written on every install and removed on uninstall.
-- **`tomcoolpxl/cash` goes public**, so its release zips can be downloaded.
-- **Unsigned for now**; the SignPath Foundation once cash has visible users.
+Decided with the user on 2026-09-28 and again on 2026-10-06: D38, D65 and D75 in
+[decisions.md](decisions.md).
 
 Work, in order:
 
@@ -482,11 +407,8 @@ Work, in order:
    made from Scoop's bucket template, carries `bucket/cash.json` at 1.1.0, and its
    Excavator workflow updates it from new releases. `scoop bucket add tomcoolpxl
    https://github.com/tomcoolpxl/scoop-bucket` then `scoop install cash` installs it.
-7. **Decided 2026-10-06, next** (DONE.md phase 22, spec D75): the Inno Setup per-user
-   installer on the releases page, with Scoop's versioned layout and `current` junction,
-   the tool links on PATH by default, `cash --update` for upgrades on request, and the
-   winget submission from that installer. Unsigned; signing is postponed (no paid
-   certificate, SignPath not wanted).
+7. **Done** (DONE.md phase 22, D75): the per-user installer and `cash --update`; the first
+   winget submission, 1.7.0 from the installer, is microsoft/winget-pkgs#447760.
 
 Found at the release: GitHub's Windows runners run elevated, so `$EUID` is 0 there and
 new files belong to Administrators; two tests that assumed a normal user failed there

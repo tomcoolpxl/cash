@@ -252,8 +252,9 @@ worth its cost, or a decision.
 - **`/DEV/STDIN`** works with Git Bash's MSYS programs (`cat /DEV/STDIN`), which take
   `/dev` paths without regard to case. Bash's own redirections (`< /DEV/NULL`: "Permission
   denied") and file tests (`[ -e /DEV/NULL ]`: false) do not, and cash follows Bash's own.
-- **`read x < 'CONIN$'`** fails: a reserved Windows name is an ordinary file name (D28),
-  and the console's name is `/dev/tty` (D7).
+- **`read x < 'CONIN$'`** fails with "No such file or directory": `CONIN$` is not among
+  the reserved device names (`nul`, `con`, …) that D28 keeps, and the console's name is
+  `/dev/tty` (D7).
 - **`exec 3<>/dev/tty`** can be read from and not written to: a console's keys and its
   screen are two handles, and a descriptor is one (spec D7).
 - **A read of more than a mebibyte from `/dev/urandom` or `/dev/random`** can come back

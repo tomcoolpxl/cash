@@ -26,8 +26,6 @@ The Cash project uses Cargo workspace package inheritance (`version.workspace = 
 - `cash-test-harness`
 - `xtask`
 
-The vendored crates under `vendor/` keep their own versions.
-
 The authoritative version is declared in the root [Cargo.toml](Cargo.toml) under:
 
 ```toml

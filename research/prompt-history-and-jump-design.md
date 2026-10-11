@@ -4,7 +4,7 @@ Asked by the user on 2026-10-10, after 1.11.0: what they like most in cash is th
 small and fast, that every way of writing a path works, and the prompt's helpers
 (Alt-←/→, Alt-E). Four things were proposed in that spirit and all four asked for, then
 `rm -rf` on junctions (DONE.md phase 34). This is the design; the choices the user made by pick list
-on 2026-10-10 are marked (spec D79, D80).
+on 2026-10-10 are marked, and recorded as D79 and D80 in [decisions.md](../decisions.md).
 
 ## 1. Ctrl-R: the history picker (D79)
 
@@ -46,7 +46,8 @@ folders, in memory, gone when the shell ends. zoxide's `z` is the usual answer f
   machine's). A folder's rank is zoxide's: its visits weighted by the last one's age
   (×4 within the hour, ×2 the day, ×½ the week, ×¼ older); when the visits add up
   past 10,000 all are scaled by 0.9 and those under 1 forgotten. A folder that is gone
-  is forgotten when a jump meets it.
+  is skipped, and forgotten only after 90 days without a visit (changed while building,
+  so an unplugged drive keeps its folders).
 - **The command**, `z` (the user's pick): `z foo bar` goes to the best-ranked folder
   whose path holds `foo` and then `bar`, the last word in its last part, case aside
   (zoxide's rule); a word that is a folder (`..`, `C:/x`, `~/y`) is just `cd`'s;

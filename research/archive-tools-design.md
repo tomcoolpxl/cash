@@ -295,11 +295,8 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   order (members replaced where they stand, new ones after), and its option table.
   `select`'s `fnmatch` serves both (UnZip's `*` crosses `/` unless `-W`).
 - **Decided in the phase**, under the instruction to finish phase 30 without stopping,
-  and confirmed by the user on 2026-10-11: deflate on `miniz_oxide` (gzip's already; output
-  differs from Info-ZIP's own deflate either way); the numeric owner is the RID, as
-  `id`, `stat` and tar give it; a zip says it was made on Unix (3.0), so Linux's UnZip
-  restores the modes from the Unix face, and MS-DOS's directory and read-only bits are
-  set beside them for Windows' readers.
+  and confirmed by the user on 2026-10-11: the deflate engine, the numeric owner and the
+  host a zip names ([decisions.md](../decisions.md), archives).
 - **Beyond Info-ZIP's unzip**, added on the user's word the same day: `WinZip`'s AES on
   RustCrypto's `aes`, `hmac`, `pbkdf2` and `sha1`; PPMd on `ppmd-rust`; PKZIP 1's
   shrunk, reduced and imploded members through the `zip` crate's own decoders, its only
@@ -488,31 +485,10 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
 
 ## 7. Decided by the user (2026-10-07, by pick lists)
 
-1. **The family**: the `bzip2`, `xz` and `zstd` commands with their aliases, `tar`, and
-   `zip`, `unzip`, `zipinfo`. Not now: the z-tools, `cpio`, `lzip`.
-2. **The crates**: `cash-archive` and `cash-getopt`, both new.
-3. **Moved onto the shared parts**: gzip; `ls` and `stat`; `dos2unix`; and all eleven
-   option parsers, not later but in the groundwork.
-4. **The order**: the groundwork (phases 26 and 27), the compressors (28), tar (29),
-   zip (30).
-5. **7z** (phase 31, for 1.10.0; 3.14): a builtin named `7z` and `7za`, reading and
-   writing; 7z and the formats cash already has; Windows 7-Zip's words with LF and `/`;
-   `sevenz-rust2` internalized; volumes, `h`, links, and `-sns`/`-sni` as 7-Zip has
-   them.
-6. **rar and unrar** (phase 33; 3.15): the fuller set of rar's commands and switches
-   (the everyday set with `r`, `rc`, `ch`, `i` and their switches); RAR 5 written by
-   default, as WinRAR does; the oracle is Scoop's WinRAR 7.23 (`Rar.exe` and `UnRAR.exe`).
-   `-ma4` refused as rar 7.23 refuses it, "Unknown option" (asked 2026-10-08, once rar
-   7.23 was seen to have dropped it).
-   Built by observation (asked the same day, after the licences were read): rar's face
-   learned only from running `Rar.exe` and `UnRAR.exe` and from reading `Rar.txt`; never
-   from UnRAR's source, whose licence forbids using it to develop a RAR-compatible
-   archiver; `-?` in cash's own words, not RAR's help text.
-   A solid archive's order (asked 2026-10-08): by extension, as `Rar.exe` without a list,
-   and `%APPDATA%\WinRAR\rarfiles.lst` when there; not WinRAR's shipped list built in.
+The family, the two crates, what moves onto the shared parts (all eleven option parsers
+in the groundwork, not later), the order, 7z (3.14) and rar and unrar (3.15): in
+[decisions.md](../decisions.md), D78 and the archive decisions after it.
 
 ## 8. Open, decided later in their phases
 
-- Decided in phase 30 (3.13), confirmed by the user on 2026-10-11: deflate on
-  `miniz_oxide`; the RID as the numeric owner; a zip made on Unix.
 - `zstd` levels above `ruzstd`'s fast one.

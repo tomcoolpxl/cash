@@ -107,7 +107,15 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
     assert!(text.contains("help crlf"), "{text}");
     // Help speaks to the user: no spec decision numbers, rows or section signs
     // (the user, 2026-10-05).
-    for developer_note in ["D49", "(row", "§", "spec.md", "ROADMAP", "WHY\n"] {
+    for developer_note in [
+        "D49",
+        "(row",
+        "§",
+        "spec.md",
+        "decisions.md",
+        "ROADMAP",
+        "WHY\n",
+    ] {
         assert!(!text.contains(developer_note), "{developer_note} in {text}");
     }
     // Not a terminal, so no colour.
@@ -126,7 +134,16 @@ fn the_f1_screen_is_not_a_topic_and_cites_no_developer_notes() {
     let lines = helpdocs::f1::render("9.9.9", 208, 80, &helpdocs::f1::Palette::none());
     let text = lines.join("\n");
     assert!(text.starts_with(" cash 9.9.9  ·  help"), "{text}");
-    for developer_note in ["D7", "(row", "§", "spec.md", "ROADMAP", "research", "TODO"] {
+    for developer_note in [
+        "D7",
+        "(row",
+        "§",
+        "spec.md",
+        "decisions.md",
+        "ROADMAP",
+        "research",
+        "TODO",
+    ] {
         assert!(
             !text.contains(developer_note),
             "{developer_note} in:\n{text}"

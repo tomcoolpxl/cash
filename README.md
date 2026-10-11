@@ -355,11 +355,12 @@ there stay as they are. Re-run it after upgrading cash, which `cash doctor` remi
 of (Scoop does it for you); `cash --unlink-tools` takes the links and the PATH entry
 away again.
 
-The rule for what cash carries is not "is it missing" — Scoop can supply anything. It is
-**does the tool have to agree with cash about something cash owns?** `find` prints paths,
-so it owes D3 one spelling; `xargs` builds command lines, which on Windows are strings the
-callee re-splits (D32); `ps` and `top` print pids that `kill` must accept (D22). Where the
-answer is no, cash stays out of the way.
+The first rule for what cash carries was **does the tool have to agree with cash about
+something cash owns?** `find` prints paths, so it owes D3 one spelling; `xargs` builds
+command lines, which on Windows are strings the callee re-splits (D32); `ps` and `top`
+print pids that `kill` must accept (D22). Since the installer (D75), the aim is wider:
+install cash and have a complete Bash, so the tools a bare machine misses most, `grep`,
+`diff` and the archivers, are carried too ([decisions.md](decisions.md), D76 and D78).
 
 `top` uses the familiar procps overview with uptime, task and CPU summaries, physical
 memory, and a live process table, refreshed every 3 seconds as procps does. It draws on
