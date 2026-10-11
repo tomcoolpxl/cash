@@ -1464,3 +1464,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   2026-10-11): a 0-byte named pipe as MSYS2's `mkfifo` makes them. `mkfifo` became a
   builtin that refuses the same day, and the 1.14.0 gate's full run, all 8,533 tests,
   left no `x.lnk`, as none of the nine release gates between had.
+- **The research documents' open questions** (found 2026-10-11 gathering decisions.md;
+  answered and built the same day, decisions.md): `declare -t` and `bind -m vi-*` are
+  refused by name where they were ignored; flock's help says the lock ends with the
+  command; `chown` and `chgrp` warn that nothing changed and return 0; `complete -A
+  service` gives Windows' `drivers\etc\services` names and `-o bashdefault` Bash's
+  defaults, both as Git Bash prints them; `xargs -P N` runs N at once; `logger` writes to
+  the Application event log. Already answered by the code: `xargs -I{}` attached, `ls
+  --help`'s options, `grep -r`'s paths, doctor's one line for the shadows.
