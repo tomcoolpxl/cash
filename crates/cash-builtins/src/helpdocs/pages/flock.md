@@ -17,7 +17,9 @@ Windows has no `flock`. The lock is a byte-range lock on one byte far past any c
 the file could have, so it stops nothing but another `flock`: `cat` and writers of the
 lock file go on. A lock belongs to the handle it was taken on, and goes when that handle
 is closed: in the command form, when the command returns; in the descriptor form, when
-the descriptor is closed, by `exec N>&-` or the end of the subshell that opened it.
+the descriptor is closed, by `exec N>&-` or the end of the subshell that opened it. So a
+command that starts something in the background and exits (`flock x.lock start app`, a
+service launcher) releases the lock while what it started still runs.
 
 A directory cannot be locked; lock a file inside it. `-o` closes nothing, since there is
 no fork and the command never sees the handle. `-c` runs its string in a copy of this
