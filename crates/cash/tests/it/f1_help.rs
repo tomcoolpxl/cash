@@ -152,10 +152,13 @@ fn a_short_window_scrolls_on_down_and_end() {
         "fifteen rows show the whole text:\n{}",
         session.output()
     );
-    session.send(DOWN).unwrap();
+    // Three lines down is the third line of KEYS.
+    for _ in 0..3 {
+        session.send(DOWN).unwrap();
+    }
     session
         .expect("press again for a menu", WAIT)
-        .expect("Down brought the next line into view");
+        .expect("Down brought the next lines into view");
     session.send(END).unwrap();
     session
         .expect("run a command elevated", WAIT)
