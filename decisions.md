@@ -244,6 +244,14 @@ command under `System32` or `SysWOW64` gets its words unexpanded. On in interact
 off in scripts. Turned down: quoting the star, right in scripts but not for a line typed
 from Windows habit; skipping globbing for programs installed elsewhere, which need it.
 
+### Decided in working sessions
+
+- **`chown` and `chgrp` change nothing, warn and return 0** (the user, 2026-10-11): Windows
+  sets an owner only with special privileges and has no POSIX groups, so, as `chmod -x`
+  (D34), they say so on standard error and succeed, and an install script carries on;
+  `enable -n chown` reaches a copy on `PATH`. Turned down: refusing, which stops install
+  scripts; leaving them to `PATH` (Git's MSYS copies, none on a bare machine).
+
 ## 3. Running programs and the environment
 
 ### D5 — `PATH` is the one variable translated, at the process boundary
@@ -560,6 +568,15 @@ folders. A `z` function, zoxide's included, comes before the builtin.
 - **The prompt names cash** (the user, 2026-10-03): `\v` and `\V` give cash's version and
   `\s` gives `cash`; `$BASH_VERSION` stays the Bash interface version (spec §4 row 44).
   Turned down: `$BASH_VERSION`'s numbers in the prompt.
+- **`complete -A service` lists Windows' services; `-o bashdefault` falls back to Bash's
+  defaults** (the user, 2026-10-11): the service names `sc` and `net start` take, and,
+  when a spec gives nothing, Bash's default candidates. Turned down: refusing both.
+- **`bind -m vi-insert` and `-m vi-command` say they are not supported** (the user,
+  2026-10-11), status 1, where they were ignored in silence; cash's vi mode keeps its own
+  keys. Turned down: vi keymaps of their own, a large change for few users.
+- **A prompt element naming the shell is the prompt's, not cash's** (2026-10-11): cash sets
+  `$SHELL` (D5), which a Starship module can show, so a PowerShell window is never taken
+  for cash.
 
 ## 7. Builtins and bundled tools
 
@@ -675,6 +692,18 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   Windows keeps per-connection statistics only for connections an administrator switched
   them on for. Unelevated, `-i` prints the MSS with a note pointing to `sudo ss -i`;
   elevated, it switches collection on for the listed connections and prints the rest.
+- **`xargs -P N` runs N commands at once** (the user, 2026-10-11), as GNU xargs does.
+  Turned down: refusing N above 1.
+- **`declare -t` is refused by name** (the user, 2026-10-11), status 1, where it was
+  accepted and did nothing; function tracing is for debuggers. Turned down: implementing
+  it.
+- **`logger` writes to the Application event log** (the user, 2026-10-11), under the
+  source `cash`, `-p` mapped to error, warning or information. Event Viewer shows each
+  entry with a "description not found" note, since registering a source needs admin.
+  Turned down: not carrying it.
+- **`flock`'s help says the lock lasts until the command exits** (the user, 2026-10-11),
+  not until its detached children do, which no tool can see. Turned down: leaving it
+  unsaid, as util-linux's manual does.
 
 ## 8. Archives and compression
 

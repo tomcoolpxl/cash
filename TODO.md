@@ -90,13 +90,12 @@ What the phases now in DONE.md left open, each where its phase says more.
   (`acceptance::an_unpatched_bundled_tool_writes_into_a_write_substitution_through_a_file`)
   is `#[ignore]`d. A fix reads only what was written: hold back the tail of a file that
   grew in one step until the program is done, or give `cp` the pipe as tee's patch did.
-- **Questions left open in the research documents** (found 2026-10-11, gathering
-  decisions.md), some perhaps answered since: `builtin-option-gaps.md` (2026-09-24) on
-  `xargs -P` and `-I{}`, `declare -t`, `bind -m vi-*`, `complete -o bashdefault` and
-  `-A service`, `ls --help`; `busybox-gap-analysis.md` on `logger`, `chown`/`chgrp` (warn
-  or refuse), `grep -r` and path rendering, doctor's line per shadow, a child that
-  re-execs detached; `open-issues.md` on a prompt element for `$SHELL`. Check each against
-  the code; answer it by pick list or close it.
+- **The research documents' open questions, answered 2026-10-11** (decisions.md), to
+  build, in order: `declare -t` and `bind -m vi-*` refused by name; flock's help line on
+  detached children; `chown` and `chgrp` that warn and return 0; `complete -A service`
+  and `-o bashdefault`; `xargs -P N` in parallel; `logger` to the Application event log.
+  Already answered by the code: `xargs -I{}` attached, `ls --help`'s options, `grep -r`'s
+  paths, doctor's one line for the shadows.
 ---
 
 ## Decided, written down so it is not decided twice

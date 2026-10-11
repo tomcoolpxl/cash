@@ -137,9 +137,9 @@ CRLF, command resolution)? A yes strengthens the case beyond "it is missing".
 | `run-parts` | 9k. Scripts rarely use it on Windows. | S | **Agrees with cash**: "executable" must mean D8 resolution (PATHEXT), not a mode bit. `--test`, `--list`, `--regex`, `-a`, `--exit-on-error`. |
 | `script`, `scriptreplay` | 6.5k. | M–L | A ConPTY recorder is plausible (cash owns ConPTY), but timing files and `-c` add surface. |
 | `mountpoint` | `mountpoint -q` usage is low. | S | `GetVolumePathNameW`: a drive root or mounted-folder junction is a mount point. `-d` (device number) refused. |
-| `logger` | Moderate on Linux, low on Windows. | S | `ReportEventW` into the Application log. An unregistered source works but Event Viewer shows a "description not found" warning, and registering a source needs admin. Decide first. |
+| `logger` | Moderate on Linux, low on Windows. | S | `ReportEventW` into the Application log. An unregistered source works but Event Viewer shows a "description not found" warning, and registering a source needs admin. Decided 2026-10-11: built ([decisions.md](../decisions.md)). |
 | `mkpasswd`, `cryptpw` | Rare (cloud-init hashes). | S | `sha-crypt`/`md5-crypt` crates (RustCrypto, MIT/Apache-2.0). **Shadowing trap:** Git's `mkpasswd.exe` is Cygwin's `/etc/passwd` generator, a completely different tool. |
-| `chown`, `chgrp` | Appear in install scripts. uutils excludes them on Windows. | M | Setting an owner needs `SeRestorePrivilege`/`SeTakeOwnershipPrivilege`, and there are no POSIX groups. Choose between a D34-style warn-and-return-0 and refusal. |
+| `chown`, `chgrp` | Appear in install scripts. uutils excludes them on Windows. | M | Setting an owner needs `SeRestorePrivilege`/`SeTakeOwnershipPrivilege`, and there are no POSIX groups. Decided 2026-10-11: warn and return 0, as D34. |
 | `ed` | Some scripts use `ed -s file <<<`. | M | posixutils-rs `editors/ed` import. |
 | `dc` | 5k. | M | Would share a numeric core with `bc`. |
 | `cpio` | 68k (dominated by initramfs scripts, which are Linux-only). | M | `tar.exe` (bsdtar) reads and writes cpio: `tar --format=cpio`. |
@@ -241,6 +241,8 @@ recommended install" argument applies to it as it did to coreutils. And uutils
   needs a differential gate against GNU diffutils like sed's (ROADMAP 3).
 - **Sub-question:** should `grep -r` output go through D48's path-rendering allowlist?
   `uu_grep` joins recursive paths itself, so it *builds* paths, which is D48's test.
+  Answered by the grep cash carries (D76): it joins with `/` onto the path as given, so
+  `grep -r x C:/d` prints `C:/d/f`, D3's form.
 
 ### Q2. Process-kill family: matching rules
 
@@ -267,7 +269,8 @@ recommended install" argument applies to it as it did to coreutils. And uutils
   detail, and `tar -xf` already works for zip.
 - **Consequence for all three:** each shadows a Git for Windows binary, so doctor and
   `type -a` must report it, as planned for `dos2unix`. Decide whether the "honest
-  shadow" rule needs a doctor line per name or one summary line.
+  shadow" rule needs a doctor line per name or one summary line. Answered since: one
+  summary line names them all.
 
 ### Q4. `bc`: POSIX or GNU surface?
 
@@ -292,7 +295,7 @@ The posixutils-rs import is POSIX bc. Real scripts often use GNU extensions: `pr
 - **Children:** Linux `flock FILE cmd` holds the lock on an open file description that
   `cmd` inherits. On Windows the lock belongs to cash's handle and process. Keeping the
   lock for `cmd`'s lifetime is natural, but a `cmd` that re-execs detached will not hold
-  it. Document this, or refuse the pattern?
+  it. Document this, or refuse the pattern? Decided 2026-10-11: documented in flock's help.
 - **Directories:** `flock /var/lock/dir cmd` is legal on Linux. `LockFileEx` on a
   directory handle is not. The choices are to refuse, or to lock a hidden sidecar file,
   which invents state.

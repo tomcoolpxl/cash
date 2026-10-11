@@ -72,7 +72,8 @@ never ran in it. No cash session ended unexpectedly.
 prompt under both shells, so nothing on screen says which shell is answering. `$SHELL`
 names cash (D5, §4 #21), so a prompt element reading it would tell the two apart — worth
 doing before chasing any bug reported from a session whose shell is assumed rather than
-checked.
+checked. Decided 2026-10-11: that element is the prompt's (a Starship module), not cash's
+([decisions.md](decisions.md)).
 
 **Adjacent:** Starship in that session reported `Scanning current directory timed out`
 inside `target/debug`, which is Starship's own scan_timeout rather than cash — but a
