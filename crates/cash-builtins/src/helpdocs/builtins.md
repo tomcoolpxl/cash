@@ -176,6 +176,8 @@ an entry or page names no builtin.
 ## Coreutils written for Windows
 
 - `chmod`: Change a file's permissions, as far as Windows can express them.
+- `chown`: Change a file's owner: nothing on Windows, said once, status 0.
+- `chgrp`: Change a file's group: nothing on Windows, said once, status 0.
 - `getconf`: Print a configuration value by its POSIX name, with the value Windows has.
 - `groups`: Print the groups a user belongs to.
 - `hostid`: Print the numeric identifier of this host.

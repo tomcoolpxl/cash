@@ -45,6 +45,8 @@ mod bundled_paths;
 // `bzip2`, `bunzip2` and `bzcat`: bzip2 1.0.8's golden output, and the file handling.
 mod bzip2_builtin;
 mod cd_errors;
+// `chown` and `chgrp`: nothing changed, said once, status 0; GNU's errors kept.
+mod chown_builtin;
 // `pbcopy`, `pbpaste`, `uuidgen` and `xdg-open`: the clipboard round trip, util-linux's
 // golden output, and `start` under the name scripts try first.
 mod clipboard_and_small_tools;

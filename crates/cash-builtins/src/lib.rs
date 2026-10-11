@@ -135,6 +135,10 @@ mod where_files;
 // writes mode bits nothing outside MSYS reads.
 mod chmod;
 
+// cash: Windows sets an owner only with privileges a user lacks and has no POSIX groups,
+// so `chown` and `chgrp` warn that nothing changed and succeed, as `chmod -x` does.
+mod chown;
+
 // cash (D48): uutils' `id` is Unix-only, and the MSYS stand-in reports a uid Windows
 // does not have.
 mod identity;

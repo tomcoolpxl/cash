@@ -454,6 +454,8 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("which".into(), builtin::<which::WhichCommand, SE>());
     m.insert("where".into(), builtin::<where_files::WhereCommand, SE>());
     m.insert("chmod".into(), builtin::<chmod::ChmodCommand, SE>());
+    m.insert("chown".into(), builtin::<chown::ChownCommand, SE>());
+    m.insert("chgrp".into(), builtin::<chown::ChownCommand, SE>());
     m.insert("id".into(), builtin::<identity::IdCommand, SE>());
     m.insert("groups".into(), builtin::<identity::GroupsCommand, SE>());
     m.insert("logname".into(), builtin::<identity::LognameCommand, SE>());
