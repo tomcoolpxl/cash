@@ -295,7 +295,7 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   order (members replaced where they stand, new ones after), and its option table.
   `select`'s `fnmatch` serves both (UnZip's `*` crosses `/` unless `-W`).
 - **Decided in the phase**, under the instruction to finish phase 30 without stopping,
-  and open to the user's change: deflate on `miniz_oxide` (gzip's already; output
+  and confirmed by the user on 2026-10-11: deflate on `miniz_oxide` (gzip's already; output
   differs from Info-ZIP's own deflate either way); the numeric owner is the RID, as
   `id`, `stat` and tar give it; a zip says it was made on Unix (3.0), so Linux's UnZip
   restores the modes from the Unix face, and MS-DOS's directory and read-only bits are
@@ -513,6 +513,6 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
 
 ## 8. Open, decided later in their phases
 
-- Decided in phase 30 (3.13): deflate on `miniz_oxide`; the RID as the numeric owner; a
-  zip made on Unix. Each is the user's to reopen.
+- Decided in phase 30 (3.13), confirmed by the user on 2026-10-11: deflate on
+  `miniz_oxide`; the RID as the numeric owner; a zip made on Unix.
 - `zstd` levels above `ruzstd`'s fast one.

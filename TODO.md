@@ -70,12 +70,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   `..._had_vt_input_on_does_not_eat_keys_typed_ahead` (line 402). Runs between passed;
   the commits touched only rar. Look at PowerShell's start on the runner (a first-run
   cache?) before raising the wait.
-- **7z's times and 7-Zip's differ by an hour across daylight saving** (found on
-  2026-10-07 with a RAR's November creation time): 7-Zip turns every UTC time into local
-  time with `FileTimeToLocalFileTime`, the offset of the day it runs, where cash's 7z
-  uses the zone's rules for the time's own date. Written down in the page's notes; the
-  oracles run cash in UTC and take 7-Zip's times back by the day's offset. Whether 7z
-  should follow 7-Zip here is **yours**.
 - **A benchmark of 1.10.0's compressors** (the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against
   Scoop's programs and WSL2's). Ahead: gzip (0.09 s against 0.4–0.5 s, 0.3 s against
@@ -91,9 +85,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   **xz is 20% slower on one block** (6.5 s against 5.4 s; lzma-rust2's encoder) and
   decodes at two thirds of XZ Utils' speed; zip on one large member has no parallelism
   to use (2.2 s against 1.9 s).
-- **Three zip choices made without a pick list** (phase 30, 2026-10-07, under "do not
-  stop"): deflate on `miniz_oxide`, the RID as the numeric owner, and "made on Unix" (design
-  3.13). **Yours** to confirm or change.
 - **`TAR_OPTIONS` and the command line** (phase 29, 2026-10-07): GNU tar drops the
   `TAR_OPTIONS` side of `--one-top-level` against `-P` given on the command line; cash
   refuses the pair wherever they come from.
@@ -133,6 +124,17 @@ What the phases now in DONE.md left open, each where its phase says more.
   LZMA2 keeps 7-Zip's block of four dictionaries by default, though a block per
   dictionary across the threads compresses a 155 MB tar in 12 s instead of 47 s; it
   made the archives 2–4% larger. `c=` gives the speed to whoever asks for it.
+- **7z shows a time by its own date's offset, not 7-Zip's** (the user, 2026-10-11):
+  7-Zip turns every UTC time into local time with `FileTimeToLocalFileTime`, the offset
+  of the day it runs, so a time from the other side of daylight saving reads an hour off
+  what the file system shows; cash's 7z uses the zone's rules for the time's own date.
+  The oracles run cash in UTC and take 7-Zip's times back by the day's offset (found
+  2026-10-07 with a RAR's November creation time). Following 7-Zip was turned down.
+- **zip's three phase-30 choices stand** (the user, 2026-10-11; design 3.13): deflate on
+  `miniz_oxide`, gzip's already; the RID as the numeric owner, as `id`, `stat` and tar
+  give it; a zip made on Unix (3.0), so Linux's UnZip restores the modes, with MS-DOS's
+  directory and read-only bits beside them. Another deflate engine, "made on NTFS", and
+  no owner field were turned down.
 - **An elevated `ss -i` switches statistics collection on** (the user, 2026-10-05):
   Windows keeps per-connection TCP statistics (rtt, rto, cwnd, bytes, retransmits,
   queues) only for connections an administrator switched collection on for; unelevated,
