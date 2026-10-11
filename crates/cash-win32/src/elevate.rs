@@ -21,16 +21,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, DUPLICATE_SAME_ACCESS, DuplicateHandle, ERROR_CANCELLED, GENERIC_READ,
-    GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, LocalFree, TRUE, WAIT_OBJECT_0,
+    DUPLICATE_SAME_ACCESS, DuplicateHandle, ERROR_CANCELLED, GENERIC_READ, GENERIC_WRITE, HANDLE,
+    HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, SetHandleInformation, TRUE, WAIT_OBJECT_0,
 };
-use windows_sys::Win32::Security::Authorization::{
-    EXPLICIT_ACCESS_W, GRANT_ACCESS, GetSecurityInfo, SE_KERNEL_OBJECT, SetEntriesInAclW,
-    SetSecurityInfo, TRUSTEE_IS_SID, TRUSTEE_IS_USER, TRUSTEE_W,
-};
-use windows_sys::Win32::Security::{
-    ACL, DACL_SECURITY_INFORMATION, NO_INHERITANCE, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES,
-};
+use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
 };
@@ -41,10 +35,9 @@ use windows_sys::Win32::System::Console::{
     SetConsoleCtrlHandler, SetConsoleMode, SetStdHandle,
 };
 use windows_sys::Win32::System::Threading::{
-    CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateProcessWithLogonW, GetCurrentProcess,
-    GetExitCodeProcess, INFINITE, LOGON_WITH_PROFILE, OpenProcess, PROCESS_DUP_HANDLE,
-    PROCESS_INFORMATION, PROCESS_QUERY_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROCESS_SYNCHRONIZE, STARTUPINFOW, WaitForSingleObject,
+    CREATE_UNICODE_ENVIRONMENT, CreateProcessWithLogonW, GetCurrentProcess, GetExitCodeProcess,
+    INFINITE, LOGON_WITH_PROFILE, OpenProcess, PROCESS_DUP_HANDLE, PROCESS_INFORMATION,
+    PROCESS_SYNCHRONIZE, STARTF_USESTDHANDLES, STARTUPINFOW, WaitForSingleObject,
 };
 use windows_sys::core::BOOL;
 
@@ -176,10 +169,6 @@ pub fn run_elevated_here(own: &Path, command: &[OsString]) -> i32 {
 /// [`run_elevated_here`]. The password is wiped once Windows has it.
 #[must_use]
 pub fn run_as_user_here(own: &Path, who: &str, user: &str, command: &[OsString]) -> i32 {
-    let Some(sid) = crate::account::lookup_user(user) else {
-        eprintln!("{who}: unknown user {user}");
-        return 1;
-    };
     let password = match read_password(&format!("Password for {user}: ")) {
         Ok(Some(password)) => password,
         Ok(None) => return 130,
@@ -191,20 +180,23 @@ pub fn run_as_user_here(own: &Path, who: &str, user: &str, command: &[OsString])
     // SAFETY: `ignore` is a valid handler for the life of the process and touches nothing.
     unsafe { SetConsoleCtrlHandler(Some(ignore), TRUE) };
 
-    // The started cash runs as USER, who may not open this process to take its console and
-    // handles unless it is let; the grant ends with the process.
-    if let Err(err) = let_open_this_process(&sid) {
-        eprintln!("{who}: {err}");
-        return 1;
-    }
-
+    // The command runs as USER right here: a cash started as USER, which inherits this
+    // console and these standard handles (`start_as`) and runs the command under
+    // `--sudo-owner`. Unlike the elevated side, it never opens this process, which another
+    // account may not do; `CreateProcessWithLogonW` hands it everything instead.
     let dir = start_folder();
     let own_text = own.to_string_lossy();
-    let command_line = format!(
-        "{} {}",
-        crate::cmd::quote_argument(&own_text),
-        attach_parameters(&dir, command)
+    let mut words = vec![own_text.clone().into_owned(), "--invoke-bundled".to_owned()];
+    words.extend(
+        command
+            .iter()
+            .map(|word| word.to_string_lossy().into_owned()),
     );
+    let command_line = words
+        .iter()
+        .map(|word| crate::cmd::quote_argument(word))
+        .collect::<Vec<_>>()
+        .join(" ");
     if command_line.encode_utf16().count() > LOGON_COMMAND_LINE {
         eprintln!(
             "{who}: the command line is too long to run as another account (over \
@@ -235,8 +227,13 @@ fn logon_name(user: &str) -> (&str, Option<&str>) {
     }
 }
 
-/// Starts `command_line` as `user`, with `password`, in `dir`, with no window and the
-/// account's own environment and profile.
+/// Starts `command_line` as `user`, with `password`, in `dir`, inheriting this console and
+/// its standard handles, with the account's own environment and profile.
+///
+/// `CreateProcessWithLogonW` hands the standard handles to the child even across the
+/// account boundary (`STARTF_USESTDHANDLES`, the handles made inheritable), so the command
+/// reads and writes this terminal, or the shell's redirections, as its own. No window is
+/// forced, so the child shares this console rather than opening one of its own.
 fn start_as(
     program: &str,
     command_line: &str,
@@ -250,8 +247,22 @@ fn start_as(
     let program = crate::wide::to_wide_nul(program);
     let mut line = crate::wide::to_wide_nul(command_line);
     let dir = crate::wide::to_wide_nul(dir);
+
+    // SAFETY: each is a standard handle this process holds, or null.
+    let handles = STD.map(|which| unsafe { GetStdHandle(which) });
+    for handle in handles {
+        if !handle.is_null() && handle != INVALID_HANDLE_VALUE {
+            // SAFETY: a handle this process holds; made inheritable for the child, which
+            // this short-lived process exits right after starting.
+            unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) };
+        }
+    }
     let startup = STARTUPINFOW {
         cb: u32::try_from(size_of::<STARTUPINFOW>()).unwrap_or(u32::MAX),
+        dwFlags: STARTF_USESTDHANDLES,
+        hStdInput: handles[0],
+        hStdOutput: handles[1],
+        hStdError: handles[2],
         ..Default::default()
     };
     let mut info = PROCESS_INFORMATION::default();
@@ -267,7 +278,7 @@ fn start_as(
             LOGON_WITH_PROFILE,
             program.as_ptr(),
             line.as_mut_ptr(),
-            CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+            CREATE_UNICODE_ENVIRONMENT,
             std::ptr::null(),
             dir.as_ptr(),
             &raw const startup,
@@ -277,79 +288,10 @@ fn start_as(
     if ok == 0 {
         return Err(io::Error::last_os_error());
     }
-    // SAFETY: the thread handle is this process's and not used.
-    unsafe { CloseHandle(info.hThread) };
+    // SAFETY: the thread handle is this process's, owned here only to close it.
+    drop(unsafe { OwnedHandle::from_raw_handle(info.hThread) });
     // SAFETY: the process handle is this process's to close, and nothing else owns it.
     Ok(unsafe { OwnedHandle::from_raw_handle(info.hProcess) })
-}
-
-/// Lets `sid` open this process to take its console and handles: an entry added to the
-/// process's access list, which lasts as long as the process.
-fn let_open_this_process(sid: &crate::account::Sid) -> io::Result<()> {
-    // SAFETY: a pseudo handle, which needs no closing.
-    let this = unsafe { GetCurrentProcess() };
-    let mut old: *mut ACL = std::ptr::null_mut();
-    let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
-    // SAFETY: the out-params are valid; the descriptor is freed below.
-    let status = unsafe {
-        GetSecurityInfo(
-            this,
-            SE_KERNEL_OBJECT,
-            DACL_SECURITY_INFORMATION,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            &raw mut old,
-            std::ptr::null_mut(),
-            &raw mut descriptor,
-        )
-    };
-    if status != 0 {
-        return Err(io::Error::from_raw_os_error(status.cast_signed()));
-    }
-    let entry = EXPLICIT_ACCESS_W {
-        grfAccessPermissions: PROCESS_DUP_HANDLE
-            | PROCESS_QUERY_INFORMATION
-            | PROCESS_QUERY_LIMITED_INFORMATION
-            | PROCESS_SYNCHRONIZE,
-        grfAccessMode: GRANT_ACCESS,
-        grfInheritance: NO_INHERITANCE,
-        Trustee: TRUSTEE_W {
-            TrusteeForm: TRUSTEE_IS_SID,
-            TrusteeType: TRUSTEE_IS_USER,
-            ptstrName: sid.as_psid().cast(),
-            ..Default::default()
-        },
-    };
-    let mut new: *mut ACL = std::ptr::null_mut();
-    // SAFETY: one entry, whose SID outlives the call; `old` is the process's own list.
-    let status = unsafe { SetEntriesInAclW(1, &raw const entry, old, &raw mut new) };
-    let result = if status == 0 {
-        // SAFETY: `new` was made by the call above.
-        let status = unsafe {
-            SetSecurityInfo(
-                this,
-                SE_KERNEL_OBJECT,
-                DACL_SECURITY_INFORMATION,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                new,
-                std::ptr::null(),
-            )
-        };
-        // SAFETY: allocated by `SetEntriesInAclW`, not used after this.
-        unsafe { LocalFree(new.cast()) };
-        if status == 0 {
-            Ok(())
-        } else {
-            Err(io::Error::from_raw_os_error(status.cast_signed()))
-        }
-    } else {
-        Err(io::Error::from_raw_os_error(status.cast_signed()))
-    };
-    // SAFETY: allocated by `GetSecurityInfo`, and `old` points into it; neither is used
-    // after this.
-    unsafe { LocalFree(descriptor) };
-    result
 }
 
 /// A password, NUL-terminated UTF-16, wiped when dropped.

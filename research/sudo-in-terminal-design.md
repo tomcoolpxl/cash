@@ -171,33 +171,45 @@ account left for later.
 
 gsudo starts its own helper as USER with USER's password, read at the console
 (`ProcessFactory.StartWithCredentials`, .NET's `Process.Start` with a user name, which is
-`CreateProcessWithLogonW`), and the helper attaches to the caller's console. cash does
-the same with the mechanism of section 3:
+`CreateProcessWithLogonW`), and the helper shares the caller's console. cash does the
+same, but **not** by the section 3 mechanism: the elevated side there has the command's
+cash open the caller and pull its handles, which works only because an elevated process
+may open an unelevated one. Another account may not — a process started as USER opening
+the caller's for `DuplicateHandle` is `Access denied`, DACL grant or no (and an elevated
+caller blocks it outright by the integrity policy). So USER's cash is **handed** the
+terminal instead, by inheritance, as `CreateProcessWithLogonW` and .NET's redirected
+run-as do it:
 
 1. `sudo` starts `cash --invoke-bundled --sudo-as WHO USER COMMAND...`, a program like any
-   other to the shell.
+   other to the shell. Its standard handles are the command's, the shell's redirections
+   included (as for the elevated side).
 2. That cash asks `Password for USER: ` on the console (`CONIN$` and `CONOUT$`, as Unix's
    `su` asks on the terminal whatever is redirected), echo off; Ctrl-C there ends it with
    130 and runs nothing. Without a console, `sudo: a terminal is required to read the
    password`.
-3. It lets USER open its process (an entry in the process's own access list for
-   `PROCESS_DUP_HANDLE`, the two query rights and `SYNCHRONIZE`), as another account may
-   not open it otherwise; the entry goes with the process.
-4. It starts the `--sudo-attach` cash as USER with `CreateProcessWithLogonW`
-   (`LOGON_WITH_PROFILE`, `CREATE_NO_WINDOW`, USER's own environment), in the shell's
-   folder, and wipes the password. That cash takes the terminal and handles as in
-   section 3 and runs the command under `--sudo-owner -`, which changes no owner. An
-   administrator's account gets its filtered token: its usual level, as gsudo's `-i
-   Medium` gave it.
-5. The status comes back as the elevated command's does.
+3. It starts `cash --invoke-bundled --sudo-owner - COMMAND` as USER with
+   `CreateProcessWithLogonW` (`LOGON_WITH_PROFILE`, USER's own environment), in the
+   shell's folder, and wipes the password. Its own standard handles — this console's, or
+   the shell's redirections — are made inheritable and handed over (`STARTF_USESTDHANDLES`);
+   no `CREATE_NO_WINDOW`, so USER's cash shares this console rather than opening one. No
+   `--sudo-attach`: nothing opens the caller. An administrator's account gets its filtered
+   token: its usual level, as gsudo's `-i Medium` gave it.
+4. USER's cash runs the command under `--sudo-owner -`, which changes no owner (the files
+   are USER's), inheriting the handed-over handles, and the status comes back.
 
-Limits: Windows takes a command line of 1,024 characters here, which `-E` can pass;
+An inherited file or pipe handle keeps the access it was opened with, so USER writes the
+shell's `> out.txt` though the file is the caller's; the DACL was checked when the caller
+opened it, not at each write.
+
+Limits: Windows takes a command line of 1,024 characters here, which `-E` can fill;
 USER must be able to read cash.exe and enter the folder (both refused with a message);
 a program with windows, run as USER, may not show, as USER has no rights on this
-desktop (gsudo has the same limit).
+desktop (gsudo has the same limit). USER's cash is outside the shell's job and is not
+ended if the shell is killed while it runs (TODO.md).
 
-Seen so far: the prompt, and Ctrl-C at it
-(`sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing`, in the suites). Not seen
-yet: a command run as a second account
-(`sudo_in_terminal::sudo_u_runs_the_command_as_the_account`, ignored; it needs the
-account and its password).
+Seen, with a test account and its password (2026-10-11): the prompt and Ctrl-C at it
+(`sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing`, in the suites), and a
+command run as the account, its `%USERNAME%` and a redirected file
+(`sudo_in_terminal::sudo_u_runs_the_command_as_the_account`, ignored; needs the account
+in `CASH_TEST_USER`, its password in `CASH_TEST_PASSWORD`, and read access to the cash
+under test).

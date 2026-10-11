@@ -40,17 +40,19 @@ What the phases now in DONE.md left open, each where its phase says more.
   taking it out is a change of its own.
 - **The 2024 edition for `cash-reedline` and crossterm** (phase 34): both keep the 2021
   edition they came with.
-- **`sudo -u USER` not yet run as a second account** (phase 35): built, and the prompt
-  and Ctrl-C at it tested, but no command has run as another account yet.
-  `sudo_in_terminal::sudo_u_runs_the_command_as_the_account` (ignored) does it with an
-  account named in `CASH_TEST_USER`, its password in `CASH_TEST_PASSWORD`, and read
-  access to the cash under test; then check a program with windows, which may not show
-  without rights on the desktop.
+- **`sudo -u USER` with a program that has windows** (phase 35): a command run as another
+  account that opens a window may not show it, as USER has no rights on this desktop
+  (gsudo has the same limit); not tried. The console cases are done and tested.
+- **`sudo -u USER`'s cash outlives a killed shell** (phase 35): USER's cash is started
+  with `CreateProcessWithLogonW` and is outside the shell's job (a job cannot hold another
+  account's process), so a shell killed while `sudo -u` runs leaves it behind. The
+  elevated side ends with the caller through a watcher in `take_callers_terminal`; the
+  as-user side has none (it does not open the caller). Give it one another way.
 - **`sudo -E`'s variables through a handle** (phase 35,
   `research/sudo-in-terminal-design.md` section 3 item 4): they still go as `NAME=value`
-  words on the elevated cash's command line, within Windows' 32,000 characters; an
-  anonymous pipe the elevated cash takes with `DuplicateHandle`, as it takes the
-  standard handles, would lift the limit.
+  words on the started cash's command line (Windows' 32,000 characters for the elevated
+  side, 1,024 for the as-user side); an anonymous pipe the started cash takes, as it takes
+  the standard handles, would lift the limit.
 - **UAC's prompt for `sudo` often only blinks in the taskbar** (phase 35, 2026-10-10):
   when the asking process is not in front, Windows shows the consent dialog as a
   flashing shield, and the user missed three prompts that way; left long enough, a

@@ -1305,13 +1305,17 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    Not built: the environment through a handle; `-E` still passes `NAME=value` words.
 
 8. **`sudo -u USER` and `su USER` without gsudo** (the user, 2026-10-11, by pick list;
-   built the same day, its probes with a second account left for later): cash asks
-   USER's password at the console, echo off, lets USER open its process, and starts the
-   `--sudo-attach` cash as USER with `CreateProcessWithLogonW`, which takes the terminal
-   as the elevated one does (`research/sudo-in-terminal-design.md` section 8). gsudo and
-   `runas` are no longer used; `cash_win32::gsudo` is gone; `sudo -v`, `-k` and `-K` are
-   kept for scripts with no cache behind them. Test:
-   `sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing`.
+   built and seen with a test account the same day): cash asks USER's password at the
+   console, echo off, then starts `cash --invoke-bundled --sudo-owner - COMMAND` as USER
+   with `CreateProcessWithLogonW`, handing it this console and these standard handles by
+   inheritance (`STARTF_USESTDHANDLES`; `research/sudo-in-terminal-design.md` section 8).
+   Unlike the elevated side, USER's cash never opens the caller, which another account may
+   not do (`Access denied`); the first try did, and failed. gsudo and `runas` are no
+   longer used; `cash_win32::gsudo` is gone; `sudo -v`, `-k` and `-K` are kept for scripts
+   with no cache behind them. Tests:
+   `sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing` (in the suites) and
+   `::sudo_u_runs_the_command_as_the_account` (ignored; a second account and its
+   password).
 
 9. **`net user NAME * /add` fails: the star becomes the folder's files** (the user,
    2026-10-11, by pick list; built the same day): a line that works in cmd and PowerShell
