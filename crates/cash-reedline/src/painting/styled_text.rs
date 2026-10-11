@@ -391,7 +391,7 @@ mod test {
         assert!(!result.contains("\x1b]133;B"));
     }
 
-    // --- the terminator cell (helix block cursor on a `\n`) ---
+    // --- the terminator cell (a selection that covers a `\n`) ---
 
     #[test]
     fn lone_terminator_chunk_gets_a_painted_cell() {
@@ -412,7 +412,7 @@ mod test {
 
     #[test]
     fn the_cell_survives_the_split_at_the_caret() {
-        // The real path. Helix rests the caret at the *start* of the covered
+        // The real path. A block caret rests at the *start* of the covered
         // grapheme, so the insertion point lands exactly on the chunk boundary
         // and the terminator stays whole rather than being split in half.
         let sel = Style::new().on(Color::LightGray);
@@ -438,8 +438,8 @@ mod test {
         #[case] style: Style,
         #[case] expected: bool,
     ) {
-        // `examples/helix.rs` styles its selection with `Style::new().reverse()`,
-        // which leaves `background` at `None` — a background-only check paints
+        // A selection styled `Style::new().reverse()` leaves `background` at
+        // `None` — a background-only check paints
         // nothing there, which is the whole selection invisible on a terminator.
         // A foreground or a weight has no glyph to act on in a space, so those
         // still get no cell.
@@ -528,7 +528,7 @@ mod test {
 
     #[test]
     fn an_unstyled_terminator_chunk_gains_nothing() {
-        // The non-helix exposure: a highlighter that pushes the whole buffer as
+        // The other exposure: a highlighter that pushes the whole buffer as
         // one chunk emits a bare `"\n"` for a newline-only buffer, with no
         // `style_range` involved. Every mode would gain a stray space.
         use crate::{Highlighter, SimpleMatchHighlighter};

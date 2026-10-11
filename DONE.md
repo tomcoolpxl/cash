@@ -1472,3 +1472,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   defaults, both as Git Bash prints them; `xargs -P N` runs N at once; `logger` writes to
   the Application event log. Already answered by the code: `xargs -I{}` attached, `ls
   --help`'s options, `grep -r`'s paths, doctor's one line for the shadows.
+- **Helix mode in `cash-reedline`** (phase 34; done 2026-10-11): on by default in
+  reedline, so compiled into cash, though cash never offered it. Gone: its state machine
+  and key bindings, `PromptHelixMode` and the prompt's Helix variants, `HelixChangeMode`,
+  the cursor shapes for it, the resting policy that put the caret on a line end, the four
+  editing commands only its keys emitted (`SelectLine`, `EraseSelection`,
+  `PasteAtSelectionEdge`, `LineStartNonBlank`), the `helix` feature, and their tests.
+  The selection model Helix gave the core editor stays, as vi and emacs run on it; an
+  operation on a selection now always drops it, as vim's visual mode does.

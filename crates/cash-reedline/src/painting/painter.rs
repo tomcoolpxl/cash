@@ -2,7 +2,6 @@
     clippy::string_slice,
     reason = "the painter cuts the line at the caret and at positions found in the same text"
 )]
-use crate::PromptHelixMode;
 use crate::terminal_extensions::semantic_prompt::{PromptKind, SemanticPromptMarkers};
 use crate::{CursorConfig, PromptEditMode, PromptViMode};
 
@@ -792,9 +791,6 @@ impl Painter {
                 PromptEditMode::Emacs => shapes.emacs,
                 PromptEditMode::Vi(PromptViMode::Insert) => shapes.vi_insert,
                 PromptEditMode::Vi(PromptViMode::Normal | PromptViMode::Visual) => shapes.vi_normal,
-                PromptEditMode::Helix(PromptHelixMode::Insert) => shapes.hx_insert,
-                PromptEditMode::Helix(PromptHelixMode::Normal) => shapes.hx_normal,
-                PromptEditMode::Helix(PromptHelixMode::Select) => shapes.hx_select,
                 _ => None,
             };
             if let Some(shape) = shape {

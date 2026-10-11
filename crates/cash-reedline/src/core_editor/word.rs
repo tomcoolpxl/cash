@@ -1,5 +1,5 @@
 //! Character classification for word-boundary detection — the shared substrate
-//! for vi, emacs, and helix word motions.
+//! for vi and emacs word motions.
 //!
 //! Every "word" notion in the editor is built on one classifier: each character
 //! is sorted into a [`CharClass`], and a word boundary is a *transition* between
@@ -10,7 +10,7 @@
 //!
 //! Modes pick a flavor; the resolver (`locate_word`) scans with the matching
 //! predicate. Keeping the classifier here — mode-agnostic and tested in isolation
-//! — means vi-word, vi-WORD, emacs-word, and helix-word are thin variations over
+//! — means vi-word, vi-WORD and emacs-word are thin variations over
 //! one definition rather than eight ad-hoc functions.
 
 #![expect(

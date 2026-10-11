@@ -35,9 +35,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   non-solid archive's members are carried as they are, but a solid one's are read back
   and written again, which needs the password.
 - **RAR dictionaries above 4 GB** (RAR 7's, phase 33) are not tried.
-- **Helix mode in `cash-reedline`** (phase 34): on by default in reedline, so compiled
-  into cash, though cash never offers it; its code runs through the core editor, so
-  taking it out is a change of its own.
 - **`sudo -E`'s variables through a handle** (phase 35,
   `research/sudo-in-terminal-design.md` section 3 item 4): they still go as `NAME=value`
   words on the started cash's command line (Windows' 32,000 characters for the elevated

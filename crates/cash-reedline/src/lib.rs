@@ -184,34 +184,12 @@
 //!     Reedline::create().with_mouse_click(MouseClickMode::EnabledWithOsc133);
 //! ```
 //!
-//! ## Use `Helix` edit mode
-//!
-//! Selection-first editing: motions carry the selection, verbs act on it.
-//! Requires the `helix` feature (enabled by default), which also gates the
-//! types below.
-//!
-//! ```rust
-//! # #[cfg(feature = "helix")] {
-//! use reedline::{default_helix_normal_keybindings, Helix, Reedline};
-//!
-//! let mut normal_keybindings = default_helix_normal_keybindings();
-//! // normal_keybindings.add_binding(..);
-//!
-//! let line_editor = Reedline::create().with_edit_mode(Box::new(
-//!     Helix::default().with_normal_keybindings(normal_keybindings),
-//! ));
-//! # }
-//! ```
-//!
-//! Run `cargo run --example helix` for the mode on its own, or
-//! `cargo run --example demo -- --helix` to exercise it against the demo's
-//! history and menus.
-//!
 //! ## Crate features
 //!
-//! cash: reedline's other features (the system clipboard, bashisms, SQLite history,
-//! the external printer, the idle callback) were never on in cash and are gone.
-//! - `helix`: Selection-first `Helix`/Kakoune-style edit mode, where a motion moves the selection and a verb acts on it. On by default; the `Helix` type and its keybinding defaults are gated behind it, so `default-features = false` builds compile without the mode.
+//! cash: none. reedline's features (the system clipboard, bashisms, SQLite history, the
+//! external printer, the idle callback) were never on in cash and are gone, and so is its
+//! Helix edit mode, which cash never offered; the editor's selection model keeps the shape
+//! Helix gave it, which vi and emacs use.
 //!
 //! ## Are we prompt yet? (Development status)
 //!
@@ -342,7 +320,6 @@ pub use history::{
 };
 
 mod prompt;
-pub use prompt::PromptHelixMode;
 pub use prompt::{
     DEFAULT_INDICATOR_COLOR, DEFAULT_PROMPT_COLOR, DEFAULT_PROMPT_MULTILINE_COLOR,
     DEFAULT_PROMPT_RIGHT_COLOR, DefaultPrompt, DefaultPromptSegment, Prompt, PromptEditMode,
@@ -353,10 +330,6 @@ mod edit_mode;
 pub use edit_mode::{
     CursorConfig, EditMode, Emacs, Keybindings, Vi, default_emacs_keybindings,
     default_vi_insert_keybindings, default_vi_normal_keybindings,
-};
-pub use edit_mode::{
-    Helix, default_helix_insert_keybindings, default_helix_normal_keybindings,
-    default_helix_select_keybindings,
 };
 
 mod highlighter;

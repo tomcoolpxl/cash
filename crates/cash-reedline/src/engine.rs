@@ -1475,7 +1475,6 @@ impl Reedline {
             | ReedlineEvent::MenuPageNext
             | ReedlineEvent::MenuPagePrevious
             | ReedlineEvent::ViChangeMode(_) => Ok(EventStatus::Inapplicable),
-            ReedlineEvent::HelixChangeMode(_) => Ok(EventStatus::Inapplicable),
         }
     }
 
@@ -1858,7 +1857,6 @@ impl Reedline {
                 Ok(EventStatus::Inapplicable)
             }
             ReedlineEvent::ViChangeMode(_) => Ok(self.change_edit_mode(event)),
-            ReedlineEvent::HelixChangeMode(_) => Ok(self.change_edit_mode(event)),
             ReedlineEvent::Mouse {
                 column,
                 row,
@@ -1877,16 +1875,15 @@ impl Reedline {
     /// the flip left behind.
     ///
     /// A machine's own transitions emit their repairs as events, the way `i`
-    /// collapses the selection on the way into helix insert. An event-driven
+    /// collapses the selection on the way into insert. An event-driven
     /// flip never reaches that path, so the repair has to happen here. The one
     /// that bites is leaving a block caret for a bar caret: a block policy rests
     /// as a min-width-1 selection, and `insert_char` deletes the selection
     /// before inserting, so the first keystroke would replace the covered
     /// grapheme.
     ///
-    /// Stated over the `RestPolicy` rather than per machine, so helix
-    /// normal/select and vi visual are one rule instead of three cases, and a
-    /// future machine inherits it.
+    /// Stated over the `RestPolicy` rather than per machine, so a future machine
+    /// with a block caret inherits it.
     fn change_edit_mode(&mut self, event: ReedlineEvent) -> EventStatus {
         let before = self.edit_mode.edit_mode().rest_policy();
         let status = self.edit_mode.handle_mode_specific_event(event);
@@ -2854,130 +2851,8 @@ mod tests {
         None
     }
 
-    /// `DefaultValidator` reads an unclosed `"` as incomplete, so `Enter` breaks
-    /// the line instead of submitting it and leaves the buffer inspectable.
-    fn helix_engine_with_validator() -> Reedline {
-        let mut rl = Reedline::create()
-            .with_edit_mode(Box::<crate::Helix>::default())
-            .with_validator(Box::new(crate::DefaultValidator));
-        rl.painter.force_prompt_anchored_for_test(0);
-        rl
-    }
-
-    // --- submitting from helix normal mode ---
-    //
-    // The resting cursor is a selection and outlives the `next_mode` flip to
-    // insert, so anything on the `Enter` path that opens with `delete_selection`
-    // eats the covered grapheme. `InsertNewline` does, which makes the incomplete
-    // branch the one that can observe it: a submitted buffer is cleared before
-    // anything can be asserted about it.
-
-    #[test]
-    fn helix_normal_submit_keeps_the_grapheme_under_the_cursor() {
-        let mut rl = helix_engine_with_validator();
-        let signal = drive_until_signal(
-            &mut rl,
-            &[
-                ch('"'),
-                ch('a'),
-                ch('b'),
-                ch('c'),
-                key(KeyCode::Esc),
-                key(KeyCode::Enter),
-            ],
-        );
-        assert!(signal.is_none(), "incomplete input must not submit");
-        // Not `"ab\n`: the cursor rests *on* the `c`, which is not a selection
-        // the break should consume.
-        assert_eq!(rl.editor.get_buffer(), "\"abc\n");
-    }
-
-    #[test]
-    fn helix_normal_submit_breaks_at_the_cursor_not_past_it() {
-        let mut rl = helix_engine_with_validator();
-        // `hh` walks the caret back onto the `a`.
-        let signal = drive_until_signal(
-            &mut rl,
-            &[
-                ch('"'),
-                ch('a'),
-                ch('b'),
-                ch('c'),
-                key(KeyCode::Esc),
-                ch('h'),
-                ch('h'),
-                key(KeyCode::Enter),
-            ],
-        );
-        assert!(signal.is_none(), "incomplete input must not submit");
-        // The head already sits past the covered `a`, so collapsing forward
-        // breaks there. A vi-style `MoveRight` would step one further and give
-        // `"ab\nc`; a plain deselect would land before it, at `"\nabc`.
-        assert_eq!(rl.editor.get_buffer(), "\"a\nbc");
-    }
-
-    /// Helix rests *on* the line terminator under `BlockOverNewline`, which vi
-    /// never does, so a break from there is a case vi's handling never answers.
-    #[test]
-    fn helix_normal_submit_breaks_from_a_terminator() {
-        let mut rl = helix_engine_with_validator();
-        let signal = drive_until_signal(
-            &mut rl,
-            &[
-                ch('"'),
-                ch('a'),
-                key(KeyCode::Esc),
-                key(KeyCode::Enter),
-                key(KeyCode::Esc),
-                key(KeyCode::Enter),
-            ],
-        );
-        assert!(signal.is_none(), "incomplete input must not submit");
-        assert_eq!(rl.editor.get_buffer(), "\"a\n\n");
-    }
-
-    /// A keybinding flip into insert must collapse the resting selection first,
-    /// exactly as `i` does. The helix block cursor *is* a one-grapheme
-    /// selection, and `insert_char` deletes the selection before inserting, so
-    /// without the collapse the first keystroke replaces the covered grapheme.
-    #[test]
-    fn helix_change_mode_into_insert_keeps_the_covered_grapheme() {
-        let mut bindings = crate::default_helix_normal_keybindings();
-        bindings.add_binding(
-            KeyModifiers::NONE,
-            KeyCode::Char('z'),
-            ReedlineEvent::HelixChangeMode("insert".into()),
-        );
-        let mut rl = Reedline::create()
-            .with_edit_mode(Box::new(
-                crate::Helix::default().with_normal_keybindings(bindings),
-            ))
-            .with_validator(Box::new(crate::DefaultValidator));
-        rl.painter.force_prompt_anchored_for_test(0);
-        // `hh` walks the caret back onto the `a`, so the cursor covers a
-        // grapheme with buffer on both sides of it.
-        let signal = drive_until_signal(
-            &mut rl,
-            &[
-                ch('"'),
-                ch('a'),
-                ch('b'),
-                ch('c'),
-                key(KeyCode::Esc),
-                ch('h'),
-                ch('h'),
-                ch('z'),
-                ch('X'),
-            ],
-        );
-        assert!(signal.is_none(), "incomplete input must not submit");
-        // Not `"Xbc`: the covered `a` is a resting cursor, not a selection the
-        // insert should consume.
-        assert_eq!(rl.editor.get_buffer(), "\"Xabc");
-    }
-
-    /// Vi visual rests min-width-1 under `RestPolicy::Block` just as helix does,
-    /// so the same rule has to cover a `ViChangeMode` flip out of it. Without the
+    /// Vi visual rests min-width-1 under `RestPolicy::Block`, so the rule has to
+    /// cover a `ViChangeMode` flip out of it. Without the
     /// collapse the visual selection is still live and the first keystroke
     /// replaces it.
     #[test]
@@ -3013,234 +2888,6 @@ mod tests {
         );
         assert!(signal.is_none(), "incomplete input must not submit");
         assert_eq!(rl.editor.get_buffer(), "\"Xabc");
-    }
-
-    /// The submitted path cannot assert on the buffer (`submit_buffer` clears
-    /// it), so pin it through the returned signal instead.
-    #[test]
-    fn helix_normal_submit_returns_the_whole_buffer() {
-        let mut rl = Reedline::create().with_edit_mode(Box::<crate::Helix>::default());
-        rl.painter.force_prompt_anchored_for_test(0);
-        let signal = drive_until_signal(
-            &mut rl,
-            &[
-                ch('a'),
-                ch('b'),
-                ch('c'),
-                key(KeyCode::Esc),
-                key(KeyCode::Enter),
-            ],
-        );
-        match signal {
-            Some(Signal::Success(buffer)) => assert_eq!(buffer, "abc"),
-            other => panic!("expected a submitted buffer, got {other:?}"),
-        }
-    }
-
-    // --- `j` / `k` ---
-    //
-    // These lower to `ReedlineEvent::Up`/`Down` rather than a `MotionTarget`,
-    // since which of line movement and history traversal applies is decided
-    // against the whole buffer, above where a motion resolves.
-
-    /// Two lines, built through the incomplete branch since a bare Enter would
-    /// submit. Leaves the caret on the second line, in insert mode.
-    fn two_line_helix_engine() -> Reedline {
-        let mut rl = helix_engine_with_validator();
-        drive_until_signal(
-            &mut rl,
-            &[
-                ch('"'),
-                ch('a'),
-                ch('b'),
-                ch('c'),
-                key(KeyCode::Esc),
-                key(KeyCode::Enter),
-                ch('d'),
-                ch('e'),
-                ch('f'),
-            ],
-        );
-        // `"abc` is 0..4, the terminator 4, `def` 5..8. Both lines are wide
-        // enough for a column-preserving move to differ from a line-start one.
-        assert_eq!(rl.editor.get_buffer(), "\"abc\ndef", "setup");
-        rl
-    }
-
-    #[test]
-    fn helix_normal_k_moves_a_line_before_it_reaches_history() {
-        let mut rl = two_line_helix_engine();
-        drive_until_signal(&mut rl, &[key(KeyCode::Esc), ch('k')]);
-        assert!(
-            rl.editor.insertion_point() < 4,
-            "expected the caret on the first line, got {}",
-            rl.editor.insertion_point()
-        );
-        assert_eq!(
-            rl.editor.get_buffer(),
-            "\"abc\ndef",
-            "history must not load yet"
-        );
-    }
-
-    #[test]
-    fn helix_normal_k_recalls_history_at_the_first_line() {
-        let mut rl = seam_engine(Box::<crate::Helix>::default());
-        let signal = drive_until_signal(
-            &mut rl,
-            &[
-                ch('o'),
-                ch('n'),
-                ch('e'),
-                key(KeyCode::Esc),
-                key(KeyCode::Enter),
-            ],
-        );
-        assert!(
-            matches!(signal, Some(Signal::Success(ref b)) if b == "one"),
-            "setup: expected a submit, got {signal:?}"
-        );
-        // The buffer is empty now, so there is no line above to move to.
-        drive_until_signal(&mut rl, &[key(KeyCode::Esc), ch('k')]);
-        assert_eq!(rl.editor.get_buffer(), "one");
-    }
-
-    #[test]
-    fn helix_select_extends_with_arrow_keys() {
-        // The original report: `v` then arrows moved the caret but dropped the
-        // anchor, since the arrows resolved through the mode-blind normal
-        // table to `MoveRight { select: false }`.
-        let mut rl = helix_engine_with_validator();
-        drive_until_signal(
-            &mut rl,
-            &[
-                ch('"'),
-                ch('a'),
-                ch('b'),
-                ch('c'),
-                key(KeyCode::Esc),
-                ch('g'),
-                ch('h'),
-                ch('v'),
-            ],
-        );
-        drive_until_signal(&mut rl, &[key(KeyCode::Right), key(KeyCode::Right)]);
-        assert_eq!(
-            rl.editor.get_selection(),
-            Some((0, 3)),
-            "arrows must extend like `l` does"
-        );
-    }
-
-    #[test]
-    fn helix_select_j_extends_to_the_column_normal_mode_would_land_on() {
-        let mut rl = two_line_helix_engine();
-        // `k` from the `f` (column 2) lands on the `b`, also column 2.
-        drive_until_signal(&mut rl, &[key(KeyCode::Esc), ch('k')]);
-        assert_eq!(rl.editor.insertion_point(), 2, "setup: expected the `b`");
-
-        drive_until_signal(&mut rl, &[ch('v'), ch('j')]);
-        assert_eq!(
-            rl.editor.get_buffer(),
-            "\"abc\ndef",
-            "select mode must not traverse history"
-        );
-        let (start, end) = rl.editor.get_selection().expect("expected a selection");
-        // Down from column 2 is the `f` at 7, not the line start at 5: the
-        // extension has to stop where a normal-mode `j` would land.
-        assert_eq!(
-            (start, end),
-            (2, 8),
-            "expected the selection to reach the `f`, not the line start"
-        );
-    }
-
-    #[test]
-    fn helix_tilde_switches_case_and_keeps_the_selection() {
-        let mut rl = seam_engine(Box::<crate::Helix>::default());
-        drive_until_signal(&mut rl, &[ch('a'), ch('b'), key(KeyCode::Esc), ch('%')]);
-        assert_eq!(rl.editor.get_selection(), Some((0, 2)), "setup");
-
-        drive_until_signal(&mut rl, &[ch('~')]);
-        assert_eq!(rl.editor.get_buffer(), "AB");
-        // Still selected, so a second `~` acts on the same span.
-        assert_eq!(rl.editor.get_selection(), Some((0, 2)));
-        drive_until_signal(&mut rl, &[ch('~')]);
-        assert_eq!(rl.editor.get_buffer(), "ab");
-    }
-
-    #[test]
-    fn helix_backtick_lowercases_and_alt_backtick_uppercases() {
-        let alt_backtick = KeyEvent::new(KeyCode::Char('`'), KeyModifiers::ALT);
-
-        let mut rl = seam_engine(Box::<crate::Helix>::default());
-        drive_until_signal(&mut rl, &[ch('A'), ch('b'), key(KeyCode::Esc), ch('%')]);
-        assert_eq!(rl.editor.get_selection(), Some((0, 2)), "setup");
-
-        drive_until_signal(&mut rl, &[ch('`')]);
-        assert_eq!(rl.editor.get_buffer(), "ab");
-        drive_until_signal(&mut rl, &[alt_backtick]);
-        assert_eq!(rl.editor.get_buffer(), "AB");
-        // Both keep the span, so they can be applied in sequence.
-        assert_eq!(rl.editor.get_selection(), Some((0, 2)));
-    }
-
-    // --- `%`, `A`, `I` ---
-
-    #[test]
-    fn helix_percent_selects_the_whole_buffer() {
-        let mut rl = seam_engine(Box::<crate::Helix>::default());
-        drive_until_signal(
-            &mut rl,
-            &[ch('a'), ch('b'), ch('c'), key(KeyCode::Esc), ch('%')],
-        );
-        assert_eq!(rl.editor.get_selection(), Some((0, 3)));
-    }
-
-    /// Appending has to land *past* the last grapheme: the block cursor rests on
-    /// it, while insert mode sits between graphemes.
-    #[test]
-    fn helix_capital_a_appends_past_the_last_grapheme() {
-        use crate::PromptHelixMode;
-
-        let mut rl = seam_engine(Box::<crate::Helix>::default());
-        drive_until_signal(
-            &mut rl,
-            &[ch(' '), ch('h'), ch('i'), key(KeyCode::Esc), ch('A')],
-        );
-        assert_eq!(rl.editor.insertion_point(), 3);
-        assert!(matches!(
-            rl.prompt_edit_mode(),
-            PromptEditMode::Helix(PromptHelixMode::Insert)
-        ));
-        // Typing lands at the end rather than one grapheme short.
-        drive_until_signal(&mut rl, &[ch('!')]);
-        assert_eq!(rl.editor.get_buffer(), " hi!");
-    }
-
-    /// The leading space is what separates this from a plain line start.
-    #[test]
-    fn helix_capital_i_inserts_at_the_first_non_blank() {
-        let mut rl = seam_engine(Box::<crate::Helix>::default());
-        drive_until_signal(
-            &mut rl,
-            &[ch(' '), ch('h'), ch('i'), key(KeyCode::Esc), ch('I')],
-        );
-        assert_eq!(rl.editor.insertion_point(), 1);
-        drive_until_signal(&mut rl, &[ch('!')]);
-        assert_eq!(rl.editor.get_buffer(), " !hi");
-    }
-
-    #[test]
-    fn with_edit_mode_builder_accepts_custom_helix_mode() {
-        use crate::PromptHelixMode;
-
-        let reedline = Reedline::create().with_edit_mode(Box::new(crate::Helix::default()));
-
-        assert!(matches!(
-            reedline.prompt_edit_mode(),
-            PromptEditMode::Helix(PromptHelixMode::Insert)
-        ));
     }
 
     #[test]

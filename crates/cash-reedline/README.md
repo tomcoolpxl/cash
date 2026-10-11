@@ -11,8 +11,11 @@ cash's code, its tests and the examples in its documentation say `reedline::`.
 - **Features cash never turned on are gone**, with their code and dependencies: the
   system clipboard (`arboard`), `bashisms`, the SQLite history (`rusqlite`), the external
   printer (`crossbeam`), the idle callback and `libc`. Helix mode, on by default and so
-  compiled into cash though cash never offers it, stays for now: its code runs through
-  the core editor, and taking it out is a change of its own.
+  compiled into cash though cash never offered it, went on 2026-10-11: its machine and
+  key bindings, its prompt modes, `HelixChangeMode`, the resting policy over the line
+  end, and the four editing commands only its keys emitted (`SelectLine`,
+  `EraseSelection`, `PasteAtSelectionEdge`, `LineStartNonBlank`). The selection model
+  Helix gave the core editor stays: vi and emacs run on it.
 - **What could panic in the code cash runs** now returns an error or says why it cannot:
   - a history that cannot be read or written is an error from `print_history`,
     `submit_buffer` and the history search, where it was `expect("todo: error

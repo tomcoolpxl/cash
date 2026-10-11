@@ -11,10 +11,6 @@ readme = "README.md"
 repository.workspace = true
 rust-version.workspace = true
 
-[features]
-default = ["helix"]
-helix = []
-
 [lib]
 # The code, its tests and its examples say `reedline::`.
 name = "reedline"

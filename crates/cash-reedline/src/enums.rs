@@ -166,7 +166,7 @@ pub enum Granularity {
 /// `Move`/`Extend`/`Cut`/`Copy`/`Erase` over a `MotionTarget` are the
 /// going-forward motion API. They resolve through the private `resolve_motion`
 /// and apply to the cursor, both free to change. Mode differences (vi vs emacs
-/// vs helix word rules) are carried as *data* here (e.g. [`WordKind`]) rather
+/// word rules) are carried as *data* here (e.g. [`WordKind`]) rather
 /// than as separate commands.
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum MotionTarget {
@@ -183,9 +183,6 @@ pub enum MotionTarget {
     },
     /// Logical line edge: `Backward` = line start (`0`), `Forward` = line end (`$`).
     LineEdge(Direction),
-    /// First non-whitespace character on the current line (helix `gs`). A blank
-    /// line has none, so the motion stays put.
-    LineStartNonBlank,
     /// Whole-buffer edge: `Backward` = start (`gg`), `Forward` = end (`G`).
     BufferEdge(Direction),
     /// The adjacent logical line: `Forward` = line below (`j`), `Backward` =
@@ -240,7 +237,6 @@ impl MotionTarget {
             // Destination-shaped targets go here. Where they lie depends on the
             // cursor, so callers resolve first and compare after.
             MotionTarget::Position(_) => None,
-            MotionTarget::LineStartNonBlank => None,
         }
     }
 }
@@ -536,17 +532,6 @@ pub enum EditCommand {
     /// Paste the cut buffer in front of the insertion point (vi `p`)
     PasteCutBufferAfter,
 
-    /// Paste the cut buffer at the selection edge in the given `direction` and
-    /// select the pasted text (helix `p`/`P`). Selecting the result means the
-    /// command cannot simply be issued twice for a count, so it carries `count`
-    /// explicitly.
-    PasteAtSelectionEdge {
-        /// Whether to paste on the forward or backward edge of the selection
-        direction: Direction,
-        /// Number of times the cut buffer content is placed
-        count: usize,
-    },
-
     /// Upper case the current word
     UppercaseWord,
 
@@ -617,19 +602,6 @@ pub enum EditCommand {
 
     /// Select whole input buffer
     SelectAll,
-
-    /// Snap the selection out to the whole lines it touches (helix `x`), or take
-    /// one more line when it already spans them exactly.
-    ///
-    /// Repeating therefore grows it a line at a time, so a count is the command
-    /// applied that many times.
-    SelectLine,
-
-    /// Delete the selection without filling the cut buffer (helix `Alt-d`).
-    ///
-    /// [`CutSelection`](EditCommand::CutSelection) clobbers the register, which
-    /// is exactly what this avoids when the text is not wanted back.
-    EraseSelection,
 
     /// Cut selection to local buffer
     CutSelection {
@@ -795,8 +767,6 @@ impl EditCommand {
             EditCommand::SwapCursorAndAnchor => EditType::MoveCursor { select: true },
 
             EditCommand::SelectAll => EditType::MoveCursor { select: true },
-            EditCommand::EraseSelection => EditType::EditText,
-            EditCommand::SelectLine => EditType::MoveCursor { select: true },
             // Text edits
             EditCommand::InsertChar(_)
             | EditCommand::Backspace
@@ -848,8 +818,7 @@ impl EditCommand {
             | EditCommand::Paste
             | EditCommand::CutInsidePair { .. }
             | EditCommand::CutAroundPair { .. }
-            | EditCommand::CutTextObject { .. }
-            | EditCommand::PasteAtSelectionEdge { .. } => EditType::EditText,
+            | EditCommand::CutTextObject { .. } => EditType::EditText,
 
             EditCommand::Undo | EditCommand::Redo => EditType::UndoRedo,
 
@@ -1117,15 +1086,6 @@ pub enum ReedlineEvent {
     /// [`UntilFound`](ReedlineEvent::UntilFound) it hands the key to the next
     /// event in the list instead.
     ViChangeMode(String),
-
-    /// Switch the helix state machine to a named mode (helix mode only).
-    ///
-    /// Accepts `normal`, `insert` or `select`, matched case-insensitively. Any
-    /// other name leaves the mode alone and reports the event inapplicable. On
-    /// its own that is a keybinding that does nothing; inside an
-    /// [`UntilFound`](ReedlineEvent::UntilFound) it hands the key to the next
-    /// event in the list instead.
-    HelixChangeMode(String),
 }
 
 /// What became of an event the editor was given.

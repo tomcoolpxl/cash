@@ -1,17 +1,12 @@
 mod base;
 mod cursors;
 mod emacs;
-mod helix;
 mod keybindings;
 mod vi;
 
 pub use base::EditMode;
 pub use cursors::CursorConfig;
 pub use emacs::{Emacs, default_emacs_keybindings};
-pub use helix::{
-    Helix, default_helix_insert_keybindings, default_helix_normal_keybindings,
-    default_helix_select_keybindings,
-};
 pub use keybindings::{KeyCombination, Keybindings};
 pub use vi::{Vi, default_vi_insert_keybindings, default_vi_normal_keybindings};
 
