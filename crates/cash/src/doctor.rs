@@ -13,10 +13,12 @@
 //!
 //! None of that produces an error message. It produces wrong answers.
 //!
-//! The report fits the window, up to 80 columns: a line for each check that passed, then
-//! each warning and note with what to do about it. A path in what was found is written
-//! as cash prints it, the home folder as `~`; a path in a fix is written out in full, to
-//! be pasted.
+//! The report fits the window, up to 100 columns: a line for each check that passed, then
+//! each warning and note with what to do about it, one way to fix it to a line, what to
+//! type in a column. A path in what was found is written as cash prints it, the home
+//! folder as `~`; a path in a fix is written out in full, to be pasted. On a terminal,
+//! and unless `NO_COLOR` is set, `ok` is green, `note` cyan, `WARN` yellow, and what to
+//! type bold.
 
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -26,7 +28,7 @@ use cash_win32::resolve::{DEFAULT_PATHEXT, parse_pathext, resolve};
 use unicode_width::UnicodeWidthStr;
 
 /// The report is laid out for this many columns, and narrower when the window is.
-const WIDTH: usize = 80;
+const WIDTH: usize = 100;
 
 /// How serious a finding is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,13 +39,60 @@ enum Level {
 }
 
 impl Level {
-    const fn marker(self) -> &'static str {
-        match self {
-            Self::Ok => "ok  ",
-            Self::Note => "note",
-            Self::Warn => "WARN",
-        }
+    /// The marker in front of a finding, its colour marked for [`paint`].
+    fn marker(self) -> String {
+        let (colour, word) = match self {
+            Self::Ok => (GREEN, "ok  "),
+            Self::Note => (CYAN, "note"),
+            Self::Warn => (YELLOW, "WARN"),
+        };
+        format!("{colour}{word}{PLAIN}")
     }
+}
+
+/// Marks in the report's text, of no width, that [`paint`] turns into colours on a
+/// terminal or drops: what to type ([`typed`]) between `BOLD` and `UNBOLD`, a marker
+/// between its colour and `PLAIN`.
+const BOLD: char = '\u{1}';
+const UNBOLD: char = '\u{2}';
+const GREEN: char = '\u{3}';
+const CYAN: char = '\u{4}';
+const YELLOW: char = '\u{5}';
+const PLAIN: char = '\u{6}';
+
+/// Whether `c` is one of the marks [`paint`] reads.
+fn is_mark(c: char) -> bool {
+    ('\u{1}'..='\u{6}').contains(&c)
+}
+
+/// The columns `text` takes on the screen, its marks taking none.
+fn columns(text: &str) -> usize {
+    text.chars()
+        .filter(|&c| !is_mark(c))
+        .collect::<String>()
+        .width()
+}
+
+/// `text`, something to type, marked to be bold and kept as one word.
+fn typed(text: &str) -> String {
+    format!("{BOLD}{}{UNBOLD}", unbroken(text))
+}
+
+/// The report's marks as ANSI colours, or dropped when `colour` is off.
+fn paint(report: &str, colour: bool) -> String {
+    report
+        .chars()
+        .map(|c| match (c, colour) {
+            (BOLD, true) => "\x1b[1m".to_owned(),
+            (UNBOLD, true) => "\x1b[22m".to_owned(),
+            (GREEN, true) => "\x1b[32m".to_owned(),
+            (CYAN, true) => "\x1b[36m".to_owned(),
+            (YELLOW, true) => "\x1b[1;33m".to_owned(),
+            (PLAIN, true) => "\x1b[0m".to_owned(),
+            (c, _) if is_mark(c) => String::new(),
+            (c, _) => c.to_string(),
+        })
+        .collect()
 }
 
 struct Finding {
@@ -133,7 +182,9 @@ pub fn run() -> u8 {
     check_session(&mut findings);
     let header = install_header(&mut findings);
 
-    print!("{}", render(&header, &findings, width()));
+    // Coloured as cash's errors are: on a terminal, and only while `NO_COLOR` is unset.
+    let colour = std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
+    print!("{}", paint(&render(&header, &findings, width()), colour));
     u8::from(findings.iter().any(|finding| finding.level == Level::Warn))
 }
 
@@ -201,7 +252,10 @@ fn pasted(path: &Path) -> String {
 }
 
 /// One finding in lines of at most `limit` columns: the marker and the text, the rows
-/// under it with their names in a column, and the fix after an arrow.
+/// under it with their names in a column, and each way to fix it after an arrow.
+///
+/// A fix is one way per line (`\n` between them); a way written `LABEL\tTYPED` puts what
+/// to type in a column after the labels of its fix, so that two ways line up.
 fn block(finding: &Finding, limit: usize) -> Vec<String> {
     const TEXT: &str = "        ";
     const UNDER: &str = "          ";
@@ -210,16 +264,44 @@ fn block(finding: &Finding, limit: usize) -> Vec<String> {
     let names = finding
         .rows
         .iter()
-        .map(|(name, _)| name.width())
+        .map(|(name, _)| columns(name))
         .max()
         .unwrap_or(0);
     for (name, meaning) in &finding.rows {
-        let first = format!("{UNDER}{name}{}  ", " ".repeat(names - name.width()));
+        let first = format!("{UNDER}{name}{}  ", " ".repeat(names - columns(name)));
         let rest = " ".repeat(UNDER.len() + names + 2);
         lines.extend(wrap(&first, &rest, meaning, limit));
     }
     if let Some(fix) = &finding.fix {
-        lines.extend(wrap(&format!("{TEXT}→ "), UNDER, fix, limit));
+        let ways: Vec<(&str, Option<&str>)> = fix
+            .split('\n')
+            .map(|way| match way.split_once('\t') {
+                Some((label, typed)) => (label, Some(typed)),
+                None => (way, None),
+            })
+            .collect();
+        let labels = ways
+            .iter()
+            .filter(|(_, typed)| typed.is_some())
+            .map(|(label, _)| columns(label))
+            .max()
+            .unwrap_or(0);
+        let column = TEXT.len() + 2 + labels + 2;
+        for (label, typed) in ways {
+            match typed {
+                // In the column when it fits the line, else under the label.
+                Some(typed) if column + columns(typed) <= limit => {
+                    let pad = " ".repeat(labels - columns(label));
+                    let first = format!("{TEXT}→ {label}{pad}  ");
+                    lines.extend(wrap(&first, &" ".repeat(column), typed, limit));
+                }
+                Some(typed) => {
+                    lines.extend(wrap(&format!("{TEXT}→ "), UNDER, label, limit));
+                    lines.extend(wrap(UNDER, UNDER, typed, limit));
+                }
+                None => lines.extend(wrap(&format!("{TEXT}→ "), UNDER, label, limit)),
+            }
+        }
     }
     lines
 }
@@ -231,7 +313,7 @@ fn wrap(first: &str, rest: &str, text: &str, limit: usize) -> Vec<String> {
     let mut line = first.to_owned();
     let mut empty = true;
     for word in text.split(' ').filter(|word| !word.is_empty()) {
-        if !empty && line.width() + 1 + word.width() > limit {
+        if !empty && columns(&line) + 1 + columns(word) > limit {
             lines.push(std::mem::replace(&mut line, rest.to_owned()));
             empty = true;
         }
@@ -336,7 +418,7 @@ fn check_platform(findings: &mut Vec<Finding>) {
     findings.push(Finding::note(
         format!(
             "{} says Windows_NT, $OSTYPE says windows",
-            unbroken("uname -s")
+            typed("uname -s")
         ),
         Some("a script that tests only MINGW*|MSYS* needs Windows_NT* too".into()),
     ));
@@ -409,7 +491,7 @@ fn check_userland(
                 stale.len(),
                 shown(&dir)
             ),
-            Some(unbroken(&format!(
+            Some(typed(&format!(
                 "cash --link-tools '{}'",
                 cash_win32::path::render(&dir)
             ))),
@@ -418,7 +500,11 @@ fn check_userland(
 
     let mut parts = Vec::new();
     if missing.is_empty() {
-        parts.push(format!("{} commands built in", builtins.len()));
+        parts.push(format!(
+            "{} commands built in ({} lists them)",
+            builtins.len(),
+            typed("help")
+        ));
     }
     parts.extend(current);
     if !parts.is_empty() {
@@ -464,7 +550,7 @@ fn check_own_path(findings: &mut Vec<Finding>) {
     findings.push(if report.ok {
         Finding::ok(report.detail)
     } else {
-        Finding::note(report.detail, report.fix)
+        Finding::note(report.detail, report.fix.map(|fix| typed(&fix)))
     });
 }
 
@@ -493,19 +579,22 @@ fn check_sudo_accounts(findings: &mut Vec<Finding>) {
     if let Ok(exe) = std::env::current_exe()
         && cash_win32::account::may_execute(&exe, None) == Some(false)
     {
-        let how = if cash_win32::install_layout::installed_by_scoop(&exe) {
-            unbroken("scoop install -g cash")
+        let fix = if cash_win32::install_layout::installed_by_scoop(&exe) {
+            format!(
+                "install it for every account instead, as an administrator:\t{}",
+                typed("scoop install -g cash")
+            )
         } else {
-            "an install under Program Files".to_owned()
+            "install it for every account instead, under Program Files".to_owned()
         };
         findings.push(Finding::note(
             format!(
                 "only you and administrators can read this cash.exe, so {} and {} cannot \
                  start it as another account",
-                unbroken("su USER"),
-                unbroken("sudo -u USER")
+                typed("su USER"),
+                typed("sudo -u USER")
             ),
-            Some(format!("{how} makes it readable to every account")),
+            Some(fix),
         ));
     }
 }
@@ -531,8 +620,8 @@ fn check_carapace(
             "no carapace: Tab completes files, commands and variables, and what completion \
              scripts you source",
             Some(format!(
-                "{}, for 700 more commands with descriptions",
-                unbroken("scoop install extras/carapace-bin")
+                "for 700 more commands, with descriptions:\t{}",
+                typed("scoop install extras/carapace-bin")
             )),
         )
     });
@@ -555,7 +644,7 @@ fn check_commands(
         let Some(dispatch) = resolve(command, entries, pathext, cwd) else {
             findings.push(Finding::warn(
                 format!("{command} not found: {note}"),
-                Some(suggest_install(command)),
+                Some(typed(&suggest_install(command))),
             ));
             continue;
         };
@@ -736,8 +825,10 @@ fn busybox_fix(
             pasted(&full)
         );
     }
-    let install = busybox_breakage(command).map_or("install the GNU tool", |(_, how)| how);
-    format!("install the full tool: {install}")
+    busybox_breakage(command).map_or_else(
+        || "install the GNU tool".to_owned(),
+        |(_, how)| format!("install the full tool:\t{}", typed(how)),
+    )
 }
 
 /// BusyBox applets on `PATH` for the listed tools that cash does not carry itself.
@@ -852,7 +943,7 @@ fn check_deliberate_shadows(
         if !is_system32(target) {
             continue;
         }
-        example.get_or_insert_with(|| (*command, pasted(target)));
+        example.get_or_insert_with(|| (*command, typed(&cash_win32::path::render(target))));
         rows.push(((*command).to_owned(), (*how).to_owned()));
     }
     let Some((command, path)) = example else {
@@ -875,8 +966,8 @@ fn check_deliberate_shadows(
         text,
         rows,
         fix: Some(format!(
-            "run Windows' {which} by its path, {path}, or switch cash's off: {}",
-            unbroken(&format!("enable -n {command}"))
+            "run Windows' {which} by its path:\t{path}\nor switch cash's off:\t{}",
+            typed(&format!("enable -n {command}"))
         )),
     });
 }
@@ -939,9 +1030,9 @@ fn program_shadows_note(found: &[(&str, &str, PathBuf)]) -> Option<Finding> {
             .map(|(name, how, _)| ((*name).to_owned(), (*how).to_owned()))
             .collect(),
         fix: Some(format!(
-            "run the program by its path, {}, or switch cash's off: {}",
-            pasted(path),
-            unbroken(&format!("enable -n {command}"))
+            "run the program by its path:\t{}\nor switch cash's off:\t{}",
+            typed(&cash_win32::path::render(path)),
+            typed(&format!("enable -n {command}"))
         )),
     })
 }
@@ -962,12 +1053,14 @@ mod tests {
             note.as_ref().map(|n| n.rows.clone()),
             Some(vec![("7z".to_owned(), "how".to_owned())])
         );
-        let fix = note.and_then(|n| n.fix).map(|f| f.replace(NO_BREAK, " "));
+        let fix = note
+            .and_then(|n| n.fix)
+            .map(|f| paint(&f, false).replace(NO_BREAK, " "));
         assert_eq!(
             fix.as_deref(),
             Some(
-                "run the program by its path, C:/Tools/7-Zip/7z.exe, or switch cash's off: \
-                 enable -n 7z"
+                "run the program by its path:\tC:/Tools/7-Zip/7z.exe\n\
+                 or switch cash's off:\tenable -n 7z"
             )
         );
         assert!(program_shadows_note(&[]).is_none());
@@ -987,12 +1080,17 @@ mod tests {
                     "resets the terminal, not a Remote Desktop session".into(),
                 ),
             ],
-            fix: Some(
-                "run Windows' one by its path, C:/WINDOWS/system32/PING.EXE, or switch \
-                 cash's off: enable -n ping"
-                    .into(),
-            ),
+            fix: Some(format!(
+                "run Windows' one by its path:\t{}\nor switch cash's off:\t{}",
+                typed("C:/WINDOWS/system32/PING.EXE"),
+                typed("enable -n ping")
+            )),
         }
+    }
+
+    /// The report as a pipe or a file gets it: no colours.
+    fn plain(header: &str, findings: &[Finding], width: usize) -> String {
+        paint(&render(header, findings, width), false)
     }
 
     #[test]
@@ -1002,7 +1100,7 @@ mod tests {
             note_with_rows(),
             Finding::ok("~/scoop/shims is on your user PATH"),
         ];
-        let report = render("cash 1.2.3 in ~/scoop/apps/cash/current", &findings, 80);
+        let report = plain("cash 1.2.3 in ~/scoop/apps/cash/current", &findings, 80);
         assert_eq!(
             report,
             "cash doctor · cash 1.2.3 in ~/scoop/apps/cash/current\n\
@@ -1012,11 +1110,27 @@ mod tests {
              \n  note  ping, reset and where are cash's own, ahead of System32's:\
              \n          ping   Linux flags: -c is the count, -n is numeric output\
              \n          reset  resets the terminal, not a Remote Desktop session\
-             \n        → run Windows' one by its path, C:/WINDOWS/system32/PING.EXE, or switch\
-             \n          cash's off: enable -n ping\
+             \n        → run Windows' one by its path:  C:/WINDOWS/system32/PING.EXE\
+             \n        → or switch cash's off:          enable -n ping\
              \n\
              \nNo problems found.\n"
         );
+    }
+
+    #[test]
+    fn on_a_terminal_the_markers_are_coloured_and_what_to_type_is_bold() {
+        let report = paint(
+            &render("cash 1.2.3", &[Finding::ok("fine"), note_with_rows()], 80),
+            true,
+        );
+        assert!(report.contains("  \x1b[32mok  \x1b[0m  fine"), "{report:?}");
+        assert!(report.contains("  \x1b[36mnote\x1b[0m  ping"), "{report:?}");
+        assert!(
+            report.contains("\x1b[1menable -n ping\x1b[22m"),
+            "{report:?}"
+        );
+        let warn = paint(&render("cash 1.2.3", &[Finding::warn("w", None)], 80), true);
+        assert!(warn.contains("\x1b[1;33mWARN\x1b[0m"), "{warn:?}");
     }
 
     #[test]
@@ -1026,7 +1140,7 @@ mod tests {
             Finding::warn("first warning", Some("its fix".into())),
             Finding::warn("second warning", None),
         ];
-        let report = render("cash 1.2.3", &findings, 80);
+        let report = plain("cash 1.2.3", &findings, 80);
         assert_eq!(
             report,
             "cash doctor · cash 1.2.3\n\
@@ -1040,7 +1154,7 @@ mod tests {
              \n2 warnings: cash works regardless, but scripts may get quietly wrong answers\
              \nfrom the tools above.\n"
         );
-        let one = render("cash 1.2.3", &[Finding::warn("w", None)], 80);
+        let one = plain("cash 1.2.3", &[Finding::warn("w", None)], 80);
         assert!(one.contains("\n1 warning: cash works"), "{one}");
     }
 
@@ -1059,7 +1173,7 @@ mod tests {
             ),
         ];
         for width in [40, 60, 80] {
-            let report = render("cash 1.2.3 in ~/scoop/apps/cash/current", &findings, width);
+            let report = plain("cash 1.2.3 in ~/scoop/apps/cash/current", &findings, width);
             for line in report.lines() {
                 assert!(line.width() < width, "{width}: {line:?}\n{report}");
             }
@@ -1068,7 +1182,7 @@ mod tests {
             assert!(report.contains("\n        "), "{report}");
             assert!(report.contains("\n          "), "{report}");
         }
-        let narrow = render("cash 1.2.3", &findings, 40);
+        let narrow = plain("cash 1.2.3", &findings, 40);
         assert!(
             narrow.contains("\n          ping   Linux flags: -c is the\n                 count,"),
             "{narrow}"
@@ -1082,7 +1196,7 @@ mod tests {
             "sh, bash and cash start this cash, ahead of {}",
             shown_from(path, None).replace(' ', &NO_BREAK.to_string())
         ))];
-        let report = render("cash 1.2.3", &findings, 60);
+        let report = plain("cash 1.2.3", &findings, 60);
         assert!(
             report.contains("\n        C:/Program Files/Git/usr/bin/bash.exe\n"),
             "{report}"

@@ -58,9 +58,10 @@ fn a_breaking_busybox_applet_is_flagged_with_the_reason() {
             .ends_with("wget.exe, a BusyBox applet: -T (timeout) crashes it"),
         "{report}"
     );
+    // What to type stands in a column after its label.
     assert_eq!(
         wget.fix.as_deref(),
-        Some("install the full tool: scoop install wget")
+        Some("install the full tool:  scoop install wget")
     );
     assert!(doctor_finding(&report, "cal is ").is_none(), "{report}");
 }
