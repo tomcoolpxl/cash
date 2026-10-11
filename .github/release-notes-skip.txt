@@ -1,1 +1,3 @@
 cf74f601 # perf(7z): split a file past one dictionary; taken back by 19b0c1aa, which keeps 7-Zip's block size
+f634de91 # fix(declare): refuse -t; taken back by 432459d8, as -t works
+432459d8 # fix(declare): the taking back of f634de91; together they change nothing
