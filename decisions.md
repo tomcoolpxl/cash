@@ -785,6 +785,14 @@ elevation; ending the program by pid at exit, which cannot cross the boundary.
   Turned down: Windows' default (`Administrators` owns them), and a system-wide policy.
 - **`elevate` stays, beside `sudo` and `su`** (the user, 2026-10-04): it starts a program
   elevated in a new window without waiting. Turned down: removing it.
+- **Doctor's fix for a cash other accounts cannot read is a grant, not a reinstall** (the
+  user, 2026-10-12): a cash under the profile (Scoop's, the installer's) is readable by
+  you and administrators only, so `su USER` and `sudo -u USER` cannot start it. Doctor
+  suggests `icacls` granting Users read and execute on the folder that holds every
+  version, inherited, so each update keeps it: no administrator needed. Tried with a
+  standard test account: refused before, run after, and a version folder made later
+  inherits it. Turned down: a machine-wide `scoop install -g`, which needs an
+  administrator and moves cash out of the profile.
 
 ## 10. Packaging, installing and updating
 

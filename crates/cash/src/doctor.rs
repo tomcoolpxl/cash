@@ -579,14 +579,6 @@ fn check_sudo_accounts(findings: &mut Vec<Finding>) {
     if let Ok(exe) = std::env::current_exe()
         && cash_win32::account::may_execute(&exe, None) == Some(false)
     {
-        let fix = if cash_win32::install_layout::installed_by_scoop(&exe) {
-            format!(
-                "install it for every account instead, as an administrator:\t{}",
-                typed("scoop install -g cash")
-            )
-        } else {
-            "install it for every account instead, under Program Files".to_owned()
-        };
         findings.push(Finding::note(
             format!(
                 "only you and administrators can read this cash.exe, so {} and {} cannot \
@@ -594,9 +586,27 @@ fn check_sudo_accounts(findings: &mut Vec<Finding>) {
                 typed("su USER"),
                 typed("sudo -u USER")
             ),
-            Some(fix),
+            Some(grant_to_every_account(&exe)),
         ));
     }
+}
+
+/// The command that lets every account read and run this cash: the Users group granted
+/// read and execute on the folder that holds every version (the one with `current` in it,
+/// Scoop's or the installer's), inherited, so a version installed later has it too. It
+/// needs no administrator, as the folder is the user's own.
+fn grant_to_every_account(exe: &Path) -> String {
+    let exe = std::fs::canonicalize(exe).unwrap_or_else(|_| exe.to_path_buf());
+    let root = cash_win32::install_layout::layout(&exe, cash_win32::junction::is_junction)
+        .and_then(|layout| Some(layout.current.parent()?.to_path_buf()))
+        .or_else(|| Some(exe.parent()?.to_path_buf()))
+        .unwrap_or_default();
+    // Breakable between its arguments, a narrow window being no wider than the command.
+    let folder = unbroken(&format!("'{}'", cash_win32::path::render(&root)));
+    format!(
+        "let every account run it, and each version after, as you:\t\
+         {BOLD}icacls {folder} /grant '*S-1-5-32-545:(OI)(CI)RX'{UNBOLD}"
+    )
 }
 
 /// carapace gives Tab completion, with descriptions, for the commands that bring none of
@@ -1169,7 +1179,7 @@ mod tests {
             Finding::note(
                 "only you and administrators can read this cash.exe, so su USER and sudo -u \
                  USER cannot start it as another account",
-                Some("scoop install -g cash makes it readable to every account".into()),
+                Some(grant_to_every_account(Path::new(r"C:\cash\cash.exe"))),
             ),
         ];
         for width in [40, 60, 80] {
@@ -1203,6 +1213,19 @@ mod tests {
         );
         assert!(!report.contains(NO_BREAK), "{report:?}");
         assert_eq!(pasted(path), "C:/Program\u{a0}Files/Git/usr/bin/bash.exe");
+    }
+
+    #[test]
+    fn the_grant_lets_every_account_run_the_folder_that_holds_cash() {
+        // No `current` junction here, so the folder is cash's own; Scoop's and the
+        // installer's give the folder that holds `current` instead.
+        let fix = grant_to_every_account(Path::new(r"C:\Tools\cash\cash.exe"));
+        let fix = paint(&fix, false).replace(NO_BREAK, " ");
+        assert_eq!(
+            fix,
+            "let every account run it, and each version after, as you:\t\
+             icacls 'C:/Tools/cash' /grant '*S-1-5-32-545:(OI)(CI)RX'"
+        );
     }
 
     #[test]
