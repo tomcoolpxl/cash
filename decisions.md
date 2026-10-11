@@ -568,9 +568,12 @@ folders. A `z` function, zoxide's included, comes before the builtin.
 - **The prompt names cash** (the user, 2026-10-03): `\v` and `\V` give cash's version and
   `\s` gives `cash`; `$BASH_VERSION` stays the Bash interface version (spec §4 row 44).
   Turned down: `$BASH_VERSION`'s numbers in the prompt.
-- **`complete -A service` lists Windows' services; `-o bashdefault` falls back to Bash's
-  defaults** (the user, 2026-10-11): the service names `sc` and `net start` take, and,
-  when a spec gives nothing, Bash's default candidates. Turned down: refusing both.
+- **`complete -A service` and `-o bashdefault` work as Bash's** (the user, 2026-10-11):
+  `-A service` gives the network service names of Windows' own `drivers\etc\services`
+  (`ssh`, `http`), as Bash's gives `/etc/services`', and `-o bashdefault` falls back to
+  Bash's default candidates when a spec gives nothing. Turned down: refusing both;
+  Windows' system services for `-A service`, which a Bash completion script does not
+  expect.
 - **`bind -m vi-insert` and `-m vi-command` say they are not supported** (the user,
   2026-10-11), status 1, where they were ignored in silence; cash's vi mode keeps its own
   keys. Turned down: vi keymaps of their own, a large change for few users.

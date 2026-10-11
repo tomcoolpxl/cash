@@ -1362,6 +1362,31 @@ fn compgen_wordlist_filtering() {
 }
 
 #[test]
+fn compgen_a_service_gives_the_network_services_as_git_bash_does() {
+    // Windows' own `drivers\etc\services`, a name once for each of its lines, as Git Bash
+    // 5.3 gives `ssh`, `ssdp` (tcp) and `ssdp` (udp).
+    let out = cash("compgen -A service ss");
+    assert_eq!(
+        out.stdout.lines().take(3).collect::<Vec<_>>(),
+        ["ssh", "ssdp", "ssdp"]
+    );
+    assert_eq!(out.code, 0);
+}
+
+#[test]
+fn compgen_o_bashdefault_falls_back_to_bashs_defaults() {
+    // When the spec gives nothing, Bash's own defaults: variables after `$`.
+    let out = cash(r#"CASH_BD_ONE=1 CASH_BD_TWO=2; compgen -o bashdefault -W "" -- '$CASH_BD_'"#);
+    assert_eq!(out.stdout, "$CASH_BD_ONE\n$CASH_BD_TWO");
+    // Neither file names, which are `-o default`'s, nor commands, which Bash offers only
+    // where a command goes: Git Bash gives nothing for either.
+    for word in ["Cargo", "carg"] {
+        let out = cash(&format!(r#"compgen -o bashdefault -W "" -- {word}"#));
+        assert_eq!((out.stdout.as_str(), out.code), ("", 1), "{word}");
+    }
+}
+
+#[test]
 fn complete_registration_and_query() {
     let out = cash(
         r#"

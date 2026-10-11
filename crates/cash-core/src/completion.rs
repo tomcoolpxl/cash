@@ -492,13 +492,34 @@ impl Spec {
             candidates.append(&mut dir_candidates);
         }
 
-        // If we still have no candidates, and bashdefault completions were requested, then generate
-        // those.
+        // If we still have no candidates, and bashdefault completions were requested, then
+        // generate Bash's own defaults (`bash_default_completion`): a variable after `$`, a
+        // user after `~`, a host after `@`. Not file names, which are `-o default`'s, nor
+        // commands, which Bash offers only where a command goes, which the word a
+        // compspec completes never is.
         if candidates.is_empty() && options.bash_default {
-            // TODO(completions): it's not clear what default "bash" completions means. From basic
-            // testing, this doesn't seem to include basic file and directory name
-            // completion.
-            tracing::debug!(target: trace_categories::COMPLETION, "unimplemented: complete -o bashdefault");
+            let token = context.token_to_complete;
+            if let Some(Answer::Candidates(mut variables, _)) =
+                try_get_variable_completions(shell, token)
+            {
+                candidates.append(&mut variables);
+            } else if let Some(prefix) = token
+                .strip_prefix('~')
+                .filter(|prefix| !sys::fs::contains_path_separator(prefix))
+            {
+                for user_name in users::get_all_users()? {
+                    if user_name.starts_with(prefix) {
+                        candidates.push(std::format!("~{user_name}"));
+                    }
+                }
+            } else if let Some(prefix) = token.strip_prefix('@') {
+                if let Ok(name) = sys::network::get_hostname() {
+                    let name = name.to_string_lossy();
+                    if name.starts_with(prefix) {
+                        candidates.push(std::format!("@{name}"));
+                    }
+                }
+            }
         }
 
         // If we still have no candidates, and default completions were requested, then generate
@@ -678,7 +699,12 @@ impl Spec {
                     }
                 }
                 CompleteAction::Service => {
-                    tracing::debug!(target: trace_categories::COMPLETION, "unimplemented: complete -A service");
+                    // Network service names, as Bash's from `/etc/services`.
+                    for name in cash_win32::net::service_names() {
+                        if name.starts_with(token) {
+                            candidates.push(name);
+                        }
+                    }
                 }
                 CompleteAction::SetOpt => {
                     for option in namedoptions::options(namedoptions::ShellOptionKind::SetO).iter()

@@ -1126,9 +1126,66 @@ pub fn host_names(addresses: &[IpAddr], limit: Duration) -> HashMap<IpAddr, Stri
         .collect()
 }
 
+/// Windows' own `services` file, the equivalent of `/etc/services`: `drivers\etc\services`
+/// in the system folder, which is asked of Windows (`GetSystemDirectoryW`), not assumed.
+#[must_use]
+pub fn services_file() -> Option<std::path::PathBuf> {
+    use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
+
+    let mut buffer = [0u16; 260];
+    // SAFETY: `buffer` holds `len` units; the call writes at most that and returns the count.
+    let written = unsafe {
+        GetSystemDirectoryW(
+            buffer.as_mut_ptr(),
+            u32::try_from(buffer.len()).unwrap_or(0),
+        )
+    };
+    let len = written as usize;
+    if written == 0 || len > buffer.len() {
+        return None;
+    }
+    let system = String::from_utf16_lossy(buffer.get(..len)?);
+    Some(std::path::PathBuf::from(system).join(r"drivers\etc\services"))
+}
+
+/// The service names the [`services_file`] lists, in its order.
+///
+/// A name comes once for each line (`domain` for 53/tcp and again for 53/udp): what Bash's
+/// `complete -A service` offers from `/etc/services`, `getservent`'s names without their
+/// aliases.
+#[must_use]
+pub fn service_names() -> Vec<String> {
+    let Some(text) = services_file().and_then(|file| std::fs::read_to_string(file).ok()) else {
+        return Vec::new();
+    };
+    text.lines()
+        .filter_map(|line| {
+            let mut fields = line.split('#').next().unwrap_or("").split_whitespace();
+            let name = fields.next()?;
+            fields
+                .next()
+                .filter(|spec| spec.contains('/'))
+                .map(|_| name.to_owned())
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_services_file_names_the_well_known_ports() {
+        let names = service_names();
+        for name in ["ftp", "ssh", "http"] {
+            assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
+        }
+        assert_eq!(
+            names.iter().filter(|n| *n == "domain").count(),
+            2,
+            "a name is offered once for each line, as getservent gives it"
+        );
+    }
 
     #[test]
     fn a_listener_in_this_process_is_listed_with_its_pid() {
