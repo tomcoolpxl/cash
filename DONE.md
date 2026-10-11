@@ -1448,3 +1448,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   lost its braces. `cargo fix`'s `expr_2021` fragments and `if let` rewrites were
   dropped: no macro has an arm `_` or `const {}` could now match, and no condition holds a
   temporary whose drop moved. The rest is the 2024 style's import order.
+- **UAC's prompt for `sudo` often only blinked in the taskbar** (phase 35, 2026-10-10; done
+  2026-10-11): when the asking process is not in front, Windows shows the consent dialog
+  as a flashing shield, and the user missed three prompts that way; left long enough, a
+  prompt counts as declined. As gsudo does, a thread now looks for the dialog
+  (`FindWindow("Credential Dialog Xaml Host")`) every 100 ms while the request lasts, up
+  to three seconds, and brings it to the front; `elevate` gets it too, through the same
+  `runas` call. Checked by the user from the app's terminal panel: the dialog came up and
+  was approved.

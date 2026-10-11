@@ -43,13 +43,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   words on the started cash's command line (Windows' 32,000 characters for the elevated
   side, 1,024 for the as-user side); an anonymous pipe the started cash takes, as it takes
   the standard handles, would lift the limit.
-- **UAC's prompt for `sudo` often only blinks in the taskbar** (phase 35, 2026-10-10):
-  when the asking process is not in front, Windows shows the consent dialog as a
-  flashing shield, and the user missed three prompts that way; left long enough, a
-  prompt counts as declined. gsudo (MIT) brings it forward: for a second after asking,
-  `FindWindow("Credential Dialog Xaml Host")` every 100 ms, then `SetForegroundWindow`
-  (`src/gsudo/Helpers/UACWindowFocusHelper.cs`). Do the same in
-  `cash_win32::elevate::run_elevated_here`.
 - **A bundled tool outlived its script and its pseudo console** (2026-10-10): after a
   `sudo_in_terminal` probe timed out and dropped its pseudo console, the script's last
   command, `cash.exe --invoke-bundled cat got.txt` (PID 26528, its parent gone, no

@@ -12,6 +12,8 @@
 use std::io;
 use std::os::windows::io::{FromRawHandle, OwnedHandle};
 use std::path::Path;
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::time::Duration;
 
 use windows_sys::Win32::System::Com::{
     COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
@@ -20,7 +22,9 @@ use windows_sys::Win32::UI::Shell::{
     SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
     ShellExecuteExW,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::{SW_HIDE, SW_SHOWNORMAL};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    FindWindowW, SW_HIDE, SW_SHOWNORMAL, SetForegroundWindow,
+};
 
 use crate::wide::to_wide_nul;
 
@@ -75,6 +79,14 @@ fn execute(
     directory: &Path,
     hidden: bool,
 ) -> io::Result<Option<OwnedHandle>> {
+    // Until `asking` drops with the call, UAC's dialog is brought to the front.
+    let (asking, answered) = mpsc::channel::<()>();
+    if verb == Some("runas") {
+        // Best-effort: without the thread, the dialog only blinks as before.
+        let _ = std::thread::Builder::new()
+            .name("cash-consent-forward".into())
+            .spawn(move || bring_consent_forward(&answered));
+    }
     let verb = verb.map(to_wide_nul);
     let target = to_wide_nul(target);
     let parameters = parameters.map(to_wide_nul);
@@ -82,16 +94,41 @@ fn execute(
     std::thread::Builder::new()
         .name("cash-shell-open".into())
         .spawn(move || {
-            open_on_this_thread(
+            let opened = open_on_this_thread(
                 verb.as_deref(),
                 &target,
                 parameters.as_deref(),
                 &directory,
                 hidden,
-            )
+            );
+            drop(asking);
+            opened
         })?
         .join()
         .unwrap_or_else(|_| Err(io::Error::other("opening it failed unexpectedly")))
+}
+
+/// Brings UAC's consent dialog to the front once it shows, looking every 100 ms for up to
+/// three seconds, or until `answered` says the request is over.
+///
+/// Asked for by a process whose window is not in front, and a shell in a terminal has
+/// none, Windows shows the dialog only as a shield blinking in the taskbar, and a prompt
+/// left there long enough counts as declined. The dialog is consent.exe's window, found by
+/// its class as gsudo finds it. On the secure desktop it is not found, nor needs to be.
+fn bring_consent_forward(answered: &mpsc::Receiver<()>) {
+    let class = to_wide_nul("Credential Dialog Xaml Host");
+    for _ in 0..30 {
+        // SAFETY: `class` is NUL-terminated and outlives the call; a null title matches any.
+        let window = unsafe { FindWindowW(class.as_ptr(), std::ptr::null()) };
+        if !window.is_null() {
+            // SAFETY: a window handle just found; one closed since makes the call fail.
+            unsafe { SetForegroundWindow(window) };
+            return;
+        }
+        if answered.recv_timeout(Duration::from_millis(100)) != Err(RecvTimeoutError::Timeout) {
+            return;
+        }
+    }
 }
 
 /// [`execute`], on a thread that has no COM apartment yet.
