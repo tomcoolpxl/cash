@@ -435,7 +435,7 @@ impl Settings {
                 _ => continue,
             };
             let bytes = if name == "lzma2" {
-                (lzma2_chunk(dict) << 6).min(1 << 34)
+                (lzma2_span(dict) << 6).min(1 << 34)
             } else {
                 (dict << 7).min(1 << 32)
             };
@@ -564,14 +564,25 @@ impl Settings {
                     .with_options(EncoderOptions::Lzma(params))
             }
             "lzma2" => {
-                let params = lzma_params(level, params, reduce);
-                let chunk = lzma2_chunk(u64::from(params.dict_size));
-                let threads = if reduce > chunk { self.threads } else { 1 };
+                // `c`: the block size, as 7-Zip's LZMA2 takes it (`c=64m`, `c26`);
+                // otherwise about one block per thread.
+                let block = param(params, "c")
+                    .and_then(|c| size(c, true))
+                    .filter(|&c| c > 0)
+                    .unwrap_or_else(|| {
+                        let dict = lzma_params(level, params, reduce).dict_size;
+                        lzma2_chunk(u64::from(dict), reduce, self.threads)
+                    });
+                // A block needs no dictionary larger than itself
+                // (`Lzma2EncProps_Normalize`).
+                let params = lzma_params(level, params, reduce.min(block));
+                let split = reduce > block;
+                let blocks = u32::try_from(reduce.div_ceil(block)).unwrap_or(u32::MAX);
                 EncoderConfiguration::new(EncoderMethod::LZMA2).with_options(
                     EncoderOptions::Lzma2 {
                         params,
-                        threads,
-                        chunk_size: if threads > 1 { chunk } else { 0 },
+                        threads: if split { self.threads.min(blocks) } else { 1 },
+                        chunk_size: if split { block } else { 0 },
                     },
                 )
             }
@@ -688,12 +699,33 @@ pub(super) fn lzma_params(level: u32, params: &[(String, String)], reduce: u64) 
     p
 }
 
-/// The chunk an LZMA2 thread compresses: four dictionaries, 1 MiB to 256 MiB, no less
-/// than the dictionary, in whole MiB.
-fn lzma2_chunk(dict: u64) -> u64 {
-    let min = 1u64 << 20;
-    let cs = (dict << 2).clamp(min, 1 << 28).max(dict);
-    (cs + min - 1) & !(min - 1)
+/// A reference span for sizing a solid block: four dictionaries, 1 MiB to 256 MiB, no less
+/// than the dictionary, in whole MiB — what one LZMA2 stream covers well.
+fn lzma2_span(dict: u64) -> u64 {
+    let mib = 1u64 << 20;
+    let cs = (dict << 2).clamp(mib, 1 << 28).max(dict);
+    cs.div_ceil(mib) * mib
+}
+
+/// The block an LZMA2 thread compresses: the input split into equal blocks, no more than
+/// `threads` of them and no more than one per dictionary, each at most 256 MiB, in whole
+/// MiB. An input of one dictionary or less is a single block.
+///
+/// One block per thread uses the cores with the fewest boundaries, so the least ratio is
+/// lost (a block cannot reference the one before it); one per dictionary keeps a medium
+/// file to a few. Equal blocks finish together. 7-Zip needs no such split: it runs the
+/// match finder on its own thread per block; lzma-rust2 has no such mode, so splitting
+/// into blocks is the only parallelism there is.
+fn lzma2_chunk(dict: u64, reduce: u64, threads: u32) -> u64 {
+    let mib = 1u64 << 20;
+    let blocks = reduce
+        .div_ceil(dict.max(mib))
+        .clamp(1, u64::from(threads.max(1)));
+    reduce
+        .div_ceil(blocks)
+        .div_ceil(mib)
+        .saturating_mul(mib)
+        .clamp(mib, 1 << 28)
 }
 
 /// `PPMd`'s order and memory for the level, `o` and `mem`, the memory no more than the
@@ -962,9 +994,76 @@ mod tests {
         assert_eq!(lzma_params(9, &[], u64::MAX).dict_size, 256 << 20);
         assert_eq!(lzma_params(5, &[], 31).dict_size, 4096);
         assert_eq!(ppmd_settings(5, &[], 31), (6, 1 << 16));
-        assert_eq!(lzma2_chunk(32 << 20), 128 << 20);
+        assert_eq!(lzma2_span(32 << 20), 128 << 20);
         let s = Settings::parse(&[]).unwrap();
         assert_eq!(s.block_limits(), (u64::MAX, 8 << 30));
+    }
+
+    #[test]
+    fn lzma2_splits_into_equal_blocks_one_per_thread_or_per_dictionary() {
+        let dict = 32 << 20;
+        let mib = 1 << 20;
+        // A file no larger than one dictionary is a single block.
+        assert_eq!(lzma2_chunk(dict, 20 * mib, 8), 20 * mib);
+        // A medium file splits into one block per dictionary, the blocks equal.
+        assert_eq!(lzma2_chunk(dict, 47 * mib, 8), 24 * mib); // ceil(47/32) = 2 blocks
+        assert_eq!(lzma2_chunk(dict, 148 * mib, 8), 30 * mib); // 5 blocks
+        // A large file gives each of the threads one block.
+        assert_eq!(lzma2_chunk(dict, 1024 * mib, 8), 128 * mib);
+        // The block never exceeds 256 MiB.
+        assert_eq!(lzma2_chunk(dict, 8192 * mib, 8), 256 * mib);
+    }
+
+    #[test]
+    fn a_medium_file_is_compressed_on_more_than_one_thread() {
+        let settings = Settings {
+            threads: 8,
+            ..Settings::parse(&[]).unwrap()
+        };
+        let one = settings.config("lzma2", &[], 20 << 20).unwrap();
+        let many = settings.config("lzma2", &[], 200 << 20).unwrap();
+        let threads = |config: &EncoderConfiguration| match &config.options {
+            Some(EncoderOptions::Lzma2 { threads, .. }) => *threads,
+            _ => 0,
+        };
+        assert_eq!(
+            threads(&one),
+            1,
+            "a file within the dictionary stays single"
+        );
+        assert!(
+            threads(&many) > 1,
+            "a file past the dictionary uses the threads"
+        );
+    }
+
+    #[test]
+    fn lzma2_c_sets_the_block_and_the_dictionary_fits_it() {
+        let settings = Settings {
+            threads: 8,
+            ..Settings::parse(&[]).unwrap()
+        };
+        let lzma2 = |params: &[(String, String)], reduce| match settings
+            .config("lzma2", params, reduce)
+            .unwrap()
+            .options
+        {
+            Some(EncoderOptions::Lzma2 {
+                params,
+                threads,
+                chunk_size,
+            }) => (params.dict_size, threads, chunk_size),
+            _ => (0, 0, 0),
+        };
+        let c = |v: &str| [("c".to_owned(), v.to_owned())];
+        // 100 MiB in 16 MiB blocks: 7 blocks, the dictionary cut to the block.
+        assert_eq!(lzma2(&c("16m"), 100 << 20), (16 << 20, 7, 16 << 20));
+        // A bare number is a power of two, as for `d`.
+        assert_eq!(lzma2(&c("24"), 100 << 20), (16 << 20, 7, 16 << 20));
+        // A block larger than the file leaves one stream.
+        assert_eq!(lzma2(&c("1g"), 100 << 20), (32 << 20, 1, 0));
+        // Without `c`, a 47 MiB file is two equal blocks, each its own dictionary.
+        assert_eq!(lzma2(&[], 47 << 20), (24 << 20, 2, 24 << 20));
     }
 
     #[test]

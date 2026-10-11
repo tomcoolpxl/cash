@@ -80,9 +80,12 @@ What the phases now in DONE.md left open, each where its phase says more.
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against
   Scoop's programs and WSL2's). Ahead: gzip (0.09 s against 0.4–0.5 s, 0.3 s against
   2 s), bzip2 (0.16 s against 1 s, 0.5 s against 3.3 s), zip and gzip decompressing.
-  Behind, worth work: **7z compresses at half 7-Zip's speed** (5.6 s against 2.9 s,
-  17.7 s against 8.9 s, the same sizes): 7-Zip's LZMA2 runs its match finder on a
-  thread of its own and splits large input across threads; **zstd writes files 1.5×
+  Behind, worth work: **7z compresses a file of one dictionary or less at half 7-Zip's
+  speed** (32 MiB at `-mx5`; 10.1 s against 4.4 s on a 31 MB tar, 2026-10-11, the same
+  size): 7-Zip's LZMA2 runs its match finder on a thread of its own, which lzma-rust2
+  cannot. A larger file is now split into blocks across the threads (DONE.md), which
+  costs 2–4% in size where 7-Zip loses none; a match-finder thread (7-Zip's
+  `MatchFinderMt`) in lzma-rust2 would close both; **zstd writes files 1.5×
   zstd's size, at half its speed** (ruzstd's fastest level, 5.9 MB against 4.0 MB);
   **xz is 20% slower on one block** (6.5 s against 5.4 s; lzma-rust2's encoder) and
   decodes at two thirds of XZ Utils' speed; zip on one large member has no parallelism
