@@ -206,7 +206,18 @@ mod tests {
     #[test]
     fn text_round_trips_and_an_empty_text_empties_the_clipboard() {
         let _turn = CLIPBOARD.lock().unwrap_or_else(PoisonError::into_inner);
-        let before = get_text().unwrap();
+        // The clipboard is one per desktop and shared with every program; when another
+        // holds it past cash's retries (a clipboard manager, a remote session), this test
+        // cannot run, so it skips rather than fails — the behaviour is covered when the
+        // clipboard is free.
+        let before = match get_text() {
+            Ok(before) => before,
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                eprintln!("skipped: {error}");
+                return;
+            }
+            Err(error) => panic!("read the clipboard: {error}"),
+        };
 
         let text = format!("cash clipboard test {}\r\nhéllo €\r\n", std::process::id());
         set_text(&text).unwrap();

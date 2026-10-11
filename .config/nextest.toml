@@ -152,6 +152,12 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 filter = 'binary(it) and test(/^(acceptance::starship_initialises_and_renders_a_prompt|ping::an_interrupt_prints_the_statistics|link_tools::a_folder_on_another_drive_is_an_error|kill_term::a_program_(with_a_window_is_asked_to_close|that_will_not_close_is_terminated_after_the_grace_period)|ping::an_unanswered_ping_reports_total_loss)$/)'
 success-output = "final"
 
+# The clipboard is one per desktop; another program (a clipboard manager, a remote session)
+# may hold it past cash's retries, and then this test skips with its reason rather than fail.
+[[profile.default.overrides]]
+filter = 'package(cash-win32) and test(=clipboard::tests::text_round_trips_and_an_empty_text_empties_the_clipboard)'
+success-output = "final"
+
 # sed's tests run sed processes one after another, many of them dozens each to compare
 # with GNU sed: 9 to 15 s in the full suite on an idle machine (2026-10-04), where 15 s
 # ended them; math.sed computing pi took 9 s with every core busy.
