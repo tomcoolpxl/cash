@@ -153,17 +153,6 @@ impl builtins::Command for DeclareCommand {
             return Ok(ExecutionResult::general_error());
         }
 
-        // Function tracing, a traced function inheriting the DEBUG and RETURN traps, is
-        // refused by name rather than accepted and left doing nothing.
-        if self.make_traced.to_bool() == Some(true) {
-            writeln!(
-                context.error_stream(),
-                "{}: -t: function tracing is not supported",
-                context.command_name
-            )?;
-            return Ok(ExecutionResult::general_error());
-        }
-
         let mut result = ExecutionResult::success();
         if !self.declarations.is_empty() {
             for declaration in &self.declarations {

@@ -1465,8 +1465,9 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   builtin that refuses the same day, and the 1.14.0 gate's full run, all 8,533 tests,
   left no `x.lnk`, as none of the nine release gates between had.
 - **The research documents' open questions** (found 2026-10-11 gathering decisions.md;
-  answered and built the same day, decisions.md): `declare -t` and `bind -m vi-*` are
-  refused by name where they were ignored; flock's help says the lock ends with the
+  answered and built the same day, decisions.md): `bind -m vi-*` is refused by name
+  where it was ignored (`declare -t` was too, and taken back: it works, as Bash's, and a
+  test of the RETURN trap failed in CI); flock's help says the lock ends with the
   command; `chown` and `chgrp` warn that nothing changed and return 0; `complete -A
   service` gives Windows' `drivers\etc\services` names and `-o bashdefault` Bash's
   defaults, both as Git Bash prints them; `xargs -P N` runs N at once; `logger` writes to

@@ -697,9 +697,10 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   elevated, it switches collection on for the listed connections and prints the rest.
 - **`xargs -P N` runs N commands at once** (the user, 2026-10-11), as GNU xargs does.
   Turned down: refusing N above 1.
-- **`declare -t` is refused by name** (the user, 2026-10-11), status 1, where it was
-  accepted and did nothing; function tracing is for debuggers. Turned down: implementing
-  it.
+- **`declare -t` stays, as Bash's** (2026-10-11): a traced function inherits the DEBUG
+  and RETURN traps, which cash already does (`declare -p` shows no `t`, as in Bash).
+  Refusing it was chosen the same day on a wrong report that it did nothing, built, and
+  taken back when a test of the RETURN trap failed.
 - **`logger` writes to the Application event log** (the user, 2026-10-11), under the
   source `cash`, `-p` mapped to error, warning or information. Event Viewer shows each
   entry with a "description not found" note, since registering a source needs admin.
