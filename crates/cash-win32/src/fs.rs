@@ -423,6 +423,32 @@ pub fn system_program(name: &str) -> std::path::PathBuf {
         .join(name)
 }
 
+/// Whether `path` is a program of Windows' own: one under `System32` or `SysWOW64` in
+/// the Windows folder, in any spelling (`C:/WINDOWS/system32/net.exe`, as `type` prints it).
+///
+/// cmd never expands a wildcard, so every such program reads `*` and `?` itself when it
+/// wants them (D81). `explorer.exe`, and the Python launcher's `py.exe`, which live in
+/// the Windows folder itself, are not counted.
+#[must_use]
+pub fn is_system_program(path: &Path) -> bool {
+    let root = std::env::var_os("SystemRoot").map_or_else(
+        || std::path::PathBuf::from(r"C:\Windows"),
+        std::path::PathBuf::from,
+    );
+    is_under_system_folders(&root, path)
+}
+
+/// [`is_system_program`] with the Windows folder given.
+fn is_under_system_folders(root: &Path, path: &Path) -> bool {
+    let spelled = |path: &Path| path.to_string_lossy().replace('/', "\\").to_lowercase();
+    let path = spelled(path);
+    ["System32", "SysWOW64"].into_iter().any(|folder| {
+        let mut prefix = spelled(&root.join(folder));
+        prefix.push('\\');
+        path.starts_with(&prefix)
+    })
+}
+
 /// What identifies a file across its names, and how many it has.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileInfo {
@@ -511,4 +537,44 @@ pub fn recycle(path: &Path) -> std::io::Result<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod system_program_tests {
+    use super::is_under_system_folders;
+    use std::path::Path;
+
+    #[test]
+    fn system32_and_syswow64_in_any_spelling() {
+        let root = Path::new(r"C:\WINDOWS");
+        for program in [
+            "C:/WINDOWS/system32/net.exe",
+            r"C:\Windows\System32\OpenSSH\scp.exe",
+            r"c:\windows\syswow64\cmd.exe",
+            r"C:\WINDOWS/System32/cmd.exe",
+        ] {
+            assert!(
+                is_under_system_folders(root, Path::new(program)),
+                "{program}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_windows_folder_itself_and_other_folders_are_not() {
+        let root = Path::new(r"C:\Windows");
+        for program in [
+            r"C:\Windows\explorer.exe",
+            r"C:\Windows\py.exe",
+            r"C:\Windows\System32x\x.exe",
+            r"C:\Program Files\Git\usr\bin\scp.exe",
+            r"D:\Windows\System32\net.exe",
+            "net.exe",
+        ] {
+            assert!(
+                !is_under_system_folders(root, Path::new(program)),
+                "{program}"
+            );
+        }
+    }
 }

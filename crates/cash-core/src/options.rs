@@ -184,6 +184,9 @@ pub struct RuntimeOptions {
     /// `winpaths` (cash, D53): an unquoted word starting `C:\` or `\\server` keeps its
     /// backslashes.
     pub windows_drive_paths: bool,
+    /// `winglob` (cash, D81): a program in `System32` or `SysWOW64` gets its wildcards
+    /// as typed, and expands them itself, as it does under cmd.
+    pub system_programs_glob: bool,
     /// `xpg_echo`
     pub echo_builtin_expands_escape_sequences: bool,
 
@@ -266,6 +269,9 @@ impl RuntimeOptions {
             // D53: at the prompt, a pasted or typed `C:\Users\me` means the path. Scripts
             // keep bash's lexing exactly.
             options.windows_drive_paths = true;
+            // D81: at the prompt, `net user NAME *` reaches net as typed; Windows' own
+            // programs glob for themselves. Scripts keep bash's globbing.
+            options.system_programs_glob = true;
         }
 
         if create_options.posix {

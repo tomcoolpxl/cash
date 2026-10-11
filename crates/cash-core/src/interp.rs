@@ -18,6 +18,7 @@ use crate::variables::{
 };
 use crate::{
     ShellFd, error, expansion, extendedtests, extensions, ioutils, jobs, openfiles, sys, timing,
+    windows_programs,
 };
 
 /// Encapsulates the context of execution in a command pipeline.
@@ -1841,6 +1842,8 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         let mut assignments = vec![];
         let mut args: Vec<CommandArg> = vec![];
         let mut command_takes_assignments = false;
+        // D81: who globs the words after the command is decided once it is known.
+        let mut globbing = windows_programs::Globbing::Undecided;
 
         // Capture the status change count before expansion, so we can detect
         // if expansion (e.g., command substitution) set an exit status.
@@ -1917,10 +1920,12 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                             // This *looks* like an assignment, but it's really a string we should
                             // fully treat as a regular looking
                             // argument.
-                            let mut next_args = expansion::full_expand_and_split_command_word(
+                            let mut next_args = expand_command_word(
                                 &mut context.shell,
                                 &params,
                                 word,
+                                &args,
+                                &mut globbing,
                             )
                             .await?
                             .into_iter()
@@ -1934,12 +1939,9 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                     }
                 }
                 CommandPrefixOrSuffixItem::Word(arg) => {
-                    let mut next_args = expansion::full_expand_and_split_command_word(
-                        &mut context.shell,
-                        &params,
-                        arg,
-                    )
-                    .await?;
+                    let mut next_args =
+                        expand_command_word(&mut context.shell, &params, arg, &args, &mut globbing)
+                            .await?;
                     // A process substitution inside the word lasts as long as the command.
                     params
                         .substitution_ends
@@ -2963,6 +2965,28 @@ fn takes_substitution_pipes(
         .builtins()
         .get(name.as_ref())
         .is_some_and(|builtin| !builtin.disabled && builtin.substitution_pipes)
+}
+
+/// Expands a word of a simple command whose words so far are `args`: with no pathname
+/// expansion once they name a program that globs for itself (D81, `shopt winglob`).
+async fn expand_command_word<SE: extensions::ShellExtensions>(
+    shell: &mut Shell<SE>,
+    params: &ExecutionParameters,
+    word: impl AsRef<str>,
+    args: &[CommandArg],
+    globbing: &mut windows_programs::Globbing,
+) -> Result<Vec<String>, error::Error> {
+    if *globbing == windows_programs::Globbing::Undecided
+        && !args.is_empty()
+        && shell.options().system_programs_glob
+    {
+        *globbing = windows_programs::who_globs(shell, args);
+    }
+    if *globbing == windows_programs::Globbing::Program {
+        expansion::full_expand_and_split_command_word_unglobbed(shell, params, word).await
+    } else {
+        expansion::full_expand_and_split_command_word(shell, params, word).await
+    }
 }
 
 /// Runs a process substitution's commands on a thread of their own, on the shell's

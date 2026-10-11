@@ -162,6 +162,11 @@ pub struct ContentOptions {
     pub colorized: bool,
 }
 
+/// Where the command a builtin runs is among its words (D81): given the words after the
+/// builtin's name, the index of the command's name, or `None` when there is none or it
+/// cannot be told yet.
+pub type CommandOperandFinder = fn(&[String]) -> Option<usize>;
+
 /// Encapsulates a registration for a built-in command.
 #[derive(Clone)]
 pub struct Registration<SE: extensions::ShellExtensions> {
@@ -190,6 +195,11 @@ pub struct Registration<SE: extensions::ShellExtensions> {
     /// opens, `cash_win32::pipe::open_output`) or does not open it, and runs no other
     /// command with it.
     pub substitution_pipes: bool,
+
+    /// Where the command this builtin runs is among its words, for the shell to know
+    /// what a line runs before it expands the rest (D81); `None` (`sudo -K`,
+    /// `command -v`) when there is none, or it cannot be told yet.
+    pub command_operand: Option<CommandOperandFinder>,
 }
 
 impl<SE: extensions::ShellExtensions> Registration<SE> {
@@ -209,6 +219,16 @@ impl<SE: extensions::ShellExtensions> Registration<SE> {
     pub const fn with_substitution_files(self) -> Self {
         Self {
             substitution_pipes: false,
+            ..self
+        }
+    }
+
+    /// Updates the given registration for a builtin that runs the command among its
+    /// words, with `find` saying where (D81).
+    #[must_use]
+    pub const fn runs_command(self, find: CommandOperandFinder) -> Self {
+        Self {
+            command_operand: Some(find),
             ..self
         }
     }
@@ -426,6 +446,7 @@ pub fn simple_builtin<B: SimpleCommand + Send + Sync, SE: extensions::ShellExten
         special_builtin: false,
         declaration_builtin: false,
         substitution_pipes: true,
+        command_operand: None,
     }
 }
 
@@ -440,6 +461,7 @@ pub fn builtin<B: Command + Send + Sync, SE: extensions::ShellExtensions>() -> R
         special_builtin: false,
         declaration_builtin: false,
         substitution_pipes: true,
+        command_operand: None,
     }
 }
 
@@ -456,6 +478,7 @@ pub fn decl_builtin<B: DeclarationCommand + Send + Sync, SE: extensions::ShellEx
         special_builtin: false,
         declaration_builtin: true,
         substitution_pipes: true,
+        command_operand: None,
     }
 }
 
@@ -478,6 +501,7 @@ pub fn raw_arg_builtin<
         special_builtin: false,
         declaration_builtin: true,
         substitution_pipes: true,
+        command_operand: None,
     }
 }
 

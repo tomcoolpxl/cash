@@ -100,6 +100,14 @@ fn parse_adjustment(text: &str) -> Result<i64, NiceRefused> {
     Ok(value.clamp(-39, 39))
 }
 
+/// Where the command is among `nice`'s words (D81): after its options, when it runs one.
+pub(crate) fn command_operand(words: &[String]) -> Option<usize> {
+    match parse_nice(words) {
+        Ok(NiceRequest::Run { command, .. }) => words.len().checked_sub(command.len()),
+        _ => None,
+    }
+}
+
 /// Reads `nice`'s command line as GNU's `getopt_long("+n:")` loop with the old `-N`
 /// form does: options stop at the first word that is not one, the last `-n` wins, and
 /// an adjustment out of range is brought into it silently.
@@ -575,6 +583,15 @@ mod tests {
 
     fn words(args: &[&str]) -> Vec<String> {
         args.iter().map(|&a| a.to_owned()).collect()
+    }
+
+    #[test]
+    fn the_command_is_found_after_the_options() {
+        assert_eq!(command_operand(&words(&["cmd", "/c", "echo"])), Some(0));
+        assert_eq!(command_operand(&words(&["-n", "5", "cmd"])), Some(2));
+        assert_eq!(command_operand(&words(&["-10", "--", "-x"])), Some(2));
+        assert_eq!(command_operand(&words(&["-n", "5"])), None);
+        assert_eq!(command_operand(&words(&[])), None);
     }
 
     fn nice(args: &[&str]) -> NiceRequest {

@@ -2893,6 +2893,45 @@ on a thread of cash's own process. Decided with the user on 2026-10-03:
   twice as large: a stage queued behind a full pool, waited for by the stages that hold
   it, would never start.
 
+### D81 — `winglob`: at the prompt, a program of Windows' own globs for itself
+
+**Status: chosen by the user on 2026-10-11**, by pick list (DONE.md phase 35).
+
+`net user NAME * /add`, a line that works in cmd and PowerShell, fails in Git Bash and
+failed in cash the same way: in a folder with files, `*` becomes their names, `net` is
+handed `net user NAME AppData Documents … /add` and prints its syntax. Quoting the star
+is the bash answer, and stays right in a script; at the prompt the line comes from a
+Windows habit, as a pasted path does (D53).
+
+The fix has one fact behind it: cmd never expands a wildcard, so every command-line
+program Windows ships was written to read `*` and `?` itself when it wants them
+(`xcopy`, `findstr`, `taskkill /im note*`, `forfiles /m`, `icacls`; OpenSSH's `scp`,
+measured: a literal `*.txt` copied both files), or to mean something else by them (`net
+user NAME *` asks for the password). The shell's globbing is never needed by such a
+program and sometimes wrong: `xcopy *.txt d\` and `forfiles /m *.txt` fail as `net`
+did. A program installed anywhere else, `python`, `node`, `rg` or `code`, needs the
+shell's globbing, as it has it in Git Bash.
+
+`shopt winglob`: when a simple command's name resolves, as the shell will resolve it to
+run it, to a program under the Windows folder's `System32` or `SysWOW64` (at any depth,
+so OpenSSH and `wbem` count; not the Windows folder itself, where `explorer.exe` and the
+Python launcher's `py.exe` live), the words after it are not pathname-expanded. The other
+expansions happen as ever, and `nullglob` and `failglob` have nothing to act on. A
+builtin that runs the command among its words is looked through to it, each by its own
+parsing (`Registration::command_operand`): `sudo`, so `sudo net user NAME *` works,
+`command`, `exec`, `nohup`, `nice`, `env` and `timeout`. A function of the program's
+name, and any other builtin, is served as bash serves them. The decision is made once
+per command, before its second word is expanded, from the words expanded so far, so
+`sudo $tool …` is looked through once `$tool` is known; the lookup is the one `hash`
+caches.
+
+Like `winpaths`, it is a divergence a script must not meet, and the same line can mean
+different things typed and in a script: **on by default in interactive shells and off
+otherwise**; `shopt -u winglob` in `.cashrc` turns it off at the prompt too, and
+`shopt -s winglob` in a script turns it on there. The costs: `cmd /c echo *` prints `*`
+at the prompt, as cmd itself would, and a Windows program that neither globs nor needs
+to (`notepad *.txt`) gets the star it would get from cmd.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -2948,6 +2987,7 @@ someone who expected bash, so additions need to earn their place.
 | 43 | With `HISTSIZE` and `HISTFILESIZE` unset, history is not cut: every line is kept, in memory and in `~/.cash_history`, until one of them is set | Bash sets both to 500 when they are unset; following it would cut an existing long `~/.cash_history` to 500 entries at the next start (the user, 2026-10-03) | — |
 | 44 | `\v` and `\V` in a prompt give cash's version (`1.3`, `1.3.13`), as `\s` gives `cash`, while `$BASH_VERSION` says `5.3.15(1)-release` | A prompt in cash is about cash; Bash's give Bash's version (the user, 2026-10-03) | — |
 | 45 | In a folder whose path is longer than 258 characters, a program starts in the folder's 8.3 short name, and sees that as its working directory; with no short name that fits, it fails with status 126 | Windows starts no process in a longer one; Git Bash's native programs fail there (the user, 2026-10-04) | D29 |
+| 46 | At the interactive prompt, the words after a program in System32 or SysWOW64 are not globbed (`shopt winglob`, off in scripts): `net user NAME * /add` reaches `net` as typed | cmd never globs, so every program Windows ships reads `*` itself or means something else by it; bash's globbing handed `net` the folder's file names (the user, 2026-10-11) | D81 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

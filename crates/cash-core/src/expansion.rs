@@ -651,6 +651,20 @@ pub(crate) async fn full_expand_and_split_command_word(
     expander.full_expand_with_splitting(word_str.as_ref()).await
 }
 
+/// [`full_expand_and_split_command_word`] with no pathname expansion: for the words after
+/// a program that globs for itself (D81, `shopt winglob`).
+pub(crate) async fn full_expand_and_split_command_word_unglobbed(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    word_str: impl AsRef<str>,
+) -> Result<Vec<String>, error::Error> {
+    let mut expander = WordExpander::new(shell, params);
+    expander.parser_options.tilde_expansion_in_assignment_words =
+        !expander.parser_options.posix_mode;
+    expander.disable_pathname_expansion = true;
+    expander.full_expand_with_splitting(word_str.as_ref()).await
+}
+
 /// [`basic_expand_word`] for the word a `case` tests, with the tilde expansion of
 /// [`full_expand_and_split_command_word`].
 pub(crate) async fn basic_expand_command_word(

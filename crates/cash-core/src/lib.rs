@@ -82,6 +82,7 @@ pub mod trace_categories;
 pub mod traps;
 pub mod variables;
 mod wellknownvars;
+mod windows_programs;
 
 /// Re-export parser types used in core definitions.
 pub mod parser {

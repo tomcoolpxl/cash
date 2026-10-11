@@ -1313,6 +1313,15 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    kept for scripts with no cache behind them. Test:
    `sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing`.
 
+9. **`net user NAME * /add` fails: the star becomes the folder's files** (the user,
+   2026-10-11, by pick list; built the same day): a line that works in cmd and PowerShell
+   failed in cash as it fails in Git Bash. `shopt winglob` (D81), on at the prompt and off
+   in scripts like `winpaths`: when the command resolves to a program under `System32` or
+   `SysWOW64`, whose programs read `*` and `?` themselves since cmd never globs for them,
+   the words after it are not pathname-expanded; `sudo`, `command`, `exec`, `nohup`,
+   `nice`, `env` and `timeout` are looked through to the command they run, each by its
+   own parsing (`Registration::command_operand`). Tests: `it/winglob.rs`.
+
 ---
 
 ## Found along the way, done

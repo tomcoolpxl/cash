@@ -391,6 +391,28 @@ struct SudoOptions {
     help: bool,
 }
 
+/// Where the command is among `sudo`'s words (D81): after its options and the variables
+/// that go with the command; `None` when `sudo` runs a shell, or no command at all.
+pub(crate) fn sudo_command_operand(words: &[String]) -> Option<usize> {
+    let (options, start) = parse_sudo(words).ok()?;
+    if options.login
+        || options.shell
+        || options.validate
+        || options.reset
+        || options.remove
+        || options.list
+        || options.edit
+        || options.help
+    {
+        return None;
+    }
+    let at = words
+        .get(start..)?
+        .iter()
+        .position(|word| !is_assignment(word))?;
+    Some(start + at)
+}
+
 /// `sudo`'s options at the start of `words`, and the index of the first word after them
 /// (a variable or the command); an error names an option it does not know or one
 /// without its value. Short options combine (`-nE`), and `-u` takes the rest of its word
@@ -1552,6 +1574,20 @@ mod tests {
 
     fn words(text: &str) -> Vec<String> {
         text.split_whitespace().map(String::from).collect()
+    }
+
+    #[test]
+    fn the_command_is_found_after_the_options_and_variables() {
+        assert_eq!(sudo_command_operand(&words("net user x *")), Some(0));
+        assert_eq!(
+            sudo_command_operand(&words("-nE -u alice FOO=1 net user")),
+            Some(4)
+        );
+        assert_eq!(sudo_command_operand(&words("-ubob -- -x")), Some(2));
+        assert_eq!(sudo_command_operand(&words("-s net")), None);
+        assert_eq!(sudo_command_operand(&words("-K")), None);
+        assert_eq!(sudo_command_operand(&words("-u alice")), None);
+        assert_eq!(sudo_command_operand(&words("-z net")), None);
     }
 
     #[test]

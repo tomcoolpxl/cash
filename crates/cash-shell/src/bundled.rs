@@ -609,7 +609,37 @@ fn shim_registration<SE: ShellExtensions>(name: &str) -> Registration<SE> {
         special_builtin: false,
         declaration_builtin: false,
         substitution_pipes: SUBSTITUTION_PIPES.contains(&name),
+        command_operand: command_operand_of(name),
     }
+}
+
+/// How the shell finds the command among the words of a bundled tool that runs one
+/// (D81): `env` and `timeout`, through the parsing the MSYS2 relay uses.
+fn command_operand_of(name: &str) -> Option<cash_core::builtins::CommandOperandFinder> {
+    #[cfg(feature = "bundled-coreutils")]
+    {
+        match name {
+            "env" => return Some(|words| coreutils_command_operand("env", words)),
+            "timeout" => return Some(|words| coreutils_command_operand("timeout", words)),
+            _ => {}
+        }
+    }
+    let _ = name;
+    None
+}
+
+/// The index among `words`, the words after `tool`'s name, of the command `tool` runs:
+/// `None` when it runs none, or an `env -S` string holds it in words the shell never saw.
+#[cfg(feature = "bundled-coreutils")]
+fn coreutils_command_operand(tool: &str, words: &[String]) -> Option<usize> {
+    let argv: Vec<OsString> = std::iter::once(OsString::from(tool))
+        .chain(words.iter().map(OsString::from))
+        .collect();
+    let operand = cash_coreutils_builtins::command_operand(&argv)?;
+    if operand.args.len() != argv.len() {
+        return None;
+    }
+    operand.index.checked_sub(1)
 }
 
 /// The bundled tools that open a file they are to write as a pipe may be opened, when it

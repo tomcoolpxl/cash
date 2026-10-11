@@ -27,6 +27,24 @@ pub(crate) struct CommandCommand {
     pub command_and_args: Vec<String>,
 }
 
+/// Where the command is among `command`'s words, for the shell to know what a line runs
+/// before it expands the rest (D81): the first word that is not an option; `None` with
+/// `-v` or `-V`, which run nothing.
+pub(crate) fn command_operand(words: &[String]) -> Option<usize> {
+    for (index, word) in words.iter().enumerate() {
+        match word.as_str() {
+            "--" => return words.get(index + 1).map(|_| index + 1),
+            option if option.starts_with('-') && option.len() > 1 => {
+                if option.contains(['v', 'V']) {
+                    return None;
+                }
+            }
+            _ => return Some(index),
+        }
+    }
+    None
+}
+
 impl CommandCommand {
     fn command(&self) -> Option<&str> {
         self.command_and_args.first().map(|s| s.as_str())
@@ -159,5 +177,29 @@ impl builtins::Command for CommandCommand {
         };
 
         self.execute_command(context, command_name).await
+    }
+}
+
+#[cfg(test)]
+mod command_operand_tests {
+    use super::command_operand;
+
+    fn words(text: &str) -> Vec<String> {
+        text.split_whitespace().map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn the_first_word_after_the_options_is_the_command() {
+        assert_eq!(command_operand(&words("net user x *")), Some(0));
+        assert_eq!(command_operand(&words("-p net user")), Some(1));
+        assert_eq!(command_operand(&words("-p -- -net")), Some(2));
+    }
+
+    #[test]
+    fn a_description_runs_nothing() {
+        assert_eq!(command_operand(&words("-v net")), None);
+        assert_eq!(command_operand(&words("-pV net")), None);
+        assert_eq!(command_operand(&words("-p")), None);
+        assert_eq!(command_operand(&words("")), None);
     }
 }

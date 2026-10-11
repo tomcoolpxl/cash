@@ -876,6 +876,13 @@ static SHOPT_OPTIONS: LazyLock<HashMap<&'static str, ShellOptionDef>> = LazyLock
             ),
         ),
         (
+            "winglob",
+            ShellOptionDef::new(
+                |options| options.system_programs_glob,
+                |options, value| options.system_programs_glob = value,
+            ),
+        ),
+        (
             "winpaths",
             ShellOptionDef::new(
                 |options| options.windows_drive_paths,

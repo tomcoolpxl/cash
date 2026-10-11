@@ -59,7 +59,7 @@ cash's own:
 
 ## Changing the running shell
 
-- `shopt` and `set -o`: Bash's options, plus cash's `winpaths` (see `help paths`).
-  Globbing ignores case unless `shopt -u nocaseglob`.
+- `shopt` and `set -o`: Bash's options, plus cash's `winpaths` (see `help paths`) and
+  `winglob` (see `help differences`). Globbing ignores case unless `shopt -u nocaseglob`.
 - `cashctl gui-apps close`: GUI programs close when cash exits, for this session;
   `cashctl gui-apps outlive` is the default (see `help job-control`).

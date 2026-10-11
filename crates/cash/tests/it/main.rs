@@ -231,6 +231,7 @@ mod tree_builtin;
 // `watch`: procps's options and exits, and the live screen on a pseudo console.
 mod watch_builtin;
 mod where_command;
+mod winglob;
 mod winpaths;
 // `xxd`, vim's, against its golden output: the dump, `-i`, `-p`, `-a`, colour and `-r`.
 mod xxd_builtin;

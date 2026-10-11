@@ -30,6 +30,16 @@ pub(crate) struct NohupCommand {
     command: Vec<String>,
 }
 
+/// Where the command is among `nohup`'s words (D81): the first, unless it asks for help
+/// or the version.
+pub(crate) fn command_operand(words: &[String]) -> Option<usize> {
+    match words.first()?.as_str() {
+        "--" => words.get(1).map(|_| 1),
+        word if word.starts_with("--") => None,
+        _ => Some(0),
+    }
+}
+
 impl builtins::Command for NohupCommand {
     type Error = cash_core::Error;
 
@@ -106,4 +116,20 @@ fn open_nohup_out<SE: cash_core::ShellExtensions>(
             open(PathBuf::from(home.as_ref()).join("nohup.out"))
         })
         .map(OpenFile::from)
+}
+
+#[cfg(test)]
+mod command_operand_tests {
+    use super::command_operand;
+
+    #[test]
+    fn the_first_word_is_the_command_unless_it_asks_for_help() {
+        let words =
+            |text: &str| -> Vec<String> { text.split_whitespace().map(str::to_owned).collect() };
+        assert_eq!(command_operand(&words("net user x *")), Some(0));
+        assert_eq!(command_operand(&words("-x y")), Some(0));
+        assert_eq!(command_operand(&words("-- --help")), Some(1));
+        assert_eq!(command_operand(&words("--help")), None);
+        assert_eq!(command_operand(&words("")), None);
+    }
 }

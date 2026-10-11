@@ -67,7 +67,8 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "exec".into(),
         builtin::<exec::ExecCommand, SE>()
             .special()
-            .with_substitution_files(),
+            .with_substitution_files()
+            .runs_command(exec::command_operand),
     );
     #[cfg(feature = "builtin.exit")]
     m.insert("exit".into(), builtin::<exit::ExitCommand, SE>().special());
@@ -120,7 +121,9 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     #[cfg(feature = "builtin.command")]
     m.insert(
         "command".into(),
-        builtin::<command::CommandCommand, SE>().with_substitution_files(),
+        builtin::<command::CommandCommand, SE>()
+            .with_substitution_files()
+            .runs_command(command::command_operand),
     );
     #[cfg(feature = "builtin.false")]
     m.insert("false".into(), simple_builtin::<false_::FalseCommand, SE>());
@@ -276,7 +279,9 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     );
     m.insert(
         "sudo".into(),
-        builtin::<win::SudoCommand, SE>().with_substitution_files(),
+        builtin::<win::SudoCommand, SE>()
+            .with_substitution_files()
+            .runs_command(win::sudo_command_operand),
     );
     m.insert("su".into(), builtin::<win::SuCommand, SE>());
     m.insert("sudoedit".into(), builtin::<win::SudoeditCommand, SE>());
@@ -284,7 +289,9 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("free".into(), builtin::<free::FreeCommand, SE>());
     m.insert(
         "nice".into(),
-        builtin::<nice::NiceCommand, SE>().with_substitution_files(),
+        builtin::<nice::NiceCommand, SE>()
+            .with_substitution_files()
+            .runs_command(nice::command_operand),
     );
     m.insert("renice".into(), builtin::<nice::ReniceCommand, SE>());
     m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
@@ -459,7 +466,9 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("stat".into(), builtin::<stat::StatCommand, SE>());
     m.insert(
         "nohup".into(),
-        builtin::<nohup::NohupCommand, SE>().with_substitution_files(),
+        builtin::<nohup::NohupCommand, SE>()
+            .with_substitution_files()
+            .runs_command(nohup::command_operand),
     );
     m.insert(
         "install".into(),

@@ -105,6 +105,9 @@ and in the fewest places it can.
   `~/.cash_history`.
 - `\v` and `\V` in a prompt give cash's version; `$BASH_VERSION` is Bash's.
 - Tab completes a typed `*` or `?` as a glob: no Windows file name can hold them.
+- At the prompt, a program of Windows' own (`net`, `xcopy`, `taskkill`, `cmd`: anything
+  in System32) gets `*` and `?` as typed, as it does from cmd, which never globs; a
+  program anywhere else gets the shell's globbing (`shopt winglob`; off in scripts).
 - `Ctrl-R` opens a list of the history to pick from, not Readline's search as you type;
   `bind '"\C-r": reverse-search-history'` puts the search back (see `help keys`).
 - `exec -a NAME` and `exec -l` are refused for programs other than cash: Windows cannot

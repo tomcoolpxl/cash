@@ -24,6 +24,25 @@ pub(crate) struct ExecCommand {
     args: Vec<String>,
 }
 
+/// Where the command is among `exec`'s words (D81): the first word after its options,
+/// `-a` taking the rest of its word or the next one as the name.
+pub(crate) fn command_operand(words: &[String]) -> Option<usize> {
+    let mut index = 0;
+    while let Some(word) = words.get(index) {
+        index += 1;
+        match word.as_str() {
+            "--" => return words.get(index).map(|_| index),
+            option if option.starts_with('-') && option.len() > 1 => {
+                if option.ends_with('a') {
+                    index += 1;
+                }
+            }
+            _ => return Some(index - 1),
+        }
+    }
+    None
+}
+
 impl builtins::Command for ExecCommand {
     type Error = cash_core::Error;
 
@@ -113,5 +132,31 @@ impl builtins::Command for ExecCommand {
         let mut result = ExecutionResult::new(cash_win32::exit::from_windows(code as u32));
         result.next_control_flow = cash_core::ExecutionControlFlow::ExitShell;
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod command_operand_tests {
+    use super::command_operand;
+
+    fn words(text: &str) -> Vec<String> {
+        text.split_whitespace().map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn the_first_word_after_the_options_is_the_command() {
+        assert_eq!(command_operand(&words("net user x *")), Some(0));
+        assert_eq!(command_operand(&words("-c -l net")), Some(2));
+        assert_eq!(command_operand(&words("-cl net")), Some(1));
+        assert_eq!(command_operand(&words("-- -net")), Some(1));
+        assert_eq!(command_operand(&words("-c")), None);
+    }
+
+    #[test]
+    fn a_takes_a_name_from_its_word_or_the_next() {
+        assert_eq!(command_operand(&words("-a sh net")), Some(2));
+        assert_eq!(command_operand(&words("-la sh net")), Some(2));
+        assert_eq!(command_operand(&words("-ash net")), Some(1));
+        assert_eq!(command_operand(&words("-a")), None);
     }
 }
