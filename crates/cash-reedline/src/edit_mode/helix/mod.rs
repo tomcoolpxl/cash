@@ -12,8 +12,8 @@ use strum::EnumString;
 use super::{is_plain_char, is_text_char, parse_non_key_event};
 
 use crate::{
-    enums::EventStatus, Direction, EditCommand, EditMode, FindStop, Granularity, Keybindings,
-    MotionTarget, PromptEditMode, PromptHelixMode, ReedlineEvent, WordEdge, WordKind,
+    Direction, EditCommand, EditMode, FindStop, Granularity, Keybindings, MotionTarget,
+    PromptEditMode, PromptHelixMode, ReedlineEvent, WordEdge, WordKind, enums::EventStatus,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]

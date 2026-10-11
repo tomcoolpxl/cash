@@ -1,8 +1,8 @@
 use crate::{
+    Hinter, History,
     hinter::get_first_token,
     history::SearchQuery,
     result::{ReedlineError, ReedlineErrorVariants::HistoryFeatureUnsupported},
-    Hinter, History,
 };
 use nu_ansi_term::{Color, Style};
 

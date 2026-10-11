@@ -7,9 +7,12 @@ use std::{collections::HashMap, ops::ControlFlow, path::PathBuf};
 use itertools::Itertools;
 use nu_ansi_term::{Color, Style};
 
-use crate::{enums::ReedlineRawEvent, CursorConfig};
+use crate::{CursorConfig, enums::ReedlineRawEvent};
 use {
     crate::{
+        AbbrExpandContext, Direction, EditCommand, ExampleHighlighter, Highlighter, LineBuffer,
+        Menu, MenuEvent, MouseButton, Prompt, PromptHistorySearch, ReedlineMenu, Signal,
+        UndoBehavior, ValidationResult, Validator,
         completion::{Completer, CompletionOrigin, CompletionStatus, DefaultCompleter},
         core_editor::Editor,
         edit_mode::{EditMode, Emacs},
@@ -29,15 +32,13 @@ use {
             semantic_prompt::{Osc133ClickEventsMarkers, SemanticPromptMarkers},
         },
         utils::text_manipulation,
-        AbbrExpandContext, Direction, EditCommand, ExampleHighlighter, Highlighter, LineBuffer,
-        Menu, MenuEvent, MouseButton, Prompt, PromptHistorySearch, ReedlineMenu, Signal,
-        UndoBehavior, ValidationResult, Validator,
     },
     crossterm::{
+        QueueableCommand,
         cursor::{SetCursorStyle, Show},
         event,
         event::{Event, KeyCode, KeyEvent, KeyModifiers},
-        terminal, QueueableCommand,
+        terminal,
     },
     std::{
         fs::File,
@@ -46,8 +47,8 @@ use {
         io::Write,
         process::Command,
         sync::{
-            atomic::{AtomicBool, Ordering},
             Arc,
+            atomic::{AtomicBool, Ordering},
         },
         time::Duration,
         time::SystemTime,
@@ -2295,7 +2296,7 @@ impl Reedline {
 
     fn open_editor(&mut self) -> Result<()> {
         match &mut self.buffer_editor {
-            Some(BufferEditor {
+            &mut Some(BufferEditor {
                 ref mut command,
                 ref temp_file,
             }) => {
@@ -3368,8 +3369,8 @@ mod tests {
     fn repaint_signal_is_independent_of_break_signal() {
         // The two out-of-band triggers must not interfere: arming a repaint
         // request must not be mistaken for a break, and vice versa.
-        use std::sync::atomic::AtomicBool;
         use std::sync::Arc;
+        use std::sync::atomic::AtomicBool;
 
         let mut reedline = Reedline::create().with_break_signal(Arc::new(AtomicBool::new(false)));
         let repaint = reedline.repaint_signal();

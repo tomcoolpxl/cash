@@ -27,8 +27,8 @@ manifests ask for, `use-dev-tty` and `libc` among them, though they do nothing h
 - `#rrggbb` colours are parsed as one number, not sliced.
 - **Lints and edition.** The workspace's lints apply; the style ones crossterm was not
   written to are allowed in `src/lib.rs`, its undocumented public API among them, as for
-  `cash-sed`. The 2021 edition stays until moving to the workspace's is a change of its
-  own.
+  `cash-sed`. The edition is the workspace's, 2024 (2026-10-11): its colour test marks
+  its changes to the environment unsafe, and the code is in the 2024 style.
 - Its colour tests turn colour on themselves, so `NO_COLOR` in a developer's shell does
   not fail them, and `test_parse_ansi_bg` tests the background, as its name says.
 

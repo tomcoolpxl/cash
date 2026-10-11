@@ -1,6 +1,6 @@
 use crate::{
-    default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
-    Keybindings,
+    Keybindings, default_emacs_keybindings, default_vi_insert_keybindings,
+    default_vi_normal_keybindings,
 };
 use crossterm::event::KeyCode;
 use std::fmt::{Display, Formatter};

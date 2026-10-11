@@ -4,8 +4,7 @@ description = "The line editor of cash's prompt, taken from reedline 0.51.0 and 
 version.workspace = true
 authors.workspace = true
 categories.workspace = true
-# Reedline's edition, kept until the move to the workspace's is a change of its own.
-edition = "2021"
+edition.workspace = true
 keywords.workspace = true
 license = "MIT"
 readme = "README.md"

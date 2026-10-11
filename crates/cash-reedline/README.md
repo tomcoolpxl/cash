@@ -29,8 +29,10 @@ cash's code, its tests and the examples in its documentation say `reedline::`.
   `EditType`, `EventStatus`, `MenuSettings`, `PainterSuspendedState`), as the workspace's
   `unnameable_types` asks, with documentation.
 - **Lints and edition.** The workspace's lints apply; the style ones reedline was not
-  written to are allowed in `src/lib.rs`, as for `cash-sed`. The 2021 edition stays until
-  moving to the workspace's is a change of its own.
+  written to are allowed in `src/lib.rs`, as for `cash-sed`. The edition is the
+  workspace's, 2024 (2026-10-11): one returned iterator keeps 2021's captures
+  (`+ use<>`), one pattern derefs before its `ref` bindings, and the code is in the 2024
+  style.
 - A test of crossterm's colour codes asks for colour, so `NO_COLOR` in a developer's
   shell no longer fails it.
 

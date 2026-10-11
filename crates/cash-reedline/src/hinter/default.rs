@@ -1,4 +1,4 @@
-use crate::{hinter::get_first_token, history::SearchQuery, Hinter, History};
+use crate::{Hinter, History, hinter::get_first_token, history::SearchQuery};
 use nu_ansi_term::{Color, Style};
 
 /// A hinter that uses the completions or the history to show a hint to the user

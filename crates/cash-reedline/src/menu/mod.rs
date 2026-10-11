@@ -4,9 +4,9 @@ mod ide_menu;
 mod list_menu;
 pub mod menu_functions;
 
-use crate::core_editor::Editor;
 use crate::History;
-use crate::{completion::history::HistoryCompleter, painting::Painter, Completer, Suggestion};
+use crate::core_editor::Editor;
+use crate::{Completer, Suggestion, completion::history::HistoryCompleter, painting::Painter};
 pub use columnar_menu::ColumnarMenu;
 pub use columnar_menu::TraversalDirection;
 pub use description_menu::DescriptionMenu;
@@ -669,11 +669,13 @@ mod tests {
         let menu = || Box::new(ColumnarMenu::default()) as Box<dyn Menu>;
 
         assert!(ReedlineMenu::EngineCompleter(menu()).queries_host_completer());
-        assert!(ReedlineMenu::WithCompleter {
-            menu: menu(),
-            completer: Box::<DefaultCompleter>::default(),
-        }
-        .queries_host_completer());
+        assert!(
+            ReedlineMenu::WithCompleter {
+                menu: menu(),
+                completer: Box::<DefaultCompleter>::default(),
+            }
+            .queries_host_completer()
+        );
 
         assert!(!ReedlineMenu::HistoryMenu(menu()).queries_host_completer());
     }

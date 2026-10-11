@@ -1,8 +1,8 @@
 use {
     super::MenuSettings,
     crate::{
-        menu_functions::{replace_in_buffer, resolve_completer_input},
         Completer, Editor, Menu, MenuBuilder, MenuEvent, Painter, Suggestion, Suggestions,
+        menu_functions::{replace_in_buffer, resolve_completer_input},
     },
     nu_ansi_term::ansi::RESET,
 };

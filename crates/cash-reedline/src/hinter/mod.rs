@@ -11,7 +11,7 @@ pub fn is_whitespace_str(s: &str) -> bool {
 
 pub fn get_first_token(string: &str) -> String {
     let mut reached_content = false;
-    let result = string
+    string
         .split_word_bounds()
         .take_while(|word| match (is_whitespace_str(word), reached_content) {
             (_, true) => false,
@@ -23,8 +23,7 @@ pub fn get_first_token(string: &str) -> String {
         })
         .collect::<Vec<&str>>()
         .join("")
-        .to_string();
-    result
+        .to_string()
 }
 
 use crate::History;

@@ -1,6 +1,6 @@
 use crate::{
-    enums::{EventStatus, ReedlineEvent, ReedlineRawEvent},
     PromptEditMode,
+    enums::{EventStatus, ReedlineEvent, ReedlineRawEvent},
 };
 
 /// Define the style of parsing for the edit events

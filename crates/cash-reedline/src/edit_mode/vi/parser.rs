@@ -1,6 +1,6 @@
-use super::command::{parse_command, Command};
-use super::motion::{parse_motion, Motion};
-use crate::{edit_mode::vi::ViMode, EditCommand, ReedlineEvent, Vi};
+use super::command::{Command, parse_command};
+use super::motion::{Motion, parse_motion};
+use crate::{EditCommand, ReedlineEvent, Vi, edit_mode::vi::ViMode};
 use std::iter::Peekable;
 
 #[derive(Debug, Clone)]

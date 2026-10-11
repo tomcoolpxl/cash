@@ -1,10 +1,10 @@
 use {
-    super::{menu_functions::parse_selection_char, Menu, MenuBuilder, MenuEvent, MenuSettings},
+    super::{Menu, MenuBuilder, MenuEvent, MenuSettings, menu_functions::parse_selection_char},
     crate::{
+        Completer, Suggestion, Suggestions,
         core_editor::Editor,
         menu_functions::{replace_in_buffer, resolve_completer_input},
-        painting::{estimate_single_line_wraps, Painter},
-        Completer, Suggestion, Suggestions,
+        painting::{Painter, estimate_single_line_wraps},
     },
     nu_ansi_term::ansi::RESET,
     std::{fmt::Write, iter::Sum},
@@ -622,7 +622,7 @@ impl Menu for ListMenu {
 }
 
 fn number_of_lines(entry: &str, max_lines: usize, terminal_columns: u16) -> u16 {
-    let lines = if entry.contains('\n') {
+    if entry.contains('\n') {
         let total_lines = entry.lines().count();
         let printable_lines = if total_lines > max_lines {
             // The extra one is there because when printing a large entry and extra line
@@ -639,9 +639,7 @@ fn number_of_lines(entry: &str, max_lines: usize, terminal_columns: u16) -> u16 
         (printable_lines + wrap_lines) as u16
     } else {
         1 + estimate_single_line_wraps(entry, terminal_columns) as u16
-    };
-
-    lines
+    }
 }
 
 fn count_digits(mut n: usize) -> u16 {

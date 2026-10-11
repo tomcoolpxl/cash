@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::style::{parse_next_u8, Color};
+use crate::style::{Color, parse_next_u8};
 
 /// Represents a foreground or background color.
 ///
@@ -311,13 +311,18 @@ mod tests {
 
     #[test]
     fn test_no_color() {
-        std::env::set_var("NO_COLOR", "1");
+        // SAFETY: nextest runs each test in a process of its own, so no other thread reads
+        // or writes the environment while it changes.
+        unsafe { std::env::set_var("NO_COLOR", "1") };
         assert!(Colored::ansi_color_disabled());
-        std::env::set_var("NO_COLOR", "XXX");
+        // SAFETY: as above.
+        unsafe { std::env::set_var("NO_COLOR", "XXX") };
         assert!(Colored::ansi_color_disabled());
-        std::env::set_var("NO_COLOR", "");
+        // SAFETY: as above.
+        unsafe { std::env::set_var("NO_COLOR", "") };
         assert!(!Colored::ansi_color_disabled());
-        std::env::remove_var("NO_COLOR");
+        // SAFETY: as above.
+        unsafe { std::env::remove_var("NO_COLOR") };
         assert!(!Colored::ansi_color_disabled());
     }
 }

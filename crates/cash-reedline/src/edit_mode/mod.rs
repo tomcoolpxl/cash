@@ -7,13 +7,13 @@ mod vi;
 
 pub use base::EditMode;
 pub use cursors::CursorConfig;
-pub use emacs::{default_emacs_keybindings, Emacs};
+pub use emacs::{Emacs, default_emacs_keybindings};
 pub use helix::{
-    default_helix_insert_keybindings, default_helix_normal_keybindings,
-    default_helix_select_keybindings, Helix,
+    Helix, default_helix_insert_keybindings, default_helix_normal_keybindings,
+    default_helix_select_keybindings,
 };
 pub use keybindings::{KeyCombination, Keybindings};
-pub use vi::{default_vi_insert_keybindings, default_vi_normal_keybindings, Vi};
+pub use vi::{Vi, default_vi_insert_keybindings, default_vi_normal_keybindings};
 
 use crossterm::event::{Event, KeyModifiers, MouseEvent, MouseEventKind};
 

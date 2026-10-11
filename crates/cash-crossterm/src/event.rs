@@ -132,7 +132,7 @@ use crate::event::{
     read::InternalEventReader,
     timeout::PollTimeout,
 };
-use crate::{csi, Command};
+use crate::{Command, csi};
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::fmt::{self, Display};
 use std::time::Duration;

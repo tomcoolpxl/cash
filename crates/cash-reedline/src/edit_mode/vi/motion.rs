@@ -1,8 +1,8 @@
 use std::iter::Peekable;
 
 use crate::{
-    edit_mode::vi::ViMode, Direction, EditCommand, MotionTarget, ReedlineEvent, Vi, WordEdge,
-    WordKind,
+    Direction, EditCommand, MotionTarget, ReedlineEvent, Vi, WordEdge, WordKind,
+    edit_mode::vi::ViMode,
 };
 
 use super::parser::{ParseResult, ReedlineOption};

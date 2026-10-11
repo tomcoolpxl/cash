@@ -2,8 +2,8 @@
     clippy::string_slice,
     reason = "the cuts are the positions `match_indices` gives"
 )]
-use crate::highlighter::Highlighter;
 use crate::StyledText;
+use crate::highlighter::Highlighter;
 use nu_ansi_term::{Color, Style};
 
 /// Highlight all matches for a given search string in a line

@@ -1,12 +1,12 @@
 use super::{Menu, MenuBuilder, MenuEvent, MenuSettings};
 use crate::{
+    Completer, Suggestion,
     core_editor::Editor,
     menu_functions::{
-        available_lines, get_match_indices, resolve_completer_input, scroll_offset,
-        style_suggestion, truncate_with_ansi, CompletionDisplay, CompletionPhase,
+        CompletionDisplay, CompletionPhase, available_lines, get_match_indices,
+        resolve_completer_input, scroll_offset, style_suggestion, truncate_with_ansi,
     },
     painting::Painter,
-    Completer, Suggestion,
 };
 use nu_ansi_term::ansi::RESET;
 
@@ -405,13 +405,12 @@ impl ColumnarMenu {
             let padding_width = left_text_size.saturating_sub(marker.len());
             let mut base_line = format!("{marker}{display_value:padding_width$}");
 
-            base_line.extend(description.chars().take(description_size).map(|character| {
-                if character == '\n' {
-                    ' '
-                } else {
-                    character
-                }
-            }));
+            base_line.extend(
+                description
+                    .chars()
+                    .take(description_size)
+                    .map(|character| if character == '\n' { ' ' } else { character }),
+            );
             base_line
         };
 

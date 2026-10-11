@@ -1,11 +1,11 @@
 use crossterm::event::{KeyCode, KeyModifiers};
 
 use crate::{
-    edit_mode::keybindings::{
-        add_common_control_bindings, add_common_edit_bindings, add_common_navigation_bindings,
-        add_common_selection_bindings, edit_bind, Keybindings,
-    },
     Direction, EditCommand, MotionTarget, WordEdge, WordKind,
+    edit_mode::keybindings::{
+        Keybindings, add_common_control_bindings, add_common_edit_bindings,
+        add_common_navigation_bindings, add_common_selection_bindings, edit_bind,
+    },
 };
 
 /// Default Helix normal-mode keybindings.

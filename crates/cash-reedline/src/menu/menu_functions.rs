@@ -8,14 +8,14 @@ use std::borrow::Cow;
 use std::ops::Range;
 use unicase::UniCase;
 
-use nu_ansi_term::{ansi::RESET, Style};
+use nu_ansi_term::{Style, ansi::RESET};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
+    CompletionOrigin, CompletionResult, Editor, Partial, Suggestion, Suggestions, UndoBehavior,
     menu::{InputMode, MenuSettings, OutputMode},
     painting::Painter,
-    CompletionOrigin, CompletionResult, Editor, Partial, Suggestion, Suggestions, UndoBehavior,
 };
 
 /// Index result obtained from parsing a string with an index marker
@@ -958,7 +958,7 @@ mod tests {
         #[case] buffer: &str,
         #[case] expected: &str,
     ) {
-        use crate::{menu::MenuSettings, Completer, DefaultCompleter};
+        use crate::{Completer, DefaultCompleter, menu::MenuSettings};
 
         let mut completer = DefaultCompleter::default();
         completer.insert(vec![expected.to_string()]);

@@ -9,11 +9,11 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use strum::EnumString;
 pub use vi_keybindings::{default_vi_insert_keybindings, default_vi_normal_keybindings};
 
-use super::{is_plain_char, is_text_char, parse_non_key_event, EditMode};
+use super::{EditMode, is_plain_char, is_text_char, parse_non_key_event};
 use crate::{
+    Direction, MotionTarget, PromptEditMode, PromptViMode,
     edit_mode::{keybindings::Keybindings, vi::parser::parse},
     enums::{EditCommand, EventStatus, ReedlineEvent, ReedlineRawEvent},
-    Direction, MotionTarget, PromptEditMode, PromptViMode,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, EnumString)]

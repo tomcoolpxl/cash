@@ -1,5 +1,5 @@
 use chrono::Utc;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{fmt::Display, time::Duration};
 
 /// Unique ID for the [`HistoryItem`]. More recent items have higher ids than older ones.

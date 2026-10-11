@@ -1439,3 +1439,12 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   less the 262 bytes deflate keeps ahead), at 65,536 for bzip2, and storing prints it for
   every member but an empty one. Cash missed it from 65,274 to 65,535 bytes and printed
   it for an empty stored member; `zip_cases.sh` now has the four edges.
+- **The 2024 edition for `cash-reedline` and crossterm** (phase 34; done 2026-10-11): both
+  kept the 2021 edition they came with, and now take the workspace's. What 2024 asked:
+  crossterm's colour test marks its changes to the environment unsafe; reedline's
+  history completer keeps 2021's captures (`+ use<>`), `open_editor`'s pattern derefs
+  before its `ref` bindings, and two values are returned without a `let` (clippy's
+  `let_and_return` holds under 2024's drop order); a block left by crossterm's Unix code
+  lost its braces. `cargo fix`'s `expr_2021` fragments and `if let` rewrites were
+  dropped: no macro has an arm `_` or `const {}` could now match, and no condition holds a
+  temporary whose drop moved. The rest is the 2024 style's import order.

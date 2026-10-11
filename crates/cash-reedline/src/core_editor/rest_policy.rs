@@ -5,11 +5,11 @@
 use std::cmp::Ordering;
 
 use crate::core_editor::{
+    Cursor,
     graphemes::{
         ensure_grapheme_boundary_next, ensure_grapheme_boundary_prev, next_grapheme_boundary,
         prev_grapheme_boundary,
     },
-    Cursor,
 };
 
 /// Where the cursor's head may *rest* after an edit, per editor paradigm.

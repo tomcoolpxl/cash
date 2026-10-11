@@ -103,9 +103,7 @@ pub use sys::supports_keyboard_enhancement;
 ///
 /// Please have a look at the [raw mode](./index.html#raw-mode) section.
 pub fn is_raw_mode_enabled() -> io::Result<bool> {
-    {
-        sys::is_raw_mode_enabled()
-    }
+    sys::is_raw_mode_enabled()
 }
 
 /// Enables raw mode.

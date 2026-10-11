@@ -336,27 +336,27 @@ pub use result::{ReedlineError, ReedlineErrorVariants, Result};
 
 mod history;
 pub use history::{
-    CommandLineSearch, FileBackedHistory, History, HistoryItem, HistoryItemExtraInfo,
+    CommandLineSearch, FileBackedHistory, HISTORY_SIZE, History, HistoryItem, HistoryItemExtraInfo,
     HistoryItemId, HistoryNavigationQuery, HistorySessionId, IgnoreAllExtraInfo, JsonFilterValue,
-    SearchDirection, SearchFilter, SearchQuery, HISTORY_SIZE,
+    SearchDirection, SearchFilter, SearchQuery,
 };
 
 mod prompt;
 pub use prompt::PromptHelixMode;
 pub use prompt::{
-    DefaultPrompt, DefaultPromptSegment, Prompt, PromptEditMode, PromptEditModeDiscriminants,
-    PromptHistorySearch, PromptHistorySearchStatus, PromptViMode, DEFAULT_INDICATOR_COLOR,
-    DEFAULT_PROMPT_COLOR, DEFAULT_PROMPT_MULTILINE_COLOR, DEFAULT_PROMPT_RIGHT_COLOR,
+    DEFAULT_INDICATOR_COLOR, DEFAULT_PROMPT_COLOR, DEFAULT_PROMPT_MULTILINE_COLOR,
+    DEFAULT_PROMPT_RIGHT_COLOR, DefaultPrompt, DefaultPromptSegment, Prompt, PromptEditMode,
+    PromptEditModeDiscriminants, PromptHistorySearch, PromptHistorySearchStatus, PromptViMode,
 };
 
 mod edit_mode;
 pub use edit_mode::{
-    default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
-    CursorConfig, EditMode, Emacs, Keybindings, Vi,
+    CursorConfig, EditMode, Emacs, Keybindings, Vi, default_emacs_keybindings,
+    default_vi_insert_keybindings, default_vi_normal_keybindings,
 };
 pub use edit_mode::{
-    default_helix_insert_keybindings, default_helix_normal_keybindings,
-    default_helix_select_keybindings, Helix,
+    Helix, default_helix_insert_keybindings, default_helix_normal_keybindings,
+    default_helix_select_keybindings,
 };
 
 mod highlighter;
@@ -377,9 +377,9 @@ pub use validator::{DefaultValidator, ValidationResult, Validator};
 
 mod menu;
 pub use menu::{
-    menu_functions, ColumnarMenu, DescriptionMenu, DescriptionMode, DescriptionPosition, IdeMenu,
-    InputMode, ListMenu, Menu, MenuBuilder, MenuEvent, MenuTextStyle, OutputMode, ReedlineMenu,
-    TraversalDirection,
+    ColumnarMenu, DescriptionMenu, DescriptionMode, DescriptionPosition, IdeMenu, InputMode,
+    ListMenu, Menu, MenuBuilder, MenuEvent, MenuTextStyle, OutputMode, ReedlineMenu,
+    TraversalDirection, menu_functions,
 };
 
 mod terminal_extensions;

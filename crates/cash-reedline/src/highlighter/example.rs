@@ -1,5 +1,5 @@
-use crate::highlighter::{AbbrExpandContext, Highlighter};
 use crate::StyledText;
+use crate::highlighter::{AbbrExpandContext, Highlighter};
 use nu_ansi_term::{Color, Style};
 
 pub static DEFAULT_BUFFER_MATCH_COLOR: Color = Color::Green;

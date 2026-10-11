@@ -1,10 +1,10 @@
 use crate::{History, HistoryNavigationQuery, HistorySessionId};
 
+use super::HistoryItem;
+use super::SearchQuery;
 use super::base::CommandLineSearch;
 use super::base::SearchDirection;
 use super::base::SearchFilter;
-use super::HistoryItem;
-use super::SearchQuery;
 use crate::Result;
 
 /// Interface of a stateful navigation via [`HistoryNavigationQuery`].

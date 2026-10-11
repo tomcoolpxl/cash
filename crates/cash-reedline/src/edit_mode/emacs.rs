@@ -1,13 +1,14 @@
 use crate::{
+    PromptEditMode,
     edit_mode::{
+        EditMode,
         keybindings::{
-            add_common_control_bindings, add_common_edit_bindings, add_common_navigation_bindings,
-            add_common_selection_bindings, edit_bind, Keybindings,
+            Keybindings, add_common_control_bindings, add_common_edit_bindings,
+            add_common_navigation_bindings, add_common_selection_bindings, edit_bind,
         },
-        parse_non_key_event, EditMode,
+        parse_non_key_event,
     },
     enums::{EditCommand, ReedlineEvent, ReedlineRawEvent},
-    PromptEditMode,
 };
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 

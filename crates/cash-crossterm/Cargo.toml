@@ -7,8 +7,7 @@ version = "0.29.0"
 description = "Terminal I/O for cash, taken from crossterm 0.29.0 and made its own"
 authors.workspace = true
 categories.workspace = true
-# Crossterm's edition, kept until the move to the workspace's is a change of its own.
-edition = "2021"
+edition.workspace = true
 keywords.workspace = true
 license = "MIT"
 readme = "README.md"

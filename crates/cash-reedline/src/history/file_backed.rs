@@ -1,9 +1,9 @@
 use super::{
-    base::CommandLineSearch, History, HistoryItem, HistoryItemId, SearchDirection, SearchQuery,
+    History, HistoryItem, HistoryItemId, SearchDirection, SearchQuery, base::CommandLineSearch,
 };
 use crate::{
-    result::{ReedlineError, ReedlineErrorVariants},
     HistorySessionId, Result,
+    result::{ReedlineError, ReedlineErrorVariants},
 };
 
 use std::{

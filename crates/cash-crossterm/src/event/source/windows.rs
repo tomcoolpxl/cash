@@ -5,7 +5,7 @@ use crossterm_winapi::{Console, Handle, InputRecord};
 use winapi::um::{
     consoleapi::ReadConsoleInputW,
     wincon::{
-        PeekConsoleInputW, INPUT_RECORD, KEY_EVENT, LEFT_ALT_PRESSED, LEFT_CTRL_PRESSED,
+        INPUT_RECORD, KEY_EVENT, LEFT_ALT_PRESSED, LEFT_CTRL_PRESSED, PeekConsoleInputW,
         RIGHT_ALT_PRESSED, RIGHT_CTRL_PRESSED,
     },
     winuser::{
@@ -15,15 +15,15 @@ use winapi::um::{
 };
 
 use crate::event::{
-    sys::windows::{parse::MouseButtonsPressed, poll::WinApiPoll},
     Event,
+    sys::windows::{parse::MouseButtonsPressed, poll::WinApiPoll},
 };
 
 use crate::event::{
+    InternalEvent,
     source::EventSource,
     sys::windows::parse::{handle_key_event, handle_mouse_event},
     timeout::PollTimeout,
-    InternalEvent,
 };
 
 mod vt_keys;

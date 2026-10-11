@@ -110,11 +110,7 @@ fn try_ensure_char_case(ch: char, desired_case: CharCase) -> char {
             let Some(ch_lower) = iter.next() else {
                 return ch;
             };
-            if iter.next().is_none() {
-                ch_lower
-            } else {
-                ch
-            }
+            if iter.next().is_none() { ch_lower } else { ch }
         }
         CharCase::UpperCase if ch.is_lowercase() => {
             let mut iter = ch.to_uppercase();
@@ -122,11 +118,7 @@ fn try_ensure_char_case(ch: char, desired_case: CharCase) -> char {
             let Some(ch_upper) = iter.next() else {
                 return ch;
             };
-            if iter.next().is_none() {
-                ch_upper
-            } else {
-                ch
-            }
+            if iter.next().is_none() { ch_upper } else { ch }
         }
         _ => ch,
     }

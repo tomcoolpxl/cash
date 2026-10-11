@@ -1,12 +1,12 @@
 use super::{Menu, MenuBuilder, MenuEvent, MenuSettings};
 use crate::{
+    Completer, Suggestion,
     core_editor::Editor,
     menu_functions::{
-        available_lines, get_match_indices, resolve_completer_input, scroll_offset,
-        style_suggestion, truncate_with_ansi, CompletionDisplay, CompletionPhase,
+        CompletionDisplay, CompletionPhase, available_lines, get_match_indices,
+        resolve_completer_input, scroll_offset, style_suggestion, truncate_with_ansi,
     },
     painting::Painter,
-    Completer, Suggestion,
 };
 use itertools::{
     EitherOrBoth::{Both, Left, Right},

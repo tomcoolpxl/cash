@@ -1,8 +1,8 @@
 use super::utils::{coerce_crlf, estimate_required_lines, line_width};
 use crate::{
+    Prompt, PromptHistorySearch,
     menu::{Menu, ReedlineMenu},
     prompt::PromptEditMode,
-    Prompt, PromptHistorySearch,
 };
 use std::borrow::Cow;
 

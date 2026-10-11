@@ -1,5 +1,5 @@
 use super::HistoryItemId;
-use crate::{core_editor::LineBuffer, HistoryItem, HistorySessionId, Result};
+use crate::{HistoryItem, HistorySessionId, Result, core_editor::LineBuffer};
 use chrono::Utc;
 
 /// Browsing modes for a [`History`]

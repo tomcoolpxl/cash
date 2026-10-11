@@ -1,5 +1,5 @@
 use {
-    crate::{enums::ReedlineEvent, EditCommand},
+    crate::{EditCommand, enums::ReedlineEvent},
     crossterm::event::{KeyCode, KeyModifiers},
     serde::{Deserialize, Serialize},
     std::collections::HashMap,

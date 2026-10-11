@@ -2,8 +2,8 @@
     clippy::string_slice,
     reason = "the painter cuts the line at the caret and at positions found in the same text"
 )]
-use crate::terminal_extensions::semantic_prompt::{PromptKind, SemanticPromptMarkers};
 use crate::PromptHelixMode;
+use crate::terminal_extensions::semantic_prompt::{PromptKind, SemanticPromptMarkers};
 use crate::{CursorConfig, PromptEditMode, PromptViMode};
 
 use {
@@ -11,15 +11,15 @@ use {
         coerce_crlf, cursor_after, deferred_wrap_row, estimate_required_lines, line_width,
     },
     crate::{
+        Prompt,
         menu::{Menu, ReedlineMenu},
         painting::PromptLines,
-        Prompt,
     },
     crossterm::{
+        QueueableCommand,
         cursor::{self, MoveTo, RestorePosition, SavePosition},
         style::{Attribute, Print, ResetColor, SetAttribute},
         terminal::{self, Clear, ClearType},
-        QueueableCommand,
     },
     std::io::{Result, Write},
     std::ops::RangeInclusive,
@@ -578,11 +578,7 @@ impl Painter {
             let size = terminal::size()?;
             // if reported size is 0, 0 -
             // use a default size to avoid divide by 0 panics
-            if size == (0, 0) {
-                (80, 24)
-            } else {
-                size
-            }
+            if size == (0, 0) { (80, 24) } else { size }
         };
         let prompt_selector = select_prompt_row(suspended_state, cursor::position()?);
         let new_row = match prompt_selector {
@@ -2687,8 +2683,8 @@ mod tests {
     #[test]
     fn crossterm_defaults_were_the_bright_palette_entries() {
         use crossterm::{
-            style::{Color as CtColor, SetForegroundColor},
             Command,
+            style::{Color as CtColor, SetForegroundColor},
         };
 
         // cash: crossterm writes no colour under `NO_COLOR`, which a developer's shell

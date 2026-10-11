@@ -38,8 +38,6 @@ What the phases now in DONE.md left open, each where its phase says more.
 - **Helix mode in `cash-reedline`** (phase 34): on by default in reedline, so compiled
   into cash, though cash never offers it; its code runs through the core editor, so
   taking it out is a change of its own.
-- **The 2024 edition for `cash-reedline` and crossterm** (phase 34): both keep the 2021
-  edition they came with.
 - **`sudo -E`'s variables through a handle** (phase 35,
   `research/sudo-in-terminal-design.md` section 3 item 4): they still go as `NAME=value`
   words on the started cash's command line (Windows' 32,000 characters for the elevated
@@ -132,6 +130,11 @@ What the phases now in DONE.md left open, each where its phase says more.
   give it; a zip made on Unix (3.0), so Linux's UnZip restores the modes, with MS-DOS's
   directory and read-only bits beside them. Another deflate engine, "made on NTFS", and
   no owner field were turned down.
+- **zip stores what deflate cannot shrink, at any size** (the user, 2026-10-11): Info-ZIP's
+  zip 3.0 stores such a member only while it fits deflate's first block (32,767 symbols,
+  about 32,781 bytes of random data, moving with the data), and keeps a larger one
+  deflated though it grows, "(deflated 0%)", about 5 bytes per 16 KiB. cash's "(stored 0%)"
+  there is a difference on purpose; following zip 3.0 was turned down.
 - **An elevated `ss -i` switches statistics collection on** (the user, 2026-10-05):
   Windows keeps per-connection TCP statistics (rtt, rto, cwnd, bytes, retransmits,
   queues) only for connections an administrator switched collection on for; unelevated,

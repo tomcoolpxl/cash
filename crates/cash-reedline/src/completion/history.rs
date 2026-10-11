@@ -1,8 +1,8 @@
 use std::{collections::HashSet, ops::Deref};
 
 use crate::{
-    history::SearchQuery, menu_functions::parse_selection_char, Completer, CompletionResult,
-    History, HistoryItem, Result, Span, Suggestion,
+    Completer, CompletionResult, History, HistoryItem, Result, Span, Suggestion,
+    history::SearchQuery, menu_functions::parse_selection_char,
 };
 
 const SELECTION_CHAR: char = '!';
@@ -14,7 +14,7 @@ pub(crate) struct HistoryCompleter<'menu>(&'menu dyn History);
 fn search_unique(
     completer: &HistoryCompleter,
     line: &str,
-) -> Result<impl Iterator<Item = HistoryItem>> {
+) -> Result<impl Iterator<Item = HistoryItem> + use<>> {
     let parsed = parse_selection_char(line, SELECTION_CHAR);
     let values = completer.0.search(SearchQuery::all_that_contain_rev(
         parsed.remainder.to_string(),
