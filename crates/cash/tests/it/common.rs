@@ -152,6 +152,49 @@ pub fn with_divergence(golden: &str, from: &str, to: &str, times: usize) -> Stri
     golden.replace(from, to)
 }
 
+/// Asserts that `actual` is `expected`, and says where they part: the line, with a few
+/// on each side. A failed `assert_eq!` on a long output prints both whole, which CI's
+/// log drops, leaving only "assertion failed".
+#[track_caller]
+pub fn assert_same_text(actual: &str, expected: &str) {
+    if actual == expected {
+        return;
+    }
+    let got: Vec<&str> = actual.lines().collect();
+    let want: Vec<&str> = expected.lines().collect();
+    let at = got
+        .iter()
+        .zip(&want)
+        .position(|(g, w)| g != w)
+        .unwrap_or_else(|| got.len().min(want.len()));
+    let around = |lines: &[&str]| {
+        use std::fmt::Write as _;
+        let mut shown = String::new();
+        for (n, line) in lines.iter().enumerate().skip(at.saturating_sub(3)).take(10) {
+            let _ = writeln!(shown, "{:>6}: {line:?}", n + 1);
+        }
+        shown
+    };
+    panic!(
+        "the output parts from the expected at line {} ({} lines, {} expected)\n\
+         got:\n{}expected:\n{}",
+        at + 1,
+        got.len(),
+        want.len(),
+        around(&got),
+        around(&want)
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[should_panic(expected = "parts from the expected at line 2 (3 lines, 3 expected)")]
+    fn assert_same_text_names_the_line_the_texts_part_at() {
+        super::assert_same_text("a\nb\nc\n", "a\nB\nc\n");
+    }
+}
+
 /// The folder Git for Windows is installed in, found through the `git` on `PATH`
 /// (`git --exec-path` is `<root>/mingw64/libexec/git-core`), with forward slashes.
 ///

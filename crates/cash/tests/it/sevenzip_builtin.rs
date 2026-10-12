@@ -13,7 +13,9 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use crate::common::{Scratch, golden, run, run_in, run_oracle_script, with_divergence};
+use crate::common::{
+    Scratch, assert_same_text, golden, run, run_in, run_oracle_script, with_divergence,
+};
 
 const STORED: &[u8] = include_bytes!("../../../cash-archive/tests/fixtures/7z/stored.7z");
 const AES: &[u8] = include_bytes!("../../../cash-archive/tests/fixtures/7z/aes.7z");
@@ -27,7 +29,7 @@ fn seven_z_matches_7_zip_26_03() {
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
         179,
     );
-    assert_eq!(run_oracle_script("7z_cases"), expected);
+    assert_same_text(&run_oracle_script("7z_cases"), &expected);
 }
 
 #[test]
@@ -39,7 +41,7 @@ fn seven_z_reads_and_writes_the_other_formats_as_7_zip_26_03_does() {
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
         153,
     );
-    assert_eq!(run_oracle_script("7z_formats"), expected);
+    assert_same_text(&run_oracle_script("7z_formats"), &expected);
 }
 
 #[test]
@@ -51,7 +53,7 @@ fn seven_z_reads_rar_as_7_zip_26_03_does() {
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
         216,
     );
-    assert_eq!(run_oracle_script("7z_rar"), expected);
+    assert_same_text(&run_oracle_script("7z_rar"), &expected);
 }
 
 #[test]
@@ -74,7 +76,7 @@ fn seven_z_reads_rar_1_5_to_4_as_7_zip_26_03_does() {
         "ERROR: Data Error : itanium_synthetic_bundles.bin\n",
         1,
     );
-    assert_eq!(run_oracle_script("7z_rar4"), expected);
+    assert_same_text(&run_oracle_script("7z_rar4"), &expected);
 }
 
 #[test]
