@@ -32,6 +32,11 @@ pub(crate) fn spawn(
         tokio_cmd
     };
 
+    // Not once cash is letting go of its programs to exit: one started then would outlive
+    // it. Held until the program is in its job.
+    let Some(_starting) = cash_win32::session::may_start() else {
+        return Err(std::io::Error::other("cash is exiting"));
+    };
     let mut child = command.spawn()?;
     // A program on the console may leave it as the prompt cannot use it; the prompt puts
     // it back (`repair_before_prompt`).

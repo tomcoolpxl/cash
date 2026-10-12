@@ -1501,3 +1501,14 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   its record's room (`FSCTL_QUERY_FILE_REGIONS`); and, for a small file, which is zeros
   at once when sized, the zeros the file ends in wait until more follows them. Two
   tests size a file before writing it, 7 bytes and 1 MiB; the acceptance test is back.
+- **A bundled tool outlived its script and its pseudo console** (2026-10-10; done
+  2026-10-12): after a `sudo_in_terminal` probe dropped its pseudo console, the script's
+  last command, `cash.exe --invoke-bundled cat got.txt`, was still there and held
+  `target\debug\cash.exe`. Closing the console runs the exit's release on a thread of its
+  own while the script goes on: it sorted the session job's members (an image read each,
+  slow when there are many), ended the console programs, and let go of every job, and a
+  program started meanwhile was let go with them. It then hung on its console, whose
+  host stays up for it (both found alive a quarter of an hour on). Now no program starts
+  once the release begins, and the sorting is repeated until a round finds no new
+  member. A test closes the console of a script starting programs in a loop: two or
+  three were left each time before, none after.

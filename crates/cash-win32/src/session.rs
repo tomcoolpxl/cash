@@ -18,9 +18,10 @@
 //! (VS Code's terminals and language servers). `cashctl gui-apps close` turns that off
 //! for the session. A crash or a kill from Task Manager still reaps everything.
 
+use std::collections::{HashMap, HashSet};
 use std::io;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{OnceLock, PoisonError, RwLock, RwLockReadGuard};
 
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
@@ -159,52 +160,89 @@ pub fn release_at_exit() {
         return;
     }
 
-    let members = job.process_ids().unwrap_or_default();
+    // No program is started from here on: one started after the members are sorted would
+    // be let go with the rest and outlive cash. The script goes on meanwhile when the
+    // console closes, as this runs on a thread of its own then.
+    *STARTING.write().unwrap_or_else(PoisonError::into_inner) = false;
+
     let own = std::process::id();
-    let parents: std::collections::HashMap<u32, u32> = crate::process::list()
-        .into_iter()
-        .map(|p| (p.pid, p.parent_pid))
-        .collect();
-    let is_gui = |pid: u32| {
-        crate::process::image_path(pid)
-            .and_then(|path| crate::process::is_gui_image(&path))
-            .unwrap_or(false)
-    };
-    let gui: std::collections::HashSet<u32> = members
-        .iter()
-        .copied()
-        .filter(|&pid| pid != own && is_gui(pid))
-        .collect();
+    let mut gui: HashMap<u32, bool> = HashMap::new();
+    let mut sorted: HashSet<u32> = HashSet::new();
+    // A console program being ended may start one more before it goes; a later round
+    // finds that one, until a round finds none new.
+    for _ in 0..8 {
+        let members = job.process_ids().unwrap_or_default();
+        let new: Vec<u32> = members
+            .iter()
+            .copied()
+            .filter(|&pid| pid != own && !sorted.contains(&pid))
+            .collect();
+        if new.is_empty() {
+            break;
+        }
+        let parents: HashMap<u32, u32> = crate::process::list()
+            .into_iter()
+            .map(|p| (p.pid, p.parent_pid))
+            .collect();
+        for &pid in &new {
+            gui.entry(pid).or_insert_with(|| {
+                crate::process::image_path(pid)
+                    .and_then(|path| crate::process::is_gui_image(&path))
+                    .unwrap_or(false)
+            });
+        }
 
-    // A member is kept if it is a GUI application or was started by one, following
-    // parents through the job — never through cash itself, whose children are exactly
-    // what is being sorted.
-    let kept = |pid: u32| {
-        let mut current = pid;
-        for _ in 0..64 {
-            if gui.contains(&current) {
-                return true;
-            }
-            match parents.get(&current) {
-                Some(&parent) if parent != own && members.contains(&parent) => {
-                    current = parent;
+        // A member is kept if it is a GUI application or was started by one, following
+        // parents through the job — never through cash itself, whose children are
+        // exactly what is being sorted.
+        let kept = |pid: u32| {
+            let mut current = pid;
+            for _ in 0..64 {
+                if gui.get(&current) == Some(&true) {
+                    return true;
                 }
-                _ => return false,
+                match parents.get(&current) {
+                    Some(&parent) if parent != own && members.contains(&parent) => {
+                        current = parent;
+                    }
+                    _ => return false,
+                }
+            }
+            false
+        };
+
+        for &pid in &new {
+            if !kept(pid) {
+                let _ = crate::process::terminate(pid, 1);
             }
         }
-        false
-    };
-
-    for &pid in &members {
-        if pid != own && !kept(pid) {
-            let _ = crate::process::terminate(pid, 1);
-        }
+        sorted.extend(new);
     }
 
     // A command still running sits in its own job too (D6), whose handle closes as cash
     // exits; release those as well, or a GUI application started with `&` goes with it.
     crate::jobreg::release_all();
     job.release_on_close();
+}
+
+/// Whether cash may still start programs: until [`release_at_exit`] sorts the session
+/// job's members, after which a program started would outlive cash.
+static STARTING: RwLock<bool> = RwLock::new(true);
+
+/// Held while the shell starts a program, until the program is in its job; see
+/// [`may_start`].
+pub struct Starting(
+    #[expect(dead_code, reason = "held for its lock")] RwLockReadGuard<'static, bool>,
+);
+
+/// Leave to start a program, held until it is in its job; `None` once cash is exiting.
+///
+/// [`release_at_exit`] waits for a program being started, which it then finds among the
+/// members, and lets no program start after.
+#[must_use]
+pub fn may_start() -> Option<Starting> {
+    let guard = STARTING.read().unwrap_or_else(PoisonError::into_inner);
+    (*guard).then(|| Starting(guard))
 }
 
 /// Run [`release_at_exit`] when the console window is closed, or the user logs off or

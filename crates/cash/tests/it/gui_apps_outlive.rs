@@ -120,6 +120,64 @@ fn gui_apps_close_reaps_the_gui_application_too() {
 }
 
 #[test]
+fn a_program_started_while_the_console_closes_does_not_outlive_cash() {
+    // Closing the console lets go of the session job's hold for GUI applications, after
+    // ending the console programs it holds; the script goes on starting programs
+    // meanwhile, and one started between the two outlived cash, hung on the console that
+    // was gone (a bundled `cat` held cash.exe so a build could not replace it). The
+    // programs are a copy of cmd.exe by a name of this test's own, to be found by it;
+    // one that runs its course writes `survivors`.
+    let dir = tempfile::tempdir().expect("scratch dir");
+    let name = format!("outlives{}.exe", std::process::id());
+    std::fs::copy(r"C:\Windows\System32\cmd.exe", dir.path().join(&name)).expect("copy cmd");
+    std::fs::write(
+        dir.path().join("script.sh"),
+        format!(
+            "while :; do ./{name} /d /c \"ping -n 3 127.0.0.1 >nul && echo alive>>survivors\" \
+             </dev/null >/dev/null 2>&1 & done\n"
+        ),
+    )
+    .expect("write the script");
+    let session = crate::common::with_isolated_environment(|env| {
+        cash_win32::conpty::ConPtySession::start_in(
+            std::path::Path::new(crate::common::CASH),
+            &["--no-config", "script.sh"],
+            Some(env),
+            Some(dir.path()),
+        )
+    })
+    .expect("start cash on a pseudo console");
+    std::thread::sleep(Duration::from_secs(1));
+    let cash = session.pid();
+    drop(session);
+    let running = |wanted: &dyn Fn(&cash_win32::process::ProcessInfo) -> bool| {
+        cash_win32::process::list()
+            .into_iter()
+            .filter(|p| wanted(p))
+            .map(|p| p.pid)
+            .collect::<Vec<u32>>()
+    };
+    assert!(
+        wait_until(Duration::from_secs(10), || running(&|p| p.pid == cash)
+            .is_empty()),
+        "cash did not end with its console"
+    );
+    std::thread::sleep(Duration::from_millis(500));
+    let left = running(&|p| p.name.eq_ignore_ascii_case(&name));
+    for &pid in &left {
+        let _ = cash_win32::process::terminate(pid, 1);
+    }
+    // Long enough for one that outlived cash to write its line too.
+    std::thread::sleep(Duration::from_secs(3));
+    let survivors = std::fs::read_to_string(dir.path().join("survivors")).unwrap_or_default();
+    assert_eq!(
+        (left.len(), survivors.lines().count()),
+        (0, 0),
+        "programs outlived cash, whose console closed"
+    );
+}
+
+#[test]
 fn cashctl_gui_apps_reports_the_setting() {
     let out = cash_command()
         .args([
