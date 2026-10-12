@@ -1481,3 +1481,8 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   `PasteAtSelectionEdge`, `LineStartNonBlank`), the `helix` feature, and their tests.
   The selection model Helix gave the core editor stays, as vi and emacs run on it; an
   operation on a selection now always drops it, as vim's visual mode does.
+- **`TAR_OPTIONS` and the command line** (phase 29, 2026-10-07; done 2026-10-12): GNU tar
+  drops the `TAR_OPTIONS` side of `--one-top-level` against `-P` given on the command line;
+  cash refused the pair wherever they came from. Checked against GNU tar 1.35 both ways:
+  the typed one is kept and `TAR_OPTIONS`' dropped, in either direction; given in one
+  place, the pair is still refused. tar_cases.sh has the cases.

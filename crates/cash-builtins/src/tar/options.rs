@@ -752,7 +752,15 @@ pub(super) fn parse(environment: Option<&str>, args: &[String]) -> Result<Option
             });
         }
     }
+    // `--one-top-level` with `-P` is refused when both come from one place; from two,
+    // GNU keeps the command line's and drops `TAR_OPTIONS`'.
+    let top_level = std::mem::replace(&mut options.one_top_level, TopLevel::Off);
+    let absolute_names = std::mem::take(&mut options.absolute_names);
     read(&mut options, args)?;
+    if options.one_top_level == TopLevel::Off && !options.absolute_names {
+        options.one_top_level = top_level;
+        options.absolute_names = absolute_names;
+    }
     if options.show_defaults {
         return Err(Stop::Say(
             "--format=gnu -f- -b20 --quoting-style=escape\n".to_owned(),
@@ -813,5 +821,33 @@ mod tests {
                 .starts_with("option '--e' is ambiguous; possibilities: '--extract' '--exclude'"),
             "{message}"
         );
+    }
+
+    #[test]
+    fn the_command_line_wins_a_top_level_against_absolute_names_from_tar_options() {
+        let with = |environment: &str, words: &[&str]| {
+            let words: Vec<String> = words.iter().map(|w| (*w).to_owned()).collect();
+            let o = parse(Some(environment), &words).unwrap();
+            (o.one_top_level, o.absolute_names)
+        };
+        assert_eq!(with("--one-top-level", &["-P"]), (TopLevel::Off, true));
+        assert_eq!(
+            with("-P", &["--one-top-level"]),
+            (TopLevel::FromArchive, false)
+        );
+        assert_eq!(
+            with("--one-top-level=x -P", &["--one-top-level=y"]),
+            (TopLevel::Named("y".into()), false)
+        );
+        // From one place, both stay, to be refused when the run starts.
+        assert_eq!(
+            with("--one-top-level -P", &["-x"]),
+            (TopLevel::FromArchive, true)
+        );
+        assert_eq!(
+            with("-P", &["-P", "--one-top-level"]),
+            (TopLevel::FromArchive, true)
+        );
+        assert_eq!(with("--verbose", &["-P"]), (TopLevel::Off, true));
     }
 }

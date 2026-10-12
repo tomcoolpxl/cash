@@ -75,6 +75,7 @@ echo "== cache and tag exclusions"; mkdir -p cd/c/sub cd/d; printf 'Signature: 8
 for o in --exclude-caches --exclude-caches-under --exclude-caches-all; do fixed $o -cvf ca.tar cd; rc; fixed $o -cf ca.tar cd; tar -tf ca.tar; done
 fixed --exclude-tag=x -cvf ca.tar cd; fixed --exclude-tag-under=x -cf ca.tar cd; tar -tf ca.tar; fixed --exclude-tag-all=z --exclude-tag=x -cvf ca.tar cd; tar -tf ca.tar; fixed --exclude-caches -cvf ca.tar cd/c/x cd/c; tar -tf ca.tar
 echo "== one top level"; mkdir ot; fixed -czf ot/pack.tar.gz src/a.txt h; (cd ot && tar -xvf pack.tar.gz --one-top-level; rc; find pack | sort; tar -xf pack.tar.gz --one-top-level=src; find src | sort; tar -tf pack.tar.gz --one-top-level=q; tar -xf - --one-top-level < pack.tar.gz; rc; tar -xf pack.tar.gz -P --one-top-level=q; rc)
+echo "== one top level against -P from TAR_OPTIONS"; (cd ot && mkdir t1 t2 t3 && (cd t1 && TAR_OPTIONS=--one-top-level tar -P -xf ../pack.tar.gz; rc; find . | sort); (cd t2 && TAR_OPTIONS=-P tar --one-top-level -xf ../pack.tar.gz; rc; find . | sort); (cd t3 && TAR_OPTIONS='--one-top-level=x -P' tar --one-top-level=y -xf ../pack.tar.gz; rc; find . | sort); TAR_OPTIONS='--one-top-level -P' tar -tf pack.tar.gz; rc; TAR_OPTIONS=-P tar -P --one-top-level -tf pack.tar.gz; rc)
 echo "== colons"; tar -tf c.tar 'a:b' src/a.txt; rc
 echo "== help"; tar --help | head -12; tar --usage | head -3; tar --version | head -1; tar -? | head -2
 

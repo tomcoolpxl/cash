@@ -591,6 +591,30 @@ rc=2
 tar: '--one-top-level' cannot be used with '--absolute-names'
 Try 'tar --help' or 'tar --usage' for more information.
 rc=2
+== one top level against -P from TAR_OPTIONS
+rc=0
+.
+./h
+./src
+./src/a.txt
+rc=0
+.
+./pack
+./pack/h
+./pack/src
+./pack/src/a.txt
+rc=0
+.
+./y
+./y/h
+./y/src
+./y/src/a.txt
+tar: '--one-top-level' cannot be used with '--absolute-names'
+Try 'tar --help' or 'tar --usage' for more information.
+rc=2
+tar: '--one-top-level' cannot be used with '--absolute-names'
+Try 'tar --help' or 'tar --usage' for more information.
+rc=2
 == colons
 src/a.txt
 tar: a\:b: Not found in archive
