@@ -1,5 +1,9 @@
 //! The catalogue's markdown, rendered as a man page renders: plain text wrapped to the
-//! terminal, headings in capitals, and bold in place of code spans when colour is on.
+//! terminal, headings in capitals.
+//!
+//! When colour is on, in the colours of the F1 screen and of the prompt's highlighting:
+//! headings in the prompt's blue accent, what you type (code spans, examples, command
+//! names) green as the highlighter paints a command.
 //!
 //! Only the markdown the pages use is understood: `##` and `###` headings, paragraphs,
 //! `- ` list items, fenced code blocks, tables and code spans. Anything else is a
@@ -23,18 +27,37 @@ pub const INDENT: usize = 4;
 
 const BOLD: &str = "\x1b[1m";
 const RESET: &str = "\x1b[0m";
+/// A heading: the prompt's accent, bold blue, as the F1 screen's section names.
+pub const HEADING: &str = "\x1b[1;34m";
+/// A command's name where it is listed or named: bold green, as the highlighter paints
+/// a command at the prompt.
+pub const COMMAND: &str = "\x1b[1;32m";
+/// What to type, in prose and in examples: green.
+pub const CODE: &str = "\x1b[32m";
+/// A topic's name: bold cyan, so that it is told from a command's.
+pub const TOPIC: &str = "\x1b[1;36m";
+/// A mark beside a name, and the note that explains it: yellow.
+pub const MARK: &str = "\x1b[33m";
+/// What a search found, in the lines that show it: bold yellow.
+pub const HIT: &str = "\x1b[1;33m";
 
-/// A section heading: its text in capitals, bold when colour is on.
-pub fn heading(text: &str, style: Style) -> String {
-    let text = plain(text).to_uppercase();
-    if style.colour {
-        format!("{BOLD}{text}{RESET}\n")
+/// `text` in `colour` when colour is on, else as it is.
+pub fn paint(text: &str, colour: &str, on: bool) -> String {
+    if on {
+        format!("{colour}{text}{RESET}")
     } else {
-        format!("{text}\n")
+        text.to_owned()
     }
 }
 
-/// `text` with its code spans drawn: bold when colour is on, else just their contents.
+/// A section heading: its text in capitals, in [`HEADING`] when colour is on.
+pub fn heading(text: &str, style: Style) -> String {
+    let text = plain(text).to_uppercase();
+    format!("{}\n", paint(&text, HEADING, style.colour))
+}
+
+/// `text` with its code spans drawn: in [`CODE`] when colour is on, else just their
+/// contents.
 pub fn inline(text: &str, colour: bool) -> String {
     if !colour {
         return plain(text);
@@ -42,7 +65,7 @@ pub fn inline(text: &str, colour: bool) -> String {
     let mut out = String::with_capacity(text.len());
     for (index, part) in text.split('`').enumerate() {
         if index % 2 == 1 {
-            let _ = write!(out, "{BOLD}{part}{RESET}");
+            let _ = write!(out, "{CODE}{part}{RESET}");
         } else {
             out.push_str(part);
         }
@@ -234,12 +257,46 @@ pub fn markdown(body: &str, style: Style) -> String {
                     INDENT + 2,
                 ));
             }
-            Block::Code(lines) => out.push_str(&indented(&lines.join("\n"), INDENT + 4)),
+            Block::Code(lines) => {
+                let lines: Vec<String> = lines
+                    .iter()
+                    .map(|line| example_line(line.trim_end(), style.colour))
+                    .collect();
+                out.push_str(&indented(&lines.join("\n"), INDENT + 4));
+            }
             Block::Table(rows) => out.push_str(&table(&rows, style)),
         }
         previous_was_item = is_item;
     }
     out
+}
+
+/// A comment after an example, as the highlighter paints one: dark grey.
+const COMMENT: &str = "\x1b[90m";
+
+/// A line of an example: the command in [`CODE`], a comment after it (two spaces and a
+/// `#`) in [`COMMENT`], as they look at the prompt.
+fn example_line(line: &str, colour: bool) -> String {
+    if line.trim().is_empty() {
+        return String::new();
+    }
+    if line.trim_start().starts_with('#') {
+        return paint(line, COMMENT, colour);
+    }
+    let comment_at = line.find("  #").filter(|_| colour);
+    match comment_at {
+        Some(at) => {
+            let (code, comment) = line.split_at(at);
+            let spaces = comment.len() - comment.trim_start().len();
+            let (gap, comment) = comment.split_at(spaces);
+            format!(
+                "{}{gap}{}",
+                paint(code, CODE, true),
+                paint(comment, COMMENT, true)
+            )
+        }
+        None => paint(line, CODE, colour),
+    }
 }
 
 /// A table as aligned columns, two spaces apart, the header bold when colour is on.
@@ -334,6 +391,31 @@ mod tests {
     #[test]
     fn escapes_take_no_columns() {
         assert_eq!(visible_width("\x1b[1mbold\x1b[0m"), 4);
+    }
+
+    #[test]
+    fn colour_follows_the_prompt_headings_blue_what_to_type_green() {
+        let on = Style {
+            width: 60,
+            colour: true,
+        };
+        assert_eq!(heading("Name", on), "\x1b[1;34mNAME\x1b[0m\n");
+        assert_eq!(
+            inline("run `ls -l` here", true),
+            "run \x1b[32mls -l\x1b[0m here"
+        );
+        // An example green, its comment dark grey, as the highlighter paints them.
+        assert_eq!(
+            example_line("make  # one build", true),
+            "\x1b[32mmake\x1b[0m  \x1b[90m# one build\x1b[0m"
+        );
+        assert_eq!(example_line("# alone", true), "\x1b[90m# alone\x1b[0m");
+        // Without colour, the text as it is.
+        assert_eq!(
+            example_line("make  # one build", false),
+            "make  # one build"
+        );
+        assert_eq!(heading("Name", PLAIN), "NAME\n");
     }
 
     #[test]

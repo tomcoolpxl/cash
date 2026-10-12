@@ -334,15 +334,13 @@ fn get_builtin_short_usage(name: &str, command: &clap::Command) -> String {
     std::format!("{name}: {name} {usage}\n")
 }
 
+/// A builtin's own help in the colours of `help`'s pages: headings in the prompt's blue
+/// accent, what to type green as the highlighter paints it, what to fill in cyan.
 fn brush_help_styles() -> clap::builder::Styles {
     styling::Styles::styled()
-        .header(
-            styling::AnsiColor::Yellow.on_default()
-                | styling::Effects::BOLD
-                | styling::Effects::UNDERLINE,
-        )
-        .usage(styling::AnsiColor::Green.on_default() | styling::Effects::BOLD)
-        .literal(styling::AnsiColor::Magenta.on_default() | styling::Effects::BOLD)
+        .header(styling::AnsiColor::Blue.on_default() | styling::Effects::BOLD)
+        .usage(styling::AnsiColor::Blue.on_default() | styling::Effects::BOLD)
+        .literal(styling::AnsiColor::Green.on_default())
         .placeholder(styling::AnsiColor::Cyan.on_default())
 }
 

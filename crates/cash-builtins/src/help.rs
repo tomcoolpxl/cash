@@ -355,7 +355,11 @@ fn builtin_page<SE: cash_core::ShellExtensions>(
     let mut out = render::heading("Name", style);
     let summary = summary_of(name, registration)?;
     out.push_str(&render::wrap(
-        &render::inline(&format!("`{name}` - {summary}"), style.colour),
+        &format!(
+            "{} - {}",
+            render::paint(name, render::COMMAND, style.colour),
+            render::inline(&summary, style.colour)
+        ),
         style.width,
         &indent,
         render::INDENT,
@@ -448,7 +452,11 @@ fn general_help<SE: cash_core::ShellExtensions>(
     let builtins = builtins_by_name(context);
     let mut out = String::new();
     if let Some(display) = context.shell.product_display_str() {
-        let _ = writeln!(out, "{display}\n");
+        let _ = writeln!(
+            out,
+            "{}\n",
+            render::paint(display, render::HEADING, style.colour)
+        );
     }
     out.push_str(&render::wrap(
         &render::inline(
@@ -473,7 +481,7 @@ fn general_help<SE: cash_core::ShellExtensions>(
         let hides = hidden_windows_program(name);
         let marker = if disabled {
             any_disabled = true;
-            '*'
+            "*"
         } else if let Some(program) = hides {
             hidden.push(
                 program
@@ -481,11 +489,17 @@ fn general_help<SE: cash_core::ShellExtensions>(
                     .map(|file| file.to_string_lossy().into_owned())
                     .unwrap_or_default(),
             );
-            '+'
+            "+"
         } else {
-            ' '
+            " "
         };
-        let first = format!(" {marker}{name:<name_width$}  ");
+        // The padding by hand: a coloured name is longer than the columns it takes.
+        let first = format!(
+            " {}{}{}  ",
+            render::paint(marker, render::MARK, style.colour),
+            render::paint(name, render::COMMAND, style.colour),
+            " ".repeat(name_width.saturating_sub(render::visible_width(name)))
+        );
         out.push_str(&render::wrap(
             &render::inline(summary, style.colour),
             style.width,
@@ -540,7 +554,7 @@ fn markers_note(hidden: &[String], any_disabled: bool, style: Style) -> String {
     if !hidden.is_empty() {
         out.push('\n');
         let text = format!(
-            "+ Windows has a program of the same name in System32 ({}). Inside cash the \
+            "Windows has a program of the same name in System32 ({}). Inside cash the \
              builtin wins; to run the Windows one, give its path, as \
              `\"$SYSTEMROOT/System32/{}\"`.",
             hidden.join(", "),
@@ -549,15 +563,15 @@ fn markers_note(hidden: &[String], any_disabled: bool, style: Style) -> String {
         out.push_str(&render::wrap(
             &render::inline(&text, style.colour),
             style.width,
-            "",
+            &format!("{} ", render::paint("+", render::MARK, style.colour)),
             2,
         ));
     }
     if any_disabled {
         out.push_str(&render::wrap(
-            &render::inline("* Disabled with `enable -n`.", style.colour),
+            &render::inline("Disabled with `enable -n`.", style.colour),
             style.width,
-            "",
+            &format!("{} ", render::paint("*", render::MARK, style.colour)),
             2,
         ));
     }
@@ -565,11 +579,7 @@ fn markers_note(hidden: &[String], any_disabled: bool, style: Style) -> String {
 }
 
 fn kind_heading(kind: &str, style: Style) -> String {
-    if style.colour {
-        format!("\x1b[1m{kind}\x1b[0m\n")
-    } else {
-        format!("{kind}\n")
-    }
+    format!("{}\n", render::paint(kind, render::HEADING, style.colour))
 }
 
 /// `help topics`.
@@ -592,7 +602,11 @@ fn topic_list(style: Style) -> String {
     );
     out.push('\n');
     for topic in &catalogue.topics {
-        let first = format!("  {:<width$}  ", topic.name);
+        let first = format!(
+            "  {}{}  ",
+            render::paint(topic.name, render::TOPIC, style.colour),
+            " ".repeat(width.saturating_sub(topic.name.len()))
+        );
         out.push_str(&render::wrap(
             &render::inline(topic.summary, style.colour),
             style.width,
@@ -634,7 +648,7 @@ impl HelpCommand {
             )?;
             return Ok(ExecutionResult::general_error());
         }
-        write_out(context, &search_results(hits, style))?;
+        write_out(context, &search_results(hits, &word, style))?;
         Ok(ExecutionResult::success())
     }
 
@@ -667,22 +681,56 @@ impl HelpCommand {
     }
 }
 
-/// What `help search` prints for `hits`.
-fn search_results(hits: Vec<helpdocs::Hit>, style: Style) -> String {
+/// `line` with each place `word` occurs, case aside, in [`render::HIT`] when colour is on.
+fn picked_out(line: &str, word: &str, colour: bool) -> String {
+    let needle = word.to_ascii_lowercase();
+    if !colour || needle.is_empty() {
+        return line.to_owned();
+    }
+    // ASCII lowercasing keeps every byte where it was, so its offsets are the line's.
+    let haystack = line.to_ascii_lowercase();
+    let mut out = String::with_capacity(line.len());
+    let mut from = 0;
+    for (at, _) in haystack.match_indices(&needle) {
+        let (Some(before), Some(found)) = (line.get(from..at), line.get(at..at + needle.len()))
+        else {
+            continue;
+        };
+        out.push_str(before);
+        out.push_str(&render::paint(found, render::HIT, true));
+        from = at + needle.len();
+    }
+    out.push_str(line.get(from..).unwrap_or_default());
+    out
+}
+
+/// What `help search` prints for `hits`: each page's name, a topic's told from a
+/// builtin's by its colour, and the lines that matched, `word` picked out in them.
+fn search_results(hits: Vec<helpdocs::Hit>, word: &str, style: Style) -> String {
     let mut out = String::new();
     for hit in hits {
-        let what = if hit.topic { "topic" } else { "builtin" };
+        let (what, colour) = if hit.topic {
+            ("topic", render::TOPIC)
+        } else {
+            ("builtin", render::COMMAND)
+        };
         out.push_str(&render::wrap(
-            &render::inline(
-                &format!("`{}` ({what}) - {}", hit.name, hit.summary),
-                style.colour,
+            &format!(
+                "{} ({what}) - {}",
+                render::paint(hit.name, colour, style.colour),
+                render::inline(hit.summary, style.colour)
             ),
             style.width,
             "",
             4,
         ));
         for line in hit.lines.iter().take(LINES_PER_HIT) {
-            out.push_str(&render::wrap(line, style.width, "    ", 6));
+            out.push_str(&render::wrap(
+                &picked_out(line, word, style.colour),
+                style.width,
+                "    ",
+                6,
+            ));
         }
         if hit.lines.len() > LINES_PER_HIT {
             let more = hit.lines.len() - LINES_PER_HIT;
@@ -691,4 +739,19 @@ fn search_results(hits: Vec<helpdocs::Hit>, style: Style) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_search_picks_out_the_word_wherever_it_is_case_aside() {
+        assert_eq!(
+            picked_out("A Pipe and a pipe", "pipe", true),
+            "A \x1b[1;33mPipe\x1b[0m and a \x1b[1;33mpipe\x1b[0m"
+        );
+        assert_eq!(picked_out("A Pipe", "pipe", false), "A Pipe");
+        assert_eq!(picked_out("nothing here", "pipe", true), "nothing here");
+    }
 }
