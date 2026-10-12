@@ -3978,3 +3978,286 @@ Everything is Ok
 Size:       0
 Compressed: 36
 rc=0
+== names that are not ASCII
+Path = u.tar
+Characteristics = GNU UTF8-ERROR non-UTF8 SingleSurrogate Escape Truncated MaxUnicode=2097152
+Path = u
+User = bn
+Group = grün
+Characteristics = 5 GNU ASCII
+Comment = 
+Path = u/01-café.txt
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8 MaxUnicode=233
+Comment = 
+Path = u/02-日本.txt
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8 MaxUnicode=26412
+Comment = 
+Path = u/03-bad.txt
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8-ERROR non-UTF8
+Comment = 
+Path = u/04-trunc
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8-ERROR Truncated MaxUnicode=3
+Comment = 
+Path = u/05-(
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8-ERROR non-UTF8
+Comment = 
+Path = u/06-lead
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8-ERROR non-UTF8
+Comment = 
+Path = u/07-over
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8-ERROR non-UTF8
+Comment = 
+Path = u/08-o3
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8-ERROR non-UTF8
+Comment = 
+Path = u/09-pair😀
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8-ERROR SingleSurrogate MaxUnicode=56832
+Comment = 
+Path = u/10-big
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8-ERROR MaxUnicode=1114112
+Comment = 
+Path = u/11-five
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8-ERROR MaxUnicode=2097152
+Comment = 
+Path = u/12-esc
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8 Escape MaxUnicode=61312
+Comment = 
+Path = u/13-emoji😀
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8 MaxUnicode=128512
+Comment = 
+Path = u/14-mixé
+User = bn
+Group = grün
+Characteristics = 0 GNU UTF8-ERROR Truncated MaxUnicode=233
+Comment = 
+Path = u/15-ctlx
+User = bn
+Group = grün
+Characteristics = 0 GNU ASCII
+Comment = 
+rc=0
+Everything is Ok
+Files: 15
+rc=0
+Path = p.tar
+Characteristics = POSIX PAX path UTF8 MaxUnicode=26412
+Path = p
+User = 
+Group = 
+Characteristics = 5 POSIX ASCII
+Comment = 
+Path = p/café.txt
+User = 
+Group = 
+Characteristics = 0 POSIX UTF8 MaxUnicode=233 PAX pax_path
+Comment = p/PaxHeaders/cafÃ©.txt_
+Path = p/日本.txt
+User = 
+Group = 
+Characteristics = 0 POSIX UTF8 MaxUnicode=26412 PAX pax_path
+Comment = p/PaxHeaders/æ¥æ¬.txt_
+rc=0
+Everything is Ok
+Files: 2
+rc=0
+names
+names/p
+names/p/café.txt
+names/p/日本.txt
+names/u
+names/u/01-café.txt
+names/u/02-日本.txt
+names/u/03-bad.txt
+names/u/04-trunc
+names/u/05-(
+names/u/06-lead
+names/u/07-over
+names/u/08-o3
+names/u/09-pair😀
+names/u/10-big
+names/u/11-five
+names/u/12-esc
+names/u/13-emoji😀
+names/u/14-mixé
+names/u/15-ctl_x
+== zips made on Unix
+Path = unix.zip
+Path = unix
+Folder = +
+Size = 0
+Attributes = D drwxr-xr-x
+CRC = 
+Method = Store
+Characteristics = UT:MA:1 ux
+Host OS = Unix
+Path = unix/café.txt
+Folder = -
+Size = 5
+Attributes =  -rw-r--r--
+CRC = 2F2FAB88
+Method = Store
+Characteristics = UT:MA:1 ux : UTF8
+Host OS = Unix
+Path = unix/link.txt
+Folder = -
+Size = 9
+Attributes =  lrwxrwxrwx
+CRC = 2694521B
+Method = Store
+Characteristics = UT:MA:1 ux
+Host OS = Unix
+Path = unix/private.txt
+Folder = -
+Size = 7
+Attributes =  -rw-------
+CRC = E2EBB28C
+Method = Store
+Characteristics = UT:MA:1 ux
+Host OS = Unix
+Path = unix/notes.txt
+Folder = -
+Size = 5
+Attributes =  -rw-r--r--
+CRC = 37ECDA27
+Method = Store
+Characteristics = UT:MA:1 ux
+Host OS = Unix
+Path = unix/run.sh
+Folder = -
+Size = 18
+Attributes =  -rwxr-xr-x
+CRC = E9DA3A2F
+Method = Store
+Characteristics = UT:MA:1 ux
+Host OS = Unix
+Path = unix/sub
+Folder = +
+Size = 0
+Attributes = D drwxr-x---
+CRC = 
+Method = Store
+Characteristics = UT:MA:1 ux
+Host OS = Unix
+Path = unix/sub/inner.txt
+Folder = -
+Size = 6
+Attributes =  -rw-r--r--
+CRC = D0024D8C
+Method = Store
+Characteristics = UT:MA:1 ux
+Host OS = Unix
+rc=0
+ERROR: Cannot create symbolic link : A required privilege is not held by the client. : unix/unix/link.txt
+rc=2
+unix
+unix/unix
+unix/unix/café.txt
+unix/unix/link.txt
+unix/unix/notes.txt
+unix/unix/private.txt
+unix/unix/run.sh
+unix/unix/sub
+unix/unix/sub/inner.txt
+Path = unix-x.zip
+Path = unix
+Folder = +
+Size = 0
+Attributes = D drwxr-xr-x
+CRC = 
+Method = Store
+Characteristics = 
+Host OS = Unix
+Path = unix/café.txt
+Folder = -
+Size = 5
+Attributes =  -rw-r--r--
+CRC = 2F2FAB88
+Method = Store
+Characteristics = UTF8
+Host OS = Unix
+Path = unix/link.txt
+Folder = -
+Size = 9
+Attributes =  lrwxrwxrwx
+CRC = 2694521B
+Method = Store
+Characteristics = 
+Host OS = Unix
+Path = unix/private.txt
+Folder = -
+Size = 7
+Attributes =  -rw-------
+CRC = E2EBB28C
+Method = Store
+Characteristics = 
+Host OS = Unix
+Path = unix/notes.txt
+Folder = -
+Size = 5
+Attributes =  -rw-r--r--
+CRC = 37ECDA27
+Method = Store
+Characteristics = 
+Host OS = Unix
+Path = unix/run.sh
+Folder = -
+Size = 18
+Attributes =  -rwxr-xr-x
+CRC = E9DA3A2F
+Method = Store
+Characteristics = 
+Host OS = Unix
+Path = unix/sub
+Folder = +
+Size = 0
+Attributes = D drwxr-x---
+CRC = 
+Method = Store
+Characteristics = 
+Host OS = Unix
+Path = unix/sub/inner.txt
+Folder = -
+Size = 6
+Attributes =  -rw-r--r--
+CRC = D0024D8C
+Method = Store
+Characteristics = 
+Host OS = Unix
+rc=0
+ERROR: Cannot create symbolic link : A required privilege is not held by the client. : unix-x/unix/link.txt
+rc=2
+unix-x
+unix-x/unix
+unix-x/unix/café.txt
+unix-x/unix/link.txt
+unix-x/unix/notes.txt
+unix-x/unix/private.txt
+unix-x/unix/run.sh
+unix-x/unix/sub
+unix-x/unix/sub/inner.txt

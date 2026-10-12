@@ -1486,3 +1486,10 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   cash refused the pair wherever they came from. Checked against GNU tar 1.35 both ways:
   the typed one is kept and `TAR_OPTIONS`' dropped, in either direction; given in one
   place, the pair is still refused. tar_cases.sh has the cases.
+- **7z cases not yet checked against 7-Zip** (phase 31; checked 2026-10-12): Unix-made
+  zips' names and modes (Info-ZIP 3.0, with and without `-X`) already matched. Tar names
+  that are not ASCII did not: 7-Zip's Characteristics carry its UTF-8 check (`UTF8-ERROR`,
+  `non-UTF8`, `SingleSurrogate`, `Escape`, `Truncated`, `MaxUnicode=N`), a byte that does
+  not start a sequence reads as U+EF00 plus the byte, user, group and link names read
+  the same way, and pax header names show byte for byte. Now as 7-Zip; 7z_formats.sh
+  has the cases. Zips read by their local headers and split zips stay in TODO.md.

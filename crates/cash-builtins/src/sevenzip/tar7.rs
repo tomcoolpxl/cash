@@ -161,7 +161,8 @@ struct Flags {
     schily: bool,
     pax_global_error: bool,
     warning: bool,
-    ascii: bool,
+    /// The check of every item's name together.
+    names: Utf8Check,
 }
 
 /// How reading stopped short (`k_ErrorType_*`).
@@ -902,8 +903,53 @@ fn ticks_of(sec: i64, ns: u32) -> Option<(u64, u8)> {
 
 /// A name as 7-Zip shows it: UTF-8, without its trailing `/`.
 fn shown_name(name: &[u8]) -> String {
-    let text = String::from_utf8_lossy(name);
+    let text = utf8_escaped(name);
     text.trim_end_matches('/').to_owned()
+}
+
+/// 7-Zip's reading of UTF-8 text: a byte that does not start a well-formed sequence
+/// becomes U+EF00 plus the byte, and a surrogate stays one, so two in a row make a
+/// pair. A surrogate left alone, which 7-Zip keeps in the name, is U+FFFD here.
+fn utf8_escaped(bytes: &[u8]) -> String {
+    let mut units: Vec<u16> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while let Some(&lead) = bytes.get(i) {
+        let (more, mask, least) = match lead {
+            0..=0x7f => {
+                units.push(lead.into());
+                i += 1;
+                continue;
+            }
+            0xc2..=0xdf => (1, 0x1f, 0x80),
+            0xe0..=0xef => (2, 0x0f, 0x800),
+            0xf0..=0xf4 => (3, 0x07, 0x1_0000),
+            _ => (0, 0, 0),
+        };
+        let tail = bytes.get(i + 1..=i + more).unwrap_or_default();
+        let point = (more > 0 && tail.len() == more && tail.iter().all(|b| b & 0xc0 == 0x80))
+            .then(|| {
+                tail.iter()
+                    .fold(u32::from(lead & mask), |v, b| v << 6 | u32::from(b & 0x3f))
+            })
+            .filter(|point| (least..=0x10_ffff).contains(point));
+        match point {
+            Some(point) if point >= 0x1_0000 => {
+                let v = point - 0x1_0000;
+                units.push(0xd800 | u16::try_from(v >> 10).unwrap_or(0));
+                units.push(0xdc00 | u16::try_from(v & 0x3ff).unwrap_or(0));
+                i += 1 + more;
+            }
+            Some(point) => {
+                units.push(u16::try_from(point).unwrap_or(0xfffd));
+                i += 1 + more;
+            }
+            None => {
+                units.push(0xef00 | u16::from(lead));
+                i += 1;
+            }
+        }
+    }
+    String::from_utf16_lossy(&units)
 }
 
 /// `AddSpecCharToString`: printable, else `[hh]`.
@@ -915,8 +961,125 @@ fn spec_char(c: u8, s: &mut String) {
     }
 }
 
+/// 7-Zip's check of a name's UTF-8, which `Characteristics` reports: `ASCII`, or
+/// `UTF8` (`UTF8-ERROR` when it fails) and what it found.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Utf8Check {
+    /// A byte past 0x7f.
+    high: bool,
+    non_utf: bool,
+    zero_char: bool,
+    single_surrogate: bool,
+    /// A point 7-Zip's escapes use, U+EF80 to U+EFFF.
+    escape: bool,
+    /// A sequence the text ends inside.
+    truncated: bool,
+    /// The largest point past 0x7f, or the start of one cut short.
+    max_point: u32,
+}
+
+impl Utf8Check {
+    fn of(bytes: &[u8]) -> Self {
+        let mut check = Self::default();
+        let mut i = 0;
+        while let Some(&lead) = bytes.get(i) {
+            i += 1;
+            if lead == 0 {
+                check.zero_char = true;
+                continue;
+            }
+            if lead < 0x80 {
+                continue;
+            }
+            check.high = true;
+            let (mut more, mask, least) = match lead {
+                0xc2..=0xdf => (1, 0x1f, 0x80),
+                0xe0..=0xef => (2, 0x0f, 0x800),
+                0xf0..=0xf7 => (3, 0x07, 0x1_0000),
+                0xf8..=0xfb => (4, 0x03, 0x20_0000),
+                0xfc..=0xfd => (5, 0x01, 0x400_0000),
+                _ => {
+                    check.non_utf = true;
+                    continue;
+                }
+            };
+            let mut point = u32::from(lead & mask);
+            while more > 0
+                && let Some(&b) = bytes.get(i)
+                && b & 0xc0 == 0x80
+            {
+                point = point << 6 | u32::from(b & 0x3f);
+                i += 1;
+                more -= 1;
+            }
+            if more > 0 {
+                if i == bytes.len() {
+                    check.truncated = true;
+                    check.max_point = check.max_point.max(point);
+                } else {
+                    check.non_utf = true;
+                }
+                continue;
+            }
+            if point < least {
+                check.non_utf = true;
+                continue;
+            }
+            check.max_point = check.max_point.max(point);
+            check.single_surrogate |= (0xd800..0xe000).contains(&point);
+            check.escape |= (0xef80..0xf000).contains(&point);
+        }
+        check
+    }
+
+    fn merge(&mut self, other: Self) {
+        self.high |= other.high;
+        self.non_utf |= other.non_utf;
+        self.zero_char |= other.zero_char;
+        self.single_surrogate |= other.single_surrogate;
+        self.escape |= other.escape;
+        self.truncated |= other.truncated;
+        self.max_point = self.max_point.max(other.max_point);
+    }
+
+    const fn is_ok(&self) -> bool {
+        !(self.non_utf
+            || self.zero_char
+            || self.single_surrogate
+            || self.truncated
+            || self.max_point >= 0x11_0000)
+    }
+
+    fn word(&self) -> String {
+        if !self.high {
+            return "ASCII".to_owned();
+        }
+        let mut word = if self.is_ok() { "UTF8" } else { "UTF8-ERROR" }.to_owned();
+        for (on, what) in [
+            (self.non_utf, "non-UTF8"),
+            (self.zero_char, "ZeroChar"),
+            (self.single_surrogate, "SingleSurrogate"),
+            (self.escape, "Escape"),
+            (self.truncated, "Truncated"),
+        ] {
+            if on {
+                word.push(' ');
+                word.push_str(what);
+            }
+        }
+        if self.max_point != 0 {
+            let _ = write!(word, " MaxUnicode={}", self.max_point);
+        }
+        word
+    }
+}
+
+/// Bytes as 7-Zip shows the text it keeps unconverted: each byte its own character.
+fn latin1(bytes: &[u8]) -> String {
+    bytes.iter().map(|&b| char::from(b)).collect()
+}
+
 /// The item's `Characteristics`.
-#[expect(clippy::too_many_lines, reason = "7-Zip's words, one by one")]
 fn characteristics(item: &TarItem) -> String {
     let mut words: Vec<String> = Vec::new();
     let mut flag = String::new();
@@ -939,14 +1102,7 @@ fn characteristics(item: &TarItem) -> String {
     if item.prefix_used {
         words.push("PREFIX".to_owned());
     }
-    words.push(
-        if item.name.is_ascii() {
-            "ASCII"
-        } else {
-            "UTF8"
-        }
-        .to_owned(),
-    );
+    words.push(Utf8Check::of(&item.name).word());
     for (used, used_2, name) in [
         (item.long_name, item.long_name_2, "LongName"),
         (item.long_link, item.long_link_2, "LongLink"),
@@ -992,10 +1148,7 @@ fn characteristics(item: &TarItem) -> String {
         words.push("pax_size".to_owned());
     }
     if !item.schily_fflags.is_empty() {
-        words.push(format!(
-            "SCHILY.fflags={}",
-            String::from_utf8_lossy(&item.schily_fflags)
-        ));
+        words.push(format!("SCHILY.fflags={}", latin1(&item.schily_fflags)));
     }
     if item.is_sparse() {
         words.push("SPARSE".to_owned());
@@ -1029,7 +1182,7 @@ fn comment(path: &[u8], raw: &[u8]) -> String {
         s.push(b'\n');
     }
     s.extend_from_slice(raw);
-    String::from_utf8_lossy(&s).replace(['\n', '\r', '\t'], "_")
+    latin1(&s).replace(['\n', '\r', '\t'], "_")
 }
 
 /// The properties a technical listing shows for a tar item, in 7-Zip's order.
@@ -1066,10 +1219,7 @@ pub(super) fn open(location: &Location, name: &Path) -> io::Result<Option<Openin
         phy_size: 0,
         headers_size: 0,
         fault: None,
-        flags: Flags {
-            ascii: true,
-            ..Flags::default()
-        },
+        flags: Flags::default(),
         pax_global: None,
     };
     let end = reader.file.seek(SeekFrom::End(0))?;
@@ -1108,7 +1258,7 @@ pub(super) fn open(location: &Location, name: &Path) -> io::Result<Option<Openin
         flags.prefix |= item.prefix_used;
         flags.pax_items |= matches!(item.link_flag, b'x' | b'X' | b'g');
         flags.warning |= item.is_warning() || item.header_error || item.pax_error;
-        flags.ascii &= item.name.is_ascii();
+        flags.names.merge(Utf8Check::of(&item.name));
         reader.phy_size += item.pack_size_aligned();
         reader.file.seek(SeekFrom::Start(reader.phy_size))?;
         items.push(item);
@@ -1150,7 +1300,8 @@ pub(super) fn open(location: &Location, name: &Path) -> io::Result<Option<Openin
             characts.push(word);
         }
     }
-    characts.push(if flags.ascii { "ASCII" } else { "UTF8" });
+    let names = flags.names.word();
+    characts.push(&names);
     let mut props = vec![
         ("Headers Size", reader.headers_size.to_string()),
         ("Code Page", "UTF-8".to_owned()),
@@ -1222,7 +1373,7 @@ fn listed_item(item: &TarItem) -> Item {
             listed.time_extra[slot] = extra;
         }
     }
-    let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
+    let text = utf8_escaped;
     listed.extra = vec![
         (
             Prop::Folder,
