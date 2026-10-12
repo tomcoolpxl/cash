@@ -1512,3 +1512,12 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   once the release begins, and the sorting is repeated until a round finds no new
   member. A test closes the console of a script starting programs in a loop: two or
   three were left each time before, none after.
+- **7z: zips 7-Zip reads and cash refuses** (phase 31; checked and done 2026-10-12): a
+  zip with no central directory now opens by its local headers, as in 7-Zip: "Local" for
+  the archive and each item, "Unexpected end of archive", status 2, the members
+  extracted; a member's data descriptor is found after its data when another header
+  follows it, else its data runs to the file's end and the item fails. A split zip
+  (`-s`: `.z01`, `.z02`, …, `.zip`) opens from any part, its parts read as one, with
+  7-Zip's volume facts and footer; a missing part is said and its members fail. Same
+  behavior as 7-Zip, not the same bytes (the user, 2026-10-12): a member cut short says
+  "Unexpected end of data" where 7-Zip says "Data Error". 7z_formats.sh has the cases.

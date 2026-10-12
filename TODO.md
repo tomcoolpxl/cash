@@ -27,12 +27,6 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 What the phases now in DONE.md left open, each where its phase says more.
 
-- **7z: zips 7-Zip reads and cash refuses** (phase 31; checked 2026-10-12): a zip with
-  no central directory, which 7-Zip opens by its local headers ("Characteristics =
-  Local" for the archive and each item, "Unexpected end of archive", status 2, every
-  member extracted); and split zips (Info-ZIP's `-s`: `.z01`, `.z02`, …, `.zip`), which
-  7-Zip opens from any part ("Multivolume = +", "Volume Index", "Volumes", "Total
-  Physical Size", each item's volume and offset). cash says "Is not archive" to both.
 - **7z: a tar name with a lone surrogate** (2026-10-12): a UTF-8-encoded surrogate with
   no partner (`ED A0 80`) stays a lone UTF-16 unit in 7-Zip's listing and extracted
   name; cash's names are Rust strings, so it shows and writes U+FFFD. Pairs (CESU-8)

@@ -2,10 +2,12 @@
 //! central directory's items with the facts 7-Zip shows (time by the NTFS or Unix extra
 //! field, else MS-DOS's; attributes by the host; the method with its encryption and
 //! level; the extra fields' names; the version, volume and offset), and each item's
-//! data through cash-archive's zip reader.
+//! data through cash-archive's zip reader. A split zip (`NAME.z01` … `NAME.zip`) is read
+//! as one from any of its parts; a zip with no end record, by its local headers.
 
 use std::fmt::Write as _;
 use std::io::{self, BufReader, Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
 
 use cash_archive::sevenz::Problem;
 use cash_archive::zip::read::{self as zread, DataError};
@@ -22,6 +24,13 @@ pub(super) struct Opening {
     pub(super) physical_size: u64,
     pub(super) props: Vec<(&'static str, String)>,
     pub(super) items: Vec<Item>,
+    /// What went wrong reading it, though it opened: a zip read by its local headers
+    /// has no end, as 7-Zip says ("Unexpected end of archive").
+    pub(super) error_flags: Vec<&'static str>,
+    /// What went wrong, in words: a split zip's missing part.
+    pub(super) error_message: Option<String>,
+    /// A split zip's parts, the opened one first.
+    pub(super) volumes: Option<super::archive::Split>,
     pub(super) zip: Zip,
 }
 
@@ -30,6 +39,8 @@ pub(super) struct Zip {
     pub(super) location: Location,
     pub(super) archive: zread::Archive,
     password: Option<String>,
+    /// For each item, whether its data descriptor was lost (read by local headers).
+    lost: Vec<bool>,
 }
 
 /// The properties a technical listing shows for a zip item, in 7-Zip's order.
@@ -318,12 +329,15 @@ fn method_text(entry: &Entry) -> String {
     words.join(" ")
 }
 
-/// `kpidCharacts`: the central extra field's blocks, then the flags 7-Zip names.
-fn characteristics(entry: &Entry) -> String {
-    let mut s: Vec<String> = extra_blocks(&entry.extra)
-        .into_iter()
-        .map(|(id, data)| extra_name(id, data))
-        .collect();
+/// `kpidCharacts`: the extra field's blocks, after `Local` for a member read by its
+/// local header, then the flags 7-Zip names.
+fn characteristics(entry: &Entry, local: bool) -> String {
+    let mut s: Vec<String> = local.then(|| "Local".to_owned()).into_iter().collect();
+    s.extend(
+        extra_blocks(&entry.extra)
+            .into_iter()
+            .map(|(id, data)| extra_name(id, data)),
+    );
     let flags = entry.flags & !6;
     let named: Vec<&str> = [
         (0, "Encrypt"),
@@ -366,15 +380,355 @@ fn has_crc(entry: &Entry) -> bool {
     entry.crc != 0 || !is_dir(entry)
 }
 
+/// `Extract_UnixTime` on a local header's `UT` block: each time its flags name, in
+/// their order, the modification time first.
+fn unix_time_local(data: &[u8], index: usize) -> Option<u32> {
+    let flags = *data.first()?;
+    if flags >> index & 1 == 0 {
+        return None;
+    }
+    let before = (flags & ((1 << index) - 1)).count_ones() as usize;
+    le32(data, 1 + 4 * before)
+}
+
+const LOCAL_SIGNATURE: &[u8] = b"PK\x03\x04";
+const CENTRAL_SIGNATURE: &[u8] = b"PK\x01\x02";
+const DESCRIPTOR_SIGNATURE: &[u8] = b"PK\x07\x08";
+
+/// A member read by its local header, with no central directory to say more (7-Zip's
+/// `Local`); `lost_descriptor` when its data descriptor was not found, and its data
+/// taken to run to the file's end.
+struct LocalMember {
+    entry: Entry,
+    lost_descriptor: bool,
+}
+
+/// The members of a zip with no central directory, one local header after another:
+/// sizes from the header, or from the data descriptor after the data when the header
+/// says one follows. Reading stops at the first place with no local header, or where a
+/// member goes past the file's end.
+fn scan_local(input: &mut (impl Read + Seek), size: u64) -> io::Result<Vec<LocalMember>> {
+    let mut members = Vec::new();
+    let mut pos = 0;
+    while pos < size {
+        input.seek(SeekFrom::Start(pos))?;
+        let mut fixed = [0u8; 30];
+        if super::archive::read_up_to(input, &mut fixed)? < fixed.len()
+            || &fixed[..4] != LOCAL_SIGNATURE
+        {
+            break;
+        }
+        let name_len = usize::from(le16(&fixed, 26).unwrap_or(0));
+        let mut variable = vec![0u8; name_len + usize::from(le16(&fixed, 28).unwrap_or(0))];
+        if super::archive::read_up_to(input, &mut variable)? < variable.len() {
+            break;
+        }
+        let extra = variable.split_off(name_len);
+        let mut entry = Entry {
+            version_needed: le16(&fixed, 4).unwrap_or(0),
+            flags: le16(&fixed, 6).unwrap_or(0),
+            method: le16(&fixed, 8).unwrap_or(0),
+            time: cash_archive::zip::DosTime {
+                time: le16(&fixed, 10).unwrap_or(0),
+                date: le16(&fixed, 12).unwrap_or(0),
+            },
+            crc: le32(&fixed, 14).unwrap_or(0),
+            compressed_size: u64::from(le32(&fixed, 18).unwrap_or(0)),
+            size: u64::from(le32(&fixed, 22).unwrap_or(0)),
+            name: variable,
+            extra,
+            local_offset: pos,
+            ..Entry::default()
+        };
+        if let Some((_, data)) = extra_blocks(&entry.extra)
+            .into_iter()
+            .find(|(id, _)| *id == 0x0001)
+        {
+            if entry.size == 0xFFFF_FFFF {
+                entry.size = le64(data, 0).unwrap_or(entry.size);
+            }
+            if entry.compressed_size == 0xFFFF_FFFF {
+                entry.compressed_size = le64(data, 8).unwrap_or(entry.compressed_size);
+            }
+        }
+        let data_start = pos + 30 + (name_len + entry.extra.len()) as u64;
+        let mut lost_descriptor = false;
+        let next = if entry.flags & 8 == 0 {
+            data_start + entry.compressed_size
+        } else if let Some((at, crc, packed, unpacked)) = find_descriptor(input, data_start, size)?
+        {
+            entry.crc = crc;
+            entry.compressed_size = packed;
+            entry.size = unpacked;
+            at + 16
+        } else {
+            lost_descriptor = true;
+            entry.crc = 0;
+            entry.compressed_size = size - data_start.min(size);
+            entry.size = 0;
+            size
+        };
+        members.push(LocalMember {
+            entry,
+            lost_descriptor,
+        });
+        pos = next;
+    }
+    Ok(members)
+}
+
+/// A data descriptor after the data starting at `start`: its signature, a packed size
+/// that is the distance from `start`, and another local header or the central
+/// directory right after it, as 7-Zip finds one. Its place, CRC and sizes.
+fn find_descriptor(
+    input: &mut (impl Read + Seek),
+    start: u64,
+    size: u64,
+) -> io::Result<Option<(u64, u32, u64, u64)>> {
+    // A descriptor and the signature after it: twenty bytes, which a chunk's end may cut.
+    const NEEDED: usize = 20;
+    let mut buf = vec![0u8; (1 << 16) + NEEDED];
+    let mut base = start;
+    while base < size {
+        input.seek(SeekFrom::Start(base))?;
+        let n = super::archive::read_up_to(input, &mut buf)?;
+        if n < NEEDED {
+            break;
+        }
+        for i in 0..=n - NEEDED {
+            if &buf[i..i + 4] != DESCRIPTOR_SIGNATURE {
+                continue;
+            }
+            let at = base + i as u64;
+            let packed = le32(&buf, i + 8).unwrap_or(0);
+            let after = &buf[i + 16..i + 20];
+            if u64::from(packed) == (at - start) & 0xFFFF_FFFF
+                && (after == LOCAL_SIGNATURE || after == CENTRAL_SIGNATURE)
+            {
+                let crc = le32(&buf, i + 4).unwrap_or(0);
+                let unpacked = le32(&buf, i + 12).unwrap_or(0);
+                return Ok(Some((at, crc, u64::from(packed), u64::from(unpacked))));
+            }
+        }
+        base += (n - (NEEDED - 1)) as u64;
+    }
+    Ok(None)
+}
+
+/// Opens a zip with no central directory by its local headers; `None` when it has
+/// none at its start.
+fn open_local(
+    location: &Location,
+    mut file: impl Read + Seek,
+    zone: &cash_core::timefmt::Zone,
+) -> io::Result<Option<Opening>> {
+    let size = file.seek(SeekFrom::End(0))?;
+    let members = scan_local(&mut file, size)?;
+    if members.is_empty() {
+        return Ok(None);
+    }
+    let items = members
+        .iter()
+        .map(|member| listed_item(&member.entry, zone, 0, Some(member.lost_descriptor)))
+        .collect();
+    let lost = members
+        .iter()
+        .map(|member| member.lost_descriptor)
+        .collect();
+    let archive = zread::Archive {
+        file_size: size,
+        entries: members.into_iter().map(|member| member.entry).collect(),
+        ..zread::Archive::default()
+    };
+    Ok(Some(Opening {
+        physical_size: size,
+        props: vec![("Characteristics", "Local".to_owned())],
+        items,
+        error_flags: vec!["Unexpected end of archive"],
+        error_message: None,
+        volumes: None,
+        zip: Zip {
+            location: location.clone(),
+            archive,
+            password: None,
+            lost,
+        },
+    }))
+}
+
+/// The number of the part a split zip's part is, by its name: `NAME.z01` is 1, and the
+/// last part, `NAME.zip`, none.
+fn part_number(path: &Path) -> Option<u32> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    let digits = ext.strip_prefix('z')?;
+    (digits.len() >= 2 && digits.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| digits.parse().ok())
+        .flatten()
+}
+
+/// Whether `path` names a part of a split zip other than its last, `NAME.zip`, which is
+/// there: 7-Zip opens the set from any of its parts.
+pub(super) fn is_split_part(path: &Path) -> bool {
+    part_number(path).is_some_and(|n| n > 0) && path.with_extension("zip").is_file()
+}
+
+/// The number of the disk a zip's end record is on: how many parts came before it.
+fn end_disk(path: &Path) -> io::Result<u32> {
+    let mut file = std::fs::File::open(path)?;
+    let size = file.seek(SeekFrom::End(0))?;
+    let tail_len = size.min(0xFFFF + 22 + 20);
+    file.seek(SeekFrom::Start(size - tail_len))?;
+    let mut tail = vec![0u8; usize::try_from(tail_len).unwrap_or(0)];
+    file.read_exact(&mut tail)?;
+    let Some(at) = tail.windows(4).rposition(|w| w == b"PK\x05\x06") else {
+        return Ok(0);
+    };
+    let disk = le16(&tail, at + 4).unwrap_or(0);
+    // Zip64's locator, before the record, has the number of disks.
+    if disk == 0xFFFF
+        && at >= 20
+        && tail.get(at - 20..at - 16) == Some(b"PK\x06\x07")
+        && let Some(disks) = le32(&tail, at - 4)
+    {
+        return Ok(disks.saturating_sub(1));
+    }
+    Ok(u32::from(disk))
+}
+
+/// A split zip's parts (Info-ZIP's and PKZIP's `-s`): `NAME.z01`, `NAME.z02`, … and
+/// `NAME.zip`, whose end record says how many came before it; and which of them `path`
+/// is. `None` when `path` is a zip of one part.
+fn split_parts(path: &Path) -> io::Result<Option<(Vec<PathBuf>, usize)>> {
+    let number = part_number(path);
+    let last = if number.is_some() {
+        path.with_extension("zip")
+    } else if path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
+    {
+        path.to_path_buf()
+    } else {
+        return Ok(None);
+    };
+    if !last.is_file() {
+        return Ok(None);
+    }
+    let disks = end_disk(&last)?;
+    if disks == 0 {
+        return Ok(None);
+    }
+    let mut parts: Vec<PathBuf> = (1..=disks)
+        .map(|n| path.with_extension(format!("z{n:02}")))
+        .collect();
+    parts.push(last);
+    let opened = number.map_or(parts.len() - 1, |n| (n as usize).saturating_sub(1));
+    Ok(Some((parts, opened)))
+}
+
+/// Opens a split zip, its parts read as one; a part missing is said, and its members'
+/// data fails.
+fn open_split(
+    parts: &[PathBuf],
+    opened: usize,
+    zone: &cash_core::timefmt::Zone,
+) -> io::Result<Option<Opening>> {
+    let sizes: Vec<Option<u64>> = parts
+        .iter()
+        .map(|p| p.metadata().ok().filter(|m| m.is_file()).map(|m| m.len()))
+        .collect();
+    // Where each part starts in the ones that are there, read as one.
+    let mut bases = Vec::with_capacity(parts.len());
+    let mut sum = 0;
+    for size in &sizes {
+        bases.push(sum);
+        sum += size.unwrap_or(0);
+    }
+    let present: Vec<PathBuf> = parts
+        .iter()
+        .zip(&sizes)
+        .filter(|(_, size)| size.is_some())
+        .map(|(p, _)| p.clone())
+        .collect();
+    let missing = parts.iter().zip(&sizes).find(|(_, size)| size.is_none());
+    let location = Location::of_parts(present.clone());
+    let mut file = location.open()?;
+    let archive = match zread::open_parts(&mut file, &bases) {
+        Ok(archive) => archive,
+        Err(zread::OpenError::Io(error)) => return Err(error),
+        Err(_) => return Ok(None),
+    };
+    let base_of = |disk: u32| {
+        bases
+            .get(disk as usize)
+            .and_then(|&b| i64::try_from(b).ok())
+            .unwrap_or(0)
+    };
+    let items = archive
+        .entries
+        .iter()
+        .map(|entry| listed_item(entry, zone, -base_of(entry.disk_start), None))
+        .collect();
+    let mut props = Vec::new();
+    if missing.is_none()
+        && let Some(first) = present.first()
+        && let Ok(mut f) = std::fs::File::open(first)
+    {
+        let mut head = [0u8; 4];
+        if f.read_exact(&mut head).is_ok() && head == DESCRIPTOR_SIGNATURE {
+            props.push(("Embedded Stub Size", "4".to_owned()));
+        }
+    }
+    props.push(("Total Physical Size", sum.to_string()));
+    props.push(("Multivolume", "+".to_owned()));
+    props.push(("Volume Index", opened.to_string()));
+    props.push(("Volumes", parts.len().to_string()));
+    let opened_size = sizes.get(opened).copied().flatten().unwrap_or(0);
+    // The opened part first: the others are read with it, not listed again.
+    let mut listed_parts = vec![parts[opened].clone()];
+    listed_parts.extend(present.iter().filter(|p| **p != parts[opened]).cloned());
+    let lost = vec![false; archive.entries.len()];
+    Ok(Some(Opening {
+        physical_size: opened_size,
+        props,
+        items,
+        error_flags: Vec::new(),
+        error_message: missing.map(|(p, _)| {
+            format!(
+                "Missing volume : {}",
+                p.file_name()
+                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+            )
+        }),
+        volumes: Some(super::archive::Split {
+            parts: listed_parts,
+            first_size: opened_size,
+            total: sum,
+        }),
+        zip: Zip {
+            location,
+            archive,
+            password: None,
+            lost,
+        },
+    }))
+}
+
 /// Opens `path` as a zip (`CHandler::Open`); `None` when it is not one.
 pub(super) fn open(
     location: &Location,
     zone: &cash_core::timefmt::Zone,
 ) -> io::Result<Option<Opening>> {
+    if let [path] = location.parts()
+        && let Some((parts, opened)) = split_parts(path)?
+    {
+        return open_split(&parts, opened, zone);
+    }
     let mut file = location.open()?;
     let archive = match zread::open(&mut file) {
         Ok(archive) => archive,
         Err(zread::OpenError::Io(error)) => return Err(error),
+        // No end record: read by the local headers, as 7-Zip does.
+        Err(zread::OpenError::NoEnd) => return open_local(location, file, zone),
         Err(_) => return Ok(None),
     };
     let mut props = Vec::new();
@@ -387,46 +741,69 @@ pub(super) fn open(
     let items = archive
         .entries
         .iter()
-        .map(|entry| listed_item(entry, zone, archive.extra_bytes))
+        .map(|entry| listed_item(entry, zone, archive.extra_bytes, None))
         .collect();
     let physical_size = archive.file_size;
+    let lost = vec![false; archive.entries.len()];
     Ok(Some(Opening {
         physical_size,
         props,
         items,
+        error_flags: Vec::new(),
+        error_message: None,
+        volumes: None,
         zip: Zip {
             location: location.clone(),
             archive,
             password: None,
+            lost,
         },
     }))
 }
 
-/// A zip item as the listing shows it.
-fn listed_item(entry: &Entry, zone: &cash_core::timefmt::Zone, base: i64) -> Item {
+/// A zip item as the listing shows it. `local` for a member read by its local header:
+/// whether its data descriptor was lost.
+fn listed_item(
+    entry: &Entry,
+    zone: &cash_core::timefmt::Zone,
+    base: i64,
+    local: Option<bool>,
+) -> Item {
     let blocks = extra_blocks(&entry.extra);
     let ntfs = blocks.iter().find(|(id, _)| *id == 0x000A).map(|(_, d)| *d);
     let ut = blocks.iter().find(|(id, _)| *id == 0x5455).map(|(_, d)| *d);
     let mut item = Item {
         path: name_of(entry),
         is_dir: is_dir(entry),
-        size: Some(entry.size),
+        // A lost descriptor took the size with it.
+        size: (local != Some(true)).then_some(entry.size),
         packed: Some(entry.compressed_size),
         attrib: Some(win_attrib(entry)),
         crc: has_crc(entry).then_some(entry.crc),
         encrypted: entry.flags & 1 != 0,
         method: Some(method_text(entry)),
-        host_os: Some(host_name(entry.host())),
+        // The host is the central directory's to say.
+        host_os: Some(if local.is_some() {
+            String::new()
+        } else {
+            host_name(entry.host())
+        }),
         ..Item::default()
     };
-    // (the item's slot: modified, created, accessed; the NTFS block's index of it)
+    let unix_time: fn(&[u8], usize) -> Option<u32> = if local.is_some() {
+        unix_time_local
+    } else {
+        unix_time_central
+    };
+    // (the item's slot: modified, created, accessed; the index of it in the NTFS and UT
+    // blocks, which keep modified, accessed, created)
     let times = [(0usize, 0usize), (1, 2), (2, 1)];
-    for (slot, ntfs_index) in times {
+    for (slot, index) in times {
         let value = ntfs
-            .and_then(|d| ntfs_time(d, ntfs_index))
+            .and_then(|d| ntfs_time(d, index))
             .map(|t| (t, 7, TimePrec::Exact))
             .or_else(|| {
-                ut.and_then(|d| unix_time_central(d, slot)).map(|u| {
+                ut.and_then(|d| unix_time(d, index)).map(|u| {
                     (
                         u64::from(u) * 10_000_000 + UNIX_EPOCH_TICKS,
                         0,
@@ -452,13 +829,17 @@ fn listed_item(entry: &Entry, zone: &cash_core::timefmt::Zone, base: i64) -> Ite
         }
     }
     let offset = i128::from(entry.local_offset) + i128::from(base);
+    let mut characts = characteristics(entry, local.is_some());
+    if local == Some(true) {
+        characts.push_str(" Descriptor_ERROR");
+    }
     item.extra = vec![
         (Prop::Folder, if item.is_dir { "+" } else { "-" }.to_owned()),
         (
             Prop::Comment,
             String::from_utf8_lossy(&entry.comment).replace(['\n', '\r'], "_"),
         ),
-        (Prop::Characteristics, characteristics(entry)),
+        (Prop::Characteristics, characts),
         (Prop::Version, (entry.version_needed & 0xFF).to_string()),
         (Prop::VolumeIndex, entry.disk_start.to_string()),
         (Prop::Offset, offset.to_string()),
@@ -487,6 +868,7 @@ impl Zip {
             encrypted: entry.flags & 1 != 0,
             unpacked: 0,
             size: entry.size,
+            after_end: self.lost.get(index).copied().unwrap_or(false),
         };
         let Ok(local) = local else {
             data.problem = Some(Problem::Data);
@@ -516,6 +898,9 @@ pub(super) struct ZipData {
     encrypted: bool,
     unpacked: u64,
     size: u64,
+    /// The data was taken to run to the file's end, its descriptor lost: what decodes
+    /// whole leaves the descriptor and more after it.
+    after_end: bool,
 }
 
 impl Read for ZipData {
@@ -549,6 +934,9 @@ impl Data for ZipData {
         let _ = io::copy(self, &mut io::sink());
         if let Some(problem) = self.problem {
             return Err(problem);
+        }
+        if self.after_end {
+            return Err(Problem::DataAfterEnd);
         }
         if self.unpacked < self.size {
             return Err(Problem::UnexpectedEnd);

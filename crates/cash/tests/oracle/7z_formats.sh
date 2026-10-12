@@ -9,8 +9,11 @@
 # tar 1.35 under WSL: one of names that are not good UTF-8 (a byte that is not, cut
 # sequences, an overlong one, CESU's surrogates, points past U+10FFFF, 7-Zip's escapes)
 # with such an owner, and a pax one of UTF-8 names; and two zips by Info-ZIP 3.0 under
-# WSL, with and without `-X`: Unix modes, a symbolic link, a UTF-8 name). 7z_formats.out
-# is 7-Zip's output.
+# WSL, with and without `-X`: Unix modes, a symbolic link, a UTF-8 name). Made as it
+# runs, by cash's zip: a split zip (`-s 64k`, opened by three of its parts, and with one
+# missing) and zips cut where their central directory starts, which 7-Zip reads by their
+# local headers (one streamed, its sizes in data descriptors, the last found or lost).
+# 7z_formats.out is 7-Zip's output.
 # A surrogate left alone is not among the names: 7-Zip keeps it, cash shows U+FFFD.
 #
 # As in 7z_cases.sh, `z` turns 7-Zip's CRLF and `\` into LF and `/`. 7-Zip shows times
@@ -345,6 +348,42 @@ unhex 504b03040a00000000000040475d00000000000000000000000005001c00756e69782f5554
 unhex 504b03040a00000000000040475d00000000000000000000000005000000756e69782f504b03040a00000800000040475d88ab2f2f05000000050000000e000000756e69782f636166c3a92e747874636166650a504b03040a00000000000040475d1b52942609000000090000000d000000756e69782f6c696e6b2e7478746e6f7465732e747874504b03040a00000000000040475d8cb2ebe2070000000700000010000000756e69782f707269766174652e7478747365637265740a504b03040a00000000000040475d27daec3705000000050000000e000000756e69782f6e6f7465732e747874746578740a504b03040a00000000000040475d2f3adae912000000120000000b000000756e69782f72756e2e736823212f62696e2f73680a6563686f2068690a504b03040a00000000000040475d00000000000000000000000009000000756e69782f7375622f504b03040a00000000000040475d8c4d02d0060000000600000012000000756e69782f7375622f696e6e65722e747874696e6e65720a504b01021e030a00000000000040475d000000000000000000000000050000000000000000001000ed4100000000756e69782f504b01021e030a00000800000040475d88ab2f2f05000000050000000e0000000000000001000000a48123000000756e69782f636166c3a92e747874504b01021e030a00000000000040475d1b52942609000000090000000d0000000000000000000000ffa154000000756e69782f6c696e6b2e747874504b01021e030a00000000000040475d8cb2ebe20700000007000000100000000000000001000000808188000000756e69782f707269766174652e747874504b01021e030a00000000000040475d27daec3705000000050000000e0000000000000001000000a481bd000000756e69782f6e6f7465732e747874504b01021e030a00000000000040475d2f3adae912000000120000000b0000000000000001000000ed81ee000000756e69782f72756e2e7368504b01021e030a00000000000040475d000000000000000000000000090000000000000000001000e84129010000756e69782f7375622f504b01021e030a00000000000040475d8c4d02d00600000006000000120000000000000001000000a48150010000756e69782f7375622f696e6e65722e747874504b05060000000008000800d4010000860100000000 > unix-x.zip
 for a in unix.zip unix-x.zip; do
   z -sccUTF-8 l -slt $a | grep -aE '^(Path|Folder|Size|Attributes|CRC|Method|Characteristics|Host OS) = |^rc='
-  z -sccUTF-8 x -y -o${a%.zip} $a | grep -aE '^(Everything|Files:|Folders:|ERROR)|^rc='
+  # Not the symbolic link: making one takes a right some machines give and others do not.
+  z -sccUTF-8 x -y -o${a%.zip} $a '-x!unix/link.txt' | grep -aE '^(Everything|Files:|Folders:|ERROR)|^rc='
   find ${a%.zip} | sort
+done
+
+echo "== split zips and zips without a central directory"
+cd "$dir" || exit 1
+mkdir pz && cd pz || exit 1
+mkdir s
+seq 1 40000 > s/big.txt
+printf 'small\n' > s/small.txt
+touch -d '2026-10-07 08:00:00' s/big.txt s/small.txt s
+zip -q -0 -X -r -s 64k split.zip s
+zf() { grep -aE '^(Path|Size|Packed Size|Attributes|CRC|Method|Characteristics|Host OS|Version|Volume Index|Offset|Physical Size|Embedded Stub Size|Total Physical Size|Multivolume|Volumes) = |^(ERROR|Unexpected|Missing|Everything|Archives|Open Errors|Sub items|Volumes:|Total archives|Files:|Compressed:)|^rc='; }
+for a in split.zip split.z01 split.z02; do
+  z -sccUTF-8 l -slt $a | zf
+  z -sccUTF-8 l $a | zf
+  z -sccUTF-8 t $a | zf
+done
+z -sccUTF-8 x -y -osplit split.z03 | zf
+find split -type f | sort | while read -r f; do echo "$f $(cksum < "$f")"; done
+mkdir miss && cp split.z01 split.z03 split.zip miss/
+(cd miss && z -sccUTF-8 l split.zip | zf; z -sccUTF-8 t split.zip | grep -aE '^(Everything|Archives with Errors)|^rc=')
+mkdir l
+printf 'alpha\n' > l/a.txt
+seq 1 300 > l/n.txt
+touch -d '2026-10-07 08:00:00' l/a.txt l/n.txt l
+zip -q -r -X plain.zip l
+zip -q -r -X - l | cat > streamed.zip
+central() { tail -c 22 "$1" | od -An -tu4 -j16 -N4 | tr -d ' '; }
+head -c "$(central plain.zip)" plain.zip > local.zip
+head -c "$(central streamed.zip)" streamed.zip > lost.zip
+head -c "$(($(central streamed.zip) + 4))" streamed.zip > found.zip
+for a in local.zip found.zip lost.zip; do
+  z -sccUTF-8 l -slt $a | zf
+  z -sccUTF-8 t $a | zf
+  z -sccUTF-8 x -y -o${a%.zip} $a | zf
+  find ${a%.zip} -type f | sort | while read -r f; do echo "$f $(cksum < "$f")"; done
 done

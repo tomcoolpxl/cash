@@ -32,6 +32,11 @@ impl Location {
         }
     }
 
+    /// The parts given, in order: a split zip's `.z01`, `.z02`, …, `.zip`.
+    pub(super) const fn of_parts(parts: Vec<PathBuf>) -> Self {
+        Self { parts }
+    }
+
     /// The parts, in order.
     pub(super) fn parts(&self) -> &[PathBuf] {
         &self.parts

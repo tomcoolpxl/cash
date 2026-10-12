@@ -4173,12 +4173,13 @@ Method = Store
 Characteristics = UT:MA:1 ux
 Host OS = Unix
 rc=0
-ERROR: Cannot create symbolic link : A required privilege is not held by the client. : unix/unix/link.txt
-rc=2
+Everything is Ok
+Folders: 2
+Files: 5
+rc=0
 unix
 unix/unix
 unix/unix/café.txt
-unix/unix/link.txt
 unix/unix/notes.txt
 unix/unix/private.txt
 unix/unix/run.sh
@@ -4250,14 +4251,420 @@ Method = Store
 Characteristics = 
 Host OS = Unix
 rc=0
-ERROR: Cannot create symbolic link : A required privilege is not held by the client. : unix-x/unix/link.txt
-rc=2
+Everything is Ok
+Folders: 2
+Files: 5
+rc=0
 unix-x
 unix-x/unix
 unix-x/unix/café.txt
-unix-x/unix/link.txt
 unix-x/unix/notes.txt
 unix-x/unix/private.txt
 unix-x/unix/run.sh
 unix-x/unix/sub
 unix-x/unix/sub/inner.txt
+== split zips and zips without a central directory
+Path = split.zip
+Physical Size = 32590
+Embedded Stub Size = 4
+Total Physical Size = 229198
+Multivolume = +
+Volume Index = 3
+Volumes = 4
+Path = s
+Size = 0
+Packed Size = 0
+Attributes = D drwxrwxr-x
+CRC = 
+Method = Store
+Characteristics = 
+Host OS = Unix
+Version = 10
+Volume Index = 0
+Offset = 4
+Path = s/big.txt
+Size = 228894
+Packed Size = 228894
+Attributes =  -rw-rw-r--
+CRC = 08F2D426
+Method = Store
+Characteristics = 
+Host OS = Unix
+Version = 10
+Volume Index = 0
+Offset = 36
+Path = s/small.txt
+Size = 6
+Packed Size = 6
+Attributes =  -rw-rw-r--
+CRC = B61C02A7
+Method = Store
+Characteristics = 
+Host OS = Unix
+Version = 10
+Volume Index = 3
+Offset = 32361
+rc=0
+Path = split.zip
+Physical Size = 32590
+Embedded Stub Size = 4
+Total Physical Size = 229198
+Multivolume = +
+Volume Index = 3
+Volumes = 4
+Archives: 1
+Volumes: 4
+Total archives size: 229198
+rc=0
+Path = split.zip
+Physical Size = 32590
+Embedded Stub Size = 4
+Total Physical Size = 229198
+Multivolume = +
+Volume Index = 3
+Volumes = 4
+Everything is Ok
+Files: 2
+Compressed: 229198
+rc=0
+Path = split.z01
+Physical Size = 65536
+Embedded Stub Size = 4
+Total Physical Size = 229198
+Multivolume = +
+Volume Index = 0
+Volumes = 4
+Path = s
+Size = 0
+Packed Size = 0
+Attributes = D drwxrwxr-x
+CRC = 
+Method = Store
+Characteristics = 
+Host OS = Unix
+Version = 10
+Volume Index = 0
+Offset = 4
+Path = s/big.txt
+Size = 228894
+Packed Size = 228894
+Attributes =  -rw-rw-r--
+CRC = 08F2D426
+Method = Store
+Characteristics = 
+Host OS = Unix
+Version = 10
+Volume Index = 0
+Offset = 36
+Path = s/small.txt
+Size = 6
+Packed Size = 6
+Attributes =  -rw-rw-r--
+CRC = B61C02A7
+Method = Store
+Characteristics = 
+Host OS = Unix
+Version = 10
+Volume Index = 3
+Offset = 32361
+rc=0
+Path = split.z01
+Physical Size = 65536
+Embedded Stub Size = 4
+Total Physical Size = 229198
+Multivolume = +
+Volume Index = 0
+Volumes = 4
+Archives: 1
+Volumes: 4
+Total archives size: 229198
+rc=0
+Path = split.z01
+Physical Size = 65536
+Embedded Stub Size = 4
+Total Physical Size = 229198
+Multivolume = +
+Volume Index = 0
+Volumes = 4
+Everything is Ok
+Files: 2
+Compressed: 229198
+rc=0
+Path = split.z02
+Physical Size = 65536
+Embedded Stub Size = 4
+Total Physical Size = 229198
+Multivolume = +
+Volume Index = 1
+Volumes = 4
+Path = s
+Size = 0
+Packed Size = 0
+Attributes = D drwxrwxr-x
+CRC = 
+Method = Store
+Characteristics = 
+Host OS = Unix
+Version = 10
+Volume Index = 0
+Offset = 4
+Path = s/big.txt
+Size = 228894
+Packed Size = 228894
+Attributes =  -rw-rw-r--
+CRC = 08F2D426
+Method = Store
+Characteristics = 
+Host OS = Unix
+Version = 10
+Volume Index = 0
+Offset = 36
+Path = s/small.txt
+Size = 6
+Packed Size = 6
+Attributes =  -rw-rw-r--
+CRC = B61C02A7
+Method = Store
+Characteristics = 
+Host OS = Unix
+Version = 10
+Volume Index = 3
+Offset = 32361
+rc=0
+Path = split.z02
+Physical Size = 65536
+Embedded Stub Size = 4
+Total Physical Size = 229198
+Multivolume = +
+Volume Index = 1
+Volumes = 4
+Archives: 1
+Volumes: 4
+Total archives size: 229198
+rc=0
+Path = split.z02
+Physical Size = 65536
+Embedded Stub Size = 4
+Total Physical Size = 229198
+Multivolume = +
+Volume Index = 1
+Volumes = 4
+Everything is Ok
+Files: 2
+Compressed: 229198
+rc=0
+Path = split.z03
+Physical Size = 65536
+Embedded Stub Size = 4
+Total Physical Size = 229198
+Multivolume = +
+Volume Index = 2
+Volumes = 4
+Everything is Ok
+Files: 2
+Compressed: 229198
+rc=0
+split/s/big.txt 4038560838 228894
+split/s/small.txt 70640329 6
+Path = split.zip
+ERROR = Missing volume : split.z02
+Physical Size = 32590
+Total Physical Size = 163662
+Multivolume = +
+Volume Index = 3
+Volumes = 4
+Archives: 1
+Volumes: 3
+Total archives size: 163662
+rc=2
+Archives with Errors: 1
+rc=2
+Path = local.zip
+ERRORS:
+Unexpected end of archive
+Physical Size = 627
+Characteristics = Local
+Path = l
+Size = 0
+Packed Size = 0
+Attributes = D
+CRC = 
+Method = Store
+Characteristics = Local
+Host OS = 
+Version = 10
+Volume Index = 0
+Offset = 0
+Path = l/a.txt
+Size = 6
+Packed Size = 6
+Attributes = 
+CRC = 9F606EEC
+Method = Store
+Characteristics = Local
+Host OS = 
+Version = 10
+Volume Index = 0
+Offset = 32
+Path = l/n.txt
+Size = 1092
+Packed Size = 515
+Attributes = 
+CRC = 88A40576
+Method = Deflate
+Characteristics = Local
+Host OS = 
+Version = 20
+Volume Index = 0
+Offset = 75
+rc=2
+ERRORS:
+Unexpected end of archive
+Path = local.zip
+ERRORS:
+Unexpected end of archive
+Physical Size = 627
+Characteristics = Local
+Archives with Errors: 1
+Open Errors: 1
+rc=2
+ERRORS:
+Unexpected end of archive
+Path = local.zip
+ERRORS:
+Unexpected end of archive
+Physical Size = 627
+Characteristics = Local
+Archives with Errors: 1
+Open Errors: 1
+rc=2
+local/l/a.txt 3650393976 6
+local/l/n.txt 1351575678 1092
+Path = found.zip
+ERRORS:
+Unexpected end of archive
+Physical Size = 681
+Characteristics = Local
+Path = l
+Size = 0
+Packed Size = 0
+Attributes = D
+CRC = 
+Method = Store
+Characteristics = Local : Descriptor
+Host OS = 
+Version = 10
+Volume Index = 0
+Offset = 0
+Path = l/a.txt
+Size = 6
+Packed Size = 8
+Attributes = 
+CRC = 9F606EEC
+Method = Deflate
+Characteristics = Local : Descriptor
+Host OS = 
+Version = 20
+Volume Index = 0
+Offset = 48
+Path = l/n.txt
+Size = 1092
+Packed Size = 515
+Attributes = 
+CRC = 88A40576
+Method = Deflate
+Characteristics = Local : Descriptor
+Host OS = 
+Version = 20
+Volume Index = 0
+Offset = 109
+rc=2
+ERRORS:
+Unexpected end of archive
+Path = found.zip
+ERRORS:
+Unexpected end of archive
+Physical Size = 681
+Characteristics = Local
+Archives with Errors: 1
+Open Errors: 1
+rc=2
+ERRORS:
+Unexpected end of archive
+Path = found.zip
+ERRORS:
+Unexpected end of archive
+Physical Size = 681
+Characteristics = Local
+Archives with Errors: 1
+Open Errors: 1
+rc=2
+found/l/a.txt 3650393976 6
+found/l/n.txt 1351575678 1092
+Path = lost.zip
+ERRORS:
+Unexpected end of archive
+Physical Size = 677
+Characteristics = Local
+Path = l
+Size = 0
+Packed Size = 0
+Attributes = D
+CRC = 
+Method = Store
+Characteristics = Local : Descriptor
+Host OS = 
+Version = 10
+Volume Index = 0
+Offset = 0
+Path = l/a.txt
+Size = 6
+Packed Size = 8
+Attributes = 
+CRC = 9F606EEC
+Method = Deflate
+Characteristics = Local : Descriptor
+Host OS = 
+Version = 20
+Volume Index = 0
+Offset = 48
+Path = l/n.txt
+Size = 
+Packed Size = 531
+Attributes = 
+CRC = 00000000
+Method = Deflate
+Characteristics = Local : Descriptor Descriptor_ERROR
+Host OS = 
+Version = 20
+Volume Index = 0
+Offset = 109
+rc=2
+ERRORS:
+Unexpected end of archive
+Path = lost.zip
+ERRORS:
+Unexpected end of archive
+Physical Size = 677
+Characteristics = Local
+ERROR: There are some data after the end of the payload data : l/n.txt
+Sub items Errors: 1
+Archives with Errors: 1
+Open Errors: 1
+Sub items Errors: 1
+rc=2
+ERRORS:
+Unexpected end of archive
+Path = lost.zip
+ERRORS:
+Unexpected end of archive
+Physical Size = 677
+Characteristics = Local
+ERROR: There are some data after the end of the payload data : l/n.txt
+Sub items Errors: 1
+Archives with Errors: 1
+Open Errors: 1
+Sub items Errors: 1
+rc=2
+lost/l/a.txt 3650393976 6
+lost/l/n.txt 1351575678 1092

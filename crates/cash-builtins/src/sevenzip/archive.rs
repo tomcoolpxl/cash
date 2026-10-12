@@ -646,6 +646,10 @@ fn open_at(
                 Kind::Tar,
                 by_name.filter(|&n| n != Kind::Tar).map(Kind::name),
             ),
+            // A zip found by its end, as a split zip's last part, which starts inside a
+            // member; or another part of one, opened through its last.
+            (Some(Kind::Zip), None) => (Kind::Zip, None),
+            (None, None) if super::zip7::is_split_part(path) => (Kind::Zip, None),
             (by_name, None) if !named_rar && super::streams::signature(Kind::Lzma, head) => (
                 Kind::Lzma,
                 by_name.filter(|&n| n != Kind::Lzma).map(Kind::name),
@@ -711,10 +715,10 @@ fn open_at(
             item_props: super::zip7::ITEM_PROPS.to_vec(),
             items: opening.items,
             tail: len.saturating_sub(opening.physical_size),
-            error_flags: Vec::new(),
+            error_flags: opening.error_flags,
             warning_flags: Vec::new(),
-            error_message: None,
-            volumes: None,
+            error_message: opening.error_message,
+            volumes: opening.volumes,
             seq_headers: None,
             split: None,
             backend: Backend::Zip(Box::new(opening.zip)),
@@ -781,7 +785,7 @@ fn open_at(
     Ok(opened)
 }
 
-fn read_up_to(file: &mut impl Read, buf: &mut [u8]) -> io::Result<usize> {
+pub(super) fn read_up_to(file: &mut impl Read, buf: &mut [u8]) -> io::Result<usize> {
     let mut done = 0;
     while done < buf.len() {
         match file.read(&mut buf[done..])? {
