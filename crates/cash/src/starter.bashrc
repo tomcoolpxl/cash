@@ -89,6 +89,14 @@ __prompt_command() {
     local arrow='\[\e[32m\]❯\[\e[0m\] '
     ((status == 0)) || arrow='\[\e[31m\]❯\[\e[0m\] '
 
+    # As administrator (cash's EUID is 0 then): Unix's sign of root, a red #, and the
+    # tab title says so.
+    local title='\w'
+    if ((EUID == 0)); then
+        arrow='\[\e[1;31m\]#\[\e[0m\] '
+        title='admin: \w'
+    fi
+
     local body="\[\e[1;34m\]\w\[\e[0m\]$branch\n$arrow"
 
     if [[ -n $WT_SESSION ]]; then
@@ -99,9 +107,9 @@ __prompt_command() {
         local cwd=
         # Each backslash doubled: in PS1 a lone one starts an escape (\t is the time).
         [[ -n $__prompt_winpath ]] && cwd="\[\e]9;9;${__prompt_winpath//\\/\\\\}\e\\\\\]"
-        PS1="\[\e]133;D;$status\e\\\\\]\[\e]133;A\e\\\\\]\[\e]2;\w\a\]$cwd$body\[\e]133;B\e\\\\\]"
+        PS1="\[\e]133;D;$status\e\\\\\]\[\e]133;A\e\\\\\]\[\e]2;$title\a\]$cwd$body\[\e]133;B\e\\\\\]"
     else
-        PS1="\[\e]2;\w\a\]$body"
+        PS1="\[\e]2;$title\a\]$body"
     fi
 }
 
