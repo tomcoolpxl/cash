@@ -250,7 +250,12 @@ from Windows habit; skipping globbing for programs installed elsewhere, which ne
   sets an owner only with special privileges and has no POSIX groups, so, as `chmod -x`
   (D34), they say so on standard error and succeed, and an install script carries on;
   `enable -n chown` reaches a copy on `PATH`. Turned down: refusing, which stops install
-  scripts; leaving them to `PATH` (Git's MSYS copies, none on a bare machine).
+  scripts; leaving them to `PATH` (Git's MSYS copies, none on a bare machine). Kept so
+  on 2026-10-12, the warning and help naming Windows' own tools (`sudo icacls FILE
+  /setowner USER`, `takeown /f FILE`): a Windows owner may change the access list but
+  gets no access from being owner, mode bits are not stored and the group is never
+  consulted, and files an elevated `sudo` makes are already yours. Turned down: a real
+  owner change under `sudo`, which would set what decides nothing.
 
 ## 3. Running programs and the environment
 

@@ -14,6 +14,15 @@ A file that is not there is still an error, status 1, as in GNU's. GNU's other o
 (`-R`, `-h`, `--from`, `--reference`, …) are taken; with nothing changed, they choose
 nothing. A `chown` on `PATH` is reached with `enable -n chown`.
 
+## Owners on Windows
+
+A Windows owner is not what a Unix one is. Who may read or write a file is its access
+list's to say, not the owner's or a mode's: being owner only lets an account change
+that list. A file's group is never consulted at all. To set an owner anyway, Windows'
+own tools do it: `sudo icacls FILE /setowner USER` gives a file to another account,
+and `takeown /f FILE` takes it for yourself. To let an account read or write a file,
+change the list: `icacls FILE /grant USER:M`.
+
 ## Examples
 
 ```

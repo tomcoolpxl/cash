@@ -132,14 +132,18 @@ impl builtins::Command for ChownCommand {
             }
         }
 
-        // Said once for the whole invocation, as chmod says what it cannot store.
+        // Said once for the whole invocation, as chmod says what it cannot store. A
+        // Windows owner may change a file's access list but gets no access from being
+        // owner, and its group is never consulted, so neither is set here; Windows' own
+        // tool sets an owner for whoever wants one.
         if !self.silent {
             let why = if name == "chgrp" {
-                "Windows has no POSIX groups"
+                "Windows has no POSIX groups; nothing changed"
             } else {
-                "owners are not changed on Windows"
+                "owners are not changed this way on Windows; nothing changed \
+                 (sudo icacls FILE /setowner USER sets one)"
             };
-            writeln!(context.stderr(), "{name}: {why}; nothing changed")?;
+            writeln!(context.stderr(), "{name}: {why}")?;
         }
 
         let mut failed = false;

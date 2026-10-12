@@ -19,7 +19,8 @@ fn chown_and_chgrp_say_once_that_nothing_changed_and_succeed() {
     assert_eq!(out.stdout, "st=0");
     assert_eq!(
         out.stderr,
-        "chown: owners are not changed on Windows; nothing changed"
+        "chown: owners are not changed this way on Windows; nothing changed \
+         (sudo icacls FILE /setowner USER sets one)"
     );
     let out = run_in(dir.path(), "chgrp -R staff a; echo \"st=$?\"");
     assert_eq!(out.stdout, "st=0");
