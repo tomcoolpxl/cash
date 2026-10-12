@@ -1493,3 +1493,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   not start a sequence reads as U+EF00 plus the byte, user, group and link names read
   the same way, and pax header names show byte for byte. Now as 7-Zip; 7z_formats.sh
   has the cases. Zips read by their local headers and split zips stay in TODO.md.
+- **`cp src >(cat)` can print zeros** (found 2026-10-10 in the 1.12.0 gate; done
+  2026-10-12): a `>(...)` handed to a tool not patched for pipes is a temp file read as it
+  grows, and `cp` (through `CopyFileEx`) sizes its target before it writes it, so a read
+  in between passed on NULs. Until the program is done, the follower now reads only
+  what is written: up to the file's valid data length, which NTFS keeps for a file past
+  its record's room (`FSCTL_QUERY_FILE_REGIONS`); and, for a small file, which is zeros
+  at once when sized, the zeros the file ends in wait until more follows them. Two
+  tests size a file before writing it, 7 bytes and 1 MiB; the acceptance test is back.

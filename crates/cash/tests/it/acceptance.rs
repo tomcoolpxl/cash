@@ -1105,10 +1105,9 @@ fn a_program_writes_into_a_write_substitution_through_a_file() {
 }
 
 #[test]
-#[ignore = "flaky: cp sizes its target before writing it, and the temp file is read as it \
-            grows, so a read in between gets zeros (TODO.md)"]
 fn an_unpatched_bundled_tool_writes_into_a_write_substitution_through_a_file() {
     // `cp` opens its target as a new file, as a program on PATH does, and gets the file.
+    // It sizes the file before it writes it, which once passed zeros on.
     let scratch = Scratch::new("procsub-cp");
     std::fs::write(scratch.path().join("src"), "copied\n").unwrap();
     let out = cash_in_scratch(scratch.path(), "cp src >(cat)");

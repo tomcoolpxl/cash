@@ -83,13 +83,7 @@ What the phases now in DONE.md left open, each where its phase says more.
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
   real; until then the page says so.
-- **`cp src >(cat)` can print zeros** (found 2026-10-10 in the 1.12.0 gate, once in a
-  full run): a `>(...)` handed to a tool not patched for pipes is a temp file read as it
-  grows, and `cp` (through `CopyFileEx`) sizes its target before it writes it, so a read
-  in between passes on NULs. The test
-  (`acceptance::an_unpatched_bundled_tool_writes_into_a_write_substitution_through_a_file`)
-  is `#[ignore]`d. A fix reads only what was written: hold back the tail of a file that
-  grew in one step until the program is done, or give `cp` the pipe as tee's patch did.
+
 ---
 
 ## Decided, written down so it is not decided twice

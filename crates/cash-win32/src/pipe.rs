@@ -24,7 +24,7 @@
 //! probe and the actual data consumer connect without encountering `ERROR_PIPE_BUSY`.
 
 use std::fs::File;
-use std::io::{self, PipeReader, PipeWriter, Read, Write};
+use std::io::{self, PipeReader, PipeWriter, Read, Seek, SeekFrom, Write};
 use std::os::windows::io::{AsRawHandle as _, OwnedHandle};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -518,10 +518,41 @@ impl Follower {
             // Whether the program was done before this read: all it wrote is in the file
             // then, and a read that finds nothing more is the end.
             let done = self.done.load(Ordering::SeqCst);
-            match self.file.read(&mut buf) {
+            // Until then, only what has been written: a program may size the file first
+            // (`CopyFileEx` does), and the size reads as zeros until it is written.
+            let mut want = buf.len();
+            if !done && let Some(end) = valid_data_end(&self.file, self.read) {
+                let Some(more) = end.checked_sub(self.read).filter(|&more| more > 0) else {
+                    std::thread::sleep(Self::POLL);
+                    continue;
+                };
+                want = want.min(usize::try_from(more).unwrap_or(usize::MAX));
+            }
+            match self.file.read(&mut buf[..want]) {
                 Ok(0) if done => break,
                 Ok(0) => std::thread::sleep(Self::POLL),
                 Ok(n) => {
+                    // A small file has no valid data length apart from its size, and sized
+                    // first it is zeros at once: the zeros it ends in wait, read again,
+                    // until more follows them or the program is done.
+                    let mut n = n;
+                    if !done && self.ends_the_file(n) {
+                        let zeros = buf[..n].iter().rev().take_while(|&&b| b == 0).count();
+                        if zeros > 0 {
+                            if self
+                                .file
+                                .seek(SeekFrom::Current(-i64::try_from(zeros).unwrap_or(0)))
+                                .is_err()
+                            {
+                                break;
+                            }
+                            n -= zeros;
+                        }
+                        if n == 0 {
+                            std::thread::sleep(Self::POLL);
+                            continue;
+                        }
+                    }
                     if let Some(writer) = &mut self.writer
                         && writer.write_all(&buf[..n]).is_err()
                     {
@@ -546,6 +577,70 @@ impl Follower {
         // the substitution finds nothing of it left.
         drop(writer);
     }
+
+    /// Whether a read of `n` bytes from where reading stands took the file to its end.
+    fn ends_the_file(&self, n: usize) -> bool {
+        self.file
+            .metadata()
+            .is_ok_and(|meta| self.read + n as u64 >= meta.len())
+    }
+}
+
+/// Where what has been written of `file` ends, from `from` on: its valid data length,
+/// past which a file sized but not yet written reads as zeros. `None` where the volume
+/// does not say (FAT, a share), and the file is read to its end as before.
+fn valid_data_end(file: &File, from: u64) -> Option<u64> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::IO::DeviceIoControl;
+    use windows_sys::Win32::System::Ioctl::{
+        FILE_REGION_INPUT, FILE_REGION_OUTPUT, FILE_REGION_USAGE_VALID_CACHED_DATA,
+        FSCTL_QUERY_FILE_REGIONS,
+    };
+
+    let size = file.metadata().ok()?.len();
+    if size <= from {
+        return Some(from);
+    }
+    let input = FILE_REGION_INPUT {
+        FileOffset: i64::try_from(from).ok()?,
+        Length: i64::try_from(size - from).ok()?,
+        DesiredUsage: FILE_REGION_USAGE_VALID_CACHED_DATA,
+    };
+    let mut output = FILE_REGION_OUTPUT::default();
+    let mut returned = 0u32;
+    // SAFETY: the handle is open; `input` and `output` are valid for the call and their
+    // sizes are passed; one region is room enough, as only the first one is looked at.
+    let ok = unsafe {
+        DeviceIoControl(
+            file.as_raw_handle(),
+            FSCTL_QUERY_FILE_REGIONS,
+            (&raw const input).cast(),
+            u32::try_from(size_of::<FILE_REGION_INPUT>()).ok()?,
+            (&raw mut output).cast(),
+            u32::try_from(size_of::<FILE_REGION_OUTPUT>()).ok()?,
+            &raw mut returned,
+            std::ptr::null_mut(),
+        )
+    };
+    // More regions than room is an error with the first one filled in.
+    if ok == 0
+        && io::Error::last_os_error().raw_os_error()
+            != Some(windows_sys::Win32::Foundation::ERROR_MORE_DATA.cast_signed())
+    {
+        return None;
+    }
+    if output.RegionEntryCount == 0 {
+        return Some(from);
+    }
+    // The regions cover the range asked for, each saying whether it is valid data;
+    // valid data is where the file begins, so it is the first region or none.
+    let region = output.Region[0];
+    if region.Usage & FILE_REGION_USAGE_VALID_CACHED_DATA == 0
+        || u64::try_from(region.FileOffset).ok()? != from
+    {
+        return Some(from);
+    }
+    u64::try_from(region.FileOffset + region.Length).ok()
 }
 
 /// Gives the disk space of the first `upto` bytes of the file at `path` back, keeping
@@ -906,5 +1001,49 @@ mod tests {
         let mut rest = Vec::new();
         reader.read_to_end(&mut rest).unwrap();
         assert!(rest.is_empty(), "{rest:?}");
+    }
+
+    #[test]
+    fn a_followed_file_sized_before_it_is_written_passes_on_no_zeros() {
+        // `cp` (`CopyFileEx`) sets its target's size first and writes it after; the size
+        // reads as zeros until then, and the follower must wait for what is written.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("substitution");
+        let followed = follow_file(&path).unwrap();
+        let mut program = File::create(&path).unwrap();
+        program.set_len(7).unwrap();
+        // The follower looks every 15 ms.
+        std::thread::sleep(Duration::from_millis(150));
+        program.write_all(b"copied\n").unwrap();
+        // Sized again, past what is written: once the program is done, the file holds
+        // that, zeros and all.
+        program.set_len(9).unwrap();
+        drop(program);
+        followed.done.store(true, Ordering::SeqCst);
+        let mut got = Vec::new();
+        let mut reader = followed.reader;
+        reader.read_to_end(&mut got).unwrap();
+        assert_eq!(got, b"copied\n\0\0");
+    }
+
+    #[test]
+    fn a_large_followed_file_sized_before_it_is_written_passes_on_no_zeros() {
+        // Past a file record's room, the volume keeps how far a file is written, and the
+        // follower reads no further: zeros there are not at the file's end.
+        const MIB: usize = 1 << 20;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("substitution");
+        let followed = follow_file(&path).unwrap();
+        let mut program = File::create(&path).unwrap();
+        program.set_len(MIB as u64).unwrap();
+        std::thread::sleep(Duration::from_millis(150));
+        program.write_all(&vec![b'x'; MIB]).unwrap();
+        drop(program);
+        followed.done.store(true, Ordering::SeqCst);
+        let mut got = Vec::new();
+        let mut reader = followed.reader;
+        reader.read_to_end(&mut got).unwrap();
+        assert_eq!(got.len(), MIB);
+        assert!(got.iter().all(|&b| b == b'x'), "zeros were passed on");
     }
 }
