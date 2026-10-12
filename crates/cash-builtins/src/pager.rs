@@ -113,19 +113,44 @@ const fn context_ref<'a, SE: cash_core::ShellExtensions>(
     context
 }
 
+/// Whether a pager may page: standard output is a terminal, both the process's and the
+/// builtin's, which is what a redirection or a pipe replaces. Anywhere else a pager is
+/// `cat`.
+fn interactive<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+) -> bool {
+    std::io::stdout().is_terminal()
+        && context
+            .try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD)
+            .is_some_and(|f| f.is_terminal())
+}
+
+/// Shows `text` from a builtin as `less -F` would: paged when it is taller than the
+/// terminal, printed when it fits, and written as it is anywhere but a terminal. Escape
+/// sequences pass through, so colours stay. For any builtin whose output can run long
+/// (`help`).
+pub(crate) fn show<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    text: &str,
+) -> Result<(), cash_core::Error> {
+    if !interactive(context) {
+        let mut stdout = context.stdout();
+        stdout.write_all(text.as_bytes())?;
+        stdout.flush()?;
+        return Ok(());
+    }
+    let lines: Vec<String> = split_lines(text).into_iter().map(str::to_owned).collect();
+    page(context, &lines, Flavor::Less, true, false)
+}
+
 impl LessCommand {
     fn run<SE: cash_core::ShellExtensions>(
         &self,
         context: &cash_core::ExecutionContext<'_, SE>,
         flavor: Flavor,
     ) -> Result<ExecutionResult, cash_core::Error> {
-        // The rule: a pager writing anywhere but a terminal is `cat`. Checked on the
-        // *shell's* stdout, which is what a redirection or a pipe actually replaces.
-        let interactive = std::io::stdout().is_terminal()
-            && context
-                .try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD)
-                .is_some_and(|f| f.is_terminal());
-        if !interactive {
+        // The rule: a pager writing anywhere but a terminal is `cat`.
+        if !interactive(context) {
             return self.pass_on(context);
         }
 
@@ -438,12 +463,51 @@ fn read_pattern(stdout: &mut impl Write) -> Result<Option<String>, cash_core::Er
     Ok((!pattern.is_empty()).then_some(pattern))
 }
 
-/// The next line at or after `from` containing `pattern`.
+/// The next line at or after `from` containing `pattern` in what it shows: its colours'
+/// escape sequences left out, so a word coloured in parts is still found.
 fn find_from(lines: &[String], from: usize, pattern: &str) -> Option<usize> {
     lines
         .iter()
         .enumerate()
         .skip(from)
-        .find(|(_, line)| line.contains(pattern))
+        .find(|(_, line)| visible(line).contains(pattern))
         .map(|(index, _)| index)
+}
+
+/// `line` without its CSI escape sequences (`ESC [` … a letter), as it reads on screen.
+fn visible(line: &str) -> std::borrow::Cow<'_, str> {
+    if !line.contains('\x1b') {
+        return std::borrow::Cow::Borrowed(line);
+    }
+    let mut shown = String::with_capacity(line.len());
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' && chars.peek() == Some(&'[') {
+            chars.next();
+            for c in chars.by_ref() {
+                if c.is_ascii_alphabetic() || c == '~' {
+                    break;
+                }
+            }
+        } else {
+            shown.push(c);
+        }
+    }
+    std::borrow::Cow::Owned(shown)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_search_finds_a_word_through_its_colours() {
+        let lines = vec![
+            "plain".to_owned(),
+            "\x1b[1;32mfl\x1b[0mock and \x1b[33mmore\x1b[0m".to_owned(),
+        ];
+        assert_eq!(find_from(&lines, 0, "flock"), Some(1));
+        assert_eq!(visible(&lines[1]), "flock and more");
+        assert_eq!(find_from(&lines, 0, "32m"), None);
+    }
 }

@@ -27,6 +27,17 @@ pub(crate) struct HelpCommand {
     #[arg(short = 's')]
     short_usage: bool,
 
+    /// Colour the text: always, never, or auto (only for a terminal, the default).
+    #[arg(
+        long = "color",
+        alias = "colour",
+        value_name = "WHEN",
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "always"
+    )]
+    colour: Option<When>,
+
     /// Speak as `cash help`, the subcommand run from outside the shell: its errors name
     /// `cash help` rather than the `-c` script and line that runs it.
     #[arg(long = helpdocs::CASH_SUBCOMMAND_OPTION, hide = true)]
@@ -40,6 +51,14 @@ pub(crate) struct HelpCommand {
     /// Patterns of builtins, or names of topics, to display help for; `topics` lists
     /// the topics, and `search WORD` searches every page.
     topic_patterns: Vec<String>,
+}
+
+/// When `help` colours its text (`--color=WHEN`, as `ls` and `grep` take it).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum When {
+    Always,
+    Never,
+    Auto,
 }
 
 /// The widest `help` wraps prose to, however wide the terminal: past this, lines are
@@ -72,6 +91,7 @@ impl builtins::Command for HelpCommand {
                     short_description: false,
                     man_page_style: false,
                     short_usage: false,
+                    colour: None,
                     cash_subcommand,
                     invalid_option: Some(option),
                     topic_patterns: Vec::new(),
@@ -90,20 +110,26 @@ impl builtins::Command for HelpCommand {
             self.complain(&context, "usage: cash help [-dms] [pattern ...]")?;
             return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
         }
-        let style = style(&context);
-        match self.topic_patterns.split_first() {
+        let style = style(&context, self.colour);
+        // Gathered whole, then shown through the pager: paged in a terminal when taller
+        // than it, colours and all.
+        let mut out = String::new();
+        let result = match self.topic_patterns.split_first() {
             None => {
-                let text = general_help(&context, style);
-                write_out(&context, &text)?;
-                Ok(ExecutionResult::success())
+                out = general_help(&context, style);
+                ExecutionResult::success()
             }
             Some((first, [])) if first == "topics" => {
-                write_out(&context, &topic_list(style))?;
-                Ok(ExecutionResult::success())
+                out = topic_list(style);
+                ExecutionResult::success()
             }
-            Some((first, words)) if first == "search" => self.search(&context, words, style),
-            Some(_) => self.show_patterns(&context, style),
-        }
+            Some((first, words)) if first == "search" => {
+                self.search(&context, words, style, &mut out)?
+            }
+            Some(_) => self.show_patterns(&context, style, &mut out)?,
+        };
+        crate::pager::show(&context, &out)?;
+        Ok(result)
     }
 }
 
@@ -144,6 +170,7 @@ impl HelpCommand {
         &self,
         context: &cash_core::ExecutionContext<'_, SE>,
         style: Style,
+        out: &mut String,
     ) -> Result<ExecutionResult, cash_core::Error> {
         let mut any_matched = false;
         let mut shown = 0;
@@ -171,9 +198,9 @@ impl HelpCommand {
                 // Whole pages are set apart by a blank line; one-line answers are not.
                 let page = !(self.short_description || self.short_usage);
                 if page && shown > 0 {
-                    write_out(context, "\n")?;
+                    out.push('\n');
                 }
-                write_out(context, &text)?;
+                out.push_str(&text);
                 shown += 1;
             }
         }
@@ -209,16 +236,33 @@ impl HelpCommand {
     }
 }
 
-/// How this run of `help` draws: wrapped to the terminal, coloured when it writes to
-/// one and `NO_COLOR` is not set.
-fn style(context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>) -> Style {
+/// How this run of `help` draws: wrapped to the terminal, and coloured as `--color`
+/// says; without it, when `NO_COLOR` is not set and it writes to a terminal or
+/// `CLICOLOR_FORCE` is set, which keeps the colours through a pipe into `less`.
+fn style(
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+    when: Option<When>,
+) -> Style {
     let terminal = context
         .try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD)
         .is_some_and(|fd| fd.is_terminal());
-    let no_colour = context
-        .shell
-        .env_str("NO_COLOR")
-        .is_some_and(|value| !value.is_empty());
+    let set = |name: &str| {
+        context
+            .shell
+            .env_str(name)
+            .is_some_and(|value| !value.is_empty() && value != "0")
+    };
+    let colour = match when {
+        Some(When::Always) => true,
+        Some(When::Never) => false,
+        Some(When::Auto) | None => {
+            context
+                .shell
+                .env_str("NO_COLOR")
+                .is_none_or(|value| value.is_empty())
+                && (terminal || set("CLICOLOR_FORCE"))
+        }
+    };
     let columns = if terminal {
         crossterm::terminal::size()
             .ok()
@@ -236,18 +280,8 @@ fn style(context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensio
         .unwrap_or(80);
     Style {
         width: columns.saturating_sub(1).clamp(40, MAX_WIDTH),
-        colour: terminal && !no_colour,
+        colour,
     }
-}
-
-fn write_out(
-    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
-    text: &str,
-) -> Result<(), cash_core::Error> {
-    let mut stdout = context.stdout();
-    stdout.write_all(text.as_bytes())?;
-    stdout.flush()?;
-    Ok(())
 }
 
 fn builtins_by_name<'a, SE: cash_core::ShellExtensions>(
@@ -627,6 +661,7 @@ impl HelpCommand {
         context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
         words: &[String],
         style: Style,
+        out: &mut String,
     ) -> Result<ExecutionResult, cash_core::Error> {
         let help = self.invocation();
         let word = words.join(" ");
@@ -648,7 +683,7 @@ impl HelpCommand {
             )?;
             return Ok(ExecutionResult::general_error());
         }
-        write_out(context, &search_results(hits, &word, style))?;
+        out.push_str(&search_results(hits, &word, style));
         Ok(ExecutionResult::success())
     }
 
@@ -744,6 +779,25 @@ fn search_results(hits: Vec<helpdocs::Hit>, word: &str, style: Style) -> String 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn color_takes_a_when_after_an_equals_sign_only() {
+        let parsed = |args: &[&str]| {
+            let parsed = HelpCommand::try_parse_from(args).unwrap();
+            (parsed.colour, parsed.topic_patterns)
+        };
+        // Bare, as `ls --color`: always; the next word is a pattern, not the WHEN.
+        assert_eq!(
+            parsed(&["help", "--color", "flock"]),
+            (Some(When::Always), vec!["flock".to_owned()])
+        );
+        assert_eq!(
+            parsed(&["help", "--color=never", "tar"]),
+            (Some(When::Never), vec!["tar".to_owned()])
+        );
+        assert_eq!(parsed(&["help", "--colour=auto"]).0, Some(When::Auto));
+        assert!(HelpCommand::try_parse_from(["help", "--color=bogus"]).is_err());
+    }
 
     #[test]
     fn a_search_picks_out_the_word_wherever_it_is_case_aside() {

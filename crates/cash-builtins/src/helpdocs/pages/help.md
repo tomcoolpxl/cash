@@ -15,6 +15,12 @@ see: differences
 - `-d` gives the one-line summary, `-s` the usage line, and `-m` the page (as `help NAME`
   does).
 
+In a terminal, what is taller than the window opens in cash's `less`, colours and all
+(`q` leaves, Space pages on, `/` searches); what fits is printed. Into a pipe or a file,
+`help` writes plain text. `--color=always` keeps the colours there too, as does
+`CLICOLOR_FORCE=1`: `help --color=always tar | less`. `--color=never` and `NO_COLOR`
+leave them out.
+
 From PowerShell or cmd, `cash help ...` says the same, unless a file named `help` is in
 the current folder, which then runs as a script.
 
