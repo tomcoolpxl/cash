@@ -83,9 +83,54 @@ pub fn fragment_files(local_app_data: &Path, program_data: Option<&Path>) -> Vec
 /// it, then [`DEFAULT_FONT`]. Of several Terminal installs, the one whose settings list
 /// the profile is read.
 pub fn profile_font(local_app_data: &Path, program_data: Option<&Path>, guid: &str) -> String {
-    profile_setting(local_app_data, program_data, guid, face_of)
-        .unwrap_or_else(|| DEFAULT_FONT.to_owned())
+    // Kept while the files it came from are as they were: `ls --icons` asks for every
+    // listing, and reading and parsing Terminal's settings each time was a third of what
+    // a listing took to appear.
+    let key = (
+        local_app_data.to_owned(),
+        program_data.map(Path::to_owned),
+        guid.to_ascii_lowercase(),
+    );
+    let files: Vec<FileStamp> = settings_files(local_app_data)
+        .into_iter()
+        .chain(fragment_files(local_app_data, program_data))
+        .map(|file| {
+            let meta = file.metadata().ok();
+            let stamp = meta.map(|meta| (meta.modified().ok(), meta.len()));
+            (file, stamp)
+        })
+        .collect();
+    if let Ok(cache) = FONT_CACHE.lock()
+        && let Some(found) = cache.as_ref()
+        && found.key == key
+        && found.files == files
+    {
+        return found.font.clone();
+    }
+    let font = profile_setting(local_app_data, program_data, guid, face_of)
+        .unwrap_or_else(|| DEFAULT_FONT.to_owned());
+    if let Ok(mut cache) = FONT_CACHE.lock() {
+        *cache = Some(FontCache {
+            key,
+            files,
+            font: font.clone(),
+        });
+    }
+    font
 }
+
+/// A settings file, with its modification time and size when it could be read.
+type FileStamp = (PathBuf, Option<(Option<std::time::SystemTime>, u64)>);
+
+/// What [`profile_font`] found last: for which install and profile, from which files as
+/// they were then.
+struct FontCache {
+    key: (PathBuf, Option<PathBuf>, String),
+    files: Vec<FileStamp>,
+    font: String,
+}
+
+static FONT_CACHE: std::sync::Mutex<Option<FontCache>> = std::sync::Mutex::new(None);
 
 /// One setting of the profile `guid`, as `setting` reads it from a profile's entry,
 /// resolved the way [`profile_font`] describes.

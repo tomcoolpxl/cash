@@ -14,7 +14,7 @@
 use std::cell::OnceCell;
 use std::cmp::Ordering;
 use std::fs::Metadata;
-use std::io::Write as _;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -345,34 +345,40 @@ impl builtins::Command for LsCommand {
             }
         }
 
+        // The listing goes out in large writes, as GNU's through stdio: a write per line,
+        // and a formatted line in a write per piece, made a terminal slow to draw it. Out
+        // before anything is said on standard error, so the two keep their order.
+        let mut out = std::io::BufWriter::with_capacity(1 << 16, context.stdout());
+
         // Print standalone files first.
         if !file_items.is_empty() {
             self.sort_items(&mut file_items);
-            self.render_items(&context, &file_items, &look, is_tty)?;
+            self.render_items(&mut out, &file_items, &look, is_tty)?;
         }
 
         // Print directories, each after one blank line when something came before it.
         for (i, (dir_path, dir_str)) in dir_paths.iter().enumerate() {
             if self.tree {
                 if i > 0 || !file_items.is_empty() {
-                    writeln!(context.stdout())?;
+                    writeln!(out)?;
                 }
-                self.render_tree(&context, dir_path, dir_str, &look)?;
+                self.render_tree(&mut out, dir_path, dir_str, &look)?;
                 continue;
             }
 
             if multiple_paths || self.recursive {
                 if i > 0 || !file_items.is_empty() {
-                    writeln!(context.stdout())?;
+                    writeln!(out)?;
                 }
-                writeln!(context.stdout(), "{dir_str}:")?;
+                writeln!(out, "{dir_str}:")?;
             }
 
-            match self.list_operand(&context, dir_path, dir_str, &look, is_tty)? {
+            match self.list_operand(&context, &mut out, dir_path, dir_str, &look, is_tty)? {
                 Some(unreadable) => had_minor_error |= unreadable,
                 None => had_error = true,
             }
         }
+        out.flush()?;
 
         Ok(gnu_status(had_error, had_minor_error))
     }
@@ -388,6 +394,7 @@ impl LsCommand {
     fn list_operand<SE: cash_core::ShellExtensions>(
         &self,
         context: &cash_core::ExecutionContext<'_, SE>,
+        out: &mut impl Write,
         dir_path: &Path,
         dir_str: &str,
         look: &Look,
@@ -395,9 +402,10 @@ impl LsCommand {
     ) -> Result<Option<bool>, std::io::Error> {
         match self.read_entries(dir_path, true) {
             Ok(items) => self
-                .show_directory(context, &items, dir_str, look, is_tty, 1)
+                .show_directory(context, out, &items, dir_str, look, is_tty, 1)
                 .map(Some),
             Err(e) => {
+                out.flush()?;
                 writeln!(
                     context.stderr(),
                     "{}: cannot open directory '{dir_str}': {}",
@@ -579,9 +587,14 @@ impl LsCommand {
     /// counts a minor problem, status 1: it said nothing, and printed the directory's
     /// header with nothing under it (BI-14). The header comes only once a directory is
     /// open, as in GNU `ls`.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the listing's options, and its depth"
+    )]
     fn show_directory<SE: cash_core::ShellExtensions>(
         &self,
         context: &cash_core::ExecutionContext<'_, SE>,
+        out: &mut impl Write,
         items: &[ItemInfo],
         dir_str: &str,
         look: &Look,
@@ -591,10 +604,10 @@ impl LsCommand {
         // In long format, print total blocks at top of directory listing.
         if self.long {
             let total_kb: u64 = items.iter().map(|item| item.size.div_ceil(1024)).sum();
-            writeln!(context.stdout(), "total {total_kb}")?;
+            writeln!(out, "total {total_kb}")?;
         }
 
-        self.render_items(context, items, look, is_tty)?;
+        self.render_items(out, items, look, is_tty)?;
 
         // Recursive descent if -R, as deep as --depth allows.
         let mut unreadable = false;
@@ -604,10 +617,11 @@ impl LsCommand {
                     let sub_str = format!("{dir_str}/{}", item.name);
                     match self.read_entries(&item.path, true) {
                         Ok(sub_items) => {
-                            writeln!(context.stdout())?;
-                            writeln!(context.stdout(), "{sub_str}:")?;
+                            writeln!(out)?;
+                            writeln!(out, "{sub_str}:")?;
                             unreadable |= self.show_directory(
                                 context,
+                                out,
                                 &sub_items,
                                 &sub_str,
                                 look,
@@ -616,6 +630,7 @@ impl LsCommand {
                             )?;
                         }
                         Err(e) => {
+                            out.flush()?;
                             writeln!(
                                 context.stderr(),
                                 "{}: cannot open directory '{sub_str}': {}",
@@ -634,9 +649,9 @@ impl LsCommand {
 
     /// `--tree`: the directory, then everything below it with the branches drawn, as
     /// deep as `--depth` allows. Links to directories are shown, not followed.
-    fn render_tree<SE: cash_core::ShellExtensions>(
+    fn render_tree(
         &self,
-        context: &cash_core::ExecutionContext<'_, SE>,
+        out: &mut impl Write,
         dir_path: &Path,
         dir_str: &str,
         look: &Look,
@@ -652,10 +667,10 @@ impl LsCommand {
                 .into_iter()
                 .map(|(prefix, item)| (item, prefix))
                 .unzip();
-            self.render_long(context, &items, look, Some(&prefixes))?;
+            self.render_long(out, &items, look, Some(&prefixes))?;
         } else {
             for (prefix, item) in &rows {
-                writeln!(context.stdout(), "{prefix}{}", self.format_name(item, look))?;
+                writeln!(out, "{prefix}{}", self.format_name(item, look))?;
             }
         }
         Ok(())
@@ -686,9 +701,9 @@ impl LsCommand {
         }
     }
 
-    fn render_items<SE: cash_core::ShellExtensions>(
+    fn render_items(
         &self,
-        context: &cash_core::ExecutionContext<'_, SE>,
+        out: &mut impl Write,
         items: &[ItemInfo],
         look: &Look,
         is_tty: bool,
@@ -698,20 +713,20 @@ impl LsCommand {
         }
 
         if self.long {
-            self.render_long(context, items, look, None)?;
+            self.render_long(out, items, look, None)?;
         } else if self.one_column || (!is_tty && !self.multi_column) {
-            self.render_single_column(context, items, look)?;
+            self.render_single_column(out, items, look)?;
         } else {
-            self.render_grid(context, items, look)?;
+            self.render_grid(out, items, look)?;
         }
 
         Ok(())
     }
 
     /// The long format, each name after its tree branch when there are `prefixes`.
-    fn render_long<SE: cash_core::ShellExtensions>(
+    fn render_long(
         &self,
-        context: &cash_core::ExecutionContext<'_, SE>,
+        out: &mut impl Write,
         items: &[ItemInfo],
         look: &Look,
         prefixes: Option<&[String]>,
@@ -768,7 +783,7 @@ impl LsCommand {
                 (owner, group, size, date_str)
             };
             writeln!(
-                context.stdout(),
+                out,
                 "{permissions} {:>max_links_len$} {owner} {group} {size} {date} {prefix}{display_name}",
                 item.links,
             )?;
@@ -777,22 +792,22 @@ impl LsCommand {
         Ok(())
     }
 
-    fn render_single_column<SE: cash_core::ShellExtensions>(
+    fn render_single_column(
         &self,
-        context: &cash_core::ExecutionContext<'_, SE>,
+        out: &mut impl Write,
         items: &[ItemInfo],
         look: &Look,
     ) -> Result<(), std::io::Error> {
         for item in items {
             let display_name = self.format_name(item, look);
-            writeln!(context.stdout(), "{display_name}")?;
+            writeln!(out, "{display_name}")?;
         }
         Ok(())
     }
 
-    fn render_grid<SE: cash_core::ShellExtensions>(
+    fn render_grid(
         &self,
-        context: &cash_core::ExecutionContext<'_, SE>,
+        out: &mut impl Write,
         items: &[ItemInfo],
         look: &Look,
     ) -> Result<(), std::io::Error> {
@@ -831,7 +846,7 @@ impl LsCommand {
                     }
                 }
             }
-            writeln!(context.stdout(), "{line}")?;
+            writeln!(out, "{line}")?;
         }
 
         Ok(())
