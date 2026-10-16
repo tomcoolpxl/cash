@@ -636,6 +636,106 @@ pub fn disk_usage(path: &std::path::Path) -> Option<(u64, u64)> {
     Some((total, free))
 }
 
+/// What `stat -f` reports of the volume holding a path, as `statfs` reports a Linux file
+/// system's.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VolumeFacts {
+    /// The volume's serial number, `vol` in `dir`'s heading.
+    pub serial: u32,
+    /// The longest name a path component may have.
+    pub name_max: u32,
+    /// The file system, as Windows names it: `NTFS`, `FAT32`, `exFAT`, `ReFS`.
+    pub file_system: String,
+    /// A cluster, the unit space is given out in.
+    pub block_size: u64,
+    /// The volume's clusters, all of them.
+    pub total_blocks: u64,
+    /// The clusters free.
+    pub free_blocks: u64,
+    /// The clusters free to this user: a quota can make them fewer.
+    pub available_blocks: u64,
+}
+
+/// The facts of the volume holding `path`, a folder or a file on it; `None` when Windows
+/// cannot say (no such path, a volume not ready).
+#[must_use]
+pub fn volume_facts(path: &std::path::Path) -> Option<VolumeFacts> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetDiskFreeSpaceExW, GetDiskFreeSpaceW, GetVolumeInformationW, GetVolumePathNameW,
+    };
+
+    let wide = to_wide_nul(path);
+    let mut root = vec![0u16; 1024];
+    let length = u32::try_from(root.len()).unwrap_or(u32::MAX);
+    // SAFETY: `wide` is NUL-terminated and `root` holds `length` units.
+    if unsafe { GetVolumePathNameW(wide.as_ptr(), root.as_mut_ptr(), length) } == 0 {
+        return None;
+    }
+    let mut serial = 0u32;
+    let mut name_max = 0u32;
+    let mut flags = 0u32;
+    let mut file_system = [0u16; 64];
+    // SAFETY: `root` is the NUL-terminated root just written; the out-parameters are
+    // valid and the name buffer's length is given.
+    let named = unsafe {
+        GetVolumeInformationW(
+            root.as_ptr(),
+            std::ptr::null_mut(),
+            0,
+            &raw mut serial,
+            &raw mut name_max,
+            &raw mut flags,
+            file_system.as_mut_ptr(),
+            64,
+        )
+    };
+    if named == 0 {
+        return None;
+    }
+    let (mut sectors, mut bytes, mut free_clusters, mut clusters) = (0u32, 0u32, 0u32, 0u32);
+    // SAFETY: as above; four valid out-parameters.
+    let shaped = unsafe {
+        GetDiskFreeSpaceW(
+            root.as_ptr(),
+            &raw mut sectors,
+            &raw mut bytes,
+            &raw mut free_clusters,
+            &raw mut clusters,
+        )
+    };
+    let block_size = u64::from(sectors) * u64::from(bytes);
+    if shaped == 0 || block_size == 0 {
+        return None;
+    }
+    let (mut available, mut total, mut free) = (0u64, 0u64, 0u64);
+    // SAFETY: as above; three valid out-parameters. The byte counts are 64-bit, where
+    // GetDiskFreeSpaceW's cluster counts stop at 2^32 clusters.
+    let counted = unsafe {
+        GetDiskFreeSpaceExW(
+            root.as_ptr(),
+            &raw mut available,
+            &raw mut total,
+            &raw mut free,
+        )
+    };
+    if counted == 0 {
+        return None;
+    }
+    let end = file_system
+        .iter()
+        .position(|&unit| unit == 0)
+        .unwrap_or(file_system.len());
+    Some(VolumeFacts {
+        serial,
+        name_max,
+        file_system: String::from_utf16_lossy(&file_system[..end]),
+        block_size,
+        total_blocks: total / block_size,
+        free_blocks: free / block_size,
+        available_blocks: available / block_size,
+    })
+}
+
 /// The size of a page of memory, as `GetSystemInfo` reports it: 4096 on every Windows
 /// that runs cash; `getconf PAGESIZE` prints it.
 #[must_use]

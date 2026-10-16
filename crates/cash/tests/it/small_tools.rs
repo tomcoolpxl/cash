@@ -147,3 +147,34 @@ fn a_terminal_that_is_not_vt_is_refused() {
         .expect("run cash");
     assert_eq!(String::from_utf8_lossy(&out.stdout), "1\n1\n");
 }
+
+#[test]
+fn stat_reads_gnus_options_and_reports_a_file_system() {
+    // `-f` was taken and did nothing: the file's status came out. GNU's terse forms,
+    // its file-system report, and its messages, as Git Bash's coreutils have them.
+    let script = r#"
+        cd "$TEMP" && : > stat-probe.txt
+        stat -t stat-probe.txt | cut -d' ' -f1-3
+        stat -f -c '%l' .
+        stat -f . | head -1
+        stat -f -t . | wc -w
+        stat -f no-such-place; echo "status $?"
+        stat; echo "status $?"
+        rm stat-probe.txt
+    "#;
+    let out = cash_command()
+        .args(["-c", script])
+        .output()
+        .expect("run cash");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "stat-probe.txt 0 0\n255\n  File: \".\"\n11\nstatus 1\nstatus 1\n",
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "stat: cannot read file system information for 'no-such-place': No such file or \
+         directory\nstat: missing operand\nTry 'stat --help' for more information.\n"
+    );
+}

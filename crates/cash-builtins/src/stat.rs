@@ -4,33 +4,147 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Order, Short};
 use cash_win32::unix::{Kind, mode_string, permissions};
 use clap::Parser;
 
 use std::os::windows::fs::MetadataExt;
 
-/// Display file status.
+/// Display file or file system status.
 #[derive(Parser)]
+#[clap(disable_help_flag = true, disable_version_flag = true)]
 pub(crate) struct StatCommand {
-    /// Follow links
-    #[arg(short = 'L', long = "dereference")]
+    /// Options and files, parsed here.
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    args: Vec<String>,
+}
+
+/// GNU coreutils 9's `c:fLt` and its long names.
+const SHORTS: &[Short<&str>] = &[
+    Short::new('c', Arg::Required, "format"),
+    Short::new('f', Arg::No, "file-system"),
+    Short::new('L', Arg::No, "dereference"),
+    Short::new('t', Arg::No, "terse"),
+];
+const LONGS: &[Long<'static, &str>] = &[
+    Long::new("dereference", Arg::No, "dereference"),
+    Long::new("file-system", Arg::No, "file-system"),
+    Long::new("format", Arg::Required, "format"),
+    Long::new("printf", Arg::Required, "printf"),
+    Long::new("terse", Arg::No, "terse"),
+    Long::new("cached", Arg::Required, "cached"),
+    Long::new("help", Arg::No, "help"),
+    Long::new("version", Arg::No, "version"),
+];
+
+/// GNU's terse forms, for a file and for a file system.
+const TERSE_FILE: &str = "%n %s %b %f %u %g %D %i %h %t %T %X %Y %Z %W %o";
+const TERSE_FILE_SYSTEM: &str = "%n %i %l %t %s %S %b %f %a %c %d";
+
+const HELP: &str = "\
+Usage: stat [OPTION]... FILE...
+Display file or file system status.
+
+Mandatory arguments to long options are mandatory for short options too.
+  -L, --dereference     follow links
+  -f, --file-system     display file system status instead of file status
+      --cached=MODE     specify how to use cached attributes;
+                          useful on remote file systems. See MODE below
+  -c  --format=FORMAT   use the specified FORMAT instead of the default;
+                          output a newline after each use of FORMAT
+      --printf=FORMAT   like --format, but interpret backslash escapes,
+                          and do not output a mandatory trailing newline;
+                          if you want a newline, include \\n in FORMAT
+  -t, --terse           print the information in terse form
+      --help        display this help and exit
+      --version     output version information and exit
+
+The MODE argument of --cached can be: always, never, or default; Windows
+keeps no attributes to choose between, so it changes nothing.
+
+The valid format sequences for files (without --file-system):
+  %a %A  permissions in octal, in human readable form
+  %b %B  number of blocks allocated, the size of each (512)
+  %d %D  device number in decimal, in hex
+  %f     raw mode in hex       %F  file type
+  %g %G  group ID, name        %h  number of hard links
+  %i     inode number (the file's index on its volume)
+  %n %N  file name, quoted file name
+  %o     optimal I/O transfer size hint
+  %s     total size, in bytes
+  %t %T  major and minor device type in hex, for a device
+  %u %U  user ID, name
+  %w %W  time of file birth, human-readable; in seconds since Epoch
+  %x %X  time of last access, human-readable; in seconds since Epoch
+  %y %Y  time of last data modification, human-readable; in seconds since Epoch
+  %z %Z  time of last status change, human-readable; in seconds since Epoch
+
+Valid format sequences for file systems:
+  %a  free blocks available to non-superuser
+  %b  total data blocks in file system
+  %c  total file nodes in file system (0: Windows does not count them)
+  %d  free file nodes in file system (0)
+  %f  free blocks in file system
+  %i  file system ID in hex
+  %l  maximum length of filenames
+  %n  file name
+  %s  block size (for faster transfers)
+  %S  fundamental block size (for block counts)
+  %t  file system type in hex
+  %T  file system type in human readable form";
+
+/// What the command line asked for.
+#[derive(Debug, Default)]
+struct Options {
     dereference: bool,
-
-    /// Use the specified FORMAT instead of the default; output a newline after each use of FORMAT
-    #[arg(short = 'c', long = "format")]
-    format: Option<String>,
-
-    /// Like --format, but interpret backslash escapes, and do not output a mandatory trailing newline
-    #[arg(long = "printf")]
-    printf: Option<String>,
-
-    /// Display file system status instead of file status
-    #[arg(short = 'f', long = "file-system")]
     file_system: bool,
+    terse: bool,
+    format: Option<String>,
+    printf: Option<String>,
+    files: Vec<String>,
+}
 
-    /// Files to stat
-    #[arg(required = true)]
-    files: Vec<PathBuf>,
+/// Why `stat` ends before it looks at a file.
+#[derive(Debug, PartialEq, Eq)]
+enum Stop {
+    Help,
+    Version,
+    /// A mistake: said with GNU's Try line, status 1.
+    Usage(String),
+}
+
+/// Reads the command line as GNU's `getopt_long` loop does, in order, the options anywhere
+/// until `--` unless `order` says otherwise.
+fn parse(args: &[String], order: Order) -> Result<Options, Stop> {
+    let mut options = Options::default();
+    for item in Getopt::new(SHORTS, LONGS).order(order).read(args) {
+        match item.map_err(|problem| Stop::Usage(problem.to_string()))? {
+            Item::Operand { value, .. } => options.files.push(value),
+            Item::Option { id, value, .. } => match id {
+                "dereference" => options.dereference = true,
+                "file-system" => options.file_system = true,
+                "terse" => options.terse = true,
+                "format" => options.format = value,
+                "printf" => options.printf = value,
+                "cached" => match value.as_deref() {
+                    Some("always" | "never" | "default") => {}
+                    other => {
+                        return Err(Stop::Usage(format!(
+                            "invalid argument '{}' for '--cached'\n\
+                             Valid arguments are:\n  - 'default'\n  - 'never'\n  - 'always'",
+                            other.unwrap_or_default()
+                        )));
+                    }
+                },
+                "help" => return Err(Stop::Help),
+                _ => return Err(Stop::Version),
+            },
+        }
+    }
+    if options.files.is_empty() {
+        return Err(Stop::Usage("missing operand".to_owned()));
+    }
+    Ok(options)
 }
 
 impl builtins::Command for StatCommand {
@@ -40,16 +154,34 @@ impl builtins::Command for StatCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        let options = match parse(&self.args, crate::options::gnu_order(&context)) {
+            Ok(options) => options,
+            Err(Stop::Help) => {
+                writeln!(context.stdout(), "{HELP}")?;
+                return Ok(ExecutionResult::success());
+            }
+            Err(Stop::Version) => {
+                writeln!(context.stdout(), "stat (cash): GNU coreutils' options")?;
+                return Ok(ExecutionResult::success());
+            }
+            Err(Stop::Usage(message)) => {
+                return crate::options::gnu_usage_error(&context, "stat", message, 1);
+            }
+        };
+        if options.file_system {
+            return file_systems(&context, &options);
+        }
         let mut had_error = false;
         let mut stdout = context.stdout();
 
-        for path in &self.files {
+        for path in options.files.iter().map(PathBuf::from) {
+            let path = &path;
             // A builtin runs in the shell's process, whose working folder is not the
             // shell's: a path is resolved against the shell's, as `ls` resolves it.
             let resolved = context.shell.absolute_path(path);
 
             let info = if let Some(name) = cash_win32::devices::dev_name(&resolved) {
-                let Some(info) = dev_info(&context, path, name, self.dereference) else {
+                let Some(info) = dev_info(&context, path, name, options.dereference) else {
                     writeln!(
                         context.stderr(),
                         "stat: cannot stat '{}': No such file or directory",
@@ -60,7 +192,7 @@ impl builtins::Command for StatCommand {
                 };
                 info
             } else {
-                let metadata_res = if self.dereference {
+                let metadata_res = if options.dereference {
                     std::fs::metadata(&resolved)
                 } else {
                     std::fs::symlink_metadata(&resolved)
@@ -81,10 +213,12 @@ impl builtins::Command for StatCommand {
                 }
             };
 
-            if let Some(format_str) = &self.format {
+            if let Some(format_str) = &options.format {
                 let formatted = format_stat(&info, format_str, false);
                 writeln!(stdout, "{formatted}")?;
-            } else if let Some(printf_str) = &self.printf {
+            } else if options.terse {
+                writeln!(stdout, "{}", format_stat(&info, TERSE_FILE, false))?;
+            } else if let Some(printf_str) = &options.printf {
                 let formatted = format_stat(&info, printf_str, true);
                 write!(stdout, "{formatted}")?;
             } else {
@@ -389,94 +523,214 @@ const fn is_leap_year(year: u64) -> bool {
     (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
 }
 
-fn format_stat(info: &FileStatInfo, spec: &str, interpret_escapes: bool) -> String {
-    use std::fmt::Write as _;
-
+/// `spec` with each `%X` replaced by `field(X)` (an unknown one kept as written) and,
+/// under `--printf`, its backslash escapes read.
+fn expand(spec: &str, interpret_escapes: bool, field: impl Fn(char) -> Option<String>) -> String {
     let mut result = String::new();
-    let chars: Vec<char> = spec.chars().collect();
-    let mut i = 0;
-
-    while i < chars.len() {
-        if interpret_escapes && chars[i] == '\\' && i + 1 < chars.len() {
-            match chars[i + 1] {
-                'n' => result.push('\n'),
-                't' => result.push('\t'),
-                'r' => result.push('\r'),
-                '\\' => result.push('\\'),
-                other => {
+    let mut chars = spec.chars().peekable();
+    while let Some(c) = chars.next() {
+        if interpret_escapes && c == '\\' && chars.peek().is_some() {
+            match chars.next() {
+                Some('n') => result.push('\n'),
+                Some('t') => result.push('\t'),
+                Some('r') => result.push('\r'),
+                Some('\\') => result.push('\\'),
+                Some(other) => {
                     result.push('\\');
                     result.push(other);
                 }
+                None => {}
             }
-            i += 2;
             continue;
         }
-
-        if chars[i] == '%' && i + 1 < chars.len() {
-            i += 1;
-            match chars[i] {
-                '%' => result.push('%'),
-                'n' => result.push_str(&info.name),
-                'N' => {
-                    result.push('\'');
-                    result.push_str(&info.name);
-                    result.push('\'');
-                }
-                's' => result.push_str(&info.size.to_string()),
-                'b' => result.push_str(&info.blocks.to_string()),
-                'B' => result.push_str("512"),
-                'o' => result.push_str("4096"),
-                'f' => {
-                    let _ = write!(result, "{:x}", info.raw_mode);
-                }
-                'a' => result.push_str(&info.octal_perms),
-                'A' => result.push_str(&info.human_perms),
-                'F' => result.push_str(&info.file_type),
-                // A device's numbers, in hex as GNU's: 0 for a file.
-                't' => {
-                    let _ = write!(
-                        result,
-                        "{:x}",
-                        info.device_type.map_or(0, |(major, _)| major)
-                    );
-                }
-                'T' => {
-                    let _ = write!(
-                        result,
-                        "{:x}",
-                        info.device_type.map_or(0, |(_, minor)| minor)
-                    );
-                }
-                'h' => result.push_str(&info.links.to_string()),
-                'i' => result.push_str(&info.inode.to_string()),
-                'd' => result.push_str(&info.device.to_string()),
-                'D' => {
-                    let _ = write!(result, "{:x}", info.device);
-                }
-                'u' => result.push_str(&info.uid.to_string()),
-                'U' => result.push_str(&info.user),
-                'g' => result.push_str(&info.gid.to_string()),
-                'G' => result.push_str(&info.group),
-                'x' => result.push_str(&info.access_time_str),
-                'X' => result.push_str(&info.access_time_secs.to_string()),
-                'y' => result.push_str(&info.modify_time_str),
-                'Y' => result.push_str(&info.modify_time_secs.to_string()),
-                'z' => result.push_str(&info.change_time_str),
-                'Z' => result.push_str(&info.change_time_secs.to_string()),
-                'w' => result.push_str(&info.birth_time_str),
-                'W' => result.push_str(&info.birth_time_secs.to_string()),
-                other => {
-                    result.push('%');
-                    result.push(other);
-                }
+        if c == '%'
+            && let Some(letter) = chars.next()
+        {
+            if letter == '%' {
+                result.push('%');
+            } else if let Some(text) = field(letter) {
+                result.push_str(&text);
+            } else {
+                result.push('%');
+                result.push(letter);
             }
-            i += 1;
             continue;
         }
+        result.push(c);
+    }
+    result
+}
 
-        result.push(chars[i]);
-        i += 1;
+fn format_stat(info: &FileStatInfo, spec: &str, interpret_escapes: bool) -> String {
+    expand(spec, interpret_escapes, |letter| file_field(info, letter))
+}
+
+/// The text of a file's `%X`, or `None` for a letter that names nothing.
+fn file_field(info: &FileStatInfo, letter: char) -> Option<String> {
+    Some(match letter {
+        'n' => info.name.clone(),
+        'N' => format!("'{}'", info.name),
+        's' => info.size.to_string(),
+        'b' => info.blocks.to_string(),
+        'B' => "512".to_owned(),
+        'o' => "4096".to_owned(),
+        'f' => format!("{:x}", info.raw_mode),
+        'a' => info.octal_perms.clone(),
+        'A' => info.human_perms.clone(),
+        'F' => info.file_type.clone(),
+        // A device's numbers, in hex as GNU's: 0 for a file.
+        't' => format!("{:x}", info.device_type.map_or(0, |(major, _)| major)),
+        'T' => format!("{:x}", info.device_type.map_or(0, |(_, minor)| minor)),
+        'h' => info.links.to_string(),
+        'i' => info.inode.to_string(),
+        'd' => info.device.to_string(),
+        'D' => format!("{:x}", info.device),
+        'u' => info.uid.to_string(),
+        'U' => info.user.clone(),
+        'g' => info.gid.to_string(),
+        'G' => info.group.clone(),
+        'x' => info.access_time_str.clone(),
+        'X' => info.access_time_secs.to_string(),
+        'y' => info.modify_time_str.clone(),
+        'Y' => info.modify_time_secs.to_string(),
+        'z' => info.change_time_str.clone(),
+        'Z' => info.change_time_secs.to_string(),
+        'w' => info.birth_time_str.clone(),
+        'W' => info.birth_time_secs.to_string(),
+        _ => return None,
+    })
+}
+
+/// A volume's file system as GNU names it, and the magic number Linux gives it (0 for one
+/// it has none for).
+fn file_system_kind(name: &str) -> (String, u32) {
+    match name.to_ascii_uppercase().as_str() {
+        "NTFS" => ("ntfs".to_owned(), 0x5346_544e),
+        "FAT" | "FAT32" => ("msdos".to_owned(), 0x4d44),
+        "EXFAT" => ("exfat".to_owned(), 0x2011_bab0),
+        "CDFS" => ("isofs".to_owned(), 0x9660),
+        "UDF" => ("udf".to_owned(), 0x1501_3346),
+        _ => (name.to_ascii_lowercase(), 0),
+    }
+}
+
+/// The text of a file system's `%X`, for the file named `name`.
+fn file_system_field(
+    facts: &cash_win32::sysinfo::VolumeFacts,
+    name: &str,
+    letter: char,
+) -> Option<String> {
+    let (kind, magic) = file_system_kind(&facts.file_system);
+    Some(match letter {
+        'n' => name.to_owned(),
+        'a' => facts.available_blocks.to_string(),
+        'b' => facts.total_blocks.to_string(),
+        // Windows counts no file nodes.
+        'c' | 'd' => "0".to_owned(),
+        'f' => facts.free_blocks.to_string(),
+        'i' => format!("{:x}", u64::from(facts.serial) << 32),
+        'l' => facts.name_max.to_string(),
+        's' | 'S' => facts.block_size.to_string(),
+        't' => format!("{magic:x}"),
+        'T' => kind,
+        _ => return None,
+    })
+}
+
+/// `stat -f`: the file system each file is on, as GNU reports it.
+fn file_systems<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    options: &Options,
+) -> Result<ExecutionResult, cash_core::Error> {
+    let mut status = ExecutionResult::success();
+    let mut stdout = context.stdout();
+    for name in &options.files {
+        // Windows finds a path's volume from its spelling, whether or not it exists; GNU
+        // looks at the file, which must be there.
+        let resolved = context.shell.absolute_path(Path::new(name));
+        let facts = std::fs::metadata(&resolved)
+            .map_err(|error| cash_core::error::os_error_text(&error))
+            .and_then(|_| {
+                cash_win32::sysinfo::volume_facts(&resolved)
+                    .ok_or_else(|| "No such file or directory".to_owned())
+            });
+        let facts = match facts {
+            Ok(facts) => facts,
+            Err(reason) => {
+                writeln!(
+                    context.stderr(),
+                    "stat: cannot read file system information for '{name}': {reason}"
+                )?;
+                status = ExecutionResult::general_error();
+                continue;
+            }
+        };
+        let field = |letter| file_system_field(&facts, name, letter);
+        if let Some(format) = &options.format {
+            writeln!(stdout, "{}", expand(format, false, field))?;
+        } else if let Some(format) = &options.printf {
+            write!(stdout, "{}", expand(format, true, field))?;
+        } else if options.terse {
+            writeln!(stdout, "{}", expand(TERSE_FILE_SYSTEM, false, field))?;
+        } else {
+            let (kind, _) = file_system_kind(&facts.file_system);
+            writeln!(
+                stdout,
+                "  File: \"{name}\"\n    ID: {:<8} Namelen: {:<7} Type: {kind}\n\
+                 Block size: {:<10} Fundamental block size: {}\n\
+                 Blocks: Total: {:<10} Free: {:<10} Available: {}\n\
+                 Inodes: Total: {:<10} Free: {}",
+                format!("{:x}", u64::from(facts.serial) << 32),
+                facts.name_max,
+                facts.block_size,
+                facts.block_size,
+                facts.total_blocks,
+                facts.free_blocks,
+                facts.available_blocks,
+                0,
+                0
+            )?;
+        }
+    }
+    Ok(status)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parsed(line: &str) -> Result<Options, Stop> {
+        let words: Vec<String> = line.split_whitespace().map(str::to_owned).collect();
+        parse(&words, Order::Permute)
     }
 
-    result
+    #[test]
+    fn the_command_line_is_read_as_gnu_stat_reads_it() {
+        let options = parsed("-L f -t --cached=never --form=%n g").unwrap();
+        assert!(options.dereference && options.terse);
+        assert_eq!(options.format.as_deref(), Some("%n"));
+        assert_eq!(options.files, ["f", "g"]);
+        assert!(parsed("-f .").unwrap().file_system);
+        assert_eq!(
+            parsed("").err(),
+            Some(Stop::Usage("missing operand".to_owned()))
+        );
+        assert_eq!(
+            parsed("-c").err(),
+            Some(Stop::Usage("option requires an argument -- 'c'".to_owned()))
+        );
+        assert!(matches!(parsed("--cached=x f"), Err(Stop::Usage(_))));
+        assert_eq!(parsed("--help --bogus").err(), Some(Stop::Help));
+        assert_eq!(parsed("--vers").err(), Some(Stop::Version));
+    }
+
+    #[test]
+    fn a_format_keeps_what_it_does_not_know() {
+        let field = |letter| (letter == 'n').then(|| "name".to_owned());
+        assert_eq!(expand("%n %% %q", false, field), "name % %q");
+        assert_eq!(expand("%n\\t.", true, field), "name\t.");
+        assert_eq!(expand("%n\\t.", false, field), "name\\t.");
+        assert_eq!(file_system_kind("NTFS"), ("ntfs".to_owned(), 0x5346_544e));
+        assert_eq!(file_system_kind("ReFS"), ("refs".to_owned(), 0));
+    }
 }
