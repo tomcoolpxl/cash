@@ -920,6 +920,26 @@ fn settle(session: &mut ConPtySession) {
         .unwrap();
 }
 
+/// Waits up to 10 s for `text` to have come at least `times` times in the session's output,
+/// and fails the test if it has not: a count taken just after [`settle`] can come before a
+/// shell on a busy machine has answered, since a pause of 400 ms is no proof that it has.
+fn expect_count(session: &mut ConPtySession, text: &str, times: usize) {
+    let start = std::time::Instant::now();
+    loop {
+        session.read_available().unwrap();
+        let seen = session.output().matches(text).count();
+        if seen >= times {
+            return;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "`{text}` came {seen} times, not {times}:\n{}",
+            session.output()
+        );
+        std::thread::sleep(Duration::from_millis(30));
+    }
+}
+
 /// Ctrl-R opens the history below the line (D79): typing filters it, Enter puts the
 /// command picked on the line and Tab runs it at once; Ctrl-R in the picker shows what ran
 /// in this folder, from the record kept in `%LOCALAPPDATA%\cash`.
@@ -948,7 +968,7 @@ fn conpty_ctrl_r_picks_from_the_history() {
         session.send(&format!("{line}\r")).unwrap();
         settle(&mut session);
     }
-    assert_eq!(count(&session, "BETA_HIST"), 1, "{}", session.output());
+    expect_count(&mut session, "BETA_HIST", 1);
 
     // Ctrl-R, `beta`, Enter: the command is on the line; Enter runs it.
     session.send("\x12").unwrap();
@@ -966,14 +986,14 @@ fn conpty_ctrl_r_picks_from_the_history() {
     );
     session.send("\r").unwrap();
     settle(&mut session);
-    assert_eq!(count(&session, "BETA_HIST"), 2, "{}", session.output());
+    expect_count(&mut session, "BETA_HIST", 2);
 
     // Tab runs it at once.
     session.send("\x12alpha").unwrap();
     settle(&mut session);
     session.send("\t").unwrap();
     settle(&mut session);
-    assert_eq!(count(&session, "ALPHA_HIST"), 2, "{}", session.output());
+    expect_count(&mut session, "ALPHA_HIST", 2);
 
     // In the other folder, Ctrl-R twice: what ran there only. `echo` there is gamma's,
     // where the whole history's newest `echo` is the one just run.
@@ -991,7 +1011,7 @@ fn conpty_ctrl_r_picks_from_the_history() {
     settle(&mut session);
     session.send("\r").unwrap();
     settle(&mut session);
-    assert_eq!(count(&session, "GAMMA_HIST"), 2, "{}", session.output());
+    expect_count(&mut session, "GAMMA_HIST", 2);
 
     // What `history -c` took out is gone from this folder's list too, though the record
     // still holds it.
@@ -1064,7 +1084,7 @@ fn conpty_z_jumps_to_folders_a_session_before_went_to() {
         .expect("prompt displayed");
     session.send("z deep && pwd\r").unwrap();
     settle(&mut session);
-    assert_eq!(count(&session, &deep), 1, "{}", session.output());
+    expect_count(&mut session, &deep, 1);
 
     // `z -i`: a list of the matches; Enter goes to the one picked, `zeta_one`, as good as
     // `zeta_three` and recorded first.
@@ -1079,7 +1099,7 @@ fn conpty_z_jumps_to_folders_a_session_before_went_to() {
     let listed = count(&session, &one);
     session.send("pwd\r").unwrap();
     settle(&mut session);
-    assert_eq!(count(&session, &one), listed + 1, "{}", session.output());
+    expect_count(&mut session, &one, listed + 1);
 
     // Tab puts the folder on the line.
     session.send("z dee\t").unwrap();
@@ -1088,7 +1108,7 @@ fn conpty_z_jumps_to_folders_a_session_before_went_to() {
     settle(&mut session);
     session.send("pwd\r").unwrap();
     settle(&mut session);
-    assert!(count(&session, &deep) >= 3, "{}", session.output());
+    expect_count(&mut session, &deep, 3);
 
     // Alt-E's Alt-H: the recorded folders, though this session has been in few.
     session.send("\x0c").unwrap();
