@@ -164,6 +164,21 @@ impl Signal {
     }
 }
 
+/// A number of seconds as procps reads `-O`'s, with C's `atoi`: the digits it starts with,
+/// after blanks and a sign, so `-O x` is 0; a negative number is 0 too.
+pub(crate) fn seconds_as_atoi(text: &str) -> u64 {
+    let text = text.trim_start();
+    let negative = text.starts_with('-');
+    let digits = text.strip_prefix(['-', '+']).unwrap_or(text);
+    let digits: String = digits.chars().take_while(char::is_ascii_digit).collect();
+    if negative {
+        return 0;
+    }
+    digits
+        .parse()
+        .unwrap_or(if digits.is_empty() { 0 } else { u64::MAX })
+}
+
 /// A signal given as a name (`TERM`, `SIGTERM`, `term`) or a number (`15`, `0`).
 pub(crate) fn parse_signal(text: &str) -> Option<Signal> {
     if let Ok(number) = text.parse::<i32>() {

@@ -386,11 +386,7 @@ fn parse_pkill(args: &[String]) -> Result<PkillOptions, PkillStop> {
             "pid" => options
                 .pids
                 .extend(parse_pids(&value).map_err(PkillStop::Mistake)?),
-            "older" => {
-                options.older = Some(value.trim().parse().map_err(|_| {
-                    PkillStop::Mistake(std::format!("invalid argument for -O: {value}"))
-                })?);
-            }
+            "older" => options.older = Some(procmatch::seconds_as_atoi(&value)),
             "echo" => options.echo = true,
             "count" => options.count = true,
             "newest" => options.newest = true,
