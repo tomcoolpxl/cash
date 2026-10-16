@@ -19,11 +19,13 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Order};
 use chrono::{DateTime, Local};
 use clap::Parser;
 use unicode_width::UnicodeWidthStr as _;
 
 use crate::ls_icon_table;
+use crate::options;
 
 const HELP: &str = "\
 Usage: ls [OPTION]... [FILE]...
@@ -190,6 +192,232 @@ pub(crate) struct LsCommand {
     /// Files or directories to list.
     #[arg(value_name = "FILE")]
     paths: Vec<String>,
+
+    /// `--classify=auto`: the marks only on a terminal, which `execute` says in `tty`.
+    #[arg(skip)]
+    classify_auto: bool,
+
+    /// Whether the command's output is a terminal, for `--classify=auto`.
+    #[arg(skip)]
+    tty: bool,
+
+    /// The words as given, read in `execute`, where `POSIXLY_CORRECT` can be seen.
+    #[arg(skip)]
+    raw: Vec<String>,
+
+    /// What ends `ls` before it lists: `--version`, or a command line it refuses.
+    #[arg(skip)]
+    early: Option<Early>,
+}
+
+/// What ends `ls` before it lists anything.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Early {
+    Version,
+    /// A mistake `getopt_long` finds, or a value refused: said with the Try line.
+    Usage(String),
+    /// One of GNU's options cash's ls does not have.
+    Refused(String),
+}
+
+/// GNU coreutils 9's short options, each known by its letter.
+const SHORTS: &str = "abcdfghiklmnopqrstuvw:xABCDFGHI:LNQRST:UXZ1";
+
+/// GNU coreutils 9's long options, known by their letter where they have one, and cash's
+/// own (`--icons`, `--icons-theme`, `--attributes`, `--count-links`, `--tree`,
+/// `--depth`), so that a name cut short is read, or found ambiguous, as GNU's would be.
+const LONGS: &[Long<'static, &str>] = &[
+    Long::new("all", Arg::No, "a"),
+    Long::new("escape", Arg::No, "b"),
+    Long::new("directory", Arg::No, "d"),
+    Long::new("dired", Arg::No, "D"),
+    Long::new("full-time", Arg::No, "full-time"),
+    Long::new(
+        "group-directories-first",
+        Arg::No,
+        "group-directories-first",
+    ),
+    Long::new("human-readable", Arg::No, "h"),
+    Long::new("inode", Arg::No, "i"),
+    Long::new("kibibytes", Arg::No, "k"),
+    Long::new("numeric-uid-gid", Arg::No, "n"),
+    Long::new("no-group", Arg::No, "G"),
+    Long::new("hide-control-chars", Arg::No, "q"),
+    Long::new("reverse", Arg::No, "r"),
+    Long::new("size", Arg::No, "s"),
+    Long::new("width", Arg::Required, "w"),
+    Long::new("almost-all", Arg::No, "A"),
+    Long::new("ignore-backups", Arg::No, "B"),
+    Long::new("classify", Arg::Optional, "F"),
+    Long::new("file-type", Arg::No, "file-type"),
+    Long::new("si", Arg::No, "si"),
+    Long::new("dereference-command-line", Arg::No, "H"),
+    Long::new(
+        "dereference-command-line-symlink-to-dir",
+        Arg::No,
+        "dereference-command-line-symlink-to-dir",
+    ),
+    Long::new("hide", Arg::Required, "hide"),
+    Long::new("ignore", Arg::Required, "I"),
+    Long::new("indicator-style", Arg::Required, "indicator-style"),
+    Long::new("dereference", Arg::No, "L"),
+    Long::new("literal", Arg::No, "N"),
+    Long::new("quote-name", Arg::No, "Q"),
+    Long::new("quoting-style", Arg::Required, "quoting-style"),
+    Long::new("recursive", Arg::No, "R"),
+    Long::new("format", Arg::Required, "format"),
+    Long::new("show-control-chars", Arg::No, "show-control-chars"),
+    Long::new("sort", Arg::Required, "sort"),
+    Long::new("tabsize", Arg::Required, "T"),
+    Long::new("time", Arg::Required, "time"),
+    Long::new("time-style", Arg::Required, "time-style"),
+    Long::new("zero", Arg::No, "zero"),
+    Long::new("color", Arg::Optional, "color"),
+    Long::new("hyperlink", Arg::Optional, "hyperlink"),
+    Long::new("block-size", Arg::Required, "block-size"),
+    Long::new("context", Arg::No, "Z"),
+    Long::new("author", Arg::No, "author"),
+    Long::new("help", Arg::No, "help"),
+    Long::new("version", Arg::No, "version"),
+    Long::new("icons", Arg::Optional, "icons"),
+    Long::new("icons-theme", Arg::Required, "icons-theme"),
+    Long::new("attributes", Arg::No, "attributes"),
+    Long::new("count-links", Arg::No, "count-links"),
+    Long::new("tree", Arg::No, "tree"),
+    Long::new("depth", Arg::Required, "depth"),
+];
+
+impl LsCommand {
+    /// Reads the command line as GNU's `getopt_long` loop does, in order, options anywhere
+    /// until `--` unless `order` says otherwise; `--help` and `--version` end the reading
+    /// where they stand.
+    /// A command line with no words.
+    const fn empty() -> Self {
+        Self {
+            help: false,
+            long: false,
+            all: false,
+            almost_all: false,
+            one_column: false,
+            multi_column: false,
+            directory: false,
+            classify: false,
+            human_readable: false,
+            reverse: false,
+            recursive: false,
+            sort_by_time: false,
+            sort_by_size: false,
+            sort_by_extension: false,
+            sort_by_version: false,
+            unsorted: false,
+            sort: None,
+            group_directories_first: false,
+            count_links: false,
+            color: None,
+            icons: None,
+            icons_theme: None,
+            attributes: false,
+            tree: false,
+            depth: None,
+            paths: Vec::new(),
+            classify_auto: false,
+            tty: false,
+            raw: Vec::new(),
+            early: None,
+        }
+    }
+
+    fn parse(args: &[String], order: Order) -> Self {
+        let mut command = Self::empty();
+        let shorts = cash_getopt::optstring_ids(SHORTS);
+        for item in Getopt::new(&shorts, LONGS).order(order).read(args) {
+            let (id, value, written) = match item {
+                Err(problem) => {
+                    command.early = Some(Early::Usage(problem.to_string()));
+                    return command;
+                }
+                Ok(Item::Operand { value, .. }) => {
+                    command.paths.push(value);
+                    continue;
+                }
+                Ok(Item::Option {
+                    id, value, written, ..
+                }) => (id, value, written),
+            };
+            match id {
+                "help" => {
+                    command.help = true;
+                    return command;
+                }
+                "version" => {
+                    command.early = Some(Early::Version);
+                    return command;
+                }
+                "l" => command.long = true,
+                "a" => command.all = true,
+                "A" => command.almost_all = true,
+                "1" => command.one_column = true,
+                "C" => command.multi_column = true,
+                "d" => command.directory = true,
+                "F" => match value.as_deref() {
+                    None | Some("always" | "yes" | "force") => {
+                        command.classify = true;
+                        command.classify_auto = false;
+                    }
+                    Some("never" | "no" | "none") => command.classify = false,
+                    Some("auto" | "tty" | "if-tty") => {
+                        command.classify = true;
+                        command.classify_auto = true;
+                    }
+                    Some(other) => {
+                        command.early = Some(Early::Usage(format!(
+                            "invalid argument '{other}' for '--classify'\n\
+                             Valid arguments are: 'always', 'auto', 'never'"
+                        )));
+                        return command;
+                    }
+                },
+                "h" => command.human_readable = true,
+                "r" => command.reverse = true,
+                "R" => command.recursive = true,
+                "t" => command.sort_by_time = true,
+                "S" => command.sort_by_size = true,
+                "X" => command.sort_by_extension = true,
+                "v" => command.sort_by_version = true,
+                "U" => command.unsorted = true,
+                // GNU's -f is -a and -U.
+                "f" => {
+                    command.all = true;
+                    command.unsorted = true;
+                }
+                "sort" => command.sort = value,
+                "group-directories-first" => command.group_directories_first = true,
+                "count-links" => command.count_links = true,
+                "color" => command.color = Some(value.unwrap_or_else(|| "always".to_owned())),
+                "icons" => command.icons = Some(value.unwrap_or_else(|| "auto".to_owned())),
+                "icons-theme" => command.icons_theme = value,
+                "attributes" => command.attributes = true,
+                "tree" => command.tree = true,
+                "depth" => {
+                    let text = value.unwrap_or_default();
+                    let Ok(depth) = text.trim().parse() else {
+                        command.early = Some(Early::Usage(format!(
+                            "invalid argument '{text}' for '--depth'"
+                        )));
+                        return command;
+                    };
+                    command.depth = Some(depth);
+                }
+                _ => {
+                    command.early = Some(Early::Refused(format!(
+                        "{written} is not supported by cash's ls"
+                    )));
+                    return command;
+                }
+            }
+        }
+        command
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -272,18 +500,69 @@ fn when(value: Option<&str>, option: &str, is_tty: bool) -> Result<bool, Invalid
 impl builtins::Command for LsCommand {
     type Error = cash_core::Error;
 
+    /// The words as they are, read by GNU's option loop in `execute`.
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let mut command = Self::empty();
+        command.raw = args.into_iter().skip(1).collect();
+        Ok(command)
+    }
+
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
-        mut context: cash_core::ExecutionContext<'_, SE>,
+        context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        if self.help {
-            write!(context.stdout(), "{HELP}")?;
-            return Ok(ExecutionResult::success());
+        // `POSIXLY_CORRECT`, a variable of the shell's, says where the options end. The
+        // command's own standard output, which a pipeline or a redirection replaces even
+        // though the shell's is still the terminal, says whether `--classify=auto` marks.
+        let mut command = Self::parse(&self.raw, options::gnu_order(&context));
+        command.tty = context.try_fd(1).is_some_and(|f| f.is_terminal());
+        command.list(context).await
+    }
+}
+
+impl LsCommand {
+    /// What a command line that ends `ls` before it lists says: the help, the version, or
+    /// the mistake; `None` for one that lists.
+    fn ended<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+    ) -> Result<Option<ExecutionResult>, cash_core::Error> {
+        let name = &context.command_name;
+        match &self.early {
+            Some(Early::Version) => {
+                writeln!(context.stdout(), "{name} (cash): GNU coreutils' options")?;
+                Ok(Some(ExecutionResult::success()))
+            }
+            Some(Early::Usage(message)) => {
+                options::gnu_usage_error(context, name, message, 2).map(Some)
+            }
+            Some(Early::Refused(message)) => {
+                writeln!(context.stderr(), "{name}: {message}")?;
+                Ok(Some(ExecutionResult::new(2)))
+            }
+            None if self.help => {
+                write!(context.stdout(), "{HELP}")?;
+                Ok(Some(ExecutionResult::success()))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Lists what the command line asked for.
+    async fn list<SE: cash_core::ShellExtensions>(
+        &self,
+        mut context: cash_core::ExecutionContext<'_, SE>,
+    ) -> Result<ExecutionResult, cash_core::Error> {
+        if let Some(result) = self.ended(&context)? {
+            return Ok(result);
         }
 
         // The command's own standard output, which a pipeline or a redirection replaces
         // even though the shell's is still the terminal.
-        let is_tty = context.try_fd(1).is_some_and(|f| f.is_terminal());
+        let is_tty = self.tty;
         let look = match self.look(&context, is_tty) {
             Ok(look) => look,
             Err(Invalid(message)) => {
@@ -872,9 +1151,14 @@ impl LsCommand {
         Ok(())
     }
 
+    /// Whether names get their `-F` marks: `--classify=auto` only on a terminal.
+    const fn classifies(&self) -> bool {
+        self.classify && (!self.classify_auto || self.tty)
+    }
+
     /// The `-F` indicator for an entry.
     fn indicator(&self, item: &ItemInfo) -> Option<char> {
-        if !self.classify {
+        if !self.classifies() {
             return None;
         }
         match item.kind {
@@ -914,7 +1198,7 @@ impl LsCommand {
             Some(target) if self.long => {
                 s.push_str(" -> ");
                 s.push_str(target);
-                if self.classify {
+                if self.classifies() {
                     let mark = match item.target {
                         Some((_, true)) => Some('/'),
                         _ => item.target_mark,
@@ -1477,6 +1761,56 @@ fn format_date(mtime: SystemTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parsed(line: &str) -> LsCommand {
+        let words: Vec<String> = line.split_whitespace().map(str::to_owned).collect();
+        LsCommand::parse(&words, Order::Permute)
+    }
+
+    #[test]
+    fn the_command_line_is_read_as_gnu_ls_reads_it() {
+        // Long names by any unique prefix, among GNU's whole table and cash's own.
+        let command = parsed("--almost --recur --tr --col=never dir");
+        assert!(command.almost_all && command.recursive && command.tree);
+        assert_eq!(command.color.as_deref(), Some("never"));
+        assert_eq!(command.paths, ["dir"]);
+        assert_eq!(
+            parsed("--al").early,
+            Some(Early::Usage(
+                "option '--al' is ambiguous; possibilities: '--all' '--almost-all'".to_owned()
+            ))
+        );
+        assert_eq!(
+            parsed("-y").early,
+            Some(Early::Usage("invalid option -- 'y'".to_owned()))
+        );
+        // GNU's options cash's ls has not are named, not called invalid.
+        assert_eq!(
+            parsed("-i").early,
+            Some(Early::Refused(
+                "-i is not supported by cash's ls".to_owned()
+            ))
+        );
+        assert_eq!(
+            parsed("--time-style iso").early,
+            Some(Early::Refused(
+                "--time-style is not supported by cash's ls".to_owned()
+            ))
+        );
+        // coreutils 9's --classify[=WHEN]; -f is -a and -U.
+        assert!(!parsed("-F --classify=never").classify);
+        let auto = parsed("--classify=auto");
+        assert!(auto.classify && auto.classify_auto && !auto.classifies());
+        let command = parsed("-f");
+        assert!(command.all && command.unsorted);
+        // Help and version end the reading where they stand.
+        assert!(parsed("--help -y").help);
+        assert_eq!(parsed("--vers --bogus").early, Some(Early::Version));
+        // POSIXLY_CORRECT: the options end at the first operand.
+        let words: Vec<String> = ["dir", "-l"].map(str::to_owned).to_vec();
+        let command = LsCommand::parse(&words, Order::StopAtOperand);
+        assert_eq!((command.long, command.paths.len()), (false, 2));
+    }
 
     #[test]
     fn version_sort_compares_numbers_as_numbers() {
