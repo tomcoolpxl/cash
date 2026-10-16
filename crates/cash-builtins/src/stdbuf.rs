@@ -11,11 +11,13 @@
 //!   `stdbuf` exits with the program's status.
 //!
 //! The options are coreutils 9.x's (`-i`, `-o`, `-e` with a MODE of `L`, `0` or a size),
-//! its messages and its status 125 for a usage error, 127 for a command not found.
+//! read by cash-getopt as its `getopt_long("+i:o:e:")` reads them; its messages and its
+//! status 125 for a usage error, 127 for a command not found.
 
 use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Order, Short};
 use clap::Parser;
 
 /// Run a command with changed buffering; on Windows, as it is.
@@ -106,17 +108,48 @@ fn valid_mode(mode: &str) -> bool {
     !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) && SUFFIXES.contains(&suffix)
 }
 
-/// The options as `getopt_long("+i:o:e:")` reads them: they end at the first word that
-/// is not one, which starts the command.
+/// coreutils' `i:o:e:` and their long names; help and version have no letter.
+const SHORTS: &[Short<char>] = &[
+    Short::new('i', Arg::Required, 'i'),
+    Short::new('o', Arg::Required, 'o'),
+    Short::new('e', Arg::Required, 'e'),
+];
+const LONGS: &[Long<'static, char>] = &[
+    Long::new("error", Arg::Required, 'e'),
+    Long::new("help", Arg::No, 'h'),
+    Long::new("input", Arg::Required, 'i'),
+    Long::new("output", Arg::Required, 'o'),
+    Long::new("version", Arg::No, 'v'),
+];
+
+/// The options as `getopt_long("+i:o:e:")` reads them: in order, each mode checked as
+/// it comes, ending at the first word that is not one, which starts the command.
 fn parse(args: &[String]) -> Result<Parsed, Refusal> {
     let mut parsed = Parsed {
         any_mode: false,
         output_by_line: false,
         command: Vec::new(),
     };
-    let mut index = 0;
-    let mut mode_for = |stream: Stream, mode: &str| -> Result<(), Refusal> {
-        if !valid_mode(mode) {
+    let getopt = Getopt::new(SHORTS, LONGS).order(Order::StopAtOperand);
+    for item in getopt.read(args) {
+        let (stream, mode) = match item {
+            Err(problem) => return Err(Refusal::Message(problem.to_string(), true)),
+            Ok(Item::Operand { value, .. }) => {
+                parsed.command.push(value);
+                continue;
+            }
+            Ok(Item::Option { id: 'h', .. }) => return Err(Refusal::Help),
+            Ok(Item::Option { id: 'v', .. }) => return Err(Refusal::Version),
+            Ok(Item::Option { id, value, .. }) => {
+                let stream = match id {
+                    'i' => Stream::Input,
+                    'o' => Stream::Output,
+                    _ => Stream::Error,
+                };
+                (stream, value.unwrap_or_default())
+            }
+        };
+        if !valid_mode(&mode) {
             return Err(Refusal::Message(format!("invalid mode '{mode}'"), false));
         }
         if stream == Stream::Input && mode == "L" {
@@ -129,63 +162,7 @@ fn parse(args: &[String]) -> Result<Parsed, Refusal> {
         if stream == Stream::Output && (mode == "L" || mode == "0") {
             parsed.output_by_line = true;
         }
-        Ok(())
-    };
-    while index < args.len() {
-        let arg = args[index].as_str();
-        index += 1;
-        let (stream, attached) = match arg {
-            "--" => break,
-            "--help" => return Err(Refusal::Help),
-            "--version" => return Err(Refusal::Version),
-            "-i" | "--input" => (Stream::Input, None),
-            "-o" | "--output" => (Stream::Output, None),
-            "-e" | "--error" => (Stream::Error, None),
-            _ if arg.starts_with("--input=") => (Stream::Input, arg.get(8..)),
-            _ if arg.starts_with("--output=") => (Stream::Output, arg.get(9..)),
-            _ if arg.starts_with("--error=") => (Stream::Error, arg.get(8..)),
-            _ if arg.starts_with("-i") => (Stream::Input, arg.get(2..)),
-            _ if arg.starts_with("-o") => (Stream::Output, arg.get(2..)),
-            _ if arg.starts_with("-e") => (Stream::Error, arg.get(2..)),
-            _ if arg.starts_with("--") => {
-                let long = arg.trim_start_matches('-');
-                let long = long.split('=').next().unwrap_or(long);
-                return Err(Refusal::Message(
-                    format!("unrecognized option '--{long}'"),
-                    true,
-                ));
-            }
-            _ if arg.starts_with('-') && arg.len() > 1 => {
-                return Err(Refusal::Message(
-                    format!("invalid option -- '{}'", arg.chars().nth(1).unwrap_or('-')),
-                    true,
-                ));
-            }
-            _ => {
-                index -= 1;
-                break;
-            }
-        };
-        let mode = if let Some(mode) = attached {
-            mode.to_owned()
-        } else {
-            let Some(mode) = args.get(index) else {
-                let shown = match stream {
-                    Stream::Input => "i",
-                    Stream::Output => "o",
-                    Stream::Error => "e",
-                };
-                return Err(Refusal::Message(
-                    format!("option requires an argument -- '{shown}'"),
-                    true,
-                ));
-            };
-            index += 1;
-            mode.clone()
-        };
-        mode_for(stream, &mode)?;
     }
-    parsed.command = args[index..].to_vec();
     if parsed.command.is_empty() {
         return Err(Refusal::Message("missing operand".to_owned(), true));
     }
@@ -343,5 +320,16 @@ mod tests {
             ))
         );
         assert_eq!(parse(&args("--help")), Err(Refusal::Help));
+        // glibc names a long option by its name, where the parser before said `-o`; a long
+        // name goes by any unique prefix.
+        assert_eq!(
+            parse(&args("--output")),
+            Err(Refusal::Message(
+                "option '--output' requires an argument".into(),
+                true
+            ))
+        );
+        let parsed = parse(&args("--out L cmd")).unwrap_or_else(|_| unreachable!("it parses"));
+        assert!(parsed.output_by_line);
     }
 }
