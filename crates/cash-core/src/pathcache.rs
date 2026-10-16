@@ -19,9 +19,10 @@ pub struct PathCache {
     buckets: Vec<Vec<Entry>>,
     /// The number of entries across all buckets.
     len: usize,
-    /// What the entries were found with: the shell's `PATH` and `PATHEXT` at the time.
-    #[cfg_attr(feature = "serde", serde(default))]
-    basis: String,
+    /// What the entries were found with: the stamps of the shell's `PATH` and `PATHEXT`
+    /// values at the time (`ShellVariable::stamp`).
+    #[cfg_attr(feature = "serde", serde(skip))]
+    found_with: Option<(Option<u64>, Option<u64>)>,
 }
 
 /// One remembered location, and how often the shell has run it from there.
@@ -47,15 +48,19 @@ impl PathCache {
         self.len = 0;
     }
 
-    /// Empties the table when what its entries were found with has changed: Bash forgets
-    /// every remembered location when `PATH` is assigned, and on Windows `PATHEXT` decides
-    /// what a name finds as well. Checking the values, rather than catching each way of
-    /// assigning them (`export`, `local`, `read`, a prefix assignment), cannot miss one.
-    pub fn forget_unless_found_with(&mut self, basis: &str) {
-        if self.basis != basis {
-            self.reset();
-            basis.clone_into(&mut self.basis);
-        }
+    /// Whether the entries were found with these values of `PATH` and `PATHEXT`, by
+    /// their stamps (`ShellVariable::stamp`; `None` for one unset). Bash forgets every
+    /// remembered location when `PATH` is assigned, and on Windows `PATHEXT` decides what
+    /// a name finds as well. A value's stamp changes with it however it is assigned
+    /// (`export`, `local`, `read`, a prefix assignment), so none is missed.
+    pub fn is_found_with(&self, path: Option<u64>, pathext: Option<u64>) -> bool {
+        self.found_with == Some((path, pathext))
+    }
+
+    /// Empties the table, for entries to be found with these values from now.
+    pub fn forget_and_find_with(&mut self, path: Option<u64>, pathext: Option<u64>) {
+        self.reset();
+        self.found_with = Some((path, pathext));
     }
 
     fn bucket_of(&self, name: &str) -> usize {

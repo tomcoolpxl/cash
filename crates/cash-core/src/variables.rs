@@ -28,6 +28,15 @@ pub struct ShellVariable {
     treat_as_integer: bool,
     /// Whether or not the variable should be treated as a name reference.
     treat_as_nameref: bool,
+    /// A number no other value of any variable has had ([`ShellVariable::stamp`]).
+    #[cfg_attr(feature = "serde", serde(skip, default = "next_stamp"))]
+    stamp: u64,
+}
+
+/// A number no value has had before: each new value of a variable takes one.
+fn next_stamp() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Kind of transformation to apply to a variable's value when it is updated.
@@ -55,6 +64,7 @@ impl Default for ShellVariable {
             trace: false,
             treat_as_integer: false,
             treat_as_nameref: false,
+            stamp: next_stamp(),
         }
     }
 }
@@ -75,6 +85,14 @@ impl ShellVariable {
     /// Returns the value associated with the variable.
     pub const fn value(&self) -> &ShellValue {
         &self.value
+    }
+
+    /// What tells this value from every other: it changes whenever the value does, and
+    /// a copy of the variable has its value's. The shell asks before each command whether
+    /// `PATH` is what it found programs with; comparing the text was a copy of it, then a
+    /// compare of some kilobytes, every command.
+    pub const fn stamp(&self) -> u64 {
+        self.stamp
     }
 
     /// Returns whether or not the variable is exported to child processes.
@@ -209,6 +227,7 @@ impl ShellVariable {
 
     /// Converts the variable to an indexed array.
     pub fn convert_to_indexed_array(&mut self) -> Result<(), error::Error> {
+        self.stamp = next_stamp();
         match self.value() {
             ShellValue::IndexedArray(_) | ShellValue::Unset(ShellValueUnsetType::IndexedArray) => {
                 Ok(())
@@ -233,6 +252,7 @@ impl ShellVariable {
 
     /// Converts the variable to an associative array.
     pub fn convert_to_associative_array(&mut self) -> Result<(), error::Error> {
+        self.stamp = next_stamp();
         match self.value() {
             ShellValue::AssociativeArray(_)
             | ShellValue::Unset(ShellValueUnsetType::AssociativeArray) => Ok(()),
@@ -262,6 +282,7 @@ impl ShellVariable {
     /// * `append` - Whether or not to append the value to the preexisting value.
     #[expect(clippy::too_many_lines)]
     pub fn assign(&mut self, value: ShellValueLiteral, append: bool) -> Result<(), error::Error> {
+        self.stamp = next_stamp();
         if self.is_readonly() {
             return Err(error::ErrorKind::ReadonlyVariable(String::new()).into());
         }
@@ -414,6 +435,7 @@ impl ShellVariable {
         value: String,
         append: bool,
     ) -> Result<(), error::Error> {
+        self.stamp = next_stamp();
         match &self.value {
             ShellValue::Unset(_) => {
                 self.assign(ShellValueLiteral::Array(ArrayLiteral(vec![])), false)?;
@@ -548,6 +570,7 @@ impl ShellVariable {
     ///
     /// * `index` - The index at which to unset the value.
     pub fn unset_index(&mut self, index: &str) -> Result<bool, error::Error> {
+        self.stamp = next_stamp();
         match &mut self.value {
             ShellValue::Unset(ty) => match ty {
                 ShellValueUnsetType::Untyped => Err(error::ErrorKind::NotArray.into()),

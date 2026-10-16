@@ -271,12 +271,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// since they were found, as Bash does when `PATH` is assigned: `PATH=a:$PATH; foo;
     /// PATH=b:$PATH; foo` ran `a/foo` twice.
     pub(crate) fn sync_program_location_cache(&mut self) {
-        let basis = format!(
-            "{}\0{}",
-            self.env_str("PATH").unwrap_or_default(),
-            self.env_str("PATHEXT").unwrap_or_default()
-        );
-        self.program_location_cache.forget_unless_found_with(&basis);
+        let path = self.env.get("PATH").map(|(_, var)| var.stamp());
+        let pathext = self.env.get("PATHEXT").map(|(_, var)| var.stamp());
+        if !self.program_location_cache.is_found_with(path, pathext) {
+            self.program_location_cache
+                .forget_and_find_with(path, pathext);
+        }
     }
 
     /// The extensions that make a file runnable by its bare name: the shell's `PATHEXT`,
