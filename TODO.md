@@ -57,6 +57,11 @@ upstream's.
    - chmod -R (an unreadable folder is reported);
    - where -r (each folder listed once) and fileuse;
    - then tar, zip, rar and 7z.
+4. **Then, the parts called most** (the user, 2026-10-17, "after you finish the whole
+   exercise"): a deep look at the components every builtin and command goes through
+   many times (option parsing, printing and output, expansion, lookups and the like)
+   for inefficient or unoptimized code: measure first (xperf, hyperfine, counts per
+   call), then fix what costs.
 
 ## Left over from finished phases
 
