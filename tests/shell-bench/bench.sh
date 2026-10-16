@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# The shell benchmarks: the same bash workloads in each shell given, timed by hyperfine
+# The shell benchmarks: the same workloads in each shell given, timed by hyperfine
 # (`scoop install hyperfine`, `pacman -S hyperfine`), one JSON file per workload in OUTDIR.
-# run.sh runs it for cash, Git Bash and WSL's bash and prints the table.
+# run.sh runs it for cash, Git Bash, PowerShell 7 and WSL's bash, and prints the table.
 #
 #   bash tests/shell-bench/bench.sh OUTDIR NAME=SHELL...
 #
-# Each SHELL runs `-c SCRIPT`. The workloads are those of crates/cash-shell/benches
-# (start, loop, echo, arithmetic, expansion, function call), and what costs a process:
-# a command substitution, a program (hostname.exe on Windows, /bin/true on Linux), and
-# a pipe into cat.
+# A bash runs `-c SCRIPT`; PowerShell (pwsh.exe, powershell.exe) runs the workload in its
+# own syntax, `-NoProfile -NonInteractive -Command SCRIPT`. The workloads are those of
+# crates/cash-shell/benches (start, loop, echo, arithmetic, expansion, function call),
+# what costs a process (a command substitution, a program: hostname.exe on Windows,
+# /bin/true on Linux; a pipe into cat), and `ls -la` of a folder of 200 files.
+# PowerShell has no process for `$(...)`, and pipes into Out-Null.
 set -u
 out=$1
 shift
@@ -19,10 +21,23 @@ case $(uname -s) in
 esac
 shells=("$@")
 
+# The folder `ls -la` lists, on the system's own disk: 200 files and 10 folders.
+listed=$(mktemp -d)
+for i in $(seq 1 200); do printf '%s\n' "$i" > "$listed/file$i.txt"; done
+for i in $(seq 1 10); do mkdir "$listed/dir$i"; done
+listed_native=$listed
+command -v cygpath > /dev/null && listed_native=$(cygpath -m "$listed")
+
 bench() {
-    local name=$1 script=$2 args=() shell
+    local name=$1 script=$2 ps_script=$3 args=() shell command
     for shell in "${shells[@]}"; do
-        args+=(-n "${shell%%=*}" "\"${shell#*=}\" -c '$script'")
+        command=${shell#*=}
+        case ${command,,} in
+            *pwsh*|*powershell*)
+                args+=(-n "${shell%%=*}" "\"$command\" -NoProfile -NonInteractive -Command '$ps_script'") ;;
+            *)
+                args+=(-n "${shell%%=*}" "\"$command\" -c '$script'") ;;
+        esac
     done
     if hyperfine -N --warmup 2 --min-runs 10 --export-json "$out/$name.json" "${args[@]}" \
         > "$out/$name.txt" 2>&1; then
@@ -32,12 +47,23 @@ bench() {
     fi
 }
 
-bench startup 'true'
-bench loop 'for ((i=0;i<20000;i++)); do :; done'
-bench echo 'for ((i=0;i<20000;i++)); do echo hi; done >/dev/null'
-bench arithmetic 'for ((i=0;i<20000;i++)); do x=$((i*3+i/2%7)); done'
-bench expansion 's=abcdef; for ((i=0;i<20000;i++)); do x=${s/b/B}; y=${s:2:3}; z=${#s}; done'
-bench function 'f() { :; }; for ((i=0;i<20000;i++)); do f; done'
-bench substitution 'for ((i=0;i<1000;i++)); do x=$(echo hi); done'
-bench program "for ((i=0;i<100;i++)); do $prog; done"
-bench pipe 'for ((i=0;i<100;i++)); do echo hi | cat >/dev/null; done'
+bench startup 'true' 'exit'
+bench loop 'for ((i=0;i<20000;i++)); do :; done' \
+    'for ($i=0; $i -lt 20000; $i++) { }'
+bench echo 'for ((i=0;i<20000;i++)); do echo hi; done >/dev/null' \
+    '& { for ($i=0; $i -lt 20000; $i++) { echo hi } } > $null'
+bench arithmetic 'for ((i=0;i<20000;i++)); do x=$((i*3+i%7)); done' \
+    'for ($i=0; $i -lt 20000; $i++) { $x = $i*3 + $i%7 }'
+bench expansion 's=abcdef; for ((i=0;i<20000;i++)); do x=${s/b/B}; y=${s:2:3}; z=${#s}; done' \
+    '$s = "abcdef"; for ($i=0; $i -lt 20000; $i++) { $x = $s.Replace("b","B"); $y = $s.Substring(2,3); $z = $s.Length }'
+bench function 'f() { :; }; for ((i=0;i<20000;i++)); do f; done' \
+    'function f { }; for ($i=0; $i -lt 20000; $i++) { f }'
+bench substitution 'for ((i=0;i<1000;i++)); do x=$(echo hi); done' \
+    'for ($i=0; $i -lt 1000; $i++) { $x = $(echo hi) }'
+bench program "for ((i=0;i<100;i++)); do $prog; done" \
+    'for ($i=0; $i -lt 100; $i++) { C:/Windows/System32/HOSTNAME.EXE > $null }'
+bench pipe 'for ((i=0;i<100;i++)); do echo hi | cat >/dev/null; done' \
+    'for ($i=0; $i -lt 100; $i++) { echo hi | Out-Null }'
+bench ls "cd $listed_native && for ((i=0;i<50;i++)); do ls -la >/dev/null; done" \
+    "Set-Location $listed_native; for (\$i=0; \$i -lt 50; \$i++) { Get-ChildItem -Force | Out-String > \$null }"
+rm -rf "$listed"

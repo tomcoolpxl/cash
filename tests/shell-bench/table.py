@@ -1,4 +1,4 @@
-"""One table from hyperfine's JSON exports: each benchmark's mean per shell, and the cost
+"""One table from hyperfine's JSON exports: each benchmark's median per shell, and the cost
 of one iteration once a shell's start (the `startup` benchmark) is taken off."""
 import json
 import pathlib
@@ -14,6 +14,7 @@ ITERATIONS = {
     "substitution": 1000,
     "program": 100,
     "pipe": 100,
+    "ls": 50,
 }
 
 means = {}
@@ -23,7 +24,7 @@ for folder in sys.argv[1:]:
         if not path.exists():
             continue
         for result in json.loads(path.read_text(encoding="utf-8"))["results"]:
-            wall = result["summary"]["time_wall_clock"]["mean"]
+            wall = result["summary"]["time_wall_clock"]["median"]
             means.setdefault(name, {})[result["name"]] = wall
 
 shells = []

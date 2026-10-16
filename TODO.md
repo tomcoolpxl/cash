@@ -67,6 +67,11 @@ What the phases now in DONE.md left open, each where its phase says more.
   **xz is 20% slower on one block** (6.5 s against 5.4 s; lzma-rust2's encoder) and
   decodes at two thirds of XZ Utils' speed; zip on one large member has no parallelism
   to use (2.2 s against 1.9 s).
+- **The clipboard test fails while another program holds the clipboard** (2026-10-16):
+  `clipboard_and_small_tools::pbcopy_and_pbpaste_round_trip_through_the_clipboard` reads
+  the clipboard first and fails with "the clipboard is in use by another program" on a
+  busy desktop (a clipboard manager, an app copying). A short retry of the open, in
+  `cash_win32::clipboard` or in the test, would ride it out.
 - **zstd compresses at ruzstd's fast level only** (phase 28, 2026-10-07): every level
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
