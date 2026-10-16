@@ -48,7 +48,7 @@ impl builtins::Command for TreeCommand {
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
-        context: cash_core::ExecutionContext<'_, SE>,
+        mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         let actual = context.shell.absolute_path(&self.path);
         let shown = self.path.clone();
@@ -79,6 +79,10 @@ impl builtins::Command for TreeCommand {
             failed: false,
         };
         self.walk(&actual, &shown, "", 0, &mut state, &context)?;
+        if context.stop_token().requested() {
+            drop(stdout);
+            return context.stopped().await;
+        }
 
         if !self.noreport {
             writeln!(
@@ -109,7 +113,8 @@ impl TreeCommand {
         state: &mut WalkState<'_, W>,
         context: &cash_core::ExecutionContext<'_, SE>,
     ) -> Result<(), cash_core::Error> {
-        if self.max_depth.is_some_and(|limit| depth >= limit) {
+        // A Ctrl-C, or `kill` of a background job, stops the walk.
+        if self.max_depth.is_some_and(|limit| depth >= limit) || context.stop_token().requested() {
             return Ok(());
         }
 

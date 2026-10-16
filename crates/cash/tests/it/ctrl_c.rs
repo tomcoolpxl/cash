@@ -190,6 +190,43 @@ tail -n 2 t.txt >> out.txt"#
     assert_eq!(left.out, "rc=0\nafter\ndone");
 }
 
+/// A builtin that runs long stops on the first Ctrl-C. `grep -r` over System32 went on to
+/// its end, minutes in a debug build, with the Ctrl-C waiting; a second Ctrl-C, which
+/// Windows takes, ended the shell.
+#[test]
+fn ctrl_c_stops_a_long_grep_and_ends_the_script() {
+    let (status, left) = script(
+        "ctrl-c-grep",
+        r#"trap 'echo "exit trap" >> out.txt' EXIT
+echo searching
+grep -r zzzz-never-there C:/Windows/System32 > /dev/null 2>&1
+echo "went on" >> out.txt"#,
+    )
+    .when_shown("searching")
+    .type_keys("\x03")
+    .ends();
+
+    assert_eq!(status, 130);
+    assert_eq!(left.out, "exit trap");
+}
+
+/// With a trap on INT the trap runs once grep has stopped, and the script goes on.
+#[test]
+fn a_trap_on_int_runs_when_a_long_grep_stops() {
+    let left = script(
+        "trap-grep",
+        r#"trap 'echo trapped >> out.txt' INT
+echo searching
+grep -r zzzz-never-there C:/Windows/System32 > /dev/null 2>&1
+echo "went on: $?" >> out.txt"#,
+    )
+    .when_shown("searching")
+    .type_keys("\x03")
+    .finish();
+
+    assert_eq!(left.out, "trapped\nwent on: 130");
+}
+
 /// `select` asks with its prompt, which it shows once the keys are its own.
 #[test]
 fn ctrl_c_ends_a_script_waiting_in_select() {

@@ -1157,6 +1157,8 @@ struct Walker<'a, W: Write, E: Write> {
     operands: usize,
     /// Standard input, until an operand reads it.
     stdin: Option<Box<dyn Read>>,
+    /// Whether to stop: a Ctrl-C, or `kill` of a background job.
+    stop: cash_core::StopToken,
     trouble: bool,
     success: bool,
 }
@@ -1186,6 +1188,7 @@ impl<W: Write, E: Write> Walker<'_, W, E> {
     ) -> std::io::Result<()> {
         self.printer.begin_file(name, show_name, size);
         let run = self.printer.run;
+        let reader = self.stop.reader(reader);
         let strip = !self.opts().keep_cr && !self.opts().null_data;
         if strip {
             let stripper = CrlfStripper::new(reader, Rc::clone(&self.printer.crlf));
@@ -1249,7 +1252,7 @@ impl<W: Write, E: Write> Walker<'_, W, E> {
             .collect();
         names.sort();
         for name in names {
-            if self.printer.stop_all {
+            if self.printer.stop_all || self.stop.requested() {
                 return Ok(());
             }
             let name_text = name.to_string_lossy().into_owned();
@@ -1552,7 +1555,7 @@ impl builtins::Command for GrepCommand {
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
-        context: cash_core::ExecutionContext<'_, SE>,
+        mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         let preset = match context.command_name.as_str() {
             "egrep" => Some(Syntax::Extended),
@@ -1606,7 +1609,12 @@ impl builtins::Command for GrepCommand {
             return Ok(ExecutionResult::general_error());
         }
 
-        search_inputs(&context, &opts, &engine, colors, filters)
+        let result = search_inputs(&context, &opts, &engine, colors, filters)?;
+        // A Ctrl-C or a `kill` stopped the search: acted on as between commands.
+        if context.stop_token().requested() {
+            return context.stopped().await;
+        }
+        Ok(result)
     }
 }
 
@@ -1646,6 +1654,7 @@ fn search_inputs<SE: cash_core::ShellExtensions>(
         exclude_dirs: opts.exclude_dirs.iter().map(|g| Glob::new(g)).collect(),
         operands: opts.files.len(),
         stdin: Some(Box::new(context.stdin())),
+        stop: context.stop_token(),
         trouble: false,
         success: false,
     };
@@ -1658,7 +1667,7 @@ fn search_inputs<SE: cash_core::ShellExtensions>(
         }
     } else {
         for name in &opts.files {
-            if walker.printer.stop_all {
+            if walker.printer.stop_all || walker.stop.requested() {
                 break;
             }
             let actual = context.shell.absolute_path(Path::new(name));

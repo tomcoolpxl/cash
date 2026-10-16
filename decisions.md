@@ -360,6 +360,9 @@ locks.
 
 A cleanup cut short is worse than a slow one, so an `EXIT` trap has no timeout; a second
 Ctrl-C while it runs tears down at once. Turned down: a timeout on traps.
+Since 2026-10-16 the second Ctrl-C must come two seconds or more after the first: one
+sooner is the same key pressed twice, and a quick double press at a long `grep` ended the
+shell (`cash_win32::console::STUCK_AFTER`).
 
 ### D15 — Exit codes truncate; crashes map to Bash's 128+n
 
@@ -686,6 +689,12 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
 - **Bundled tools stay processes of their own** (the user, 2026-10-04): a call costs a
   process start, 25 to 35 ms in a debug build, but a tool that crashes or exits cannot take
   the shell with it. Turned down: running them inside the shell's process.
+  Confirmed (the user, 2026-10-16, `research/in-process-tools-design.md`): uutils cannot
+  run inside cash (uucore's process-wide state, its exits and console handlers), and even
+  a native tool loses Ctrl-C, `&`, kill, nice and crash isolation. Only `basename` and
+  `dirname` move inside, rewritten as cash's own, as BusyBox runs them: pure string work
+  that cannot hang. Turned down: native rewrites of the filters (`cat`, `cut`, `tr`, `wc`,
+  `head`), and a warm helper process that runs bundled tools without starting one.
 - **awk and sed are imported once as cash's own** (2026-09-28): awk is posixutils-rs' AWK,
   sed is uutils' sed; gawk's and GNU sed's extensions are outside the gate. Turned down:
   tracking forks, git dependencies, and posixutils' sed.

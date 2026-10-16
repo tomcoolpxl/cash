@@ -95,9 +95,11 @@ What the phases now in DONE.md left open, each where its phase says more.
   the hinter, and in the menu's selection parsing, among about twenty fixes. cash had
   already fixed the `SubstringSearch` `todo!()` (`engine.rs`); the rest want comparing
   one by one.
-- **Two Ctrl-C end the shell during a long native builtin** (2026-10-16): `grep`, `find`,
-  `ls -R` and the archivers never poll `take_interrupt()`, so the first press shows nothing
-  until they finish, and the second is left to Windows, which ends cash (`console.rs`).
+- **The archivers finish their run before a Ctrl-C is acted on** (2026-10-16): `tar`,
+  `zip`/`unzip`, `7z` and `rar` reading files by name do not ask their
+  `cash_core::StopToken`; their standard input does stop. 7z and rar have a `Stop::Break`
+  ("Break signaled", "User break") their member loops can end with; tar and zip want a
+  quiet end. A second Ctrl-C no longer ends the shell under two seconds.
 - **Parsing an `env` or `timeout` command runs uucore's setup in the shell** (2026-10-16):
   `cash_coreutils_builtins::command_operand` calls `prepare_uutil_runtime`, which wraps the
   global panic hook once more per command, fills uucore's process-wide message store with

@@ -130,6 +130,32 @@ impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
         }
     }
 
+    /// What tells a builtin that may run long that it is to stop ([`StopToken`]): a
+    /// Ctrl-C at the keyboard, for one in the foreground; `kill` of the background job it
+    /// runs in, for one started with `&`.
+    pub fn stop_token(&self) -> StopToken {
+        self.params.stop_token()
+    }
+
+    /// Ends a builtin that stopped because its [`StopToken`] asked: a Ctrl-C is acted on
+    /// as between commands (the trap on `INT` runs, or the script ends and the prompt's
+    /// line is abandoned); a background job `kill` ended ends as `kill` said.
+    ///
+    /// # Errors
+    ///
+    /// The interrupt itself, where no trap takes it.
+    pub async fn stopped(&mut self) -> Result<ExecutionResult, error::Error> {
+        if !self.params.is_asynchronous() && cash_win32::console::take_interrupt() {
+            // As for a program Ctrl-C ended in Bash: the trap runs, and unless it left
+            // (`exit`, `return`), the command's status is SIGINT's.
+            let trapped = self.shell.interrupt(&self.params).await?;
+            if !trapped.is_normal_flow() {
+                return Ok(trapped);
+            }
+        }
+        Ok(ExecutionResult::new(130))
+    }
+
     /// Returns the file descriptor with the given number. Returns `None`
     /// if the file descriptor is not open.
     ///
@@ -143,6 +169,89 @@ impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
     /// Iterates over all open file descriptors.
     pub fn iter_fds(&self) -> impl Iterator<Item = (ShellFd, openfiles::OpenFile)> {
         self.params.iter_fds(self.shell)
+    }
+}
+
+/// Whether a builtin that may run long is to stop ([`ExecutionContext::stop_token`]).
+///
+/// The shell hears a Ctrl-C while a builtin of its own runs, and acts on it before the
+/// next command; a builtin that did not ask went on to its end, so `grep -r` over a large
+/// tree did not stop, and a second Ctrl-C, which Windows takes, ended the shell. Each
+/// builtin that may run long asks between pieces of work, a file of a walk or a block of
+/// a read ([`StopToken::reader`]), and ends with [`ExecutionContext::stopped`]. A copy
+/// can go where the context cannot: a walk, a thread.
+#[derive(Clone, Debug)]
+pub struct StopToken {
+    background: bool,
+    job_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicI32>>,
+}
+
+impl StopToken {
+    /// The token of a command run under parameters with these.
+    pub(crate) const fn new(
+        background: bool,
+        job_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicI32>>,
+    ) -> Self {
+        Self {
+            background,
+            job_cancel,
+        }
+    }
+
+    /// A token that never asks, for code run outside a command.
+    pub const fn never() -> Self {
+        Self {
+            background: true,
+            job_cancel: None,
+        }
+    }
+
+    /// Whether the builtin is to stop now.
+    pub fn requested(&self) -> bool {
+        if self.background {
+            self.job_cancel
+                .as_ref()
+                .is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::SeqCst) != 0)
+        } else {
+            cash_win32::console::interrupt_pending()
+        }
+    }
+
+    /// `reader`, ending as if at its end once the builtin is to stop: a read of a large
+    /// file or an endless input asks before each block.
+    pub fn reader<R: std::io::Read>(&self, reader: R) -> StopReader<R> {
+        StopReader {
+            inner: reader,
+            stop: self.clone(),
+        }
+    }
+}
+
+/// A reader that ends once its builtin is to stop ([`StopToken::reader`]).
+pub struct StopReader<R> {
+    inner: R,
+    stop: StopToken,
+}
+
+impl<R: std::io::Read> std::io::Read for StopReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.stop.requested() {
+            return Ok(0);
+        }
+        self.inner.read(buf)
+    }
+}
+
+impl<R: std::io::BufRead> std::io::BufRead for StopReader<R> {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        if self.stop.requested() {
+            return Ok(&[]);
+        }
+        self.inner.fill_buf()
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.inner.consume(amount);
     }
 }
 

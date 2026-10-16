@@ -254,11 +254,23 @@ impl Write for Stdout {
 pub struct AfterOutput {
     file: OpenFile,
     output: Option<Arc<OutputBuffer>>,
+    /// For standard input: what ends the reading once the builtin is to stop.
+    stop: Option<crate::commands::StopToken>,
 }
 
 impl AfterOutput {
     pub(crate) const fn new(file: OpenFile, output: Option<Arc<OutputBuffer>>) -> Self {
-        Self { file, output }
+        Self {
+            file,
+            output,
+            stop: None,
+        }
+    }
+
+    /// Reads that end, as at the end of the input, once `stop` asks.
+    pub(crate) fn stopping(mut self, stop: crate::commands::StopToken) -> Self {
+        self.stop = Some(stop);
+        self
     }
 
     fn write_output(&self) {
@@ -271,6 +283,13 @@ impl AfterOutput {
 impl Read for AfterOutput {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.write_output();
+        if self
+            .stop
+            .as_ref()
+            .is_some_and(crate::commands::StopToken::requested)
+        {
+            return Ok(0);
+        }
         self.file.read(buf)
     }
 }

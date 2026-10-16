@@ -274,7 +274,7 @@ impl builtins::Command for LsCommand {
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
-        context: cash_core::ExecutionContext<'_, SE>,
+        mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         if self.help {
             write!(context.stdout(), "{HELP}")?;
@@ -362,6 +362,10 @@ impl builtins::Command for LsCommand {
 
         // Print directories, each after one blank line when something came before it.
         for (i, (dir_path, dir_str)) in dir_paths.iter().enumerate() {
+            // A Ctrl-C, or `kill` of a background job, stops a long listing (`-R`).
+            if context.stop_token().requested() {
+                break;
+            }
             if self.tree {
                 if i > 0 || !file_items.is_empty() {
                     writeln!(out)?;
@@ -383,6 +387,10 @@ impl builtins::Command for LsCommand {
             }
         }
 
+        drop(out);
+        if context.stop_token().requested() {
+            return context.stopped().await;
+        }
         Ok(gnu_status(had_error, had_minor_error))
     }
 }
@@ -612,6 +620,9 @@ impl LsCommand {
         let mut unreadable = false;
         if self.recursive && self.depth.is_none_or(|depth| level < depth) {
             for item in items {
+                if context.stop_token().requested() {
+                    break;
+                }
                 if item.kind == EntryKind::Dir && item.name != "." && item.name != ".." {
                     let sub_str = format!("{dir_str}/{}", item.name);
                     match self.read_entries(&item.path, true) {

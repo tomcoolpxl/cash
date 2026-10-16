@@ -152,6 +152,13 @@ pub fn ignore_ctrl_c() {
 /// which the shell has not acted on yet.
 static PENDING_INTERRUPT: AtomicBool = AtomicBool::new(false);
 
+/// When the pending Ctrl-C came, in milliseconds since Windows started.
+static PENDING_SINCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How long a Ctrl-C waits for the shell to act on it before another one, taken as the
+/// shell being stuck, is left to Windows to end the process ([`keep_interrupts`]).
+pub const STUCK_AFTER: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// Keeps a Ctrl-C that arrives while the shell runs its own commands, for the shell to
 /// act on before its next command ([`take_interrupt`]) (D13).
 ///
@@ -162,14 +169,26 @@ static PENDING_INTERRUPT: AtomicBool = AtomicBool::new(false);
 /// Handlers are asked newest first, and this one is installed when the shell starts, so
 /// anything that listens later is asked before it: the wait for a foreground program,
 /// which has its own rule for a Ctrl-C, and `ping`. It therefore hears only the Ctrl-C
-/// nothing else took. A second one that arrives before the shell has acted on the first
-/// is left to Windows, which ends the process: a shell stuck in a command that never
-/// returns can still be ended from the keyboard.
+/// nothing else took. One that arrives once the first has waited [`STUCK_AFTER`] without
+/// the shell acting on it is left to Windows, which ends the process: a shell stuck in a
+/// command that never returns can still be ended from the keyboard. One sooner is the
+/// same interrupt pressed twice, and kept: a quick second Ctrl-C at a long `grep` ended
+/// the shell.
 ///
 /// A shell started to ignore Ctrl-C hears nothing here, and goes on ignoring it.
 pub fn keep_interrupts() {
     unsafe extern "system" fn handler(kind: u32) -> i32 {
-        i32::from(kind == CTRL_C_EVENT && !PENDING_INTERRUPT.swap(true, Ordering::SeqCst))
+        if kind != CTRL_C_EVENT {
+            return 0;
+        }
+        let now = crate::sysinfo::uptime().as_millis();
+        let now = u64::try_from(now).unwrap_or(u64::MAX);
+        if !PENDING_INTERRUPT.swap(true, Ordering::SeqCst) {
+            PENDING_SINCE.store(now, Ordering::SeqCst);
+            return 1;
+        }
+        let waited = now.saturating_sub(PENDING_SINCE.load(Ordering::SeqCst));
+        i32::from(!stuck_after(waited))
     }
 
     static INSTALLED: std::sync::Once = std::sync::Once::new();
@@ -179,9 +198,22 @@ pub fn keep_interrupts() {
     });
 }
 
+/// Whether a Ctrl-C that comes when the pending one has waited `waited_ms` is taken as the
+/// shell being stuck ([`keep_interrupts`]).
+fn stuck_after(waited_ms: u64) -> bool {
+    u128::from(waited_ms) >= STUCK_AFTER.as_millis()
+}
+
 /// Whether a Ctrl-C is waiting to be acted on, which this call takes.
 pub fn take_interrupt() -> bool {
     PENDING_INTERRUPT.swap(false, Ordering::SeqCst)
+}
+
+/// Whether a Ctrl-C is waiting to be acted on, leaving it there: a builtin that may run
+/// long asks between pieces of work, stops, and the shell then acts on the Ctrl-C as it
+/// does between commands.
+pub fn interrupt_pending() -> bool {
+    PENDING_INTERRUPT.load(Ordering::SeqCst)
 }
 
 /// Input modes of a console waiting for a line: processed, line-buffered and echoed
@@ -688,6 +720,17 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A second Ctrl-C soon after the first is the key pressed twice; only one that comes
+    /// once the first has waited two seconds says the shell is stuck.
+    #[test]
+    fn only_a_late_second_ctrl_c_says_the_shell_is_stuck() {
+        assert!(!stuck_after(0));
+        assert!(!stuck_after(300));
+        assert!(!stuck_after(1_999));
+        assert!(stuck_after(2_000));
+        assert!(stuck_after(60_000));
+    }
 
     /// A tree's processes stop and start together, from one snapshot (W32-16), and a
     /// second stop or start of each does nothing, as for one process (W32-05).

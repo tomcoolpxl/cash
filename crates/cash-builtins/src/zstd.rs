@@ -1190,7 +1190,10 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             }
         };
         match fs::File::open(self.path(name)) {
-            Ok(file) => Ok(Some((Box::new(file), Some(metadata)))),
+            Ok(file) => Ok(Some((
+                Box::new(self.context.stop_token().reader(file)),
+                Some(metadata),
+            ))),
             Err(e) => {
                 self.say(1, &format!("zstd: {name}: {} \n", strerror(&e)))?;
                 Ok(None)

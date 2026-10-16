@@ -135,6 +135,12 @@ impl ExecutionParameters {
         self.asynchronous
     }
 
+    /// What tells a command run under these parameters that it is to stop
+    /// (`commands::StopToken`).
+    pub fn stop_token(&self) -> commands::StopToken {
+        commands::StopToken::new(self.asynchronous, self.job_cancel.clone())
+    }
+
     /// Returns the standard input file; usable with `write!` et al.
     ///
     /// # Arguments
@@ -149,7 +155,9 @@ impl ExecutionParameters {
             .unwrap_or_else(|| {
                 ioutils::FailingReaderWriter::new("standard input not available").into()
             });
-        crate::output::AfterOutput::new(file, self.output.clone())
+        // A builtin reading it ends at the next block once it is to stop: a Ctrl-C, or
+        // `kill` of its background job.
+        crate::output::AfterOutput::new(file, self.output.clone()).stopping(self.stop_token())
     }
 
     /// Tries to retrieve the standard input file. Returns `None` if not set.

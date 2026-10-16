@@ -797,7 +797,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 return self.refuse_terminal("write compressed data to");
             }
             Mode::ToStdout | Mode::Files => match self.open_pair()? {
-                Some((file, output)) => (Box::new(file), output),
+                Some((file, output)) => (Box::new(self.context.stop_token().reader(file)), output),
                 None => return Ok(()),
             },
         };
@@ -898,7 +898,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             (Box::new(self.context.stdin()), None)
         } else {
             match self.open_pair()? {
-                Some((file, output)) => (Box::new(file), output),
+                Some((file, output)) => (Box::new(self.context.stop_token().reader(file)), output),
                 None => return Ok(()),
             }
         };
@@ -1008,7 +1008,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             Box::new(self.context.stdin())
         } else {
             match fs::File::open(self.path(&in_name)) {
-                Ok(file) => Box::new(file),
+                Ok(file) => Box::new(self.context.stop_token().reader(file)),
                 Err(e) => {
                     return self.refuse(&format!(
                         "{p}: Can't open input file {in_name}:{}.\n",

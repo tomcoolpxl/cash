@@ -1527,3 +1527,10 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   A builtin that starts no command now says at once that no pid is coming; one that may
   (`nohup`, `nice`, `xargs`, `eval`, …, listed in the factory) still lets its command's
   pid be `$!`, and in a pipeline only the last stage reports, as in Bash.
+- **Two Ctrl-C ended the shell during a long native builtin** (found and done
+  2026-10-16): `grep -r` over a large tree did not stop, and a second Ctrl-C, which Windows
+  takes, ended cash. Builtins that may run long ask a `cash_core::StopToken` between
+  pieces of work and end through `ExecutionContext::stopped`, as a program Ctrl-C ended
+  would (the INT trap, or 130): grep, find, `ls -R`, tree, the compressors' named files,
+  and any builtin reading standard input. `kill` of a background job stops them too. A
+  second Ctrl-C ends the shell only when the first has waited two seconds (D14 amended).

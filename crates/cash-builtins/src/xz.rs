@@ -1193,7 +1193,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             Source::Stdin => (Box::new(self.context.stdin()), None, false),
             Source::File(path, metadata) => match fs::File::open(path) {
                 Ok(file) => (
-                    Box::new(file),
+                    Box::new(self.context.stop_token().reader(file)),
                     Some(times_of(metadata)),
                     metadata.permissions().readonly(),
                 ),

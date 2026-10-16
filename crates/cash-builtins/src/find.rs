@@ -188,7 +188,7 @@ impl builtins::Command for FindCommand {
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
-        context: cash_core::ExecutionContext<'_, SE>,
+        mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         let (walk, expr) = match parse(&self.args, context.shell.working_dir()) {
             Ok(parsed) => parsed,
@@ -200,6 +200,8 @@ impl builtins::Command for FindCommand {
 
         let mut failed = false;
         let mut batches: Vec<(Vec<String>, Vec<String>)> = Vec::new();
+        // A Ctrl-C, or `kill` of a background job, stops the walk.
+        let stop = context.stop_token();
 
         'walking: for start in &walk.starts {
             // Two paths per entry: the one to print, spelled as the caller asked, and the
@@ -221,6 +223,9 @@ impl builtins::Command for FindCommand {
             }];
 
             while let Some(entry) = stack.pop() {
+                if stop.requested() {
+                    break 'walking;
+                }
                 let Entry {
                     path,
                     actual,
@@ -294,17 +299,11 @@ impl builtins::Command for FindCommand {
             }
         }
 
-        // `-exec cmd {} +` holds its arguments until the walk is over, and runs as often
-        // as a Windows command line needs to hold them all; it ran once, and a long list
-        // failed to start (BI-11). A run that fails fails find, as in GNU `find`.
-        for (argv, collected) in batches {
-            for chunk in command_line_chunks(&argv, &collected) {
-                if !run(&context, &argv, chunk).await? {
-                    failed = true;
-                }
-            }
+        if stop.requested() {
+            return context.stopped().await;
         }
 
+        failed |= !run_batches(&context, batches).await?;
         if failed {
             return Ok(ExecutionResult::general_error());
         }
@@ -333,6 +332,24 @@ fn command_line_chunks<'a>(argv: &[String], paths: &'a [String]) -> Vec<&'a [Str
         chunks.extend(paths.get(start..));
     }
     chunks
+}
+
+/// Runs `-exec cmd {} +`'s commands once the walk is over, as often as a Windows command
+/// line needs to hold all their arguments; it ran once, and a long list failed to start
+/// (BI-11). Whether every run succeeded: one that fails fails find, as in GNU `find`.
+async fn run_batches<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    batches: Vec<(Vec<String>, Vec<String>)>,
+) -> Result<bool, cash_core::Error> {
+    let mut succeeded = true;
+    for (argv, collected) in batches {
+        for chunk in command_line_chunks(&argv, &collected) {
+            if !run(context, &argv, chunk).await? {
+                succeeded = false;
+            }
+        }
+    }
+    Ok(succeeded)
 }
 
 /// Puts what is in a directory on the walk's stack, in name order; whether it could be

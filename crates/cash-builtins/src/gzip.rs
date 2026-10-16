@@ -943,7 +943,8 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             Ok(file) => file,
             Err(e) => return self.error(&format!("{name}: {}", strerror(&e))),
         };
-        let mut input = Input::new(Box::new(file));
+        // A Ctrl-C, or `kill` of a background job, ends the read at the next block.
+        let mut input = Input::new(Box::new(self.context.stop_token().reader(file)));
         let read_only = meta.permissions().readonly();
         let input_times = fs::FileTimes::new()
             .set_modified(meta.modified().unwrap_or(UNIX_EPOCH))
