@@ -161,6 +161,8 @@ pub enum Written {
     Short(char),
     /// `--name`, the whole name.
     Long(String),
+    /// A word [`Getopt::claim`] took whole, as it was written.
+    Word(String),
 }
 
 impl fmt::Display for Written {
@@ -168,6 +170,7 @@ impl fmt::Display for Written {
         match self {
             Self::Short(letter) => write!(f, "-{letter}"),
             Self::Long(name) => write!(f, "--{name}"),
+            Self::Word(word) => f.write_str(word),
         }
     }
 }
@@ -321,6 +324,7 @@ pub struct Getopt<'t, 'n, Id> {
     longs: &'t [Long<'n, Id>],
     order: Order,
     long_only: bool,
+    claim: Option<fn(&str) -> Option<Id>>,
 }
 
 impl<'t, 'n, Id: Copy + PartialEq> Getopt<'t, 'n, Id> {
@@ -331,7 +335,18 @@ impl<'t, 'n, Id: Copy + PartialEq> Getopt<'t, 'n, Id> {
             longs,
             order: Order::Permute,
             long_only: false,
+            claim: None,
         }
+    }
+
+    /// Words that start with `-` but are no options, taken whole before the parser reads
+    /// them, as coreutils' `nice` takes `-10` and procps' `pkill` takes `-9` and `-KILL`
+    /// before `getopt_long` sees them: `claim` gives the id such a word comes as, an
+    /// option whose value is the word, or `None` for a word to read as options.
+    #[must_use]
+    pub const fn claim(mut self, claim: fn(&str) -> Option<Id>) -> Self {
+        self.claim = Some(claim);
+        self
     }
 
     /// When the options end besides at `--`.
@@ -512,6 +527,11 @@ impl<Id: Copy + PartialEq, W: Word> Reader<'_, '_, '_, Id, W> {
                 value: word,
                 word: index,
             }));
+            return;
+        }
+        if let Some(id) = self.parser.claim.and_then(|claim| claim(&text)) {
+            self.option_words.push(word.clone());
+            self.option(id, Some(word), index, Written::Word(text));
             return;
         }
         self.option_words.push(word);
@@ -708,6 +728,40 @@ mod tests {
 
     fn parser() -> Getopt<'static, 'static, &'static str> {
         Getopt::new(SHORTS, LONGS)
+    }
+
+    #[test]
+    fn a_claimed_word_comes_whole_before_the_parser_reads_it() {
+        // nice's `-10`, `--5` and `-+3`: an adjustment, where getopt would read letters.
+        let number = |word: &str| {
+            let digits = word.trim_start_matches('-').trim_start_matches('+');
+            digits
+                .starts_with(|c: char| c.is_ascii_digit())
+                .then_some("adjust")
+        };
+        let parsed = parser()
+            .claim(number)
+            .parse(&words(&["-10", "-r", "--5", "x", "-+3"]))
+            .unwrap();
+        let items: Vec<String> = parsed.items.iter().map(said).collect();
+        assert_eq!(
+            items,
+            [
+                "adjust=-10 -10 @0",
+                "recursive -r @1",
+                "adjust=--5 --5 @2",
+                "x @3",
+                "adjust=-+3 -+3 @4"
+            ]
+        );
+        // After `--`, or once the options end at an operand, a word is an operand.
+        let parsed = parser()
+            .claim(number)
+            .order(Order::StopAtOperand)
+            .parse(&words(&["x", "-10"]))
+            .unwrap();
+        let items: Vec<String> = parsed.items.iter().map(said).collect();
+        assert_eq!(items, ["x @0", "-10 @1"]);
     }
 
     /// An item in one line: `id=value as written @word`, or `operand @word`.
