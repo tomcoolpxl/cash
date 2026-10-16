@@ -95,10 +95,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   the hinter, and in the menu's selection parsing, among about twenty fixes. cash had
   already fixed the `SubstringSearch` `todo!()` (`engine.rs`); the rest want comparing
   one by one.
-- **A builtin started with `&` blocks until it finishes** (2026-10-16,
-  `research/in-process-tools-design.md`): `grep -r x dir &` returned after 102 s, a
-  bundled `sleep 2 &` after 21 ms. `&` waits for the job's pid, which a builtin publishes
-  only when it ends (`interp.rs:628-638`, `commands.rs:1681-1693`). Bash returns at once.
 - **Two Ctrl-C end the shell during a long native builtin** (2026-10-16): `grep`, `find`,
   `ls -R` and the archivers never poll `take_interrupt()`, so the first press shows nothing
   until they finish, and the second is left to Windows, which ends cash (`console.rs`).

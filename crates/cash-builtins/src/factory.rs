@@ -508,8 +508,43 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         builtin::<iconv::IconvCommand, SE>().with_substitution_files(),
     );
 
+    for name in STARTS_COMMANDS {
+        if let Some(registration) = m.get_mut(*name) {
+            registration.may_start_commands = true;
+        }
+    }
+
     m
 }
+
+/// The builtins that may start other commands, whose pid a background job's `$!` is to be
+/// (`nohup server & echo $! > pid`); every other builtin tells `&` at once that it will
+/// have none, so `grep -r … &` returns at once.
+const STARTS_COMMANDS: &[&str] = &[
+    ".",
+    "builtin",
+    "command",
+    "detach",
+    "elevate",
+    "eval",
+    "exec",
+    "fc",
+    "find",
+    "flock",
+    "mapfile",
+    "nice",
+    "nohup",
+    "readarray",
+    "source",
+    "start",
+    "stdbuf",
+    "su",
+    "sudo",
+    "sudoedit",
+    "watch",
+    "xargs",
+    "xdg-open",
+];
 
 #[cfg(test)]
 mod tests {
@@ -518,6 +553,17 @@ mod tests {
     /// The builtins whose output is written as it comes, not gathered into larger writes
     /// (`cash_core::output`): each runs until it is stopped, or draws a screen and waits
     /// for keys. Any other builtin, a new one too, has its output gathered.
+    #[test]
+    fn the_builtins_that_start_commands_are_these() {
+        let builtins =
+            default_builtins::<cash_core::extensions::DefaultShellExtensions>(BuiltinSet::BashMode);
+        for name in STARTS_COMMANDS {
+            assert!(builtins.contains_key(*name), "{name} is no builtin");
+        }
+        assert!(!builtins["grep"].may_start_commands);
+        assert!(builtins["nohup"].may_start_commands);
+    }
+
     #[test]
     fn only_these_builtins_stream_their_output() {
         let builtins =

@@ -901,6 +901,12 @@ async fn spawn_pipeline_processes(
         // Set up parameters appropriate for this command.
         let mut cmd_params = params.clone();
 
+        // A background job's `$!` is its pipeline's last command, as in Bash: only that
+        // stage tells `&` its pid, or that it will have none.
+        if current_pipeline_index + 1 < pipeline_len {
+            cmd_params.spawned_pid_ready = None;
+        }
+
         // Install pipes.
         if let Some(Some(reader)) = pipe_readers.pop() {
             cmd_params.open_files.set_fd(OpenFiles::STDIN_FD, reader);

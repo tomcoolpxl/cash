@@ -612,6 +612,8 @@ fn shim_registration<SE: ShellExtensions>(name: &str) -> Registration<SE> {
         command_operand: command_operand_of(name),
         // A bundled tool is a process of its own, writing its output itself.
         streams_output: true,
+        // Its pid is the one `$!` is.
+        may_start_commands: true,
     }
 }
 

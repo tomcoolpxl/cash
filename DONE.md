@@ -1521,3 +1521,9 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   7-Zip's volume facts and footer; a missing part is said and its members fail. Same
   behavior as 7-Zip, not the same bytes (the user, 2026-10-12): a member cut short says
   "Unexpected end of data" where 7-Zip says "Data Error". 7z_formats.sh has the cases.
+- **A builtin started with `&` blocked until it finished** (found and done
+  2026-10-16, `research/in-process-tools-design.md`): `grep -r x dir &` returned after
+  102 s, as `&` waited for the job's pid, which a builtin published only when it ended.
+  A builtin that starts no command now says at once that no pid is coming; one that may
+  (`nohup`, `nice`, `xargs`, `eval`, …, listed in the factory) still lets its command's
+  pid be `$!`, and in a pipeline only the last stage reports, as in Bash.

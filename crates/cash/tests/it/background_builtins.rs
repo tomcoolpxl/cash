@@ -146,3 +146,35 @@ fn a_job_is_written_as_bash_writes_it() {
         ),
     ]);
 }
+
+#[test]
+fn a_builtin_started_with_an_ampersand_lets_the_shell_go_on_at_once() {
+    // `&` waited for the job to report a pid or end, and a builtin reported only when it
+    // ended: `grep -r … &` held the shell for the whole search. One that starts no
+    // command now says at once that no pid is coming. `read -t 2` waits its 2 s in the
+    // background.
+    let out = run("s=$EPOCHREALTIME; read -t 2 v < <(sleep 5) & \
+         t=$EPOCHREALTIME; echo $(( (${t/./} - ${s/./}) < 1000000 )); wait; echo done");
+    assert_eq!(
+        (out.stdout.as_str(), out.code),
+        ("1\ndone", 0),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn a_command_a_builtin_starts_in_the_background_keeps_its_pid() {
+    // `nohup server & echo $! > pid`: `$!` is the program's pid, not the job's number,
+    // so another shell can signal it. So is a pipeline's, its last command's.
+    check(&[
+        (
+            "nohup sleep 5 >/dev/null 2>&1 & p=$!; (( p < 100000 )) && kill -0 $p && echo pid; kill $p; wait",
+            "pid",
+        ),
+        (
+            "echo x | sleep 5 & p=$!; (( p < 100000 )) && kill -0 $p && echo pid; kill $p; wait",
+            "pid",
+        ),
+    ]);
+}

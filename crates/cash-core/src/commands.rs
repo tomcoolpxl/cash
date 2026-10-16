@@ -1687,6 +1687,13 @@ async fn execute_builtin_command<SE: extensions::ShellExtensions>(
     // that re-enters the binary as a child process, so its pid appears partway through.
     // Releasing on entry would make `sleep 10 & echo $!` empty again.
     let pid_ready = context.params.spawned_pid_ready.clone();
+    // One that starts no command will publish no pid at all, and `&` need not wait for it
+    // to end: `grep -r … &` held the shell for the whole search.
+    if !builtin.may_start_commands {
+        if let Some(ready) = &pid_ready {
+            ready.notify_one();
+        }
+    }
     let mut outcome = (builtin.execute_func)(context, args).await;
     if let Some(ready) = pid_ready {
         ready.notify_one();

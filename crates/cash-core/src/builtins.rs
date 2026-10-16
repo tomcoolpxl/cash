@@ -205,6 +205,11 @@ pub struct Registration<SE: extensions::ShellExtensions> {
     /// into larger writes (`crate::output`): true of one that runs until it is stopped, or
     /// draws a screen and waits for keys.
     pub streams_output: bool,
+
+    /// Whether the builtin may start other commands (`nohup server`, `xargs`, `eval`),
+    /// whose pid a background job's `$!` is to be. A builtin that starts none tells `&` at
+    /// once that no pid is coming.
+    pub may_start_commands: bool,
 }
 
 impl<SE: extensions::ShellExtensions> Registration<SE> {
@@ -463,6 +468,7 @@ pub fn simple_builtin<B: SimpleCommand + Send + Sync, SE: extensions::ShellExten
         substitution_pipes: true,
         command_operand: None,
         streams_output: false,
+        may_start_commands: false,
     }
 }
 
@@ -479,6 +485,7 @@ pub fn builtin<B: Command + Send + Sync, SE: extensions::ShellExtensions>() -> R
         substitution_pipes: true,
         command_operand: None,
         streams_output: false,
+        may_start_commands: false,
     }
 }
 
@@ -497,6 +504,7 @@ pub fn decl_builtin<B: DeclarationCommand + Send + Sync, SE: extensions::ShellEx
         substitution_pipes: true,
         command_operand: None,
         streams_output: false,
+        may_start_commands: false,
     }
 }
 
@@ -521,6 +529,7 @@ pub fn raw_arg_builtin<
         substitution_pipes: true,
         command_operand: None,
         streams_output: false,
+        may_start_commands: false,
     }
 }
 
