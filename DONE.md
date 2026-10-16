@@ -1534,3 +1534,8 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   would (the INT trap, or 130): grep, find, `ls -R`, tree, the compressors' named files,
   and any builtin reading standard input. `kill` of a background job stops them too. A
   second Ctrl-C ends the shell only when the first has waited two seconds (D14 amended).
+- **Parsing an `env` or `timeout` command ran uucore's setup in the shell** (found and
+  done 2026-10-16): `command_operand` called `prepare_uutil_runtime` for every such
+  command line, which wrapped the process's panic hook once more each time, filled
+  uucore's process-wide message store with `env`'s, and could `exit(99)` the shell. Parsing
+  needs no messages, and does no setup now.

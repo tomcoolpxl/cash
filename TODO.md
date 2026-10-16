@@ -100,10 +100,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   `cash_core::StopToken`; their standard input does stop. 7z and rar have a `Stop::Break`
   ("Break signaled", "User break") their member loops can end with; tar and zip want a
   quiet end. A second Ctrl-C no longer ends the shell under two seconds.
-- **Parsing an `env` or `timeout` command runs uucore's setup in the shell** (2026-10-16):
-  `cash_coreutils_builtins::command_operand` calls `prepare_uutil_runtime`, which wraps the
-  global panic hook once more per command, fills uucore's process-wide message store with
-  `env`'s, and calls `exit(99)` on the shell if that fails.
 - **`{ head -n1; cat; } < file` loses what head read ahead** (2026-10-16): uutils' `head`
   seeks the shared input back on Unix only (`uu_head` 0.12.0 `head.rs:460-489`); GNU head
   leaves a seekable input just after what it printed.

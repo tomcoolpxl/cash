@@ -254,6 +254,11 @@ pub struct CommandOperand {
 ///
 /// `args[0]` names the utility. `None` means it runs no command, or its arguments do not
 /// parse, and the utility should simply be left to report that itself.
+///
+/// It runs in the shell's process, for every `env` or `timeout` command line, so it does
+/// none of uucore's setup for a tool (`prepare_uutil_runtime`): that wrapped the process's
+/// panic hook once more each time, filled uucore's process-wide message store, and could
+/// `exit(99)` the shell. Parsing needs no messages; uucore gives their ids without it.
 #[must_use]
 pub fn command_operand(args: &[OsString]) -> Option<CommandOperand> {
     #[cfg(feature = "coreutils.env")]
@@ -262,7 +267,6 @@ pub fn command_operand(args: &[OsString]) -> Option<CommandOperand> {
     }
     #[cfg(feature = "coreutils.timeout")]
     if args.first().is_some_and(|name| name == "timeout") {
-        prepare_uutil_runtime(stringify!(uu_timeout));
         // `command` takes the rest of the command line, so it is the tail of `args`.
         let matches = uu_timeout::uu_app().try_get_matches_from(args).ok()?;
         return Some(CommandOperand {
@@ -283,7 +287,6 @@ pub fn command_operand(args: &[OsString]) -> Option<CommandOperand> {
 /// assignment up to the first word that is not.
 #[cfg(feature = "coreutils.env")]
 fn env_operand(args: &[OsString]) -> Option<CommandOperand> {
-    prepare_uutil_runtime(stringify!(uu_env));
     let args = split_env_strings(args)?;
     let matches = uu_env::uu_app().try_get_matches_from(&args).ok()?;
     let mut path = matches.get_flag("ignore-environment").then(OsString::new);
