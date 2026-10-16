@@ -99,49 +99,140 @@ pub fn file_security(path: &Path) -> FileSecurity {
             writable: None,
         };
     };
-    let writable = may_write(&mut buffer);
-    let owner_account = owner_of(&mut buffer);
+    security_of(&mut buffer)
+}
+
+/// What a security descriptor with its owner, group and access list says.
+fn security_of(buffer: &mut [u8]) -> FileSecurity {
+    let writable = may_write(buffer);
+    let owner_account = owner_of(buffer);
     FileSecurity {
         owner: owner_account.as_ref().map(|owner| owner.name.clone()),
         owner_account,
-        group: group_of(&mut buffer),
+        group: group_of(buffer),
         writable,
     }
 }
 
-/// A file's security descriptor, with the parts `info` names.
-fn security_descriptor(path: &Path, info: OBJECT_SECURITY_INFORMATION) -> Option<Vec<u8>> {
-    let wide = crate::wide::to_wide_nul(path);
+/// What a long listing shows of a file beyond its directory entry
+/// ([`listing_facts`]).
+#[derive(Clone, Debug)]
+pub struct ListingFacts {
+    /// Its owner, group and whether this process may write it.
+    pub security: FileSecurity,
+    /// Its hard links.
+    pub links: u32,
+    /// Whether it starts with `#!`, when that was asked.
+    pub starts_with_shebang: Option<bool>,
+}
 
-    let mut needed: u32 = 0;
-    // SAFETY: querying required buffer size with a null pointer and length 0.
-    unsafe {
-        GetFileSecurityW(
-            wide.as_ptr(),
-            info,
-            std::ptr::null_mut(),
-            0,
-            &raw mut needed,
-        );
-    }
-
-    if needed == 0 {
-        return None;
-    }
-
-    let mut buffer = vec![0u8; needed as usize];
-    // SAFETY: `buffer` is allocated to the required `needed` size.
-    let ok = unsafe {
-        GetFileSecurityW(
-            wide.as_ptr(),
-            info,
-            buffer.as_mut_ptr().cast(),
-            needed,
-            &raw mut needed,
-        )
+/// A file's security, hard links and, when `read_start`, whether it starts with `#!`.
+///
+/// From one open of it: `ls -l` opened each file three times for them (its security,
+/// asked twice for the size first, its links, and its first bytes), 180 µs a file.
+/// Data access is asked only for `read_start`, so a program is not opened for reading,
+/// which an antivirus scans. Follows a link; `None` when the file cannot be opened.
+#[must_use]
+pub fn listing_facts(path: &Path, read_start: bool) -> Option<ListingFacts> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, GetLastError};
+    use windows_sys::Win32::Security::GetKernelObjectSecurity;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_ATTRIBUTES, FILE_READ_DATA, FILE_SHARE_DELETE,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, READ_CONTROL,
     };
 
-    (ok != 0).then_some(buffer)
+    let open = |access: u32| {
+        std::fs::OpenOptions::new()
+            .access_mode(access)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(path)
+    };
+    let attributes = READ_CONTROL | FILE_READ_ATTRIBUTES;
+    let (mut file, readable) = match read_start.then(|| open(attributes | FILE_READ_DATA)) {
+        Some(Ok(file)) => (file, true),
+        _ => (open(attributes).ok()?, false),
+    };
+    let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+
+    let info = OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;
+    let mut buffer = vec![0u8; 1024];
+    let mut needed = 0u32;
+    loop {
+        // SAFETY: `handle` was opened with READ_CONTROL; `buffer` holds its length.
+        let ok = unsafe {
+            GetKernelObjectSecurity(
+                handle,
+                info,
+                buffer.as_mut_ptr().cast(),
+                u32::try_from(buffer.len()).unwrap_or(u32::MAX),
+                &raw mut needed,
+            )
+        };
+        if ok != 0 {
+            break;
+        }
+        // SAFETY: reads the calling thread's last error.
+        if unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER || needed as usize <= buffer.len()
+        {
+            return None;
+        }
+        buffer.resize(needed as usize, 0);
+    }
+    let security = security_of(&mut buffer);
+
+    // SAFETY: zeroed struct is valid for BY_HANDLE_FILE_INFORMATION.
+    let mut by_handle: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    // SAFETY: `handle` is open for FILE_READ_ATTRIBUTES; `by_handle` is an out-pointer.
+    let links = if unsafe { GetFileInformationByHandle(handle, &raw mut by_handle) } != 0 {
+        by_handle.nNumberOfLinks
+    } else {
+        1
+    };
+
+    let starts_with_shebang = read_start.then(|| {
+        let mut magic = [0u8; 2];
+        readable && std::io::Read::read_exact(&mut file, &mut magic).is_ok() && &magic == b"#!"
+    });
+    Some(ListingFacts {
+        security,
+        links,
+        starts_with_shebang,
+    })
+}
+
+/// A file's security descriptor, with the parts `info` names.
+///
+/// Asked once into a buffer most descriptors fit, and again only for one that does not:
+/// each call opens the file, and asking for the size first opened it twice.
+fn security_descriptor(path: &Path, info: OBJECT_SECURITY_INFORMATION) -> Option<Vec<u8>> {
+    use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, GetLastError};
+
+    let wide = crate::wide::to_wide_nul(path);
+    let mut buffer = vec![0u8; 1024];
+    let mut needed: u32 = 0;
+    loop {
+        // SAFETY: `buffer` holds the length given.
+        let ok = unsafe {
+            GetFileSecurityW(
+                wide.as_ptr(),
+                info,
+                buffer.as_mut_ptr().cast(),
+                u32::try_from(buffer.len()).unwrap_or(u32::MAX),
+                &raw mut needed,
+            )
+        };
+        if ok != 0 {
+            return Some(buffer);
+        }
+        // SAFETY: reads the calling thread's last error.
+        if unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER || needed as usize <= buffer.len()
+        {
+            return None;
+        }
+        buffer.resize(needed as usize, 0);
+    }
 }
 
 /// This process's token as an impersonation token, which `AccessCheck` needs; opened

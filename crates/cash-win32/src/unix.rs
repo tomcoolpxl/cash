@@ -246,11 +246,7 @@ pub fn mode_string(mode: u32) -> String {
 /// Whether `path` is a program: by its extension (`exe`, `com`, `cmd`, `bat`, `ps1`),
 /// or a file that starts with `#!`.
 pub fn is_executable(path: &Path) -> bool {
-    let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-    if ["exe", "cmd", "bat", "com", "ps1"]
-        .iter()
-        .any(|known| extension.eq_ignore_ascii_case(known))
-    {
+    if has_program_extension(path) {
         return true;
     }
     let Ok(mut file) = fs::File::open(path) else {
@@ -258,6 +254,15 @@ pub fn is_executable(path: &Path) -> bool {
     };
     let mut magic = [0u8; 2];
     io::Read::read_exact(&mut file, &mut magic).is_ok() && &magic == b"#!"
+}
+
+/// Whether `path`'s extension makes it a program (`exe`, `com`, `cmd`, `bat`, `ps1`); any
+/// other file is one when it starts with `#!` ([`is_executable`]).
+pub fn has_program_extension(path: &Path) -> bool {
+    let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    ["exe", "cmd", "bat", "com", "ps1"]
+        .iter()
+        .any(|known| extension.eq_ignore_ascii_case(known))
 }
 
 /// The output of a file that replaces another, written beside it.

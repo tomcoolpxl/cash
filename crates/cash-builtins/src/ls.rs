@@ -1340,8 +1340,31 @@ fn inspect_path(
         target_mark: None,
     };
     if long {
-        item.links = cash_win32::fs::file_link_count(path, &symlink_metadata);
-        fill_long(&mut item, &symlink_metadata);
+        // One open of the file for its security, links and first bytes (a link keeps
+        // the separate asks, which read the link itself where they should).
+        let facts = (kind != EntryKind::Symlink).then(|| {
+            let read_start = kind == EntryKind::File
+                && item.size >= 2
+                && !cash_win32::unix::has_program_extension(path);
+            cash_win32::fs::listing_facts(path, read_start)
+        });
+        if let Some(Some(facts)) = facts {
+            // A folder's link count is not counted in a listing (`--count-links` does).
+            item.links = if kind == EntryKind::Dir {
+                1
+            } else {
+                facts.links
+            };
+            if kind == EntryKind::File {
+                let executable = cash_win32::unix::has_program_extension(path)
+                    || facts.starts_with_shebang == Some(true);
+                let _ = item.executable.set(executable);
+            }
+            fill_long_from(&mut item, &symlink_metadata, facts.security);
+        } else {
+            item.links = cash_win32::fs::file_link_count(path, &symlink_metadata);
+            fill_long(&mut item, &symlink_metadata);
+        }
     }
     Some(item)
 }
@@ -1349,6 +1372,15 @@ fn inspect_path(
 /// The owner and the permission string `-l` shows, from one read of the file's security.
 fn fill_long(item: &mut ItemInfo, metadata: &Metadata) {
     let security = cash_win32::fs::file_security(&item.path);
+    fill_long_from(item, metadata, security);
+}
+
+/// The owner, group and permission string `-l` shows, from the file's security.
+fn fill_long_from(
+    item: &mut ItemInfo,
+    metadata: &Metadata,
+    security: cash_win32::fs::FileSecurity,
+) {
     item.owner = security
         .owner
         .clone()
