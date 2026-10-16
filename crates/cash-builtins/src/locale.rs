@@ -14,7 +14,10 @@
 use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Order, Problem, Short};
 use clap::Parser;
+
+use crate::options;
 
 /// Show the locale.
 #[derive(Parser)]
@@ -94,8 +97,8 @@ enum Request {
     Windows(Which, bool),
     /// `-k`, `-c` or a name: definitions cash has none of.
     Definitions(String),
-    /// An option that is not one.
-    Unknown(String),
+    /// A command line `getopt_long` refuses.
+    Unknown(Problem),
 }
 
 /// Which Windows locale `-u`, `-s` and `-f` ask for.
@@ -106,50 +109,70 @@ enum Which {
     Format,
 }
 
-/// The command line as glibc's `getopt_long` reads it, options anywhere.
-fn parse(args: &[String]) -> Request {
+/// The options of Git for Windows' Cygwin `locale`, `acfhikmnsuUvV`, and their long names.
+const SHORTS: &[Short<char>] = &[
+    Short::new('a', Arg::No, 'a'),
+    Short::new('c', Arg::No, 'c'),
+    Short::new('f', Arg::No, 'f'),
+    Short::new('h', Arg::No, 'h'),
+    Short::new('i', Arg::No, 'i'),
+    Short::new('k', Arg::No, 'k'),
+    Short::new('m', Arg::No, 'm'),
+    Short::new('n', Arg::No, 'n'),
+    Short::new('s', Arg::No, 's'),
+    Short::new('u', Arg::No, 'u'),
+    Short::new('U', Arg::No, 'U'),
+    Short::new('v', Arg::No, 'v'),
+    Short::new('V', Arg::No, 'V'),
+];
+const LONGS: &[Long<'static, char>] = &[
+    Long::new("all-locales", Arg::No, 'a'),
+    Long::new("category-name", Arg::No, 'c'),
+    Long::new("charmaps", Arg::No, 'm'),
+    Long::new("format", Arg::No, 'f'),
+    Long::new("help", Arg::No, 'h'),
+    Long::new("input", Arg::No, 'i'),
+    Long::new("keyword-name", Arg::No, 'k'),
+    Long::new("no-unicode", Arg::No, 'n'),
+    Long::new("system", Arg::No, 's'),
+    Long::new("user", Arg::No, 'u'),
+    Long::new("utf", Arg::No, 'U'),
+    Long::new("verbose", Arg::No, 'v'),
+    Long::new("version", Arg::No, 'V'),
+];
+
+/// The command line as `getopt_long` reads it, in order: options anywhere until `--`
+/// unless `order` says otherwise, long names by any unique prefix.
+fn parse(args: &[String], order: Order) -> Request {
     let mut request = Request::Environment;
     let mut utf = false;
-    let mut names: Vec<&str> = Vec::new();
-    let mut only_names = false;
+    let mut names: Vec<String> = Vec::new();
     let set = |request: &mut Request, new: Request| {
         if matches!(request, Request::Environment) {
             *request = new;
         }
     };
-    for arg in args {
-        let arg = arg.as_str();
-        if only_names || !arg.starts_with('-') || arg == "-" {
-            names.push(arg);
-            continue;
-        }
-        let flags: Vec<String> = if let Some(long) = arg.strip_prefix("--") {
-            vec![long.to_owned()]
-        } else if arg == "--" {
-            only_names = true;
-            continue;
-        } else {
-            arg.chars().skip(1).map(|c| c.to_string()).collect()
-        };
-        for flag in flags {
-            match flag.as_str() {
-                "h" | "help" => return Request::Help,
-                "V" | "version" => return Request::Version,
-                "a" | "all-locales" => set(&mut request, Request::Locales),
-                "m" | "charmaps" => set(&mut request, Request::Charmaps),
-                "v" | "verbose" => {}
-                "u" | "user" => set(&mut request, Request::Windows(Which::UserUi, false)),
-                "s" | "system" => set(&mut request, Request::Windows(Which::SystemUi, false)),
-                "f" | "format" => set(&mut request, Request::Windows(Which::Format, false)),
-                "U" | "utf" => utf = true,
-                "c" | "category-name" | "k" | "keyword-name" => {
-                    set(&mut request, Request::Definitions(format!("-{flag}")));
-                }
-                "i" | "input" | "n" | "no-unicode" => {
-                    set(&mut request, Request::Definitions(format!("-{flag}")));
-                }
-                _ => return Request::Unknown(arg.to_owned()),
+    for item in Getopt::new(SHORTS, LONGS).order(order).read(args) {
+        let letter = match item {
+            Err(problem) => return Request::Unknown(problem),
+            Ok(Item::Operand { value, .. }) => {
+                names.push(value);
+                continue;
             }
+            Ok(Item::Option { id, .. }) => id,
+        };
+        match letter {
+            'h' => return Request::Help,
+            'V' => return Request::Version,
+            'a' => set(&mut request, Request::Locales),
+            'm' => set(&mut request, Request::Charmaps),
+            'v' => {}
+            'u' => set(&mut request, Request::Windows(Which::UserUi, false)),
+            's' => set(&mut request, Request::Windows(Which::SystemUi, false)),
+            'f' => set(&mut request, Request::Windows(Which::Format, false)),
+            'U' => utf = true,
+            // `-c`, `-k`, `-i` and `-n` look inside definitions cash has none of.
+            other => set(&mut request, Request::Definitions(format!("-{other}"))),
         }
     }
     if let Request::Windows(which, _) = request {
@@ -158,7 +181,7 @@ fn parse(args: &[String]) -> Request {
     if let Some(name) = names.first()
         && matches!(request, Request::Environment)
     {
-        return Request::Definitions((*name).to_owned());
+        return Request::Definitions(name.clone());
     }
     request
 }
@@ -231,7 +254,7 @@ impl builtins::Command for LocaleCommand {
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         let mut stdout = context.stdout();
-        match parse(&self.args) {
+        match parse(&self.args, options::gnu_order(&context)) {
             Request::Help => {
                 writeln!(stdout, "{HELP}")?;
             }
@@ -282,21 +305,8 @@ impl builtins::Command for LocaleCommand {
                 )?;
                 return Ok(ExecutionResult::general_error());
             }
-            Request::Unknown(option) => {
-                let shown = option.strip_prefix("--").map_or_else(
-                    || {
-                        format!(
-                            "invalid option -- '{}'",
-                            option.chars().nth(1).unwrap_or('-')
-                        )
-                    },
-                    |long| format!("unrecognized option '--{long}'"),
-                );
-                writeln!(
-                    context.stderr(),
-                    "locale: {shown}\nTry 'locale --help' for more information."
-                )?;
-                return Ok(ExecutionResult::general_error());
+            Request::Unknown(problem) => {
+                return options::gnu_usage_error(&context, "locale", problem, 1);
             }
         }
         Ok(ExecutionResult::success())
@@ -351,23 +361,47 @@ mod tests {
         );
     }
 
+    fn parse_permuting(args: &[String]) -> Request {
+        parse(args, Order::Permute)
+    }
+
     #[test]
     fn the_command_line() {
-        assert_eq!(parse(&args("")), Request::Environment);
-        assert_eq!(parse(&args("-a")), Request::Locales);
-        assert_eq!(parse(&args("--all-locales -v")), Request::Locales);
-        assert_eq!(parse(&args("-m")), Request::Charmaps);
-        assert_eq!(parse(&args("-uU")), Request::Windows(Which::UserUi, true));
-        assert_eq!(parse(&args("-f")), Request::Windows(Which::Format, false));
+        assert_eq!(parse_permuting(&args("")), Request::Environment);
+        assert_eq!(parse_permuting(&args("-a")), Request::Locales);
+        assert_eq!(parse_permuting(&args("--all-locales -v")), Request::Locales);
+        assert_eq!(parse_permuting(&args("-m")), Request::Charmaps);
         assert_eq!(
-            parse(&args("-k LC_CTYPE")),
+            parse_permuting(&args("-uU")),
+            Request::Windows(Which::UserUi, true)
+        );
+        assert_eq!(
+            parse_permuting(&args("-f")),
+            Request::Windows(Which::Format, false)
+        );
+        assert_eq!(
+            parse_permuting(&args("-k LC_CTYPE")),
             Request::Definitions("-k".into())
         );
         assert_eq!(
-            parse(&args("LC_CTYPE")),
+            parse_permuting(&args("LC_CTYPE")),
             Request::Definitions("LC_CTYPE".into())
         );
-        assert_eq!(parse(&args("--nope")), Request::Unknown("--nope".into()));
-        assert_eq!(parse(&args("-V")), Request::Version);
+        assert_eq!(
+            parse_permuting(&args("--nope")),
+            Request::Unknown(Problem::UnknownLong {
+                dashes: "--",
+                text: "nope".into()
+            })
+        );
+        // `--` ends the options, which the parser before never reached; long names go
+        // by any unique prefix, as Git for Windows' `locale` takes them.
+        assert_eq!(
+            parse_permuting(&args("-- -a")),
+            Request::Definitions("-a".into())
+        );
+        assert_eq!(parse_permuting(&args("--all")), Request::Locales);
+        assert_eq!(parse_permuting(&args("--he --nope")), Request::Help);
+        assert_eq!(parse_permuting(&args("-V")), Request::Version);
     }
 }
