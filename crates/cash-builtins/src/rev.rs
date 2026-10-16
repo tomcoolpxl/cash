@@ -1,10 +1,11 @@
 //! `rev`, util-linux's: each line's characters in reverse order.
 //!
-//! Checked against util-linux 2.42.3 (`crates/cash/tests/oracle`). Characters are code
+//! Checked against util-linux 2.42.4 (`crates/cash/tests/oracle`). Characters are code
 //! points, as util-linux reverses them; bytes that are not UTF-8 are reversed one by one
 //! rather than lost. `-0`/`--zero` separates records with NUL instead of newline, and a
 //! last record without its separator is written without one. A missing file is reported
 //! and the rest are still read, with status 1; `-` is a file name here, as in util-linux.
+//! The options are util-linux's `Vh0` and their long names, read by cash-getopt.
 //!
 //! One difference, deliberate (D20): a line ending in CRLF keeps its `\r` at the end.
 //! util-linux reverses the `\r` to the front, which turns `rev | cut | rev` on a Windows
@@ -13,7 +14,10 @@
 use std::io::{Read, Write};
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use clap::Parser;
+
+use crate::options;
 
 /// Reverse the characters of each line.
 #[derive(Parser)]
@@ -23,6 +27,32 @@ pub(crate) struct RevCommand {
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     args: Vec<String>,
 }
+
+/// util-linux's `Vh0` and their long names.
+const SHORTS: &[Short<char>] = &[
+    Short::new('V', Arg::No, 'V'),
+    Short::new('h', Arg::No, 'h'),
+    Short::new('0', Arg::No, '0'),
+];
+const LONGS: &[Long<'static, char>] = &[
+    Long::new("help", Arg::No, 'h'),
+    Long::new("version", Arg::No, 'V'),
+    Long::new("zero", Arg::No, '0'),
+];
+
+/// util-linux 2.42.4's, from its empty first line on.
+const HELP: &str = "
+Usage:
+ rev [options] [<file> ...]
+
+Reverse lines characterwise.
+
+Options:
+ -0, --zero     use the NUL byte as line separator
+ -h, --help     display this help
+ -V, --version  display version
+
+For more details see rev(1).";
 
 /// `line` with its characters in reverse order; `line` excludes its separator.
 fn reverse_record(line: &[u8], out: &mut Vec<u8>) {
@@ -87,39 +117,20 @@ impl builtins::Command for RevCommand {
     ) -> Result<ExecutionResult, Self::Error> {
         let mut separator = b'\n';
         let mut files = Vec::new();
-        let mut only_files = false;
-        for arg in &self.args {
-            if only_files || arg == "-" || !arg.starts_with('-') {
-                files.push(arg.as_str());
-                continue;
-            }
-            match arg.as_str() {
-                "--" => only_files = true,
-                "-0" | "--zero" => separator = 0,
-                "-h" | "--help" => {
-                    writeln!(
-                        context.stdout(),
-                        "Usage:\n rev [options] [<file> ...]\n\nReverse lines characterwise.\n\n\
-                         Options:\n -0, --zero     zero line delimiter\n -h, --help     display this help\n"
-                    )?;
+        let getopt = Getopt::new(SHORTS, LONGS).order(options::gnu_order(&context));
+        for item in getopt.read(&self.args) {
+            match item {
+                Err(problem) => return options::gnu_usage_error(&context, "rev", problem, 1),
+                Ok(Item::Option { id: 'h', .. }) => {
+                    writeln!(context.stdout(), "{HELP}")?;
                     return Ok(ExecutionResult::success());
                 }
-                other => {
-                    let shown = other.strip_prefix("--").map_or_else(
-                        || {
-                            std::format!(
-                                "invalid option -- '{}'",
-                                other.chars().nth(1).unwrap_or('-')
-                            )
-                        },
-                        |long| std::format!("unrecognized option '--{long}'"),
-                    );
-                    writeln!(
-                        context.stderr(),
-                        "rev: {shown}\nTry 'rev --help' for more information."
-                    )?;
-                    return Ok(ExecutionResult::general_error());
+                Ok(Item::Option { id: 'V', .. }) => {
+                    writeln!(context.stdout(), "rev (cash): util-linux 2.42.4's options")?;
+                    return Ok(ExecutionResult::success());
                 }
+                Ok(Item::Option { .. }) => separator = 0,
+                Ok(Item::Operand { value, .. }) => files.push(value),
             }
         }
 
@@ -135,7 +146,7 @@ impl builtins::Command for RevCommand {
         // error about a missing file comes before any of the output.
         let mut reversed = Vec::new();
         for file in files {
-            let path = context.shell.absolute_path(std::path::Path::new(file));
+            let path = context.shell.absolute_path(std::path::Path::new(&file));
             match std::fs::read(&path) {
                 Ok(input) => reversed.extend(reverse_all(&input, separator)),
                 Err(error) => {

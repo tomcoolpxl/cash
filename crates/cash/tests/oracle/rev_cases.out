@@ -30,3 +30,10 @@ rev: cannot open -: No such file or directory
 == bad option
 rev: invalid option -- 'Z'
 rc=1
+== long names cut short, clusters
+ b a \0
+
+Usage:
+== help and version stop the run
+rc=0
+rc=0

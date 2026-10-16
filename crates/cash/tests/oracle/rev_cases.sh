@@ -1,6 +1,6 @@
 # rev cases, run under util-linux rev (the oracle) and under cash's builtin. Output is
 # shown through od so line endings, NULs and missing final newlines are visible.
-# rev_cases.out is util-linux 2.42.3's output.
+# rev_cases.out is util-linux 2.42.4's output.
 #
 # Regenerate the golden file (WSL):
 #   bash rev_cases.sh > rev_cases.out 2>&1
@@ -23,5 +23,7 @@ echo "== -0"; printf 'ab\0cd\0' | rev -0 | show
 echo "== --zero, no final NUL"; printf 'ab\0cd' | rev --zero | show
 echo "== dash is stdin"; printf 'xy\n' | rev - | show
 echo "== bad option"; rev -Z 2>&1 | head -1; rev -Z 2>/dev/null; echo "rc=$?"
+echo "== long names cut short, clusters"; printf 'ab\0' | rev --ze | show; rev -0h | head -2
+echo "== help and version stop the run"; rev --help --bogus >/dev/null; echo "rc=$?"; rev -V nosuch >/dev/null; echo "rc=$?"
 
 cd / && rm -rf "$dir"
