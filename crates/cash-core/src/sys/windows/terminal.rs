@@ -9,12 +9,9 @@ pub use crate::sys::stubs::terminal::{
 
 /// Get the native Windows process ID of this process's parent.
 ///
-/// Tool Help is the same snapshot cash's `ps`, `top`, `pgrep`, and `pstree` use, so
-/// `PPID` names a process those tools can display and `kill` can address.
+/// Windows' record of the process that created cash (`cash_win32::facts::parent_pid`),
+/// the parent cash's `ps`, `top`, `pgrep` and `pstree` show, so `PPID` names a process
+/// those tools can display and `kill` can address.
 pub fn get_parent_process_id() -> Option<sys::process::ProcessId> {
-    let own_pid = std::process::id();
-    cash_win32::process::list()
-        .into_iter()
-        .find(|process| process.pid == own_pid)
-        .and_then(|process| i32::try_from(process.parent_pid).ok())
+    cash_win32::facts::parent_pid().and_then(|pid| i32::try_from(pid).ok())
 }

@@ -262,6 +262,45 @@ fn ntdll(name: &core::ffi::CStr) -> Option<unsafe extern "system" fn() -> isize>
     unsafe { GetProcAddress(module, name.as_ptr().cast()) }
 }
 
+/// `PROCESS_BASIC_INFORMATION`, which windows-sys gates behind its kernel feature.
+#[repr(C)]
+#[derive(Default)]
+#[expect(non_snake_case, reason = "the Windows structure's own field names")]
+pub(crate) struct PROCESS_BASIC_INFORMATION {
+    pub(crate) ExitStatus: i32,
+    pub(crate) PebBaseAddress: usize,
+    pub(crate) AffinityMask: usize,
+    pub(crate) BasePriority: i32,
+    pub(crate) UniqueProcessId: usize,
+    pub(crate) InheritedFromUniqueProcessId: usize,
+}
+
+/// What `NtQueryInformationProcess` says of `process` (`ProcessBasicInformation`): its
+/// PEB, and the process that created it. `process` must be open for
+/// `PROCESS_QUERY_LIMITED_INFORMATION`, or be `GetCurrentProcess()`.
+pub(crate) fn basic_information(process: HANDLE) -> Option<PROCESS_BASIC_INFORMATION> {
+    type QueryInformationProcess =
+        unsafe extern "system" fn(HANDLE, i32, *mut core::ffi::c_void, u32, *mut u32) -> i32;
+    let query = ntdll(c"NtQueryInformationProcess")?;
+    // SAFETY: the documented signature of NtQueryInformationProcess.
+    let query = unsafe {
+        std::mem::transmute::<unsafe extern "system" fn() -> isize, QueryInformationProcess>(query)
+    };
+    let mut basic = PROCESS_BASIC_INFORMATION::default();
+    // SAFETY: `ProcessBasicInformation` (0) fills a PROCESS_BASIC_INFORMATION of the size
+    // given; the caller opened the process for the query.
+    let status = unsafe {
+        query(
+            process,
+            0,
+            (&raw mut basic).cast(),
+            u32::try_from(size_of::<PROCESS_BASIC_INFORMATION>()).ok()?,
+            std::ptr::null_mut(),
+        )
+    };
+    (status >= 0).then_some(basic)
+}
+
 /// The values of a process's standard input, output and error handles, from its process
 /// parameters (`RTL_USER_PROCESS_PARAMETERS`, which `SetStdHandle` writes). The layout is
 /// undocumented and has not changed since Windows XP: the parameters at offset 0x20 of the
@@ -271,41 +310,9 @@ fn standard_handles(pid: u32) -> Option<[usize; 3]> {
     use windows_sys::Win32::System::Diagnostics::ToolHelp::Toolhelp32ReadProcessMemory;
     use windows_sys::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION;
 
-    /// `PROCESS_BASIC_INFORMATION`, which windows-sys gates behind its kernel feature.
-    #[repr(C)]
-    #[derive(Default)]
-    #[expect(non_snake_case, reason = "the Windows structure's own field names")]
-    struct PROCESS_BASIC_INFORMATION {
-        ExitStatus: i32,
-        PebBaseAddress: usize,
-        AffinityMask: usize,
-        BasePriority: i32,
-        UniqueProcessId: usize,
-        InheritedFromUniqueProcessId: usize,
-    }
-
-    type QueryInformationProcess =
-        unsafe extern "system" fn(HANDLE, i32, *mut core::ffi::c_void, u32, *mut u32) -> i32;
-    let query = ntdll(c"NtQueryInformationProcess")?;
-    // SAFETY: the documented signature of NtQueryInformationProcess.
-    let query = unsafe {
-        std::mem::transmute::<unsafe extern "system" fn() -> isize, QueryInformationProcess>(query)
-    };
-
     let process = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION).ok()?;
-    let mut basic = PROCESS_BASIC_INFORMATION::default();
-    // SAFETY: `ProcessBasicInformation` (0) fills a PROCESS_BASIC_INFORMATION of the size
-    // given; the process was opened for the query.
-    let status = unsafe {
-        query(
-            process.as_raw_handle(),
-            0,
-            (&raw mut basic).cast(),
-            u32::try_from(size_of::<PROCESS_BASIC_INFORMATION>()).ok()?,
-            std::ptr::null_mut(),
-        )
-    };
-    if status < 0 || basic.PebBaseAddress == 0 {
+    let basic = basic_information(process.as_raw_handle())?;
+    if basic.PebBaseAddress == 0 {
         return None;
     }
     let read = |address: usize| -> Option<usize> {

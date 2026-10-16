@@ -4,6 +4,7 @@
 //! - the account running cash, its RID and its SID as text: never, since a process's
 //!   token does not change user;
 //! - the machine's name: never, since a rename takes a restart;
+//! - the process that started cash: never, since Windows records it at creation;
 //! - an account's name by its SID: never, asked of LSA once per SID, where `ps` asked once
 //!   per process and `ls -l` once per file whose owner it could not read;
 //! - what Windows Terminal draws a profile in, its font and the shape of its cells: while
@@ -44,6 +45,22 @@ pub fn current_user_sid_string() -> Option<String> {
 pub fn computer_name() -> Option<String> {
     static NAME: OnceLock<Option<String>> = OnceLock::new();
     NAME.get_or_init(crate::process::read_computer_name).clone()
+}
+
+/// The process that started cash, as Windows recorded it when cash was created (`$PPID`).
+///
+/// Asked of cash's own process, one call. `$PPID` listed every process on the machine to
+/// find cash among them, 11 ms of each start's 14.
+#[must_use]
+pub fn parent_pid() -> Option<u32> {
+    static PARENT: OnceLock<Option<u32>> = OnceLock::new();
+    *PARENT.get_or_init(|| {
+        // SAFETY: the pseudo-handle of the current process, valid without being opened.
+        let own = unsafe { windows_sys::Win32::System::Threading::GetCurrentProcess() };
+        crate::handles::basic_information(own)
+            .and_then(|basic| u32::try_from(basic.InheritedFromUniqueProcessId).ok())
+            .filter(|&pid| pid != 0)
+    })
 }
 
 /// Account names by their SID's bytes.
@@ -219,6 +236,16 @@ mod tests {
         let first = current_account();
         assert_eq!(first, crate::process::read_current_account());
         assert_eq!(current_account(), first);
+    }
+
+    #[test]
+    fn the_parent_is_the_one_the_process_list_names() {
+        let own = std::process::id();
+        let listed = crate::process::list()
+            .into_iter()
+            .find(|process| process.pid == own)
+            .map(|process| process.parent_pid);
+        assert_eq!(parent_pid(), listed);
     }
 
     #[test]
