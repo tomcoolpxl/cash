@@ -107,9 +107,14 @@ macro_rules! command {
 
             async fn execute<SE: cash_core::ShellExtensions>(
                 &self,
-                context: cash_core::ExecutionContext<'_, SE>,
+                mut context: cash_core::ExecutionContext<'_, SE>,
             ) -> Result<ExecutionResult, Self::Error> {
-                run($name, &self.args, &context)
+                let result = run($name, &self.args, &context);
+                // A Ctrl-C or a `kill` stopped the work: acted on as between commands.
+                if context.stop_token().requested() {
+                    return context.stopped().await;
+                }
+                result
             }
         }
     };
@@ -1135,9 +1140,10 @@ struct Run<'a, SE: cash_core::ShellExtensions> {
 }
 
 impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
-    /// Said at zstd's `level` of display, or not.
+    /// Said at zstd's `level` of display, or not; nothing once the run is to stop, as
+    /// zstd Ctrl-C ends says nothing more.
     fn say(&self, level: i32, text: &str) -> Result<(), Stop> {
-        if self.options.display >= level {
+        if self.options.display >= level && !self.context.stop_token().requested() {
             self.context.stderr().write_all(text.as_bytes())?;
         }
         Ok(())
@@ -1163,7 +1169,10 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
     /// zstd's `FIO_openSrcFile`: the file, or `None` when it was refused, said.
     fn open_source(&self, name: &str) -> Result<Option<Opened>, Stop> {
         if name == STDIN_MARK {
-            return Ok(Some((Box::new(self.context.stdin()), None)));
+            return Ok(Some((
+                Box::new(self.context.stop_token().reader(self.context.stdin())),
+                None,
+            )));
         }
         if is_device(name) {
             return match fs::File::open(name) {

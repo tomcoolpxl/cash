@@ -17,7 +17,7 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use crate::common::{cash_command, output_of, run};
+use crate::common::{cash_command, output_of, run, run_in};
 
 /// Runs each script and checks its standard output and status.
 fn check(cases: &[(&str, &str)]) {
@@ -177,4 +177,51 @@ fn a_command_a_builtin_starts_in_the_background_keeps_its_pid() {
             "pid",
         ),
     ]);
+}
+
+#[test]
+fn a_compressor_kill_stops_keeps_its_file_and_leaves_no_archive() {
+    // A read a stop ended looked like the file's end: gzip and bzip2 wrote half an
+    // archive and removed the file, zstd wrote half an archive. A stop now fails the
+    // read (and xz's writes, whose threads read ahead), and the tool gives up as on any
+    // failed read. The file is 64 GiB of zeros in no disk space, more than any of them
+    // gets through in a second.
+    let dir = tempfile::tempdir().unwrap();
+    let file = std::fs::File::create(dir.path().join("big")).unwrap();
+    cash_win32::pipe::make_sparse(&file).unwrap();
+    file.set_len(64 << 30).unwrap();
+    drop(file);
+    for tool in ["gzip", "bzip2", "xz", "zstd"] {
+        let out = run_in(
+            dir.path(),
+            &format!(r#"{tool} -q big & sleep 1; kill %1; wait %1; echo "$?"; ls -A"#),
+        );
+        assert_eq!(
+            (out.stdout.as_str(), out.stderr.as_str()),
+            ("143\nbig", ""),
+            "{tool}"
+        );
+    }
+}
+
+#[test]
+fn a_compressor_kill_stops_on_standard_input_leaves_a_broken_archive() {
+    // Standard input ended at a stop too, and the archive of what came before it was
+    // whole, as if that were all; now it lacks its end, as a killed program's does.
+    // bzip2 and zstd are not asked: they write a whole stream or frame for each batch of
+    // input, as pbzip2 does, so what they wrote before a stop is whole and says so.
+    let dir = tempfile::tempdir().unwrap();
+    for tool in ["gzip", "xz"] {
+        let out = run_in(
+            dir.path(),
+            &format!(
+                r#"{tool} -c < /dev/zero > out & sleep 1; kill %1; wait %1; echo "$?"; {tool} -t out 2>/dev/null || echo broken"#
+            ),
+        );
+        assert_eq!(
+            (out.stdout.as_str(), out.stderr.as_str()),
+            ("143\nbroken", ""),
+            "{tool}"
+        );
+    }
 }

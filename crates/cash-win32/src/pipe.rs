@@ -691,7 +691,7 @@ fn release_space(path: &std::path::Path, upto: u64) {
 /// # Errors
 ///
 /// Returns the error of the call, as on a volume that keeps no sparse files (FAT).
-pub(crate) fn make_sparse(file: &File) -> io::Result<()> {
+pub fn make_sparse(file: &File) -> io::Result<()> {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::System::IO::DeviceIoControl;
     use windows_sys::Win32::System::Ioctl::FSCTL_SET_SPARSE;

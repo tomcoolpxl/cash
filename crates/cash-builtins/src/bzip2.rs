@@ -98,9 +98,14 @@ macro_rules! command {
 
             async fn execute<SE: cash_core::ShellExtensions>(
                 &self,
-                context: cash_core::ExecutionContext<'_, SE>,
+                mut context: cash_core::ExecutionContext<'_, SE>,
             ) -> Result<ExecutionResult, Self::Error> {
-                run($name, &self.args, &context)
+                let result = run($name, &self.args, &context);
+                // A Ctrl-C or a `kill` stopped the work: acted on as between commands.
+                if context.stop_token().requested() {
+                    return context.stopped().await;
+                }
+                result
             }
         }
     };
@@ -397,7 +402,7 @@ fn rewound<SE: cash_core::ShellExtensions>(
     }
     if let Some(OpenFile::File(file)) = context.try_fd(OpenFiles::STDIN_FD) {
         (&*file).seek(io::SeekFrom::Start(0))?;
-        return Ok(Box::new(context.stdin()));
+        return Ok(Box::new(context.stop_token().reader(context.stdin())));
     }
     Ok(input.into_inner())
 }
@@ -445,8 +450,12 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         self.status = self.status.max(status);
     }
 
+    /// `text` on standard error, unless the run is to stop: a stopped bzip2 says
+    /// nothing more, as one Ctrl-C ends says nothing.
     fn say(&self, text: &str) -> Result<(), Stop> {
-        self.context.stderr().write_all(text.as_bytes())?;
+        if !self.context.stop_token().requested() {
+            self.context.stderr().write_all(text.as_bytes())?;
+        }
         Ok(())
     }
 
@@ -791,7 +800,10 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 if is_terminal(self.context, OpenFiles::STDOUT_FD) {
                     return self.refuse_terminal("write compressed data to");
                 }
-                (Box::new(self.context.stdin()), None)
+                (
+                    Box::new(self.context.stop_token().reader(self.context.stdin())),
+                    None,
+                )
             }
             Mode::ToStdout if is_terminal(self.context, OpenFiles::STDOUT_FD) => {
                 return self.refuse_terminal("write compressed data to");
@@ -895,7 +907,10 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             if is_terminal(self.context, OpenFiles::STDIN_FD) {
                 return self.refuse_terminal("read compressed data from");
             }
-            (Box::new(self.context.stdin()), None)
+            (
+                Box::new(self.context.stop_token().reader(self.context.stdin())),
+                None,
+            )
         } else {
             match self.open_pair()? {
                 Some((file, output)) => (Box::new(self.context.stop_token().reader(file)), output),
@@ -1005,7 +1020,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             if is_terminal(self.context, OpenFiles::STDIN_FD) {
                 return self.refuse_terminal("read compressed data from");
             }
-            Box::new(self.context.stdin())
+            Box::new(self.context.stop_token().reader(self.context.stdin()))
         } else {
             match fs::File::open(self.path(&in_name)) {
                 Ok(file) => Box::new(self.context.stop_token().reader(file)),

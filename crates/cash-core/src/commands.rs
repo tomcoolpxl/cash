@@ -217,7 +217,7 @@ impl StopToken {
         }
     }
 
-    /// `reader`, ending as if at its end once the builtin is to stop: a read of a large
+    /// `reader`, failing with [`Stopped`] once the builtin is to stop: a read of a large
     /// file or an endless input asks before each block.
     pub fn reader<R: std::io::Read>(&self, reader: R) -> StopReader<R> {
         StopReader {
@@ -225,18 +225,71 @@ impl StopToken {
             stop: self.clone(),
         }
     }
+
+    /// `writer`, failing with [`Stopped`] once the builtin is to stop: a coder that has
+    /// read its input ahead, for threads of its own, asks at each block it writes.
+    pub fn writer<W: std::io::Write>(&self, writer: W) -> StopWriter<W> {
+        StopWriter {
+            inner: writer,
+            stop: self.clone(),
+        }
+    }
 }
 
-/// A reader that ends once its builtin is to stop ([`StopToken::reader`]).
+/// A writer that fails with [`Stopped`] once its builtin is to stop
+/// ([`StopToken::writer`]).
+pub struct StopWriter<W> {
+    inner: W,
+    stop: StopToken,
+}
+
+impl<W: std::io::Write> std::io::Write for StopWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.stop.requested() {
+            return Err(Stopped::error());
+        }
+        self.inner.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+/// A reader that fails with [`Stopped`] once its builtin is to stop
+/// ([`StopToken::reader`]).
+///
+/// It fails rather than end: a tool that took its input for read whole would act on it
+/// whole, as gzip, given a file, writes the archive and removes the file. An end there
+/// left half an archive and no file.
 pub struct StopReader<R> {
     inner: R,
     stop: StopToken,
 }
 
+/// The error of a read through a [`StopReader`] once its builtin is to stop: a tool says
+/// nothing of it, as a program Ctrl-C ends says nothing.
+#[derive(Debug)]
+pub struct Stopped;
+
+impl Display for Stopped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("stopped")
+    }
+}
+
+impl std::error::Error for Stopped {}
+
+impl Stopped {
+    fn error() -> std::io::Error {
+        std::io::Error::other(Self)
+    }
+}
+
 impl<R: std::io::Read> std::io::Read for StopReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.stop.requested() {
-            return Ok(0);
+            return Err(Stopped::error());
         }
         self.inner.read(buf)
     }
@@ -245,7 +298,7 @@ impl<R: std::io::Read> std::io::Read for StopReader<R> {
 impl<R: std::io::BufRead> std::io::BufRead for StopReader<R> {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         if self.stop.requested() {
-            return Ok(&[]);
+            return Err(Stopped::error());
         }
         self.inner.fill_buf()
     }

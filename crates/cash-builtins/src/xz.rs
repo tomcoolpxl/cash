@@ -219,9 +219,14 @@ macro_rules! command {
 
             async fn execute<SE: cash_core::ShellExtensions>(
                 &self,
-                context: cash_core::ExecutionContext<'_, SE>,
+                mut context: cash_core::ExecutionContext<'_, SE>,
             ) -> Result<ExecutionResult, Self::Error> {
-                run($name, &self.args, &context)
+                let result = run($name, &self.args, &context);
+                // A Ctrl-C or a `kill` stopped the work: acted on as between commands.
+                if context.stop_token().requested() {
+                    return context.stopped().await;
+                }
+                result
             }
         }
     };
@@ -915,8 +920,12 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         u32::try_from(auto_threads(preset, block)).ok()
     }
 
+    /// `text` on standard error, unless the run is to stop: a stopped xz says nothing
+    /// more, as one Ctrl-C ends says nothing.
     fn say(&self, text: &str) -> Result<(), Stop> {
-        self.context.stderr().write_all(text.as_bytes())?;
+        if !self.context.stop_token().requested() {
+            self.context.stderr().write_all(text.as_bytes())?;
+        }
         Ok(())
     }
 
@@ -1190,7 +1199,11 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             }
         };
         let (mut input, times, read_only): (Box<dyn Read>, _, _) = match &source {
-            Source::Stdin => (Box::new(self.context.stdin()), None, false),
+            Source::Stdin => (
+                Box::new(self.context.stop_token().reader(self.context.stdin())),
+                None,
+                false,
+            ),
             Source::File(path, metadata) => match fs::File::open(path) {
                 Ok(file) => (
                     Box::new(self.context.stop_token().reader(file)),
@@ -1249,9 +1262,11 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             None => Output::Stdout(Box::new(self.context.stdout())),
         };
 
+        // A stop ends the coding at the next block written: the threads that compress
+        // have read the input ahead, and the threads that decompress read it themselves.
         let outcome = if passthrough {
             let mut all = io::Cursor::new(first).chain(input);
-            let mut written = Counted::new(&mut output);
+            let mut written = Counted::new(self.context.stop_token().writer(&mut output));
             io::copy(&mut all, &mut written)
                 .map(|n| (n, written.count))
                 .map_err(Broken::Write)
@@ -1263,7 +1278,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 block_size: self.options.block_size,
                 threads: self.threads(),
             };
-            let mut written = Counted::new(&mut output);
+            let mut written = Counted::new(self.context.stop_token().writer(&mut output));
             let mut read = Counted::new(&mut input);
             let coded = xz::compressor(format, &settings, &mut written)
                 .map_err(Broken::Write)
@@ -1280,7 +1295,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 block_size: None,
                 threads: None,
             };
-            let mut written = Counted::new(&mut output);
+            let mut written = Counted::new(self.context.stop_token().writer(&mut output));
             // A file of several blocks, on every core.
             let threads = self
                 .options

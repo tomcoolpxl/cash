@@ -99,7 +99,16 @@ What the phases now in DONE.md left open, each where its phase says more.
   `zip`/`unzip`, `7z` and `rar` reading files by name do not ask their
   `cash_core::StopToken`; their standard input does stop. 7z and rar have a `Stop::Break`
   ("Break signaled", "User break") their member loops can end with; tar and zip want a
-  quiet end. A second Ctrl-C no longer ends the shell under two seconds.
+  quiet end. A second Ctrl-C no longer ends the shell under two seconds. Their reads
+  must go through `StopToken::reader`, which fails, never an end that looks like the
+  file's: an end made gzip finish half an archive and remove the file.
+- **A Ctrl-C or `kill` on a large `xz` waits for its blocks** (2026-10-16): lzma-rust2's
+  threaded encoder takes the whole input at once (13 blocks of 24 MiB from a 300 MB
+  file, on 16 threads) and writes the first block only when it is done, about 12 s
+  later; a block cannot be stopped half way, so the stop is acted on at that first
+  write (`StopToken::writer`). Nothing is lost: the archive is abandoned and the file
+  kept. Acting at once would need the coding on a thread of its own, left to wind down
+  writing nowhere, or a stop inside lzma-rust2's block loop.
 - **`{ head -n1; cat; } < file` loses what head read ahead** (2026-10-16): uutils' `head`
   seeks the shared input back on Unix only (`uu_head` 0.12.0 `head.rs:460-489`); GNU head
   leaves a seekable input just after what it printed.

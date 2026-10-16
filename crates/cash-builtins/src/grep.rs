@@ -1609,12 +1609,13 @@ impl builtins::Command for GrepCommand {
             return Ok(ExecutionResult::general_error());
         }
 
-        let result = search_inputs(&context, &opts, &engine, colors, filters)?;
-        // A Ctrl-C or a `kill` stopped the search: acted on as between commands.
+        let result = search_inputs(&context, &opts, &engine, colors, filters);
+        // A Ctrl-C or a `kill` stopped the search, whose read failed with `Stopped`: acted
+        // on as between commands.
         if context.stop_token().requested() {
             return context.stopped().await;
         }
-        Ok(result)
+        result
     }
 }
 

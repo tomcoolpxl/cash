@@ -94,7 +94,7 @@ pub mod parser {
     };
 }
 
-pub use commands::{CommandArg, ExecutionContext, StopReader, StopToken};
+pub use commands::{CommandArg, ExecutionContext, StopReader, StopToken, StopWriter, Stopped};
 pub use error::{BuiltinError, Error, ErrorKind};
 pub use extensions::ShellExtensions;
 pub use interp::{ExecutionParameters, ProcessGroupPolicy, finish_output_substitutions};

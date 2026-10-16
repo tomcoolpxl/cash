@@ -97,9 +97,14 @@ macro_rules! command {
 
             async fn execute<SE: cash_core::ShellExtensions>(
                 &self,
-                context: cash_core::ExecutionContext<'_, SE>,
+                mut context: cash_core::ExecutionContext<'_, SE>,
             ) -> Result<ExecutionResult, Self::Error> {
-                run($name, $preset, &self.args, &context)
+                let result = run($name, $preset, &self.args, &context);
+                // A Ctrl-C or a `kill` stopped the work: acted on as between commands.
+                if context.stop_token().requested() {
+                    return context.stopped().await;
+                }
+                result
             }
         }
     };
@@ -548,8 +553,13 @@ struct Run<'a, SE: cash_core::ShellExtensions> {
 }
 
 impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
-    fn stderr(&self) -> impl Write + 'static {
-        self.context.stderr()
+    /// Standard error, silent once the run is to stop: a stopped gzip says nothing
+    /// more, as one Ctrl-C ends says nothing.
+    fn stderr(&self) -> Box<dyn Write + 'static> {
+        if self.context.stop_token().requested() {
+            return Box::new(io::sink());
+        }
+        Box::new(self.context.stderr())
     }
 
     /// A warning: `line` said unless `-q`, status 2 either way.
@@ -717,7 +727,9 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             self.status = 1;
             return Err(Stop::Fatal);
         }
-        let mut input = Input::new(Box::new(self.context.stdin()));
+        let mut input = Input::new(Box::new(
+            self.context.stop_token().reader(self.context.stdin()),
+        ));
         let stamp = if options.no_time {
             0
         } else {
@@ -943,7 +955,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             Ok(file) => file,
             Err(e) => return self.error(&format!("{name}: {}", strerror(&e))),
         };
-        // A Ctrl-C, or `kill` of a background job, ends the read at the next block.
+        // A Ctrl-C, or `kill` of a background job, fails the read at the next block.
         let mut input = Input::new(Box::new(self.context.stop_token().reader(file)));
         let read_only = meta.permissions().readonly();
         let input_times = fs::FileTimes::new()

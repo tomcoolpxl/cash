@@ -1539,3 +1539,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   command line, which wrapped the process's panic hook once more each time, filled
   uucore's process-wide message store with `env`'s, and could `exit(99)` the shell. Parsing
   needs no messages, and does no setup now.
+- **A compressor stopped half way removed the file it was compressing** (found and done
+  2026-10-16, the day the stop above came in, before a release): a read the stop ended
+  looked like the file's end, so `gzip big` and `bzip2 big` stopped by Ctrl-C or `kill`
+  wrote half an archive and removed `big`, and `zstd` wrote half an archive and said
+  100%. A stop now fails the read (`cash_core::Stopped`), and the compressors give up as
+  on any failed read, saying nothing and ending with the stop's status: the file is kept
+  and no archive is left. Their standard input fails the same way, and xz's writes too,
+  since its threads read ahead.
