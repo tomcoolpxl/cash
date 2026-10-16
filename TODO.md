@@ -23,6 +23,41 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
+## Shared parts for the builtins (the current phase, 2026-10-16)
+
+The user's choice (decisions.md, "Builtins share their option parsing, input opening and
+folder walks"; `research/central-components-design.md` has the surveys and the design).
+One tool at a time, each against its tests and Git Bash; its messages stay its
+upstream's.
+
+1. **Options** (cash-getopt):
+   - a repeated option overrides in every clap builtin (`ls -F -F`,
+     `alias ls='ls --color=auto'` then `ls --color=never`);
+   - basename stops at the first operand (`basename foo-bar -bar` is `foo`);
+   - cash-getopt gets `POSIXLY_CORRECT`, a claim hook and the shared usage-error line;
+   - mkfifo (`--mode MODE`, clusters), rev, locale (`--`), stdbuf and nice move onto it;
+   - pkill, killall and pidof move onto it with the claim hook (`--help`, `-V`), then
+     tput and ping;
+   - flock, watch and nc act on help and version in order;
+   - xargs (`-x`, `-a`, `-d`, `-E`, `-L`, `-p`), ls (`--al`), stat (`missing operand`)
+     and pgrep move off clap;
+   - find loses clap's `-h`/`--help`, and watch no longer loses a leading `--`.
+2. **Inputs** (`ExecutionContext::open_input`):
+   - grep (`/dev/stdin`);
+   - rev, column (a folder is "Is a directory"), hexdump, iconv, xxd and logger;
+   - dos2unix and the pager;
+   - the compressors (bzip2's third open of a pipe);
+   - tar's `-T`/`-X` (cash's path spellings), and 7z's and rar's list files (7z's
+     resolve against the folder cash started in).
+3. **Walks** (walkdir with a cash layer):
+   - grep -r/-R (link loops);
+   - find (its loop code goes, its message stays), and `-H` becomes real;
+   - tree (a OneDrive folder is a folder);
+   - gzip -r and zstd -r (links as upstream);
+   - chmod -R (an unreadable folder is reported);
+   - where -r (each folder listed once) and fileuse;
+   - then tar, zip, rar and 7z.
+
 ## Left over from finished phases
 
 What the phases now in DONE.md left open, each where its phase says more.

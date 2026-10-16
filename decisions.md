@@ -742,6 +742,21 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   `cash_win32::facts`): the account, the machine's name, account names by SID, and a
   Terminal profile's font, each with its own rule for going stale. Turned down: a cache
   beside each caller.
+- **Builtins share their option parsing, input opening and folder walks** (the user,
+  2026-10-16; `research/central-components-design.md`):
+  - **Options:** cash-getopt, finished with `POSIXLY_CORRECT`, a hook for `-9` and `-10`
+    words, and one usage-error line with each upstream's style. A repeated option
+    overrides in every clap builtin. xargs, ls, stat and pgrep move off clap for GNU's
+    messages and abbreviations.
+  - **Inputs:** `ExecutionContext::open_input`, which gives builtins the `/dev` names,
+    "Is a directory" and a read that fails at a stop.
+  - **Walks:** walkdir with a cash layer: one answer to what a link is (a symlink or
+    junction), loop detection, the stop token, and every error left to the tool.
+  - **Order:** options, then inputs, then walks. The archivers move onto the walker last.
+  - Each tool keeps its upstream's messages and statuses, and moves one at a time against
+    its tests and Git Bash.
+  - Turned down: a walker of cash's own; patching the archivers' own walks; keeping
+    clap's messages.
 
 ## 8. Archives and compression
 
