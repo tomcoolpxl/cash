@@ -1252,7 +1252,49 @@ pub struct SimpleCommand {
         serde(skip_serializing_if = "Option::is_none", default)
     )]
     pub suffix: Option<CommandSuffix>,
+    /// The command as it prints, made once it is asked for ([`SimpleCommand::printed`]).
+    #[cfg_attr(any(test, feature = "serde"), serde(skip))]
+    pub printed: PrintedOnce,
 }
+
+impl SimpleCommand {
+    /// The command as it prints (`Display`), made the first time it is asked for and kept
+    /// with it: the shell names the command it is about to run (`$BASH_COMMAND`) before
+    /// every simple command, and printed it again each time, a loop's body every turn.
+    pub fn printed(&self) -> std::sync::Arc<str> {
+        std::sync::Arc::clone(
+            self.printed
+                .0
+                .get_or_init(|| std::sync::Arc::from(self.to_string())),
+        )
+    }
+}
+
+/// A node's printed text, kept once made ([`SimpleCommand::printed`]). A copy of the node
+/// starts without it, as a copy may be changed; nodes compare equal whether or not they
+/// have it.
+#[derive(Default)]
+pub struct PrintedOnce(std::sync::OnceLock<std::sync::Arc<str>>);
+
+impl Clone for PrintedOnce {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
+impl std::fmt::Debug for PrintedOnce {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PrintedOnce")
+    }
+}
+
+impl PartialEq for PrintedOnce {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for PrintedOnce {}
 
 impl Node for SimpleCommand {}
 

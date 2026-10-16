@@ -31,6 +31,10 @@ pub trait ShellState {
     /// Seeds `$RANDOM`, as an assignment to it does.
     fn seed_random(&self, seed: u64);
 
+    /// The simple command the shell is running or about to run, as written
+    /// (`$BASH_COMMAND`).
+    fn current_command(&self) -> Option<std::sync::Arc<str>>;
+
     /// Returns the shell environment containing variables.
     fn env(&self) -> &ShellEnvironment;
 

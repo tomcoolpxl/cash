@@ -540,15 +540,15 @@ peg::parser! {
             prefix:cmd_prefix() word_and_suffix:(word_or_name:cmd_word() suffix:cmd_suffix()? { (word_or_name, suffix) })? {
                 match word_and_suffix {
                     Some((word_or_name, suffix)) => {
-                        ast::SimpleCommand { prefix: Some(prefix), word_or_name: Some(ast::Word::from(word_or_name)), suffix }
+                        ast::SimpleCommand { prefix: Some(prefix), word_or_name: Some(ast::Word::from(word_or_name)), suffix, printed: ast::PrintedOnce::default() }
                     }
                     None => {
-                        ast::SimpleCommand { prefix: Some(prefix), word_or_name: None, suffix: None }
+                        ast::SimpleCommand { prefix: Some(prefix), word_or_name: None, suffix: None, printed: ast::PrintedOnce::default() }
                     }
                 }
             } /
             word_or_name:cmd_name() suffix:cmd_suffix()? {
-                ast::SimpleCommand { prefix: None, word_or_name: Some(ast::Word::from(word_or_name)), suffix } } /
+                ast::SimpleCommand { prefix: None, word_or_name: Some(ast::Word::from(word_or_name)), suffix, printed: ast::PrintedOnce::default() } } /
             expected!("simple command")
 
         rule cmd_name() -> &'input Token =

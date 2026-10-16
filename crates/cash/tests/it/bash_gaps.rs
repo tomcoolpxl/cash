@@ -775,6 +775,23 @@ fn bash_command_and_seconds_are_updated() {
 }
 
 #[test]
+fn a_trap_sees_the_command_it_came_at_in_bash_command() {
+    // As Bash: inside a trap, `$BASH_COMMAND` is the command the trap came at, which a
+    // DEBUG trap is there to show; it was the trap's own `echo`. Assigning it changes
+    // nothing it says, and unsetting it ends it.
+    assert_eq!(
+        output(
+            "trap 'echo \"[$BASH_COMMAND]\"' DEBUG; echo hi; trap - DEBUG; \
+             trap 'echo \"exit after: $BASH_COMMAND\"' EXIT; BASH_COMMAND=x; echo \"$BASH_COMMAND\"; false"
+        ),
+        (
+            1,
+            "[echo hi]\nhi\n[trap - DEBUG]\necho \"$BASH_COMMAND\"\nexit after: false".into()
+        )
+    );
+}
+
+#[test]
 fn symbolic_umask_updates_the_remembered_mask() {
     assert_eq!(
         output(

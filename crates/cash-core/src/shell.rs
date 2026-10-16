@@ -135,6 +135,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     #[cfg_attr(feature = "serde", serde(skip))]
     word_substitution_ends: Vec<std::sync::Arc<crate::interp::SubstitutionEnd>>,
 
+    /// The simple command running or about to run, as written (`$BASH_COMMAND`).
+    #[cfg_attr(feature = "serde", serde(skip))]
+    current_command: Option<std::sync::Arc<str>>,
+
     /// Shell name
     name: Option<String>,
 
@@ -265,6 +269,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             trace_level: self.trace_level,
             catches_fatal_errors: self.catches_fatal_errors,
             word_substitution_ends: Vec::new(),
+            current_command: self.current_command.clone(),
         }
     }
 }
@@ -478,6 +483,15 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         self.call_stack.increment_current_line_offset(delta);
     }
 
+    /// Names the simple command about to run, as written (`$BASH_COMMAND`). Not while
+    /// a trap's handler runs: as in Bash, `$BASH_COMMAND` there is the command the trap
+    /// came at, which a DEBUG trap prints (it printed its own `echo`).
+    pub(crate) fn set_current_command(&mut self, text: std::sync::Arc<str>) {
+        if !self.call_stack().is_any_trap_active() {
+            self.current_command = Some(text);
+        }
+    }
+
     /// Updates the currently executing command in the shell.
     pub fn set_current_cmd(&mut self, cmd: &impl cash_parser::ast::Node) {
         self.call_stack
@@ -654,6 +668,11 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     /// Seeds `$RANDOM`, as an assignment to it does.
     pub fn seed_random(&self, seed: u64) {
         self.random.seed(seed);
+    }
+
+    /// The simple command running or about to run, as written (`$BASH_COMMAND`).
+    pub fn current_command(&self) -> Option<std::sync::Arc<str>> {
+        self.current_command.clone()
     }
 
     /// Returns the shell environment containing variables.

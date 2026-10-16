@@ -1916,14 +1916,9 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
     ) -> Result<ExecutionSpawnResult, error::Error> {
         // Bash exposes the command currently being expanded, including its original
         // quoting, through BASH_COMMAND. This must happen before argument expansion so
-        // the command itself and a DEBUG trap both observe the current command.
-        context.shell.env_mut().update_or_add(
-            "BASH_COMMAND",
-            ShellValueLiteral::Scalar(self.to_string()),
-            |_| Ok(()),
-            EnvironmentLookup::Anywhere,
-            EnvironmentScope::Global,
-        )?;
+        // the command itself and a DEBUG trap both observe the current command. The
+        // variable reads it when read; the text is made once per command (`printed`).
+        context.shell.set_current_command(self.printed());
 
         let prefix_iter = self.prefix.as_ref().map(|s| s.0.iter()).unwrap_or_default();
         let suffix_iter = self.suffix.as_ref().map(|s| s.0.iter()).unwrap_or_default();

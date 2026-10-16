@@ -95,6 +95,9 @@ What the phases now in DONE.md left open, each where its phase says more.
   the hinter, and in the menu's selection parsing, among about twenty fixes. cash had
   already fixed the `SubstringSearch` `todo!()` (`engine.rs`); the rest want comparing
   one by one.
+- **The DEBUG trap misses a command that only assigns** (2026-10-16): `trap '...' DEBUG;
+  x=1` runs the trap before `x=1` in Bash, not in cash, which fires it only for a
+  command with a name (`commands::on_preexecute`).
 - **A write to a closed standard output says too much** (2026-10-16): `echo hi >&-`
   says `echo: i/o error: I/O write error: standard output not available`, where Bash
   says `echo: write error: Bad file descriptor`; both exit 1.

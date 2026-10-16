@@ -167,7 +167,20 @@ pub(crate) fn init_well_known_vars(
         }),
     )?;
 
-    // TODO(vars): implement BASH_COMMAND
+    // BASH_COMMAND, read when it is read, as Bash's is: the shell names the command
+    // before each simple command, and an assignment is ignored.
+    shell.env_mut().set_global(
+        "BASH_COMMAND",
+        ShellVariable::new(ShellValue::Dynamic {
+            getter: |shell| {
+                shell
+                    .current_command()
+                    .map_or_else(String::new, |text| text.to_string())
+                    .into()
+            },
+            setter: |_| (),
+        }),
+    )?;
     // TODO(vars): implement BASH_EXECUTION_STRING
 
     // BASH_LINENO
