@@ -33,11 +33,78 @@ use clap::Parser;
 
 /// Search a directory tree for files matching an expression.
 #[derive(Parser)]
+#[clap(disable_help_flag = true, disable_version_flag = true)]
 pub(crate) struct FindCommand {
     /// Starting points, then the expression — parsed here rather than by clap, because
     /// `find`'s grammar is an expression language, not a list of options.
     #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
     args: Vec<String>,
+}
+
+/// What `-help` and `-version`, predicates GNU's find answers where it meets them, end
+/// the parse with: no complaint can begin with a NUL.
+const HELP_ASKED: &str = "\0help";
+const VERSION_ASKED: &str = "\0version";
+
+/// GNU findutils' `find --help`, cut to the predicates cash's find carries.
+const HELP: &str = "\
+Usage: find [-H] [-L] [-P] [-Olevel] [-D debugopts] [path...] [expression]
+
+Default path is the current directory; default expression is -print.
+Expression may consist of: operators, options, tests, and actions.
+
+Operators (decreasing precedence; -and is implicit where no others are given):
+      ( EXPR )   ! EXPR   -not EXPR   EXPR1 -a EXPR2   EXPR1 -and EXPR2
+      EXPR1 -o EXPR2   EXPR1 -or EXPR2
+
+Positional options (always true):
+      -follow
+
+Normal options (always true, specified before other expressions):
+      -depth -maxdepth LEVELS -mindepth LEVELS
+
+Tests (N can be +N or -N or N):
+      -empty -false -iname PATTERN -ipath PATTERN -mtime N -name PATTERN
+      -newer FILE -path PATTERN -size N[bckMG] -true -type [fdl]
+      -wholename PATTERN
+
+Actions:
+      -delete -print -print0 -prune -quit
+      -exec COMMAND ; -exec COMMAND {} + -execdir COMMAND ; -execdir COMMAND {} +
+      -ok COMMAND ; -okdir COMMAND ;
+
+Other common options:
+      --help                   display this help and exit
+      --version                output version information and exit
+
+On Windows, names match without regard to case, so -name and -iname agree,
+and -H is taken as -P. A predicate GNU's find has beyond these is refused by
+name rather than ignored.";
+
+/// The walk and the expression `args` ask for, or what the command line ends with, said:
+/// the help, the version, or a complaint.
+fn read_command_line<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    args: &[String],
+) -> Result<Result<(Walk, Expr), ExecutionResult>, cash_core::Error> {
+    match parse(args, context.shell.working_dir()) {
+        Ok(parsed) => Ok(Ok(parsed)),
+        Err(asked) if asked == HELP_ASKED => {
+            writeln!(context.stdout(), "{HELP}")?;
+            Ok(Err(ExecutionResult::success()))
+        }
+        Err(asked) if asked == VERSION_ASKED => {
+            writeln!(
+                context.stdout(),
+                "find (cash): GNU findutils 4.10's predicates"
+            )?;
+            Ok(Err(ExecutionResult::success()))
+        }
+        Err(complaint) => {
+            writeln!(context.stderr(), "{}: {complaint}", context.command_name)?;
+            Ok(Err(ExecutionResult::general_error()))
+        }
+    }
 }
 
 /// What a name is being matched against.
@@ -186,16 +253,24 @@ struct Walk {
 impl builtins::Command for FindCommand {
     type Error = cash_core::Error;
 
+    /// The words as they are: clap answered `-h` and `--help` itself and took a leading
+    /// `--` for its own, where GNU's find reads both.
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        Ok(Self {
+            args: args.into_iter().skip(1).collect(),
+        })
+    }
+
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let (walk, expr) = match parse(&self.args, context.shell.working_dir()) {
+        let (walk, expr) = match read_command_line(&context, &self.args)? {
             Ok(parsed) => parsed,
-            Err(complaint) => {
-                writeln!(context.stderr(), "{}: {complaint}", context.command_name)?;
-                return Ok(ExecutionResult::general_error());
-            }
+            Err(ended) => return Ok(ended),
         };
 
         let mut failed = false;
@@ -416,7 +491,8 @@ fn parse(args: &[String], here: &Path) -> Result<(Walk, Expr), String> {
     let mut index = 0;
 
     // Anything before the first predicate is a starting point — except the `-H`/`-L`/`-P`
-    // options, which `find` takes before them.
+    // options, which `find` takes before them, with GNU's `-D DEBUGOPTS` and `-OLEVEL`
+    // (which change nothing here) and a `--` that ends them.
     while index < args.len() {
         match args[index].as_str() {
             "-L" | "-follow" => {
@@ -424,6 +500,16 @@ fn parse(args: &[String], here: &Path) -> Result<(Walk, Expr), String> {
                 index += 1;
             }
             "-P" | "-H" => index += 1,
+            "--" if walk.starts.is_empty() => index += 1,
+            "-D" if walk.starts.is_empty() => index += 2,
+            level
+                if walk.starts.is_empty()
+                    && level
+                        .strip_prefix("-O")
+                        .is_some_and(|digits| digits.chars().all(|c| c.is_ascii_digit())) =>
+            {
+                index += 1;
+            }
             arg if arg.starts_with('-') || arg == "(" || arg == "!" => break,
             arg => {
                 walk.starts.push(arg.to_string());
@@ -725,6 +811,8 @@ impl ExprParser<'_> {
                 }
                 Ok(Expr::Action(Action::Exec(argv, batch)))
             }
+            "-help" | "--help" => Err(HELP_ASKED.to_owned()),
+            "-version" | "--version" => Err(VERSION_ASKED.to_owned()),
             other => Err(std::format!(
                 "unknown predicate `{other}'. cash's find carries the predicates scripts \
                  use — a listing filtered by a predicate it had ignored would be wrong \

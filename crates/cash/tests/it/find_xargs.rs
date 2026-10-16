@@ -684,3 +684,24 @@ fn xargs_takes_gnus_line_delimiter_eof_file_and_slot_options() {
     );
     assert_eq!(out.stderr, "xargs: argument line too long");
 }
+
+/// GNU find's -help and -version, predicates it answers where it meets them but not as
+/// -exec's words, and its leading `--`, -D and -O: clap answered -h and --help itself
+/// and took the `--` for its own.
+#[test]
+fn find_answers_help_and_version_and_takes_a_leading_double_dash() {
+    let sandbox = Sandbox::new("find-help");
+    let out = sandbox.run(
+        r#"find --help | head -1
+           find . -name x -version
+           find -- . -maxdepth 0
+           find -O2 -D tree . -maxdepth 0 -exec echo --help \;"#,
+    );
+    assert_eq!(
+        out.stdout,
+        "Usage: find [-H] [-L] [-P] [-Olevel] [-D debugopts] [path...] [expression]\n\
+         find (cash): GNU findutils 4.10's predicates\n.\n--help",
+        "{}",
+        out.stderr
+    );
+}
