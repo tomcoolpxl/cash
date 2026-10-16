@@ -95,6 +95,22 @@ What the phases now in DONE.md left open, each where its phase says more.
   the hinter, and in the menu's selection parsing, among about twenty fixes. cash had
   already fixed the `SubstringSearch` `todo!()` (`engine.rs`); the rest want comparing
   one by one.
+- **A builtin started with `&` blocks until it finishes** (2026-10-16,
+  `research/in-process-tools-design.md`): `grep -r x dir &` returned after 102 s, a
+  bundled `sleep 2 &` after 21 ms. `&` waits for the job's pid, which a builtin publishes
+  only when it ends (`interp.rs:628-638`, `commands.rs:1681-1693`). Bash returns at once.
+- **Two Ctrl-C end the shell during a long native builtin** (2026-10-16): `grep`, `find`,
+  `ls -R` and the archivers never poll `take_interrupt()`, so the first press shows nothing
+  until they finish, and the second is left to Windows, which ends cash (`console.rs`).
+- **Parsing an `env` or `timeout` command runs uucore's setup in the shell** (2026-10-16):
+  `cash_coreutils_builtins::command_operand` calls `prepare_uutil_runtime`, which wraps the
+  global panic hook once more per command, fills uucore's process-wide message store with
+  `env`'s, and calls `exit(99)` on the shell if that fails.
+- **`{ head -n1; cat; } < file` loses what head read ahead** (2026-10-16): uutils' `head`
+  seeks the shared input back on Unix only (`uu_head` 0.12.0 `head.rs:460-489`); GNU head
+  leaves a seekable input just after what it printed.
+- **spec.md §8 says an in-process `rm` could not fix §4 #13** (2026-10-16): it could, as
+  cash's process never sits in the shell's folder (D10); the text wants correcting.
 - **The DEBUG trap misses a command that only assigns** (2026-10-16): `trap '...' DEBUG;
   x=1` runs the trap before `x=1` in Bash, not in cash, which fires it only for a
   command with a name (`commands::on_preexecute`).
