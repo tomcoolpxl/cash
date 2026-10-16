@@ -645,10 +645,28 @@ pub(crate) async fn full_expand_and_split_command_word(
     params: &ExecutionParameters,
     word_str: impl AsRef<str>,
 ) -> Result<Vec<String>, error::Error> {
+    if is_plain_literal(word_str.as_ref()) {
+        return Ok(vec![word_str.as_ref().to_owned()]);
+    }
     let mut expander = WordExpander::new(shell, params);
     expander.parser_options.tilde_expansion_in_assignment_words =
         !expander.parser_options.posix_mode;
     expander.full_expand_with_splitting(word_str.as_ref()).await
+}
+
+/// Whether `word` can only expand to itself, as one field: it has no quoting, no `$` or
+/// backquote, no brace, tilde or glob character, nothing a backslash or history could
+/// act on. Most command words are such (`echo`, `-la`, `src/main.rs`, `key=value`), and
+/// each went through the whole expander, an eighth of an `echo` loop's time.
+fn is_plain_literal(word: &str) -> bool {
+    !word.is_empty()
+        && word.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(
+                    byte,
+                    b'-' | b'_' | b'.' | b'/' | b':' | b',' | b'@' | b'%' | b'+' | b'='
+                )
+        })
 }
 
 /// [`full_expand_and_split_command_word`] with no pathname expansion: for the words after
@@ -658,6 +676,9 @@ pub(crate) async fn full_expand_and_split_command_word_unglobbed(
     params: &ExecutionParameters,
     word_str: impl AsRef<str>,
 ) -> Result<Vec<String>, error::Error> {
+    if is_plain_literal(word_str.as_ref()) {
+        return Ok(vec![word_str.as_ref().to_owned()]);
+    }
     let mut expander = WordExpander::new(shell, params);
     expander.parser_options.tilde_expansion_in_assignment_words =
         !expander.parser_options.posix_mode;

@@ -29,7 +29,7 @@
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError, Weak};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::openfiles::OpenFile;
 
@@ -38,6 +38,13 @@ pub(crate) const CAPACITY: usize = 64 * 1024;
 
 /// How long output waits at most.
 pub(crate) const DELAY: Duration = Duration::from_millis(50);
+
+/// Milliseconds since Windows started, to the tick (10 to 16 ms): enough for a 50 ms
+/// limit, and read from memory Windows keeps up to date, where `Instant::now` asks the
+/// performance counter, for each builtin call that writes.
+fn now() -> u64 {
+    u64::try_from(cash_win32::sysinfo::uptime().as_millis()).unwrap_or(u64::MAX)
+}
 
 /// The output of the builtin running, and of the builtins it runs that write to the same
 /// file, waiting to be written.
@@ -60,8 +67,8 @@ pub struct OutputBuffer {
 struct State {
     file: OpenFile,
     bytes: Vec<u8>,
-    /// When the oldest byte waiting came.
-    since: Option<Instant>,
+    /// When the oldest byte waiting came, by [`now`].
+    since: Option<u64>,
     /// Whether the watching thread knows of this buffer.
     watched: bool,
     /// What went wrong writing where no one could be told, for the call's end to report.
@@ -158,9 +165,10 @@ impl OutputBuffer {
         let Ok(mut state) = self.state.try_lock() else {
             return true;
         };
+        let waited = |since: u64| u128::from(now().saturating_sub(since));
         if state
             .since
-            .is_some_and(|since| since.elapsed() >= self.delay)
+            .is_some_and(|since| waited(since) >= self.delay.as_millis())
         {
             if let Err(error) = self.write_out(&mut state) {
                 state.error.get_or_insert(error);
@@ -212,7 +220,7 @@ impl Write for Stdout {
             }
         }
         if state.bytes.is_empty() {
-            state.since = Some(Instant::now());
+            state.since = Some(now());
             buffer.pending.store(true, Ordering::Release);
         }
         state.bytes.extend_from_slice(buf);
@@ -343,6 +351,7 @@ impl Watcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     fn file_in(dir: &tempfile::TempDir, name: &str) -> (std::path::PathBuf, OpenFile) {
         let path = dir.path().join(name);

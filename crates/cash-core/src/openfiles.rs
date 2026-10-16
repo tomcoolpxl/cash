@@ -1,6 +1,5 @@
 //! Managing files open within a shell instance.
 
-use std::collections::HashMap;
 use std::io::IsTerminal;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -393,8 +392,10 @@ pub enum OpenFileEntry<'a> {
 #[derive(Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OpenFiles {
-    /// Maps shell file descriptors to open files.
-    files: HashMap<ShellFd, Option<OpenFile>>,
+    /// Maps shell file descriptors to open files. Shared between the copies each command
+    /// and subshell takes, and copied only when one of them changes it: a command's
+    /// parameters copied the whole table, every command.
+    files: Arc<rustc_hash::FxHashMap<ShellFd, Option<OpenFile>>>,
 }
 
 impl OpenFiles {
@@ -414,11 +415,11 @@ impl OpenFiles {
     /// from the host environment.
     pub(crate) fn new() -> Self {
         Self {
-            files: HashMap::from([
+            files: Arc::new(rustc_hash::FxHashMap::from_iter([
                 (Self::STDIN_FD, Some(std::io::stdin().into())),
                 (Self::STDOUT_FD, Some(std::io::stdout().into())),
                 (Self::STDERR_FD, Some(std::io::stderr().into())),
-            ]),
+            ])),
         }
     }
 
@@ -429,8 +430,9 @@ impl OpenFiles {
     ///
     /// * `files`: An iterator of (fd number, `OpenFile`) pairs to update the open files with.
     pub fn update_from(&mut self, files: impl Iterator<Item = (ShellFd, OpenFile)>) {
+        let table = Arc::make_mut(&mut self.files);
         for (fd, file) in files {
-            let _ = self.files.insert(fd, Some(file));
+            let _ = table.insert(fd, Some(file));
         }
     }
 
@@ -457,7 +459,9 @@ impl OpenFiles {
     ///
     /// * `fd`: The file descriptor to remove.
     pub fn remove_fd(&mut self, fd: ShellFd) -> Option<OpenFile> {
-        self.files.insert(fd, None).and_then(|f| f)
+        Arc::make_mut(&mut self.files)
+            .insert(fd, None)
+            .and_then(|f| f)
     }
 
     /// Tries to lookup the `OpenFile` associated with a file descriptor.
@@ -499,7 +503,9 @@ impl OpenFiles {
     /// * `fd`: The file descriptor to associate with the file.
     /// * `file`: The file to associate with the file descriptor.
     pub fn set_fd(&mut self, fd: ShellFd, file: OpenFile) -> Option<OpenFile> {
-        self.files.insert(fd, Some(file)).and_then(|f| f)
+        Arc::make_mut(&mut self.files)
+            .insert(fd, Some(file))
+            .and_then(|f| f)
     }
 
     /// Iterates over all file descriptors.
@@ -525,7 +531,7 @@ impl OpenFiles {
             fd += 1;
         }
 
-        self.files.insert(fd, Some(file));
+        Arc::make_mut(&mut self.files).insert(fd, Some(file));
         Ok(fd)
     }
 }
@@ -536,6 +542,8 @@ where
 {
     fn from(iter: I) -> Self {
         let files = iter.map(|(fd, file)| (fd, Some(file))).collect();
-        Self { files }
+        Self {
+            files: Arc::new(files),
+        }
     }
 }

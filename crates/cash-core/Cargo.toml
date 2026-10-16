@@ -43,7 +43,7 @@ rpds = "1.2.0"
 # A fast hash for the variable tables, looked up for every name a command touches;
 # std's SipHash was 5% of a builtin's time.
 rustc-hash = { workspace = true }
-serde = { workspace = true, optional = true, features = ["derive"] }
+serde = { workspace = true, optional = true, features = ["derive", "rc"] }
 strum = { workspace = true }
 strum_macros = "0.28.0"
 thiserror = { workspace = true }
