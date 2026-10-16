@@ -250,7 +250,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("cdh".into(), builtin::<dirhistory::CdhCommand, SE>());
 
         // cash (D73): the file and folder picker, also on Alt-E at the prompt.
-        m.insert("croot".into(), builtin::<croot::CrootCommand, SE>());
+        m.insert(
+            "croot".into(),
+            builtin::<croot::CrootCommand, SE>().streams_output(),
+        );
 
         // cash (D80): zoxide's folder jump, on the folders an interactive cash records.
         m.insert("z".into(), builtin::<z::ZCommand, SE>());
@@ -286,7 +289,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("su".into(), builtin::<win::SuCommand, SE>());
     m.insert("sudoedit".into(), builtin::<win::SudoeditCommand, SE>());
     m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
-    m.insert("free".into(), builtin::<free::FreeCommand, SE>());
+    m.insert(
+        "free".into(),
+        builtin::<free::FreeCommand, SE>().streams_output(),
+    );
     m.insert(
         "nice".into(),
         builtin::<nice::NiceCommand, SE>()
@@ -326,11 +332,17 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("fuser".into(), builtin::<fuser::FuserCommand, SE>());
     m.insert("lsof".into(), builtin::<lsof::LsofCommand, SE>());
     m.insert("ss".into(), builtin::<ss::SsCommand, SE>());
-    m.insert("nc".into(), builtin::<nc::NcCommand, SE>());
+    m.insert("nc".into(), builtin::<nc::NcCommand, SE>().streams_output());
     m.insert("pstree".into(), builtin::<pstree::PsTreeCommand, SE>());
     m.insert("tree".into(), builtin::<tree::TreeCommand, SE>());
-    m.insert("top".into(), builtin::<top::TopCommand, SE>());
-    m.insert("watch".into(), builtin::<watch::WatchCommand, SE>());
+    m.insert(
+        "top".into(),
+        builtin::<top::TopCommand, SE>().streams_output(),
+    );
+    m.insert(
+        "watch".into(),
+        builtin::<watch::WatchCommand, SE>().streams_output(),
+    );
     m.insert(
         "find".into(),
         builtin::<find::FindCommand, SE>().with_substitution_files(),
@@ -450,8 +462,14 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "hostname".into(),
         builtin::<hostname::HostnameCommand, SE>(),
     );
-    m.insert("less".into(), builtin::<pager::LessCommand, SE>());
-    m.insert("more".into(), builtin::<pager::MoreCommand, SE>());
+    m.insert(
+        "less".into(),
+        builtin::<pager::LessCommand, SE>().streams_output(),
+    );
+    m.insert(
+        "more".into(),
+        builtin::<pager::MoreCommand, SE>().streams_output(),
+    );
     m.insert("which".into(), builtin::<which::WhichCommand, SE>());
     m.insert("where".into(), builtin::<where_files::WhereCommand, SE>());
     m.insert("chmod".into(), builtin::<chmod::ChmodCommand, SE>());
@@ -491,4 +509,28 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     );
 
     m
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The builtins whose output is written as it comes, not gathered into larger writes
+    /// (`cash_core::output`): each runs until it is stopped, or draws a screen and waits
+    /// for keys. Any other builtin, a new one too, has its output gathered.
+    #[test]
+    fn only_these_builtins_stream_their_output() {
+        let builtins =
+            default_builtins::<cash_core::extensions::DefaultShellExtensions>(BuiltinSet::BashMode);
+        let mut streaming: Vec<&str> = builtins
+            .iter()
+            .filter(|(_, registration)| registration.streams_output)
+            .map(|(name, _)| name.as_str())
+            .collect();
+        streaming.sort_unstable();
+        assert_eq!(
+            streaming,
+            ["croot", "free", "less", "more", "nc", "top", "watch"]
+        );
+    }
 }

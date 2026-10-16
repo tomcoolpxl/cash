@@ -116,6 +116,14 @@ pub struct ExecutionParameters {
     /// them that what it runs gets, and a program it runs until the program has exited
     /// (`commands::hold_substitutions_until_exit`).
     pub(crate) substitution_ends: Vec<std::sync::Arc<SubstitutionEnd>>,
+
+    /// The buffer the output of the builtin running collects in (`crate::output`), which
+    /// the commands it runs share; `None` while no builtin runs.
+    pub(crate) output: Option<std::sync::Arc<crate::output::OutputBuffer>>,
+
+    /// Whether the builtins run under these parameters write their output as it comes,
+    /// as `stdbuf -oL` and `-o0` ask, rather than gathered (`crate::output`).
+    pub(crate) builtins_stream_output: bool,
 }
 
 impl ExecutionParameters {
@@ -136,9 +144,12 @@ impl ExecutionParameters {
         &self,
         shell: &Shell<impl extensions::ShellExtensions>,
     ) -> impl std::io::Read + 'static {
-        self.try_stdin(shell).unwrap_or_else(|| {
-            ioutils::FailingReaderWriter::new("standard input not available").into()
-        })
+        let file = self
+            .resolve_fd(shell, openfiles::OpenFiles::STDIN_FD)
+            .unwrap_or_else(|| {
+                ioutils::FailingReaderWriter::new("standard input not available").into()
+            });
+        crate::output::AfterOutput::new(file, self.output.clone())
     }
 
     /// Tries to retrieve the standard input file. Returns `None` if not set.
@@ -162,9 +173,76 @@ impl ExecutionParameters {
         &self,
         shell: &Shell<impl extensions::ShellExtensions>,
     ) -> impl std::io::Write + 'static {
-        self.try_stdout(shell).unwrap_or_else(|| {
-            ioutils::FailingReaderWriter::new("standard output not available").into()
-        })
+        use crate::output::Stdout;
+
+        match self.resolve_fd(shell, openfiles::OpenFiles::STDOUT_FD) {
+            Some(file) => match &self.output {
+                Some(output) if output.is_for(&file) => Stdout::Buffered(output.clone()),
+                _ => {
+                    self.write_output();
+                    Stdout::Direct(file)
+                }
+            },
+            None => Stdout::Direct(
+                ioutils::FailingReaderWriter::new("standard output not available").into(),
+            ),
+        }
+    }
+
+    /// Standard error for a builtin: written after what its standard output gathered
+    /// (`crate::output`).
+    pub(crate) fn stderr_after_output(
+        &self,
+        shell: &Shell<impl extensions::ShellExtensions>,
+    ) -> crate::output::AfterOutput {
+        let file = self
+            .resolve_fd(shell, openfiles::OpenFiles::STDERR_FD)
+            .unwrap_or_else(|| {
+                ioutils::FailingReaderWriter::new("standard error not available").into()
+            });
+        crate::output::AfterOutput::new(file, self.output.clone())
+    }
+
+    /// Gathers the output of a builtin about to run (`crate::output`): into the buffer of
+    /// the builtin that runs it, when they write to the same file, or into a new one.
+    /// Returns the buffer, and whether it is new.
+    pub(crate) fn gather_output(
+        &mut self,
+        shell: &Shell<impl extensions::ShellExtensions>,
+    ) -> Option<(std::sync::Arc<crate::output::OutputBuffer>, bool)> {
+        let file = self.resolve_fd(shell, openfiles::OpenFiles::STDOUT_FD)?;
+        if let Some(output) = &self.output {
+            if output.is_for(&file) {
+                return Some((output.clone(), false));
+            }
+            output.write_pending();
+        }
+        let output = crate::output::OutputBuffer::new(file);
+        self.output = Some(output.clone());
+        Some((output, true))
+    }
+
+    /// Lets a builtin about to run write its output straight through: what the builtin
+    /// that runs it gathered is written first.
+    pub(crate) fn stream_output(&mut self) {
+        if let Some(output) = self.output.take() {
+            output.write_pending();
+        }
+    }
+
+    /// Has every builtin run under these parameters write its output as it comes, rather
+    /// than gathered into larger writes (`crate::output`): `stdbuf -oL` and `-o0` ask it
+    /// of the command they run.
+    pub fn stream_builtins_output(&mut self) {
+        self.stream_output();
+        self.builtins_stream_output = true;
+    }
+
+    /// Writes what the builtin running has gathered, before something else takes its turn.
+    fn write_output(&self) {
+        if let Some(output) = &self.output {
+            output.write_pending();
+        }
     }
 
     /// Tries to retrieve the standard output file. Returns `None` if not set.
@@ -205,7 +283,21 @@ impl ExecutionParameters {
     ///
     /// * `shell` - The shell context.
     /// * `fd` - The file descriptor number to retrieve.
+    ///
+    /// What the builtin running has gathered of its output is written first
+    /// (`crate::output`): a descriptor asked for is about to be used, by a message, a
+    /// read, a program started or a command run.
     pub fn try_fd(
+        &self,
+        shell: &Shell<impl extensions::ShellExtensions>,
+        fd: ShellFd,
+    ) -> Option<openfiles::OpenFile> {
+        self.write_output();
+        self.resolve_fd(shell, fd)
+    }
+
+    /// The file the descriptor `fd` names, as [`Self::try_fd`] without writing output.
+    fn resolve_fd(
         &self,
         shell: &Shell<impl extensions::ShellExtensions>,
         fd: ShellFd,
@@ -248,6 +340,7 @@ impl ExecutionParameters {
         &self,
         shell: &Shell<impl extensions::ShellExtensions>,
     ) -> impl Iterator<Item = (ShellFd, openfiles::OpenFile)> {
+        self.write_output();
         let our_fds = self.open_files.iter_fds();
         let shell_fds = shell
             .persistent_open_files()

@@ -83,8 +83,10 @@ What the phases now in DONE.md left open, each where its phase says more.
   - each `.ps1` run scans PATH for pwsh;
   - `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command;
   - `Shell::clone` copies the builtins table for every subshell;
-  - coolfetch asks sysinfo for everything on each run, nothing kept between runs;
-  - `tar -cf -` writes 512-byte blocks, one write each, into a pipe.
+  - coolfetch asks sysinfo for everything on each run, nothing kept between runs.
+- **A write to a closed standard output says too much** (2026-10-16): `echo hi >&-`
+  says `echo: i/o error: I/O write error: standard output not available`, where Bash
+  says `echo: write error: Bad file descriptor`; both exit 1.
 - **zstd compresses at ruzstd's fast level only** (phase 28, 2026-10-07): every level
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be

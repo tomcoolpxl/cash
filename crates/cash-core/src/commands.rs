@@ -46,7 +46,7 @@ pub struct ExecutionContext<'a, SE: ShellExtensions = extensions::DefaultShellEx
 /// ([`ExecutionContext::error_stream`]). It writes a line once it is whole, and what is
 /// left when it is dropped.
 pub struct ErrorStream {
-    file: openfiles::OpenFile,
+    file: crate::output::AfterOutput,
     prefix: String,
     name: String,
     line: Vec<u8>,
@@ -91,19 +91,22 @@ impl Drop for ErrorStream {
 }
 
 impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
-    /// Returns the standard input file; usable with `write!` et al.
+    /// Returns the standard input file; usable with `read!` et al. What the builtin's
+    /// standard output gathered is written before each read (`crate::output`).
     pub fn stdin(&self) -> impl std::io::Read + 'static {
         self.params.stdin(self.shell)
     }
 
-    /// Returns the standard output file; usable with `write!` et al.
+    /// Returns the standard output file; usable with `write!` et al. A builtin's output
+    /// is gathered into larger writes (`crate::output`); `flush` writes it at once.
     pub fn stdout(&self) -> impl std::io::Write + 'static {
         self.params.stdout(self.shell)
     }
 
-    /// Returns the standard error file; usable with `write!` et al.
+    /// Returns the standard error file; usable with `write!` et al. What the builtin's
+    /// standard output gathered is written before each write (`crate::output`).
     pub fn stderr(&self) -> impl std::io::Write + 'static {
-        self.params.stderr(self.shell)
+        self.params.stderr_after_output(self.shell)
     }
 
     /// Standard error for a builtin of Bash's own to report through, as Bash's
@@ -120,7 +123,7 @@ impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
             prefix
         };
         ErrorStream {
-            file,
+            file: crate::output::AfterOutput::new(file, self.params.output.clone()),
             prefix,
             name: format!("{}: ", self.command_name),
             line: Vec::new(),
@@ -1659,12 +1662,21 @@ pub(crate) fn execute_external_command(
 
 async fn execute_builtin_command<SE: extensions::ShellExtensions>(
     builtin: &builtins::Registration<SE>,
-    context: ExecutionContext<'_, SE>,
+    mut context: ExecutionContext<'_, SE>,
     args: Vec<CommandArg>,
 ) -> Result<ExecutionResult, error::Error> {
     // In POSIX mode, special builtins that return errors are to be treated as fatal.
     let mark_errors_fatal = builtin.special_builtin && context.shell.options().posix_mode;
     let interactive = context.shell.options().interactive;
+
+    // The builtin's output is gathered into larger writes, unless it streams, or is run
+    // by `stdbuf -oL` (`crate::output`).
+    let output = if builtin.streams_output || context.params.builtins_stream_output {
+        context.params.stream_output();
+        None
+    } else {
+        context.params.gather_output(context.shell)
+    };
 
     // Release a background job's `$!` waiter once this builtin is done. A builtin is the
     // shell's own code, so if it did not publish a pid along the way there will never be
@@ -1675,9 +1687,19 @@ async fn execute_builtin_command<SE: extensions::ShellExtensions>(
     // that re-enters the binary as a child process, so its pid appears partway through.
     // Releasing on entry would make `sleep 10 & echo $!` empty again.
     let pid_ready = context.params.spawned_pid_ready.clone();
-    let outcome = (builtin.execute_func)(context, args).await;
+    let mut outcome = (builtin.execute_func)(context, args).await;
     if let Some(ready) = pid_ready {
         ready.notify_one();
+    }
+
+    // What is left of the output is written now; a write that failed fails the builtin,
+    // as the write itself would have without the buffer.
+    if let Some((output, made_here)) = output {
+        if let Err(write_error) = output.finish(made_here) {
+            if outcome.is_ok() {
+                outcome = Err(write_error.into());
+            }
+        }
     }
 
     match outcome {

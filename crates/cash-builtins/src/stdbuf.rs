@@ -1,12 +1,12 @@
 //! `stdbuf`, coreutils': run a command with its standard streams' buffering changed. GNU's
-//! works by preloading a library into the program, which Windows has no equivalent of,
-//! so the command runs as it is:
+//! works by preloading a library into the program, which Windows has no equivalent of:
 //!
-//! * a builtin or bundled tool of cash's own runs unchanged. cash's builtins write each
-//!   line as they make it, and the bundled coreutils (`cat` among them) line-buffer
-//!   even into a pipe; `grep` is given `--line-buffered`, which is what `-oL` or `-o0`
-//!   asks of it. `awk` and `sed` fill a buffer into a pipe, as GNU's do, and `stdbuf`
-//!   cannot change that for them either;
+//! * a builtin of cash's own gathers its output into larger writes, written within
+//!   50 ms (`cash_core::output`). `-oL` and `-o0` have it, and every builtin it runs,
+//!   write as they go instead; `grep` is also given `--line-buffered`, which writes each
+//!   matching line at once. The bundled coreutils (`cat` among them) line-buffer even
+//!   into a pipe; `awk` and `sed` fill a buffer into a pipe, as GNU's do, and `stdbuf`
+//!   cannot change that for them;
 //! * an external program runs as it is, after one line on standard error saying so, and
 //!   `stdbuf` exits with the program's status.
 //!
@@ -57,9 +57,10 @@ In this case the corresponding stream will be fully buffered with the buffer
 size set to MODE bytes.
 
 On Windows there is no way into another program's buffering, so an external
-COMMAND runs as it is, after a note on standard error. cash's own builtins
-and bundled tools write line by line into a pipe already; 'grep' is given
---line-buffered.";
+COMMAND runs as it is, after a note on standard error. A builtin of cash's
+own writes its output as it goes under -oL or -o0, not in larger writes;
+'grep' is also given --line-buffered. The bundled tools write line by line
+into a pipe already.";
 
 /// Which stream an option names.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -250,7 +251,10 @@ impl builtins::Command for StdbufCommand {
             writeln!(context.stderr(), "cash: stdbuf: {NOTE}")?;
         }
 
-        let params = context.params.clone();
+        let mut params = context.params.clone();
+        if parsed.output_by_line {
+            params.stream_builtins_output();
+        }
         match cash_core::commands::run_for_builtin(context.shell, params, &parsed.command).await {
             Ok(result) => Ok(result),
             Err(error) => {

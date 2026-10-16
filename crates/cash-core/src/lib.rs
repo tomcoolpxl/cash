@@ -32,6 +32,8 @@ pub mod namedoptions;
 pub mod net;
 pub mod openfiles;
 pub mod options;
+// cash: a builtin's standard output, gathered into larger writes.
+pub mod output;
 pub mod pathcache;
 pub mod pathindex;
 pub mod pathsearch;

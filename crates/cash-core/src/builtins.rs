@@ -200,9 +200,26 @@ pub struct Registration<SE: extensions::ShellExtensions> {
     /// what a line runs before it expands the rest (D81); `None` (`sudo -K`,
     /// `command -v`) when there is none, or it cannot be told yet.
     pub command_operand: Option<CommandOperandFinder>,
+
+    /// Whether the builtin's standard output is written as it comes, rather than gathered
+    /// into larger writes (`crate::output`): true of one that runs until it is stopped, or
+    /// draws a screen and waits for keys.
+    pub streams_output: bool,
 }
 
 impl<SE: extensions::ShellExtensions> Registration<SE> {
+    /// Updates the given registration for a builtin whose output is written as it comes:
+    /// one that runs until it is stopped (`nc`, `free -s`), or draws a screen and waits
+    /// for keys (`top`, a pager). Any other builtin's output is gathered into larger
+    /// writes, and shows on a terminal within 50 ms (`crate::output`).
+    #[must_use]
+    pub const fn streams_output(self) -> Self {
+        Self {
+            streams_output: true,
+            ..self
+        }
+    }
+
     /// Updates the given registration to mark it for a special builtin.
     #[must_use]
     pub const fn special(self) -> Self {
@@ -445,6 +462,7 @@ pub fn simple_builtin<B: SimpleCommand + Send + Sync, SE: extensions::ShellExten
         declaration_builtin: false,
         substitution_pipes: true,
         command_operand: None,
+        streams_output: false,
     }
 }
 
@@ -460,6 +478,7 @@ pub fn builtin<B: Command + Send + Sync, SE: extensions::ShellExtensions>() -> R
         declaration_builtin: false,
         substitution_pipes: true,
         command_operand: None,
+        streams_output: false,
     }
 }
 
@@ -477,6 +496,7 @@ pub fn decl_builtin<B: DeclarationCommand + Send + Sync, SE: extensions::ShellEx
         declaration_builtin: true,
         substitution_pipes: true,
         command_operand: None,
+        streams_output: false,
     }
 }
 
@@ -500,6 +520,7 @@ pub fn raw_arg_builtin<
         declaration_builtin: true,
         substitution_pipes: true,
         command_operand: None,
+        streams_output: false,
     }
 }
 

@@ -352,10 +352,7 @@ impl builtins::Command for LsCommand {
             }
         }
 
-        // The listing goes out in large writes, as GNU's through stdio: a write per line,
-        // and a formatted line in a write per piece, made a terminal slow to draw it. Out
-        // before anything is said on standard error, so the two keep their order.
-        let mut out = std::io::BufWriter::with_capacity(1 << 16, context.stdout());
+        let mut out = context.stdout();
 
         // Print standalone files first.
         if !file_items.is_empty() {
@@ -385,7 +382,6 @@ impl builtins::Command for LsCommand {
                 None => had_error = true,
             }
         }
-        out.flush()?;
 
         Ok(gnu_status(had_error, had_minor_error))
     }
@@ -412,7 +408,6 @@ impl LsCommand {
                 .show_directory(context, out, &items, dir_str, look, is_tty, 1)
                 .map(Some),
             Err(e) => {
-                out.flush()?;
                 writeln!(
                     context.stderr(),
                     "{}: cannot open directory '{dir_str}': {}",
@@ -634,7 +629,6 @@ impl LsCommand {
                             )?;
                         }
                         Err(e) => {
-                            out.flush()?;
                             writeln!(
                                 context.stderr(),
                                 "{}: cannot open directory '{sub_str}': {}",

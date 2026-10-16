@@ -39,6 +39,8 @@ mod bc;
 mod bc_cash;
 // ARCH-02, ARCH-09, ARCH-10: what a user sees names cash, not brush.
 mod brush_names;
+// A builtin's output gathered into larger writes, in its place among everything else.
+mod builtin_output;
 // Comprehensive parameter matrix across builtins.
 mod builtin_parameters;
 mod bundled_paths;

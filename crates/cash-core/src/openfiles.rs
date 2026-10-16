@@ -176,6 +176,20 @@ impl OpenFile {
         }
     }
 
+    /// Whether this and `other` are one open file, as two copies of a descriptor are.
+    pub(crate) fn same_file(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Stdin(_), Self::Stdin(_))
+            | (Self::Stdout(_), Self::Stdout(_))
+            | (Self::Stderr(_), Self::Stderr(_)) => true,
+            (Self::File(a), Self::File(b)) => Arc::ptr_eq(a, b),
+            (Self::PipeReader(a), Self::PipeReader(b)) => Arc::ptr_eq(a, b),
+            (Self::PipeWriter(a), Self::PipeWriter(b)) => Arc::ptr_eq(a, b),
+            (Self::Socket(a), Self::Socket(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+
     pub(crate) fn is_dir(&self) -> bool {
         match self {
             Self::Stdin(_) | Self::Stdout(_) | Self::Stderr(_) => false,

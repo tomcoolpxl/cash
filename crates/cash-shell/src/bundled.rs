@@ -610,6 +610,8 @@ fn shim_registration<SE: ShellExtensions>(name: &str) -> Registration<SE> {
         declaration_builtin: false,
         substitution_pipes: SUBSTITUTION_PIPES.contains(&name),
         command_operand: command_operand_of(name),
+        // A bundled tool is a process of its own, writing its output itself.
+        streams_output: true,
     }
 }
 
