@@ -73,7 +73,23 @@ fn mkfifo_refuses_each_name_and_points_at_process_substitution() {
         out.stdout
     );
     assert!(out.stdout.contains("mkfifo (cash)"), "{}", out.stdout);
+    // coreutils' getopt_long: a mode in the next word, a cluster, a long name cut short.
+    let out = cash("mkfifo --mode 644 a; mkfifo -Zm 644 b; mkfifo --mo=644 --cont c");
+    let refused = |name: &str| format!("cash: mkfifo: {name}: {REFUSAL}");
+    assert_eq!(
+        out.stderr,
+        [refused("a"), refused("b"), refused("c")].join("\n")
+    );
+    let out = cash("mkfifo -q a; mkfifo --mode");
+    assert_eq!(
+        out.stderr,
+        "mkfifo: invalid option -- 'q'\nTry 'mkfifo --help' for more information.\n\
+         mkfifo: option '--mode' requires an argument\nTry 'mkfifo --help' for more information."
+    );
 }
+
+const REFUSAL: &str =
+    "named pipes are not files on Windows; use a process substitution, <(…) or >(…)";
 
 #[test]
 fn stdbuf_runs_cashs_own_as_they_are() {

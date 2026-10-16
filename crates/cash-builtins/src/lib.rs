@@ -56,11 +56,13 @@ mod hexdump;
 mod iconv;
 mod killfam;
 mod lsof;
-// cash: `nc`, OpenBSD netcat's, on Windows sockets; a clean Windows machine has none.
 mod names;
+// cash: `nc`, OpenBSD netcat's, on Windows sockets; a clean Windows machine has none.
 mod nc;
 // cash: `nice` and `renice` on Windows' six priority classes; Windows has neither.
 mod nice;
+// cash: what the builtins that read GNU's options share beside cash-getopt.
+mod options;
 mod pgrep;
 pub mod ping;
 mod procmatch;

@@ -4,14 +4,18 @@
 //! a process substitution, with coreutils' status 1 for a FIFO not made. Before this it
 //! was `command not found`, status 127, which reads as the tool missing.
 //!
-//! The options are coreutils 9.x's: `-m MODE` and `--mode=MODE`, `-Z` and `--context`
-//! are accepted and change nothing; `--help` and `--version` as theirs; no operand is
-//! their `missing operand`.
+//! The options are coreutils 9.x's, `m:Z` and the long ones, read by cash-getopt as
+//! coreutils' `getopt_long` reads them: `-m MODE` and `--mode MODE`, `-Z` and
+//! `--context[=CTX]` are accepted and change nothing; `--help` and `--version` as
+//! theirs; no operand is their `missing operand`.
 
 use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use clap::Parser;
+
+use crate::options;
 
 /// Make named pipes; not files on Windows.
 #[derive(Parser)]
@@ -25,6 +29,18 @@ pub(crate) struct MkfifoCommand {
 /// The one line each name gets.
 pub(crate) const REFUSAL: &str =
     "named pipes are not files on Windows; use a process substitution, <(…) or >(…)";
+
+/// coreutils' `m:Z`; help and version have no letter.
+const SHORTS: &[Short<char>] = &[
+    Short::new('m', Arg::Required, 'm'),
+    Short::new('Z', Arg::No, 'Z'),
+];
+const LONGS: &[Long<'static, char>] = &[
+    Long::new("context", Arg::Optional, 'Z'),
+    Long::new("help", Arg::No, 'h'),
+    Long::new("mode", Arg::Required, 'm'),
+    Long::new("version", Arg::No, 'v'),
+];
 
 const HELP: &str = "\
 Usage: mkfifo [OPTION]... NAME...
@@ -58,60 +74,29 @@ impl builtins::Command for MkfifoCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        let getopt = Getopt::new(SHORTS, LONGS).order(options::gnu_order(&context));
         let mut names = Vec::new();
-        let mut only_names = false;
-        let mut args = self.args.iter().map(String::as_str);
-        while let Some(arg) = args.next() {
-            if only_names || arg == "-" || !arg.starts_with('-') {
-                names.push(arg);
-                continue;
-            }
-            match arg {
-                "--" => only_names = true,
-                "--help" => {
+        for item in getopt.read(&self.args) {
+            match item {
+                Err(problem) => return options::gnu_usage_error(&context, "mkfifo", problem, 1),
+                Ok(Item::Option { id: 'h', .. }) => {
                     writeln!(context.stdout(), "{HELP}")?;
                     return Ok(ExecutionResult::success());
                 }
-                "--version" => {
+                Ok(Item::Option { id: 'v', .. }) => {
                     writeln!(
                         context.stdout(),
                         "mkfifo (cash): coreutils' options; a FIFO cannot be made on Windows"
                     )?;
                     return Ok(ExecutionResult::success());
                 }
-                "-m" => {
-                    if args.next().is_none() {
-                        writeln!(
-                            context.stderr(),
-                            "mkfifo: option requires an argument -- 'm'\n\
-                             Try 'mkfifo --help' for more information."
-                        )?;
-                        return Ok(ExecutionResult::general_error());
-                    }
-                }
-                "-Z" | "--context" => {}
-                _ if arg.starts_with("-m")
-                    || arg.starts_with("--mode=")
-                    || arg.starts_with("--context=") => {}
-                _ => {
-                    let shown = arg.strip_prefix("--").map_or_else(
-                        || format!("invalid option -- '{}'", arg.chars().nth(1).unwrap_or('-')),
-                        |long| format!("unrecognized option '--{long}'"),
-                    );
-                    writeln!(
-                        context.stderr(),
-                        "mkfifo: {shown}\nTry 'mkfifo --help' for more information."
-                    )?;
-                    return Ok(ExecutionResult::general_error());
-                }
+                // A mode and a security context change nothing: no FIFO is made.
+                Ok(Item::Option { .. }) => {}
+                Ok(Item::Operand { value, .. }) => names.push(value),
             }
         }
         if names.is_empty() {
-            writeln!(
-                context.stderr(),
-                "mkfifo: missing operand\nTry 'mkfifo --help' for more information."
-            )?;
-            return Ok(ExecutionResult::general_error());
+            return options::gnu_usage_error(&context, "mkfifo", "missing operand", 1);
         }
         let mut stderr = context.stderr();
         for name in names {
