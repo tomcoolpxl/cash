@@ -874,6 +874,14 @@ that changes overnight surprises script authors; a paid certificate or SignPath.
   Git Bash and cash is held to that, with a note to re-freeze; CI's runners updated Git
   without notice and the build stayed red until someone had the same Git. Turned down:
   updating the local Git to the runners' and re-freezing, and re-freezing on CI.
+- **The upstreams cash took in are watched weekly** (the user, 2026-10-16):
+  `upstreams.toml` lists each with what it was taken from, `cargo xtask upstreams` shows
+  upstream's releases, commits since and RustSec advisories, and the weekly Upstreams
+  workflow runs it with `cargo deny check advisories` and keeps one `upstreams` issue.
+  Turned down: the command alone, and a TODO line looked at by hand.
+- **Dependabot's patch and minor updates merge themselves once CI is green** (the user,
+  2026-10-16); majors wait for a person. Turned down: majors too, and merging by hand,
+  which left an Actions update unmerged for nine days.
 - **Timing-sensitive tests run on an idle machine, and failures under load are never
   fixed** (the user, 2026-10-02): such a test is run again with the CPU free and judged
   from that; no timeout is lengthened and no test rewritten for load.

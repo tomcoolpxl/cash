@@ -1,0 +1,60 @@
+name: Dependabot merge
+
+# Dependabot's patch and minor updates merge themselves once CI has passed on the very
+# commit proposed (the user, 2026-10-16); a major waits for a person. There is no branch
+# protection to make GitHub's auto-merge wait for CI, so this waits for the CI run of the
+# pull request's head itself, and merges that head and no other.
+on:
+  pull_request:
+    branches: [ main ]
+
+# A Dependabot pull request's token reads only, unless the workflow asks for more.
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+# A newer push to the pull request (Dependabot rebasing it) replaces the wait.
+concurrency:
+  group: dependabot-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Third-party actions are pinned to a commit, with the version it was in a comment;
+# Dependabot proposes the updates (.github/dependabot.yml).
+jobs:
+  merge:
+    name: Merge a green patch or minor update
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: What the update is
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ github.token }}
+
+      # For a group, the highest change in it.
+      - name: Wait for CI on the head, then merge it
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          run_id=
+          for _ in $(seq 1 60); do
+            run_id=$(gh run list --repo "$REPO" --workflow ci.yml --commit "$SHA" \
+              --event pull_request --json databaseId --jq '.[0].databaseId')
+            [ -n "$run_id" ] && break
+            sleep 20
+          done
+          if [ -z "$run_id" ]; then
+            echo "::error::no CI run for $SHA after 20 minutes"
+            exit 1
+          fi
+          gh run watch "$run_id" --repo "$REPO" --interval 60 --exit-status > /dev/null
+          gh pr merge "$PR" --repo "$REPO" --squash --delete-branch --match-head-commit "$SHA"
