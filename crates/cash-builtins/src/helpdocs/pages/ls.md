@@ -19,6 +19,9 @@ Windows.
   junctions) are left out without `-a` or `-A`, as Explorer leaves them out. Hidden
   alone is listed, as a dotfile is not.
 - `--attributes` shows the Windows attributes: archive, read-only, hidden, system.
+- A folder's link count in `-l` is 1, as in Git Bash: Linux's 2 and one per folder in it
+  would mean reading every folder listed, and a busy folder's `..` can hold hundreds of
+  thousands. `--count-links` counts them anyway; `stat` always counts the one asked about.
 - `--icons` draws Nerd Font icons when Windows Terminal draws the tab in a Nerd Font
   (`--icons-theme=fancy` draws them anywhere).
 

@@ -126,15 +126,17 @@ fn ls_long_format_shows_accurate_link_counts() {
         "hard-linked file line should show link count 2: {orig_line}"
     );
 
-    // Subdir with 2 children must show 2 + 2 = 4 links.
+    // A folder shows 1, as Git Bash shows it, however many subfolders it has: Linux's
+    // 2 + subfolders took reading every folder listed, and `..` of a temporary folder
+    // held 160,000 of them.
     let sub_line = out
         .stdout
         .lines()
         .find(|l| l.contains("subdir"))
         .expect("subdir line");
     assert!(
-        sub_line.contains(" 4 "),
-        "directory with 2 subdirs should show link count 4: {sub_line}"
+        sub_line.contains(" 1 "),
+        "a folder should show link count 1: {sub_line}"
     );
 }
 

@@ -327,44 +327,150 @@ pub fn current_owner() -> Option<FileOwner> {
     crate::process::current_process_account().map(|(name, rid)| FileOwner { name, rid })
 }
 
-/// Count the number of subdirectories directly under `path`.
-#[must_use]
-pub fn count_subdirectories(path: &Path) -> usize {
-    let Ok(entries) = std::fs::read_dir(path) else {
-        return 0;
+/// `FILE_STAT_BASIC_INFORMATION` (fileapi.h), what `GetFileInformationByName` fills;
+/// windows-sys does not have it.
+#[repr(C)]
+struct FileStatBasicInformation {
+    file_id: i64,
+    creation_time: i64,
+    last_access_time: i64,
+    last_write_time: i64,
+    change_time: i64,
+    allocation_size: i64,
+    end_of_file: i64,
+    file_attributes: u32,
+    reparse_tag: u32,
+    number_of_links: u32,
+    device_type: u32,
+    device_characteristics: u32,
+    reserved: u32,
+    volume_serial_number: i64,
+    file_id_128: [u8; 16],
+}
+
+type GetFileInformationByNameFn =
+    unsafe extern "system" fn(*const u16, i32, *mut core::ffi::c_void, u32) -> i32;
+
+/// `GetFileInformationByName`, looked up at run time: Windows 11 24H2 and later have it,
+/// and linking it would keep cash from starting on any Windows before.
+fn get_file_information_by_name() -> Option<GetFileInformationByNameFn> {
+    use std::sync::LazyLock;
+    use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
+
+    static FUNCTION: LazyLock<Option<GetFileInformationByNameFn>> = LazyLock::new(|| {
+        [c"kernel32.dll", c"kernelbase.dll"]
+            .iter()
+            .find_map(|module| {
+                // SAFETY: both modules are loaded into every Windows process; the name is NUL
+                // terminated.
+                let handle = unsafe { GetModuleHandleA(module.as_ptr().cast()) };
+                if handle.is_null() {
+                    return None;
+                }
+                // SAFETY: the module handle is valid and the name is NUL terminated.
+                let found =
+                    unsafe { GetProcAddress(handle, c"GetFileInformationByName".as_ptr().cast()) };
+                found.map(|function| {
+                    // SAFETY: the export has this signature (fileapi.h).
+                    unsafe {
+                        std::mem::transmute::<
+                            unsafe extern "system" fn() -> isize,
+                            GetFileInformationByNameFn,
+                        >(function)
+                    }
+                })
+            })
+    });
+    *FUNCTION
+}
+
+/// What a file's name alone tells, without opening it: `None` where Windows cannot say
+/// (before 11 24H2, or a file system that refuses, as some shares do), and for a reparse
+/// point (a link, a junction), which its callers want followed, as opening it follows it.
+fn stat_by_name(path: &Path) -> Option<FileStatBasicInformation> {
+    // FileStatBasicByNameInfo.
+    const FILE_STAT_BASIC_BY_NAME_INFO: i32 = 0;
+    let function = get_file_information_by_name()?;
+    let wide = crate::wide::to_wide_nul(path);
+    let mut info = std::mem::MaybeUninit::<FileStatBasicInformation>::zeroed();
+    // SAFETY: `wide` is NUL terminated; `info` is valid for writes of its size, given.
+    let ok = unsafe {
+        function(
+            wide.as_ptr(),
+            FILE_STAT_BASIC_BY_NAME_INFO,
+            info.as_mut_ptr().cast(),
+            u32::try_from(size_of::<FileStatBasicInformation>()).ok()?,
+        )
     };
-    let mut count = 0;
-    for entry in entries.flatten() {
-        if let Ok(ft) = entry.file_type() {
-            if ft.is_dir() {
-                count += 1;
-            }
-        }
+    if ok == 0 {
+        return None;
     }
-    count
+    // SAFETY: the call succeeded and filled the structure.
+    let info = unsafe { info.assume_init() };
+    (info.reparse_tag == 0).then_some(info)
+}
+
+/// A file's hard links, asked by its name: see [`stat_by_name`].
+fn links_by_name(path: &Path) -> Option<u32> {
+    stat_by_name(path).map(|info| info.number_of_links)
+}
+
+/// [`FileInfo`] from what [`stat_by_name`] found: the volume's serial number is the 32
+/// bits `GetFileInformationByHandle` gives of it. `None` while Windows leaves the serial
+/// number 0, as 26300 does: an identity without its volume is no identity.
+const fn file_info_of(info: &FileStatBasicInformation) -> Option<FileInfo> {
+    if info.volume_serial_number == 0 {
+        return None;
+    }
+    let serial = info.volume_serial_number.to_ne_bytes();
+    Some(FileInfo {
+        volume: u32::from_ne_bytes([serial[0], serial[1], serial[2], serial[3]]),
+        index: u64::from_ne_bytes(info.file_id.to_ne_bytes()),
+        links: info.number_of_links,
+    })
+}
+
+/// A folder's link count counted, as Linux has it.
+///
+/// 2 (its name, and its own `.`) and one for each folder in it (its `..`). Reads the
+/// whole folder, so it is for questions about one folder (`stat`, `ls --count-links`); a
+/// listing shows [`file_link_count`]'s 1.
+#[must_use]
+pub fn folder_link_count(path: &Path) -> u32 {
+    let subfolders = std::fs::read_dir(path).map_or(0, |entries| {
+        entries
+            .flatten()
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .count()
+    });
+    2 + u32::try_from(subfolders).unwrap_or(u32::MAX - 2)
 }
 
 /// Compute the POSIX-equivalent link count for a file or directory.
 ///
-/// For directories, returns `2 + count of subdirectories`.
-/// For regular files, returns the NTFS hard link count via `GetFileInformationByHandle`.
+/// A folder's is 1, as Git Bash shows it: Linux's 2 + its subfolders took reading the
+/// whole folder, which for a temporary folder's `..` was 160,000 entries. A file's is its
+/// NTFS hard links, asked by name where Windows can (11 24H2 and later), else through
+/// `GetFileInformationByHandle`.
 #[must_use]
 pub fn file_link_count(path: &Path, metadata: &std::fs::Metadata) -> u32 {
     if metadata.is_dir() {
-        2 + u32::try_from(count_subdirectories(path)).unwrap_or(0)
-    } else {
-        if let Ok(file) = std::fs::File::open(path) {
-            let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
-            // SAFETY: zeroed struct is valid for BY_HANDLE_FILE_INFORMATION.
-            let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
-            // SAFETY: `handle` is a valid open file handle, `info` is a valid out-pointer.
-            let ok = unsafe { GetFileInformationByHandle(handle, &raw mut info) };
-            if ok != 0 {
-                return info.nNumberOfLinks;
-            }
-        }
-        1
+        return 1;
     }
+    if let Some(links) = links_by_name(path) {
+        return links.max(1);
+    }
+    if let Ok(file) = std::fs::File::open(path) {
+        let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+        // SAFETY: zeroed struct is valid for BY_HANDLE_FILE_INFORMATION.
+        let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+        // SAFETY: `handle` is a valid open file handle, `info` is a valid out-pointer.
+        let ok = unsafe { GetFileInformationByHandle(handle, &raw mut info) };
+        if ok != 0 {
+            return info.nNumberOfLinks;
+        }
+    }
+    1
 }
 
 /// Whether two paths name the same file: the same volume and file index, as a hard link
@@ -462,14 +568,25 @@ pub struct FileInfo {
 
 /// A file's or folder's [`FileInfo`].
 ///
-/// Opened with backup semantics, without which a folder cannot be opened at all: `stat`
-/// gave a folder inode 0 and `[ d -ef d ]` was "not supported" (XC-3, ARCH-06). It asks
-/// only to read attributes, and shares everything.
+/// Asked by name where Windows can ([`stat_by_name`]): the identity behind `stat`,
+/// `same_file` and the archivers' hard links, without an open per file. Else opened with
+/// backup semantics, without which a folder cannot be opened at all: `stat` gave a folder
+/// inode 0 and `[ d -ef d ]` was "not supported" (XC-3, ARCH-06). It asks only to read
+/// attributes, and shares everything.
 ///
 /// # Errors
 ///
 /// The error of opening it or of asking.
 pub fn file_info(path: &Path) -> std::io::Result<FileInfo> {
+    if let Some(info) = stat_by_name(path).as_ref().and_then(file_info_of) {
+        return Ok(info);
+    }
+    file_info_by_handle(path)
+}
+
+/// [`file_info`] through a handle: what it was before Windows could answer by name, and
+/// still is for a link, which is followed.
+fn file_info_by_handle(path: &Path) -> std::io::Result<FileInfo> {
     use std::os::windows::fs::OpenOptionsExt as _;
     use windows_sys::Win32::Storage::FileSystem::{
         FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
@@ -537,6 +654,45 @@ pub fn recycle(path: &Path) -> std::io::Result<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod by_name_tests {
+    use super::{FileInfo, file_info, file_info_by_handle, file_link_count, stat_by_name};
+
+    #[test]
+    fn a_file_is_the_same_asked_by_name_as_through_a_handle() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        std::fs::write(&path, "x").unwrap();
+        std::fs::hard_link(&path, dir.path().join("other")).unwrap();
+        let by_handle = file_info_by_handle(&path).unwrap();
+        assert_eq!(by_handle.links, 2);
+        // Before Windows 11 24H2 there is no asking by name; the handle answers then. Asked
+        // by name, the file and its links are those the handle gives; the volume, when
+        // Windows gives one at all.
+        if let Some(info) = stat_by_name(&path) {
+            assert_eq!(
+                (
+                    u64::from_ne_bytes(info.file_id.to_ne_bytes()),
+                    info.number_of_links
+                ),
+                (by_handle.index, by_handle.links)
+            );
+            if let Some(found) = super::file_info_of(&info) {
+                assert_eq!(found, by_handle);
+            }
+        }
+        assert_eq!(file_info(&path).unwrap(), by_handle);
+        let meta = std::fs::metadata(&path).unwrap();
+        assert_eq!(file_link_count(&path, &meta), 2);
+        // A folder's is 1, as Git Bash shows it, however many subfolders it has.
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        let meta = std::fs::metadata(dir.path()).unwrap();
+        assert_eq!(file_link_count(dir.path(), &meta), 1);
+        let folder: FileInfo = file_info(dir.path()).unwrap();
+        assert_eq!(folder, file_info_by_handle(dir.path()).unwrap());
+    }
 }
 
 #[cfg(test)]

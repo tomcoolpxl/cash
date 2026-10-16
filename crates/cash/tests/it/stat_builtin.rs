@@ -32,6 +32,38 @@ fn cash(script: &str) -> String {
     String::from_utf8_lossy(&out.stdout).trim_end().to_string()
 }
 
+#[test]
+fn stat_counts_a_folders_links_as_linux_does() {
+    // 2 and one per folder in it, where `ls -l` shows 1 unless asked to count; a file's
+    // are its hard links.
+    let scratch = Scratch::new("stat-links");
+    let dir = scratch.path().join("folder");
+    std::fs::create_dir_all(dir.join("one")).unwrap();
+    std::fs::create_dir_all(dir.join("two")).unwrap();
+    std::fs::write(dir.join("file"), "x").unwrap();
+    std::fs::hard_link(dir.join("file"), dir.join("again")).unwrap();
+    let dir_str = dir.to_string_lossy().replace('\\', "/");
+    assert_eq!(
+        cash(&format!(
+            "stat -c %h '{dir_str}' '{dir_str}/one' '{dir_str}/file'"
+        )),
+        "4\n2\n2"
+    );
+    let listed = cash(&format!(
+        "cd '{dir_str}' && ls -l --count-links . && ls -l ."
+    ));
+    let link_of = |text: &str, name: &str| {
+        text.lines()
+            .find(|line| line.ends_with(&format!(" {name}")))
+            .and_then(|line| line.split_whitespace().nth(1))
+            .map(str::to_owned)
+    };
+    let (counted, plain) = listed.split_once("\ntotal").expect("two listings");
+    assert_eq!(link_of(counted, "one").as_deref(), Some("2"), "{listed}");
+    assert_eq!(link_of(plain, "one").as_deref(), Some("1"), "{listed}");
+    assert_eq!(link_of(plain, "file").as_deref(), Some("2"), "{listed}");
+}
+
 /// An account's name (without its domain) and its SID's RID.
 type Account = (String, u32);
 

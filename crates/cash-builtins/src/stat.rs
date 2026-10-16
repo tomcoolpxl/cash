@@ -181,7 +181,7 @@ impl FileStatInfo {
         let human_perms = mode_string(raw_mode);
         let file_type = file_type.to_owned();
 
-        let (inode, links, device) = query_file_index_and_links(path);
+        let (inode, links, device) = query_file_index_and_links(path, kind == Kind::Dir);
 
         // The owner SID from the file's security descriptor, its RID the uid, which is
         // what `id -u` reports for that account; only when neither the file's nor the
@@ -328,9 +328,19 @@ fn dev_info<SE: cash_core::ShellExtensions>(
 }
 
 /// The inode, links and device `stat` shows. A folder's are its own: it could not be
-/// opened without backup semantics, and was inode 0 on device 0 (ARCH-06).
-fn query_file_index_and_links(path: &Path) -> (u64, u32, u32) {
-    cash_win32::fs::file_info(path).map_or((0, 1, 0), |info| (info.index, info.links, info.volume))
+/// opened without backup semantics, and was inode 0 on device 0 (ARCH-06). A folder's
+/// links are counted, 2 and one for each folder in it, as on Linux: `ls -l` shows 1, the
+/// value for "not counted", since it would have to read every folder it lists, so this is
+/// where the count is found.
+fn query_file_index_and_links(path: &Path, is_dir: bool) -> (u64, u32, u32) {
+    let (index, links, volume) = cash_win32::fs::file_info(path)
+        .map_or((0, 1, 0), |info| (info.index, info.links, info.volume));
+    let links = if is_dir {
+        cash_win32::fs::folder_link_count(path)
+    } else {
+        links
+    };
+    (index, links, volume)
 }
 
 const fn filetime_to_unix(filetime: u64) -> u64 {

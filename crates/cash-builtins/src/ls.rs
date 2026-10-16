@@ -59,6 +59,9 @@ List information about the FILEs (the current directory by default).
                                anywhere else) or fancy (the glyphs regardless)
       --attributes           show Windows' attributes as lsd does: d (or .),
                                archive, read-only, hidden, system (`.a-h-`)
+      --count-links          with -l, count a folder's links as Linux has them,
+                               2 and one per folder in it, reading each folder;
+                               without it a folder shows 1, as in Git Bash
       --tree                 list the directories as a tree
       --depth=NUM            descend at most NUM levels, with --tree or -R
       --help                 display this help and exit
@@ -143,6 +146,10 @@ pub(crate) struct LsCommand {
     /// Group directories before files.
     #[arg(long = "group-directories-first")]
     group_directories_first: bool,
+
+    /// With -l, count each folder's links (2 and one per folder in it), reading it.
+    #[arg(long = "count-links")]
+    count_links: bool,
 
     /// Colorize the output (always, auto, never).
     #[arg(
@@ -731,9 +738,20 @@ impl LsCommand {
         look: &Look,
         prefixes: Option<&[String]>,
     ) -> Result<(), std::io::Error> {
-        let max_links_len = items
+        // A folder shows 1, as in Git Bash; --count-links counts it, reading it.
+        let links: Vec<u32> = items
             .iter()
-            .map(|i| i.links.to_string().len())
+            .map(|item| {
+                if self.count_links && item.kind == EntryKind::Dir {
+                    cash_win32::fs::folder_link_count(&item.path)
+                } else {
+                    item.links
+                }
+            })
+            .collect();
+        let max_links_len = links
+            .iter()
+            .map(|links| links.to_string().len())
             .max()
             .unwrap_or(1);
         let max_owner_len = items.iter().map(|i| i.owner.len()).max().unwrap_or(1);
@@ -785,7 +803,7 @@ impl LsCommand {
             writeln!(
                 out,
                 "{permissions} {:>max_links_len$} {owner} {group} {size} {date} {prefix}{display_name}",
-                item.links,
+                links[index],
             )?;
         }
 
@@ -1207,8 +1225,8 @@ fn inspect_dot(dir_path: &Path, name: &str, long: bool) -> Option<ItemInfo> {
         target_mark: None,
     };
     if long {
-        let subdirs = cash_win32::fs::count_subdirectories(dir_path);
-        item.links = 2 + u32::try_from(subdirs).unwrap_or(0);
+        // A folder's link count is 1, as Git Bash shows it (`file_link_count`).
+        item.links = 1;
         fill_long(&mut item, &metadata);
     }
     Some(item)
