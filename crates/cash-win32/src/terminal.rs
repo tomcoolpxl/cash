@@ -82,55 +82,23 @@ pub fn fragment_files(local_app_data: &Path, program_data: Option<&Path>) -> Vec
 /// `settings.json`, then `profiles.defaults`, then the fragment that brings or updates
 /// it, then [`DEFAULT_FONT`]. Of several Terminal installs, the one whose settings list
 /// the profile is read.
+///
+/// Kept while the files it came from are as they were (`facts`): `ls --icons` asks for
+/// every listing, and reading and parsing Terminal's settings each time was a third of
+/// what a listing took to appear.
 pub fn profile_font(local_app_data: &Path, program_data: Option<&Path>, guid: &str) -> String {
-    // Kept while the files it came from are as they were: `ls --icons` asks for every
-    // listing, and reading and parsing Terminal's settings each time was a third of what
-    // a listing took to appear.
-    let key = (
-        local_app_data.to_owned(),
-        program_data.map(Path::to_owned),
-        guid.to_ascii_lowercase(),
-    );
-    let files: Vec<FileStamp> = settings_files(local_app_data)
-        .into_iter()
-        .chain(fragment_files(local_app_data, program_data))
-        .map(|file| {
-            let meta = file.metadata().ok();
-            let stamp = meta.map(|meta| (meta.modified().ok(), meta.len()));
-            (file, stamp)
-        })
-        .collect();
-    if let Ok(cache) = FONT_CACHE.lock()
-        && let Some(found) = cache.as_ref()
-        && found.key == key
-        && found.files == files
-    {
-        return found.font.clone();
-    }
-    let font = profile_setting(local_app_data, program_data, guid, face_of)
-        .unwrap_or_else(|| DEFAULT_FONT.to_owned());
-    if let Ok(mut cache) = FONT_CACHE.lock() {
-        *cache = Some(FontCache {
-            key,
-            files,
-            font: font.clone(),
-        });
-    }
-    font
+    crate::facts::profile_font(local_app_data, program_data, guid)
 }
 
-/// A settings file, with its modification time and size when it could be read.
-type FileStamp = (PathBuf, Option<(Option<std::time::SystemTime>, u64)>);
-
-/// What [`profile_font`] found last: for which install and profile, from which files as
-/// they were then.
-struct FontCache {
-    key: (PathBuf, Option<PathBuf>, String),
-    files: Vec<FileStamp>,
-    font: String,
+/// [`profile_font`], read from Terminal's settings, for `facts` to keep.
+pub(crate) fn read_profile_font(
+    local_app_data: &Path,
+    program_data: Option<&Path>,
+    guid: &str,
+) -> String {
+    profile_setting(local_app_data, program_data, guid, face_of)
+        .unwrap_or_else(|| DEFAULT_FONT.to_owned())
 }
-
-static FONT_CACHE: std::sync::Mutex<Option<FontCache>> = std::sync::Mutex::new(None);
 
 /// One setting of the profile `guid`, as `setting` reads it from a profile's entry,
 /// resolved the way [`profile_font`] describes.
@@ -188,13 +156,24 @@ fn profile_setting(
 /// asked the size of its cells in real pixels: Terminal answers `CSI 16 t` with the 10x20
 /// of its sixel grid. A picture is drawn over that grid and stretched onto the real cells,
 /// so this is what decides its shape on the screen. With Terminal's own spacing a cell is
-/// about twice as tall as wide; `"cellHeight": "1.4"` makes it some 2.4 times.
+/// about twice as tall as wide; `"cellHeight": "1.4"` makes it some 2.4 times. Kept as
+/// [`profile_font`] is (`facts`).
 pub fn profile_cell_ratio(
     local_app_data: &Path,
     program_data: Option<&Path>,
     guid: &str,
 ) -> Option<f64> {
-    let face = profile_font(local_app_data, program_data, guid);
+    crate::facts::profile_cell_ratio(local_app_data, program_data, guid)
+}
+
+/// [`profile_cell_ratio`] for the profile drawn in `face`, read from Terminal's settings
+/// and the font, for `facts` to keep.
+pub(crate) fn read_profile_cell_ratio(
+    local_app_data: &Path,
+    program_data: Option<&Path>,
+    guid: &str,
+    face: &str,
+) -> Option<f64> {
     let height = profile_setting(local_app_data, program_data, guid, cell_height_of);
     let width = profile_setting(local_app_data, program_data, guid, cell_width_of);
     cell_ratio(height.as_deref(), width.as_deref(), || {

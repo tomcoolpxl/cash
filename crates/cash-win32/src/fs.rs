@@ -1,25 +1,21 @@
 //! Win32 filesystem metadata and security inspection.
 //!
-//! Provides native resolution of Windows file owners (SIDs -> Account Names)
-//! with in-memory caching, accurate hard link counts, and directory link counts.
+//! Native resolution of Windows file owners (SIDs to account names, which `facts` keeps),
+//! hard link counts asked by name where Windows can, and file identity.
 
-use std::collections::HashMap;
 use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _};
 use std::path::Path;
-use std::sync::Mutex;
 
 use windows_sys::Win32::Security::{
     AccessCheck, DACL_SECURITY_INFORMATION, DuplicateToken, GENERIC_MAPPING,
-    GROUP_SECURITY_INFORMATION, GetFileSecurityW, GetLengthSid, GetSecurityDescriptorGroup,
+    GROUP_SECURITY_INFORMATION, GetFileSecurityW, GetSecurityDescriptorGroup,
     GetSecurityDescriptorOwner, GetSidSubAuthority, GetSidSubAuthorityCount, IsValidSid,
-    LookupAccountSidW, OBJECT_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PRIVILEGE_SET,
-    PSID, SID_NAME_USE, SecurityImpersonation, TOKEN_DUPLICATE, TOKEN_QUERY,
+    OBJECT_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PRIVILEGE_SET, PSID,
+    SecurityImpersonation, TOKEN_DUPLICATE, TOKEN_QUERY,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
 };
-
-static SID_CACHE: Mutex<Option<HashMap<Vec<u8>, String>>> = Mutex::new(None);
 
 /// A file's owner: the account name and the RID (last sub-authority) of its SID.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -255,60 +251,12 @@ fn group_of(buffer: &mut [u8]) -> Option<FileOwner> {
     account_of(p_sid)
 }
 
-/// The account a SID names, with its RID; names cached.
+/// The account a SID names, with its RID; the name asked of LSA once per account
+/// (`facts`).
 fn account_of(p_sid: PSID) -> Option<FileOwner> {
-    // SAFETY: `p_sid` is a valid PSID from a security descriptor.
-    let sid_len = unsafe { GetLengthSid(p_sid) } as usize;
-    // SAFETY: `p_sid` points to a valid SID buffer of length `sid_len`.
-    let sid_bytes = unsafe { std::slice::from_raw_parts(p_sid.cast::<u8>(), sid_len) };
     let rid = sid_rid(p_sid)?;
-
-    if let Some(name) = cached_lookup(sid_bytes) {
-        return Some(FileOwner { name, rid });
-    }
-
-    let mut name = [0u16; 256];
-    let mut name_len = u32::try_from(name.len()).unwrap_or(u32::MAX);
-    let mut domain = [0u16; 256];
-    let mut domain_len = u32::try_from(domain.len()).unwrap_or(u32::MAX);
-    let mut kind: SID_NAME_USE = 0;
-
-    // SAFETY: `p_sid` is valid, and the buffers are sized by their respective lengths.
-    let ok = unsafe {
-        LookupAccountSidW(
-            std::ptr::null(),
-            p_sid,
-            name.as_mut_ptr(),
-            &raw mut name_len,
-            domain.as_mut_ptr(),
-            &raw mut domain_len,
-            &raw mut kind,
-        )
-    };
-
-    if ok == 0 {
-        return None;
-    }
-
-    let resolved = String::from_utf16_lossy(&name[..name_len as usize]);
-    cache_insert(sid_bytes.to_vec(), resolved.clone());
-    Some(FileOwner {
-        name: resolved,
-        rid,
-    })
-}
-
-fn cached_lookup(sid_bytes: &[u8]) -> Option<String> {
-    let mut guard = SID_CACHE.lock().unwrap_or_else(|p| p.into_inner());
-    guard.as_mut().and_then(|c| c.get(sid_bytes).cloned())
-}
-
-fn cache_insert(sid_bytes: Vec<u8>, name: String) {
-    SID_CACHE
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .get_or_insert_with(HashMap::new)
-        .insert(sid_bytes, name);
+    let name = crate::facts::account_name(p_sid)?;
+    Some(FileOwner { name, rid })
 }
 
 /// Returns the username of the current running process.

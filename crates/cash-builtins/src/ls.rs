@@ -465,10 +465,7 @@ impl LsCommand {
 
         let colors = color.then(|| {
             // The shell's own variable, which `export` need not have reached the process.
-            context.shell.env_str("LS_COLORS").map_or_else(
-                || lscolors::LsColors::from_string(&default_ls_colors()),
-                |value| lscolors::LsColors::from_string(&value),
-            )
+            parsed_ls_colors(context.shell.env_str("LS_COLORS").as_deref())
         });
         Ok(Look {
             me: if colors.is_some() && self.long {
@@ -1034,6 +1031,27 @@ fn date_colour(mtime: SystemTime) -> &'static str {
 /// `LS_COLORS` as `eval "$(dircolors)"` would set it: the colours for each kind of file,
 /// and for archives, backups and temporary files by extension. uutils' copy of
 /// `dircolors`' defaults.
+/// `LS_COLORS` parsed, or dircolors' defaults without it, kept while the variable's text
+/// stays the same: every coloured listing built and parsed the whole table again.
+fn parsed_ls_colors(value: Option<&str>) -> lscolors::LsColors {
+    static PARSED: std::sync::Mutex<Option<(Option<String>, lscolors::LsColors)>> =
+        std::sync::Mutex::new(None);
+    let mut kept = PARSED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((text, colors)) = kept.as_ref()
+        && text.as_deref() == value
+    {
+        return colors.clone();
+    }
+    let colors = value.map_or_else(
+        || lscolors::LsColors::from_string(&default_ls_colors()),
+        lscolors::LsColors::from_string,
+    );
+    *kept = Some((value.map(str::to_owned), colors.clone()));
+    colors
+}
+
 fn default_ls_colors() -> String {
     use std::fmt::Write as _;
     let mut spec = String::new();

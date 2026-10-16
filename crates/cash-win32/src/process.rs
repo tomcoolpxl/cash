@@ -522,17 +522,21 @@ fn details_of(pid: u32, with_user: bool) -> ProcessDetails {
     details
 }
 
-/// The account running the current process.
+/// The account running the current process; kept once asked (`facts`).
 #[must_use]
 pub fn current_process_user() -> Option<String> {
-    // SAFETY: GetCurrentProcess returns a pseudo-handle for the current process.
-    let current = unsafe { windows_sys::Win32::System::Threading::GetCurrentProcess() };
-    token_user(current)
+    crate::facts::current_account().map(|(name, _)| name)
 }
 
-/// The account running the current process, with its SID's RID.
+/// The account running the current process, with its SID's RID; kept once asked
+/// (`facts`): the prompt's `\u` and every `ls -l` asked LSA for it.
 #[must_use]
 pub fn current_process_account() -> Option<(String, u32)> {
+    crate::facts::current_account()
+}
+
+/// [`current_process_account`], read from the token, for `facts` to keep.
+pub(crate) fn read_current_account() -> Option<(String, u32)> {
     // SAFETY: GetCurrentProcess returns a pseudo-handle for the current process.
     let current = unsafe { windows_sys::Win32::System::Threading::GetCurrentProcess() };
     token_account(current)
@@ -580,9 +584,15 @@ pub fn current_process_is_elevated() -> Option<bool> {
     (ok != 0).then_some(elevation.TokenIsElevated != 0)
 }
 
-/// The current user's SID as text (`S-1-5-21-…`), as a security descriptor names it.
+/// The current user's SID as text (`S-1-5-21-…`), as a security descriptor names it;
+/// kept once asked (`facts`).
 #[must_use]
 pub fn current_user_sid_string() -> Option<String> {
+    crate::facts::current_user_sid_string()
+}
+
+/// [`current_user_sid_string`], read from the token, for `facts` to keep.
+pub(crate) fn read_current_user_sid_string() -> Option<String> {
     use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
 
@@ -602,36 +612,13 @@ pub fn current_user_sid_string() -> Option<String> {
     })
 }
 
-/// The account a process's token names, without its domain, and its SID's RID.
+/// The account a process's token names, without its domain, and its SID's RID; the name
+/// asked of LSA once per account (`facts`), where `ps` asked it for every process.
 fn token_account(process: windows_sys::Win32::Foundation::HANDLE) -> Option<(String, u32)> {
-    use windows_sys::Win32::Security::{LookupAccountSidW, SID_NAME_USE};
-
     with_token_user(process, |user| {
-        let mut name = [0u16; 256];
-        let mut name_len = u32::try_from(name.len()).unwrap_or(u32::MAX);
-        let mut domain = [0u16; 256];
-        let mut domain_len = u32::try_from(domain.len()).unwrap_or(u32::MAX);
-        let mut kind: SID_NAME_USE = 0;
-
-        // SAFETY: the SID comes from the token, and both buffers are sized by their lengths.
-        let ok = unsafe {
-            LookupAccountSidW(
-                std::ptr::null(),
-                user.User.Sid,
-                name.as_mut_ptr(),
-                &raw mut name_len,
-                domain.as_mut_ptr(),
-                &raw mut domain_len,
-                &raw mut kind,
-            )
-        };
-
-        if ok == 0 {
-            return None;
-        }
-
+        let name = crate::facts::account_name(user.User.Sid)?;
         let rid = crate::fs::sid_rid(user.User.Sid)?;
-        Some((String::from_utf16_lossy(&name[..name_len as usize]), rid))
+        Some((name, rid))
     })
 }
 
@@ -698,9 +685,15 @@ fn with_token_user<T>(
 /// `desktop-tomc`, while `%COMPUTERNAME%`, the domain half of `id -un` and every Windows
 /// tool answer `DESKTOP-TOMC`. A shell that uses both has its own machine under two
 /// names, so `[ "$(hostname)" = "$COMPUTERNAME" ]` is false. This is the spelling the
-/// rest of Windows agrees on, and cash reports it everywhere.
+/// rest of Windows agrees on, and cash reports it everywhere. Kept once asked (`facts`):
+/// the prompt's `\h` asked for it at every prompt.
 #[must_use]
 pub fn computer_name() -> Option<String> {
+    crate::facts::computer_name()
+}
+
+/// [`computer_name`], asked of Windows, for `facts` to keep.
+pub(crate) fn read_computer_name() -> Option<String> {
     use windows_sys::Win32::System::SystemInformation::{ComputerNameNetBIOS, GetComputerNameExW};
 
     // A NetBIOS name is at most 15 characters, but ask for room and let the API say.

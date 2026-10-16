@@ -40,6 +40,9 @@ pub mod env;
 // Writing to the Application event log, for `logger`.
 pub mod eventlog;
 pub mod exit;
+// Session facts that rarely change, kept once worked out: the user, the machine's name,
+// account names, what Terminal draws in.
+pub mod facts;
 // Byte-range locks on an open file, for `flock`.
 pub mod filelock;
 pub mod fold;
