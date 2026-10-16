@@ -182,7 +182,7 @@ pub fn open_null_file() -> Result<std::fs::File, error::Error> {
 /// only to be written cannot be asked for its mode or its size, so `[ -t 1 ]` said it was
 /// no terminal; keys opened only to be read cannot have their mode set, so `read` could
 /// not have a terminal's answer arrive as its escape sequence, and waited out its timeout.
-fn open_console(access: crate::sys::fs::Access) -> std::io::Result<std::fs::File> {
+pub fn open_console(access: crate::sys::fs::Access) -> std::io::Result<std::fs::File> {
     use crate::sys::fs::Access;
 
     let name = match access {

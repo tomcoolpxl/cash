@@ -661,3 +661,26 @@ fn xargs_budgets_for_the_quotes_windows_adds() {
         out.stderr
     );
 }
+
+/// GNU findutils 4.10's options cash's xargs lacked, as Git Bash's xargs answers them: lines
+/// with -L (a line ending in a blank goes on), -d with an escape, the -E item, -a and its
+/// file, an argument too long for -s, and a slot for each command.
+#[test]
+fn xargs_takes_gnus_line_delimiter_eof_file_and_slot_options() {
+    let sandbox = Sandbox::new("xargs-gnu");
+    let out = sandbox.run(
+        r#"printf 'a b \nc d\ne\n' | xargs -L 1 echo
+           printf 'x\ty' | xargs -d '\t' printf '[%s]'; echo
+           printf 'a,,b' | xargs -d, printf '[%s]'; echo
+           echo a END b | xargs -E END echo
+           printf 'one\ntwo\n' > list; xargs -a list echo
+           echo aaaaaaaa | xargs -s 5 echo; echo "too long $?"
+           echo a | xargs --process-slot-var=SLOT sh -c 'echo slot $SLOT'"#,
+    );
+    assert_eq!(
+        out.stdout, "a b c d\ne\n[x][y]\n[a][][b]\na\none two\ntoo long 1\nslot 0",
+        "{}",
+        out.stderr
+    );
+    assert_eq!(out.stderr, "xargs: argument line too long");
+}

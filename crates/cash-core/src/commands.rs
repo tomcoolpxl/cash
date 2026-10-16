@@ -1060,10 +1060,31 @@ pub async fn run_for_builtin<SE: extensions::ShellExtensions>(
     params: ExecutionParameters,
     argv: &[String],
 ) -> Result<ExecutionResult, error::Error> {
+    run_for_builtin_exporting(shell, params, argv, &[]).await
+}
+
+/// [`run_for_builtin`], with `exported` (name and value) set and exported in the copy of
+/// the shell the command runs in, as `xargs --process-slot-var` gives each command its
+/// slot.
+///
+/// # Errors
+///
+/// As [`run_for_builtin`]; and when a name cannot be a variable.
+pub async fn run_for_builtin_exporting<SE: extensions::ShellExtensions>(
+    shell: &Shell<SE>,
+    params: ExecutionParameters,
+    argv: &[String],
+    exported: &[(&str, String)],
+) -> Result<ExecutionResult, error::Error> {
     let Some(name) = argv.first() else {
         return Ok(ExecutionResult::success());
     };
     let mut shell = shell.clone();
+    for (variable, value) in exported {
+        let mut value = crate::variables::ShellVariable::new(value.as_str());
+        value.export();
+        shell.env_mut().set_global(*variable, value)?;
+    }
     let mut command = SimpleCommand::new(
         ShellForCommand::ParentShell(&mut shell),
         params,

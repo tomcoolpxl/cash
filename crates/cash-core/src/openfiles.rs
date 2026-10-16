@@ -96,6 +96,16 @@ pub fn null() -> Result<OpenFile, error::Error> {
     Ok(file.into())
 }
 
+/// The keys of the console this process is attached to, as `/dev/tty` opened for reading.
+///
+/// What `xargs -p` reads its answer from and `xargs -o` gives a command as its input.
+/// Without a console, "No such device or address", as a process without a terminal is
+/// told.
+pub fn tty_input() -> Result<OpenFile, error::Error> {
+    let file = sys::fs::open_console(sys::fs::Access::Read)?;
+    Ok(file.into())
+}
+
 impl Clone for OpenFile {
     fn clone(&self) -> Self {
         match self {
