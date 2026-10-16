@@ -7,6 +7,7 @@ mod common;
 mod generate;
 mod perf;
 mod test;
+mod upstreams;
 
 use anyhow::Result;
 use clap::Parser;
@@ -47,6 +48,8 @@ enum Command {
     Perf(perf::PerfArgs),
     /// Run tests.
     Test(Box<test::TestCommand>),
+    /// Show the upstreams cash took in as its own against what upstream has now.
+    Upstreams(upstreams::UpstreamsArgs),
 }
 
 fn main() -> Result<()> {
@@ -60,5 +63,6 @@ fn main() -> Result<()> {
         Command::Test(cmd) => test::run(cmd, verbose),
         Command::Ci(cmd) => ci::run(cmd, verbose),
         Command::Perf(args) => perf::run(args, verbose),
+        Command::Upstreams(args) => upstreams::run(args, verbose),
     }
 }

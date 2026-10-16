@@ -1,0 +1,67 @@
+# The upstream code cash took in as crates of its own, which Dependabot cannot see.
+#
+# `cargo xtask upstreams` shows each against upstream's newest release on crates.io, or
+# the commits made upstream since the revision it was taken at, and the RustSec advisories
+# that name it. The weekly Upstreams workflow runs it, with `cargo deny check advisories`
+# for everything else, and opens an issue when something wants looking at.
+#
+# When a crate is brought up to a newer upstream, or a fix is ported, its entry here moves
+# in the same commit.
+#
+#   crate       the folder in this repository
+#   name        upstream's crate on crates.io, for its releases and its advisories
+#   version     the release it was taken from
+#   repository  for one taken from git: the repository ...
+#   revision    ... the commit it was taken at ...
+#   path        ... and the folder in it whose commits count, for a repository of many
+#   reviewed    how far upstream was looked through with nothing to port: a release, or
+#               a commit; the check counts from there
+
+[[upstream]]
+crate = "crates/cash-crossterm"
+name = "crossterm"
+version = "0.29.0"
+
+[[upstream]]
+crate = "crates/cash-reedline"
+name = "reedline"
+version = "0.51.0"
+
+[[upstream]]
+crate = "crates/cash-archive/src/sevenz"
+name = "sevenz-rust2"
+version = "0.23.0"
+# 0.24.0 (2026-10-16): its CRC fix is for a writer cash replaced with 7-Zip's own rules,
+# and cash copies raw blocks itself.
+reviewed = "0.24.0"
+
+[[upstream]]
+crate = "crates/cash-uutils"
+name = "coreutils"
+version = "0.12.0"
+
+[[upstream]]
+crate = "crates/cash-diffutils"
+name = "diffutils"
+version = "0.6.0"
+repository = "https://github.com/uutils/diffutils"
+revision = "7aa5409c2ed723c7b9768ef4cd10f4176cf78f45"
+
+[[upstream]]
+crate = "crates/cash-sed"
+name = "sed"
+version = "0.2.0"
+repository = "https://github.com/uutils/sed"
+revision = "c46dd6dab61a6a571bf08cb6b333e4fe1f3636c3"
+
+[[upstream]]
+crate = "crates/cash-awk"
+repository = "https://github.com/rustcoreutils/posixutils-rs"
+revision = "96bd8a372541cf7e4c427010a5414a40cf20c805"
+path = "awk"
+
+[[upstream]]
+crate = "crates/cash-bc"
+repository = "https://github.com/rustcoreutils/posixutils-rs"
+revision = "96bd8a372541cf7e4c427010a5414a40cf20c805"
+path = "calc"

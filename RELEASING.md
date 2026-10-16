@@ -101,6 +101,11 @@ yanked (`deny.toml`); `ci full` runs both lanes of tests (`.config/nextest.toml`
 the doc tests. The release workflow runs CI's two lanes again on the
 tag's commit before it builds anything (`release.yml` calls `ci.yml`).
 
+`cargo xtask upstreams` shows the upstreams cash took in as crates of its own
+(`upstreams.toml`) against what upstream has done since; an open `upstreams` issue,
+which the weekly Upstreams workflow keeps, says the same. A release does not wait for
+it, but a RustSec advisory listed there does.
+
 Verify that cash reports the new version:
 
 ```powershell

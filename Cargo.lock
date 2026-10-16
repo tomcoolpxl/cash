@@ -6705,8 +6705,10 @@ version = "1.18.0"
 dependencies = [
  "anyhow",
  "clap",
+ "semver",
  "serde",
  "serde_json",
+ "toml",
  "xshell",
 ]
 
