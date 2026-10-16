@@ -21,6 +21,7 @@
 use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Order, Short};
 use cash_win32::priority::{self, PriorityClass, clamp_niceness};
 use clap::Parser;
 
@@ -108,90 +109,55 @@ pub(crate) fn command_operand(words: &[String]) -> Option<usize> {
     }
 }
 
+/// coreutils' `+n:` and its long names; help and version have no letter, and `o` is the
+/// old form, [`old_adjustment`].
+const NICE_SHORTS: &[Short<char>] = &[Short::new('n', Arg::Required, 'n')];
+const NICE_LONGS: &[Long<'static, char>] = &[
+    Long::new("adjustment", Arg::Required, 'n'),
+    Long::new("help", Arg::No, 'h'),
+    Long::new("version", Arg::No, 'v'),
+];
+
+/// The old form of an adjustment, `-10`, `--5` or `-+3`, which GNU's `nice` takes before
+/// `getopt_long` reads the word.
+fn old_adjustment(word: &str) -> Option<char> {
+    let short = word.strip_prefix('-')?;
+    let digits_at = usize::from(short.starts_with(['-', '+']));
+    short
+        .get(digits_at..)?
+        .starts_with(|c: char| c.is_ascii_digit())
+        .then_some('o')
+}
+
 /// Reads `nice`'s command line as GNU's `getopt_long("+n:")` loop with the old `-N`
 /// form does: options stop at the first word that is not one, the last `-n` wins, and
 /// an adjustment out of range is brought into it silently.
 fn parse_nice(args: &[String]) -> Result<NiceRequest, NiceRefused> {
     let mut given: Option<String> = None;
-    let mut index = 0;
-    while index < args.len() {
-        let word = args[index].as_str();
-        // The old form comes first, as in GNU: `-10`, `--5`, `-+3`.
-        if let Some(short) = word.strip_prefix('-') {
-            let digits_at = usize::from(short.starts_with(['-', '+']));
-            if short
-                .get(digits_at..)
-                .unwrap_or("")
-                .starts_with(|c: char| c.is_ascii_digit())
-            {
-                given = Some(short.to_owned());
-                index += 1;
-                continue;
+    let mut command: Vec<String> = Vec::new();
+    let getopt = Getopt::new(NICE_SHORTS, NICE_LONGS)
+        .order(Order::StopAtOperand)
+        .claim(old_adjustment);
+    for item in getopt.read(args) {
+        match item {
+            Err(problem) => {
+                return Err(NiceRefused {
+                    message: problem.to_string(),
+                    try_help: true,
+                });
             }
-        }
-        if word == "--" {
-            index += 1;
-            break;
-        }
-        if let Some(long) = word.strip_prefix("--") {
-            let (name, value) = long
-                .split_once('=')
-                .map_or((long, None), |(name, value)| (name, Some(value)));
-            match name {
-                "help" if value.is_none() => return Ok(NiceRequest::Help),
-                "version" if value.is_none() => return Ok(NiceRequest::Version),
-                "adjustment" => {
-                    if let Some(value) = value {
-                        given = Some(value.to_owned());
-                        index += 1;
-                    } else {
-                        let Some(value) = args.get(index + 1) else {
-                            return Err(NiceRefused {
-                                message: "option '--adjustment' requires an argument".to_owned(),
-                                try_help: true,
-                            });
-                        };
-                        given = Some(value.clone());
-                        index += 2;
-                    }
-                    continue;
-                }
-                _ => {
-                    return Err(NiceRefused {
-                        message: std::format!("unrecognized option '{word}'"),
-                        try_help: true,
-                    });
-                }
+            Ok(Item::Option { id: 'h', .. }) => return Ok(NiceRequest::Help),
+            Ok(Item::Option { id: 'v', .. }) => return Ok(NiceRequest::Version),
+            // The old form's adjustment is the word without its first dash: `--5` is -5.
+            Ok(Item::Option { id: 'o', value, .. }) => {
+                given = value.and_then(|word| word.get(1..).map(str::to_owned));
             }
+            Ok(Item::Option { value, .. }) => given = value,
+            Ok(Item::Operand { value, .. }) => command.push(value),
         }
-        let Some(short) = word.strip_prefix('-').filter(|rest| !rest.is_empty()) else {
-            break;
-        };
-        if let Some(rest) = short.strip_prefix('n') {
-            if rest.is_empty() {
-                let Some(value) = args.get(index + 1) else {
-                    return Err(NiceRefused {
-                        message: "option requires an argument -- 'n'".to_owned(),
-                        try_help: true,
-                    });
-                };
-                given = Some(value.clone());
-                index += 2;
-            } else {
-                given = Some(rest.to_owned());
-                index += 1;
-            }
-            continue;
-        }
-        let letter = short.chars().next().unwrap_or('-');
-        return Err(NiceRefused {
-            message: std::format!("invalid option -- '{letter}'"),
-            try_help: true,
-        });
     }
 
     let adjustment = given.as_deref().map(parse_adjustment).transpose()?;
-    let command: Vec<String> = args[index..].to_vec();
     if command.is_empty() {
         if adjustment.is_some() {
             return Err(NiceRefused {
@@ -666,6 +632,20 @@ mod tests {
                 try_help: true
             }
         );
+        // glibc's words for a value given to an option that takes none; the parser before
+        // called `--help=x` unrecognized.
+        assert_eq!(
+            refused(&["--help=x"]),
+            NiceRefused {
+                message: "option '--help' doesn't allow an argument".to_owned(),
+                try_help: true
+            }
+        );
+        // A long name goes by any unique prefix.
+        assert!(matches!(
+            parse_nice(&words(&["--adj", "5", "cmd"])),
+            Ok(NiceRequest::Run { adjustment: 5, .. })
+        ));
     }
 
     #[test]
