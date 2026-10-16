@@ -19,6 +19,7 @@ use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use cash_getopt::{Getopt, Item};
 use cash_win32::icmp::{Outcome, Pinger};
 
 /// The most data bytes Windows sends in one echo; iputils allows 65507.
@@ -136,102 +137,72 @@ const fn refusal(flag: char) -> Option<&'static str> {
         'I' | 'B' => "choosing the source interface is not supported",
         'p' => "a padding pattern needs a raw socket",
         'R' | 'T' => "IP options (record route, timestamps) need a raw socket",
-        'M' | 'Q' | 'S' | 'm' | 'L' | 'b' | 'C' | 'd' | 'e' | 'U' | 'A' | '3' | 'r' => {
+        'N' => "node information queries need a raw socket",
+        'M' | 'Q' | 'S' | 'm' | 'L' | 'b' | 'C' | 'd' | 'e' | 'U' | 'A' | '3' | 'r' | 'F' => {
             "this option needs a Linux socket option Windows does not have"
         }
         _ => return None,
     })
 }
 
+/// iputils 20250605's `getopt` string, its parts for both families, IPv4 and IPv6 run
+/// together: `h?`, `4bRT:`, `6F:N:` and the rest.
+const OPTSTRING: &str = "h4bRT:6F:N:3aABc:CdDe:fHi:I:l:Lm:M:nOp:qQ:rs:S:t:UvVw:W:";
+
+/// Reads the command line as iputils' `getopt` loop does, in order, options anywhere until
+/// `--`.
 fn parse(args: &[String]) -> Result<Options, Stop> {
     let mut options = Options::default();
-    let mut operands: Vec<&str> = Vec::new();
-    let mut index = 0;
-    while let Some(arg) = args.get(index) {
-        index += 1;
-        let Some(cluster) = arg.strip_prefix('-').filter(|c| !c.is_empty()) else {
-            operands.push(arg);
-            continue;
+    let mut operands: Vec<String> = Vec::new();
+    let shorts = cash_getopt::optstring(OPTSTRING);
+    for item in Getopt::new(&shorts, &[]).read(args) {
+        let (flag, value) = match item {
+            Err(problem) => return Err(Stop::usage(format!("ping: {problem}\n\n{USAGE}"))),
+            Ok(Item::Operand { value, .. }) => {
+                operands.push(value);
+                continue;
+            }
+            Ok(Item::Option { id, value, .. }) => (id, value.unwrap_or_default()),
         };
-        if cluster == "-" {
-            operands.extend(args.iter().skip(index).map(String::as_str));
-            break;
-        }
-        for (at, flag) in cluster.char_indices() {
-            let rest = cluster.get(at + flag.len_utf8()..).unwrap_or_default();
-            let mut value = || -> Result<String, Stop> {
-                if rest.is_empty() {
-                    index += 1;
-                    args.get(index - 1).cloned().ok_or_else(|| {
-                        Stop::usage(format!(
-                            "ping: option requires an argument -- '{flag}'\n\n{USAGE}"
-                        ))
-                    })
-                } else {
-                    Ok(rest.to_owned())
-                }
-            };
-            match flag {
-                'c' => {
-                    options.count = Some(positive(&value()?)?);
-                    break;
-                }
-                'i' => {
-                    options.interval = interval(&value()?)?;
-                    break;
-                }
-                'W' => {
-                    options.timeout = Some(seconds(&value()?)?);
-                    break;
-                }
-                'w' => {
-                    options.deadline = Some(seconds(&value()?)?);
-                    break;
-                }
-                's' => {
-                    options.size = size(&value()?)?;
-                    break;
-                }
-                't' => {
-                    options.ttl = Some(ttl(&value()?)?);
-                    break;
-                }
-                'q' => options.quiet = true,
-                'n' => {
-                    options.numeric = true;
-                    options.reverse = false;
-                }
-                'H' => {
-                    options.reverse = true;
-                    options.numeric = false;
-                }
-                '4' => options.family = Some(Family::V4),
-                '6' => options.family = Some(Family::V6),
-                'D' => options.timestamps = true,
-                'O' => options.outstanding = true,
-                'a' => options.audible = true,
-                'v' => {}
-                'h' => {
-                    println!("{USAGE}");
-                    return Err(Stop(String::new(), 0));
-                }
-                'V' => {
-                    println!("ping (cash), with iputils 20250605's flags, over Windows ICMP");
-                    return Err(Stop(String::new(), 0));
-                }
-                other => {
-                    return Err(match refusal(other) {
-                        Some(reason) => {
-                            Stop::usage(format!("ping: -{other} is not supported: {reason}"))
-                        }
-                        None => {
-                            Stop::usage(format!("ping: invalid option -- '{other}'\n\n{USAGE}"))
-                        }
-                    });
-                }
+        match flag {
+            'c' => options.count = Some(positive(&value)?),
+            'i' => options.interval = interval(&value)?,
+            'W' => options.timeout = Some(seconds(&value)?),
+            'w' => options.deadline = Some(seconds(&value)?),
+            's' => options.size = size(&value)?,
+            't' => options.ttl = Some(ttl(&value)?),
+            'q' => options.quiet = true,
+            'n' => {
+                options.numeric = true;
+                options.reverse = false;
+            }
+            'H' => {
+                options.reverse = true;
+                options.numeric = false;
+            }
+            '4' => options.family = Some(Family::V4),
+            '6' => options.family = Some(Family::V6),
+            'D' => options.timestamps = true,
+            'O' => options.outstanding = true,
+            'a' => options.audible = true,
+            'v' => {}
+            'h' => {
+                println!("{USAGE}");
+                return Err(Stop(String::new(), 0));
+            }
+            'V' => {
+                println!("ping (cash), with iputils 20250605's flags, over Windows ICMP");
+                return Err(Stop(String::new(), 0));
+            }
+            other => {
+                let reason = refusal(other).unwrap_or("not supported on Windows");
+                return Err(Stop::usage(format!(
+                    "ping: -{other} is not supported: {reason}"
+                )));
             }
         }
     }
+    let operands: Vec<&str> = operands.iter().map(String::as_str).collect();
     options.destination = destination(&operands, options.numeric)?;
     Ok(options)
 }
