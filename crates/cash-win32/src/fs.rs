@@ -516,7 +516,7 @@ pub struct FileInfo {
 
 /// A file's or folder's [`FileInfo`].
 ///
-/// Asked by name where Windows can ([`stat_by_name`]): the identity behind `stat`,
+/// Asked by name where Windows can (`GetFileInformationByName`): the identity behind `stat`,
 /// `same_file` and the archivers' hard links, without an open per file. Else opened with
 /// backup semantics, without which a folder cannot be opened at all: `stat` gave a folder
 /// inode 0 and `[ d -ef d ]` was "not supported" (XC-3, ARCH-06). It asks only to read
