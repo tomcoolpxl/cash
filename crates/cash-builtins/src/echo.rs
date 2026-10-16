@@ -27,17 +27,43 @@ pub(crate) struct EchoCommand {
 impl builtins::Command for EchoCommand {
     type Error = cash_core::Error;
 
-    /// Override the default [`builtins::Command::new`] function to handle clap's limitation related
-    /// to `--`. See [`builtins::parse_known`] for more information
-    /// TODO(echo): we can safely remove this after the issue is resolved
+    /// Bash's own reading of echo's options, by hand: clap built its parser for every
+    /// `echo`, a third of a loop of them, and refused what Bash takes. A word that is `-`
+    /// and only `n`, `e` and `E` holds options, applied in order, so the last of `-e` and
+    /// `-E` wins and `-nn` is `-n`; the first other word, `-` and `--` among them, ends
+    /// them and is echoed.
     fn new<I>(args: I) -> Result<Self, clap::Error>
     where
         I: IntoIterator<Item = String>,
     {
-        let (mut this, rest_args) = cash_core::builtins::try_parse_known::<Self>(args)?;
-        if let Some(args) = rest_args {
-            this.args.extend(args);
+        let mut this = Self {
+            no_trailing_newline: false,
+            interpret_backslash_escapes: false,
+            no_interpret_backslash_escapes: false,
+            args: Vec::new(),
+        };
+        // The first is the name the command was run by.
+        let mut words = args.into_iter().skip(1).peekable();
+        while let Some(flags) = words.peek().and_then(|word| word.strip_prefix('-')) {
+            if flags.is_empty() || !flags.chars().all(|c| matches!(c, 'n' | 'e' | 'E')) {
+                break;
+            }
+            for flag in flags.chars() {
+                match flag {
+                    'n' => this.no_trailing_newline = true,
+                    'e' => {
+                        this.interpret_backslash_escapes = true;
+                        this.no_interpret_backslash_escapes = false;
+                    }
+                    _ => {
+                        this.interpret_backslash_escapes = false;
+                        this.no_interpret_backslash_escapes = true;
+                    }
+                }
+            }
+            words.next();
         }
+        this.args = words.collect();
         Ok(this)
     }
 
@@ -47,7 +73,14 @@ impl builtins::Command for EchoCommand {
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         let mut trailing_newline = !self.no_trailing_newline;
         let mut s;
-        if self.interpret_backslash_escapes {
+        // Without -e or -E, as `shopt xpg_echo` says (off by default).
+        let interpret = self.interpret_backslash_escapes
+            || (!self.no_interpret_backslash_escapes
+                && context
+                    .shell
+                    .options()
+                    .echo_builtin_expands_escape_sequences);
+        if interpret {
             s = String::new();
             for (i, arg) in self.args.iter().enumerate() {
                 if i > 0 {
@@ -73,9 +106,61 @@ impl builtins::Command for EchoCommand {
             s.push('\n');
         }
 
-        write!(context.stdout(), "{s}")?;
-        context.stdout().flush()?;
+        let mut stdout = context.stdout();
+        stdout.write_all(s.as_bytes())?;
+        stdout.flush()?;
 
         Ok(ExecutionResult::success())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cash_core::builtins::Command as _;
+
+    fn parsed(words: &[&str]) -> (bool, bool, bool, Vec<String>) {
+        let args = std::iter::once("echo")
+            .chain(words.iter().copied())
+            .map(str::to_owned);
+        let echo = EchoCommand::new(args).unwrap();
+        (
+            echo.no_trailing_newline,
+            echo.interpret_backslash_escapes,
+            echo.no_interpret_backslash_escapes,
+            echo.args,
+        )
+    }
+
+    #[test]
+    fn options_are_read_as_bash_reads_them() {
+        let words = |w: &[&str]| w.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        // The last of -e and -E wins; a repeated option is taken.
+        assert_eq!(
+            parsed(&["-e", "-E", "x"]),
+            (false, false, true, words(&["x"]))
+        );
+        assert_eq!(parsed(&["-neE", "x"]), (true, false, true, words(&["x"])));
+        assert_eq!(
+            parsed(&["-nn", "-ee", "x"]),
+            (true, true, false, words(&["x"]))
+        );
+        // `-`, `--` and a word with another letter end the options and are echoed.
+        assert_eq!(
+            parsed(&["-", "-n"]),
+            (false, false, false, words(&["-", "-n"]))
+        );
+        assert_eq!(
+            parsed(&["-n", "--", "x"]),
+            (true, false, false, words(&["--", "x"]))
+        );
+        assert_eq!(
+            parsed(&["-nx", "y"]),
+            (false, false, false, words(&["-nx", "y"]))
+        );
+        assert_eq!(
+            parsed(&["x", "-n"]),
+            (false, false, false, words(&["x", "-n"]))
+        );
     }
 }
