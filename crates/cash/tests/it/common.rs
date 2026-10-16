@@ -202,6 +202,18 @@ mod tests {
 /// that needs it fails without it, saying so, rather than passing without a word
 /// (BIN-20; the user, 2026-10-04).
 pub fn git_for_windows() -> String {
+    git_for_windows_layout().0
+}
+
+/// The folder of Git for Windows' own programs and scripts, `<root>/mingw64`, or
+/// `<root>/ucrt64` in the builds made with the UCRT (CI's runners since 2026-10), or
+/// `<root>/clangarm64` on ARM.
+pub fn git_for_windows_prefix() -> String {
+    let (root, prefix) = git_for_windows_layout();
+    format!("{root}/{prefix}")
+}
+
+fn git_for_windows_layout() -> (String, String) {
     let output = Command::new("git")
         .arg("--exec-path")
         .output()
@@ -209,16 +221,18 @@ pub fn git_for_windows() -> String {
     let exec_path = String::from_utf8_lossy(&output.stdout)
         .trim()
         .replace('\\', "/");
-    let root = exec_path
-        .strip_suffix("/mingw64/libexec/git-core")
-        .unwrap_or_else(|| {
-            panic!("`git --exec-path` is {exec_path:?}, not Git for Windows' mingw64 layout")
-        });
+    let layout = exec_path
+        .strip_suffix("/libexec/git-core")
+        .and_then(|prefixed| prefixed.rsplit_once('/'))
+        .filter(|(_, prefix)| ["mingw64", "ucrt64", "clang64", "clangarm64"].contains(prefix));
+    let Some((root, prefix)) = layout else {
+        panic!("`git --exec-path` is {exec_path:?}, not Git for Windows' layout");
+    };
     assert!(
         Path::new(root).join("usr/bin").is_dir(),
         "Git for Windows at {root} has no usr/bin"
     );
-    root.to_owned()
+    (root.to_owned(), prefix.to_owned())
 }
 
 /// A folder of the test's own, empty when made and removed when dropped.

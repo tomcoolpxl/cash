@@ -18,7 +18,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::common::{CASH, Scratch, git_for_windows, isolate};
+use crate::common::{CASH, Scratch, git_for_windows_prefix, isolate};
 
 /// A scratch folder whose git sees neither the user's nor the system's configuration and
 /// makes the same commits every run.
@@ -88,8 +88,7 @@ impl GitScratch {
 /// The installed `git-prompt.sh`. Git for Windows is a prerequisite (spec D35), so a
 /// machine without it fails the test rather than passing it unrun (BIN-20).
 fn installed_git_prompt() -> PathBuf {
-    let script =
-        PathBuf::from(git_for_windows()).join("mingw64/share/git/completion/git-prompt.sh");
+    let script = PathBuf::from(git_for_windows_prefix()).join("share/git/completion/git-prompt.sh");
     assert!(script.is_file(), "no git-prompt.sh at {}", script.display());
     script
 }

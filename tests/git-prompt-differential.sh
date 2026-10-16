@@ -31,7 +31,7 @@ G=$(cd "$(dirname "$0")" && pwd)/git-prompt
 git_exec=$(git --exec-path) || exit 2
 GP=${git_exec%/libexec/git-core}/share/git/completion/git-prompt.sh
 GC=${git_exec%/libexec/git-core}/share/git/completion/git-completion.bash
-PD=${git_exec%/mingw64/libexec/git-core}/etc/profile.d/git-prompt.sh
+PD=${git_exec%/*/libexec/git-core}/etc/profile.d/git-prompt.sh
 if [[ ! -f $GP ]]; then
     printf 'git-prompt.sh not found at %s\n' "$GP" >&2
     exit 2
