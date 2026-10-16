@@ -310,6 +310,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         builtin::<flock::FlockCommand, SE>().with_substitution_files(),
     );
     m.insert("rev".into(), builtin::<rev::RevCommand, SE>());
+    // cash's own, not the bundled ones: pure string work, run inside the shell (the user,
+    // 2026-10-16, research/in-process-tools-design.md).
+    m.insert("basename".into(), builtin::<names::BasenameCommand, SE>());
+    m.insert("dirname".into(), builtin::<names::DirnameCommand, SE>());
     m.insert("uuidgen".into(), builtin::<uuidgen::UuidgenCommand, SE>());
     m.insert("xxd".into(), builtin::<xxd::XxdCommand, SE>());
     m.insert("hexdump".into(), builtin::<hexdump::HexdumpCommand, SE>());

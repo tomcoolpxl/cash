@@ -57,6 +57,7 @@ mod iconv;
 mod killfam;
 mod lsof;
 // cash: `nc`, OpenBSD netcat's, on Windows sockets; a clean Windows machine has none.
+mod names;
 mod nc;
 // cash: `nice` and `renice` on Windows' six priority classes; Windows has neither.
 mod nice;
