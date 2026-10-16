@@ -16,6 +16,15 @@ use crate::variables::{self, ShellValue, ShellValueUnsetType, ShellVariable};
 /// way, so the ceiling costs nothing real.
 const NAMEREF_DEPTH_LIMIT: usize = 32;
 
+/// What a followed name came to, when it is not the name itself: `None` for a name that
+/// is no reference (borrowed back), so the caller keeps the string it already has.
+fn changed_name(name: Cow<'_, str>) -> Option<String> {
+    match name {
+        Cow::Borrowed(_) => None,
+        Cow::Owned(target) => Some(target),
+    }
+}
+
 /// Represents the policy for looking up variables in a shell environment.
 #[derive(Clone, Copy)]
 pub enum EnvironmentLookup {
@@ -240,7 +249,17 @@ impl ShellEnvironment {
     ///
     /// * `name` - The name of the variable to retrieve.
     pub fn get<S: AsRef<str>>(&self, name: S) -> Option<(EnvironmentScope, &ShellVariable)> {
-        let name = self.follow_namerefs(name.as_ref())?;
+        // Searched once: only a name reference sends the search on, from what it names.
+        // Following first and then searching again looked every variable up twice.
+        let found = self.get_raw(name.as_ref())?;
+        let Some(target) = found.1.nameref_target() else {
+            return Some(found);
+        };
+        if target == name.as_ref() {
+            return None;
+        }
+        let target = target.into_owned();
+        let name = self.follow_namerefs(&target)?;
         self.get_raw(name.as_ref())
     }
 
@@ -266,9 +285,11 @@ impl ShellEnvironment {
         //
         // Deliberately a fallback rather than the primary lookup: an exact match always
         // wins, so a script that defines its own `$x` and `$X` keeps bash semantics. Only
-        // a name that resolves to nothing at all gets the second chance.
+        // a name that resolves to nothing at all gets the second chance. Its folded
+        // spelling is made once for all the scopes.
+        let key = cash_win32::fold::name_key(name.as_ref());
         for (scope_type, map) in self.scopes.iter().rev() {
-            if let Some(var) = map.get_ignoring_case(name.as_ref()) {
+            if let Some(var) = map.get_by_folded_name(&key) {
                 return Some((*scope_type, var));
             }
         }
@@ -420,7 +441,14 @@ impl ShellEnvironment {
         // bash stops after a fixed number of hops rather than remembering where it has
         // been; a chain this long is a mistake either way.
         for _ in 0..NAMEREF_DEPTH_LIMIT {
-            let Some((_, var)) = self.get_raw(current.as_ref()) else {
+            // By the exact name, as assignments find a variable: the case-insensitive
+            // fallback folded the name of every variable not set yet, on every write.
+            let Some(var) = self
+                .scopes
+                .iter()
+                .rev()
+                .find_map(|(_, map)| map.get(current.as_ref()))
+            else {
                 return Some(current);
             };
 
@@ -598,11 +626,13 @@ impl ShellEnvironment {
 
         // An assignment through a name reference lands on what it names — and creates it
         // if it is not there yet, which is how `local -n out=$1; out=result` hands a value
-        // back to a caller that never declared `out` at all.
-        let Some(name) = self.follow_namerefs(name.as_str()) else {
-            return Ok(());
+        // back to a caller that never declared `out` at all. A name that is not one is
+        // kept, not copied.
+        let name = match self.follow_namerefs(name.as_str()).map(changed_name) {
+            None => return Ok(()),
+            Some(None) => name,
+            Some(Some(target)) => target,
         };
-        let name = name.into_owned();
 
         let auto_export = self.export_variables_on_modification;
         if let Some(var) = self.get_mut_using_policy_raw(&name, lookup_policy) {
@@ -723,12 +753,12 @@ impl ShellEnvironment {
     serde(from = "SerializedVariableMap")
 )]
 pub struct ShellVariableMap {
-    variables: HashMap<String, ShellVariable>,
+    variables: HashMap<String, ShellVariable, rustc_hash::FxBuildHasher>,
     /// The names in `variables` by their lower-case spelling, for the case-insensitive
     /// fallback (D31). It scanned every variable on each miss, so creating 20k variables
     /// took ten times as long as in Bash (LANG-15).
     #[cfg_attr(feature = "serde", serde(skip))]
-    by_folded_name: HashMap<String, Vec<String>>,
+    by_folded_name: HashMap<String, Vec<String>, rustc_hash::FxBuildHasher>,
 }
 
 /// What is serialized of a [`ShellVariableMap`]; its index is rebuilt.
@@ -755,7 +785,13 @@ impl ShellVariableMap {
     /// with `Foo` and `FOO` both set the answer depended on the order of the hash map
     /// (LANG-15).
     pub fn get_ignoring_case(&self, name: &str) -> Option<&ShellVariable> {
-        let names = self.by_folded_name.get(&cash_win32::fold::name_key(name))?;
+        self.get_by_folded_name(&cash_win32::fold::name_key(name))
+    }
+
+    /// [`Self::get_ignoring_case`] with the name already folded
+    /// (`cash_win32::fold::name_key`), for a search of several maps.
+    pub fn get_by_folded_name(&self, key: &str) -> Option<&ShellVariable> {
+        let names = self.by_folded_name.get(key)?;
         self.variables.get(names.iter().min()?)
     }
 

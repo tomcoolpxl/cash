@@ -40,6 +40,9 @@ rand = "0.10.0"
 # The leftmost-longest match of `[[ =~ ]]` (LANG-17); already built for `regex`.
 regex-automata = "0.4.18"
 rpds = "1.2.0"
+# A fast hash for the variable tables, looked up for every name a command touches;
+# std's SipHash was 5% of a builtin's time.
+rustc-hash = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 strum = { workspace = true }
 strum_macros = "0.28.0"

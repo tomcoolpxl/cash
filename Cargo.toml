@@ -86,12 +86,14 @@ grep-searcher = "0.1.17"
 indent = "0.1.1"
 insta = "1.47.1"
 itertools = "0.15.0"
+mimalloc = { version = "0.1", default-features = false }
 nu-ansi-term = "0.50.3"
 pretty_assertions = "1.4.1"
 proptest = "1"
 regex = "1.13.1"
 regex-automata = "0.4.18"
 regex-syntax = "0.8.5"
+rustc-hash = "2.1.3"
 serde = "1.0.228"
 serde_json = "1.0.151"
 serde_yaml = "0.9.34"
@@ -252,6 +254,13 @@ codegen-units = 1
 [profile.bench]
 inherits = "release"
 strip = "debuginfo"
+
+# For a profiler (samply): the release build with its symbols, so a profile names the
+# functions the time goes to.
+[profile.profiling]
+inherits = "release"
+strip = false
+debug = true
 
 # `uu_more`, bundled unchanged from crates.io, asks for crossterm 0.29: it gets cash's.
 [patch.crates-io]

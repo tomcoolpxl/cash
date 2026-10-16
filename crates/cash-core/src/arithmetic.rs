@@ -466,6 +466,18 @@ fn expand_simple_references(
     Ok(out)
 }
 
+/// `text` as a number when it is written the one way that needs no parsing: digits with
+/// no leading zero (a leading zero makes octal, `0x` hex), an optional `-`, and short
+/// enough not to overflow. Anything else goes through the parser.
+fn plain_decimal(text: &str) -> Option<i64> {
+    let digits = text.strip_prefix('-').unwrap_or(text);
+    let plain = !digits.is_empty()
+        && digits.len() <= 18
+        && digits.bytes().all(|b| b.is_ascii_digit())
+        && (digits == "0" || !digits.starts_with('0'));
+    plain.then(|| text.parse().ok()).flatten()
+}
+
 fn deref_lvalue(
     shell: &mut Shell<impl extensions::ShellExtensions>,
     lvalue: &ast::ArithmeticTarget,
@@ -493,6 +505,12 @@ fn deref_lvalue(
                 .unwrap_or(Cow::Borrowed(""))
         }
     };
+
+    // A plain decimal number, the usual value of a counter, is that number: parsing it
+    // as an expression missed the parse cache for every new value of `i` in a loop.
+    if let Some(number) = plain_decimal(value_str.as_ref()) {
+        return Ok(number);
+    }
 
     let parsed_value = cash_parser::arithmetic::parse(value_str.as_ref())
         .map_err(|e| syntax_error(&value_str, e.arithmetic_offset()))?;

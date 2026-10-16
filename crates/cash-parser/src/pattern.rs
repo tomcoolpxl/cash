@@ -26,6 +26,20 @@ pub fn pattern_to_regex_str(
     pattern: &str,
     enable_extended_globbing: bool,
 ) -> Result<String, error::WordParseError> {
+    cacheable_pattern_to_regex_str(pattern, enable_extended_globbing)
+}
+
+/// The translation, kept for the patterns used last: `${s/b/B}` in a loop translated the
+/// same pattern on every pass.
+#[cached::macros::cached(
+    max_size = 64,
+    key = "(String, bool)",
+    convert = r#"{ (pattern.to_owned(), enable_extended_globbing) }"#
+)]
+fn cacheable_pattern_to_regex_str(
+    pattern: &str,
+    enable_extended_globbing: bool,
+) -> Result<String, error::WordParseError> {
     let regex_str = pattern_to_regex_translator::pattern(pattern, enable_extended_globbing)
         .map_err(|e| error::WordParseError::Pattern(e.into()))?;
     Ok(regex_str)
@@ -225,8 +239,13 @@ peg::parser! {
 /// * `pattern` - The shell pattern to check.
 /// * `enable_extended_globbing` - Whether to enable extended globbing (extglob).
 pub fn pattern_has_glob_metacharacters(pattern: &str, enable_extended_globbing: bool) -> bool {
-    pattern_to_regex_translator::has_glob_metacharacters(pattern, enable_extended_globbing)
-        .unwrap_or(false)
+    // Every glob piece holds `[`, `?` or `*`, or with extglob a `(`: a word without one,
+    // as almost every word is, needs no parse. Asked for each word of every command.
+    let may_glob =
+        pattern.contains(['[', '?', '*']) || (enable_extended_globbing && pattern.contains('('));
+    may_glob
+        && pattern_to_regex_translator::has_glob_metacharacters(pattern, enable_extended_globbing)
+            .unwrap_or(false)
 }
 
 /// Returns whether or not a given character needs to be escaped in a regular expression.

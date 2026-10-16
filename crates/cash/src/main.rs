@@ -16,6 +16,12 @@ mod own_path;
 mod terminal_menu;
 mod terminal_profile;
 
+/// mimalloc, not Windows' process heap: a shell allocates and frees small strings and
+/// tables for every command, and `HeapAlloc`/`HeapFree` took about 40% of a builtin's
+/// time in a profile.
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() {
     // Read first, while cash has a single thread, so it can be removed safely.
     let invoked_as = take_invoked_name();
