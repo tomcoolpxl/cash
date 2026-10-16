@@ -12,6 +12,38 @@ pub fn parse(input: &str) -> Result<ast::ArithmeticExpr, error::WordParseError> 
     cacheable_parse(input)
 }
 
+/// Parses a shell arithmetic expression, shared from the ones this thread has parsed.
+///
+/// A loop's condition and step are parsed once, and each turn has the same tree again
+/// without a copy of it, a key made for the lookup, or a lock. Up to 256 are kept; then
+/// they are forgotten and parsed again as they come.
+///
+/// # Arguments
+///
+/// * `input` - The arithmetic expression to parse, in string form.
+pub fn parse_shared(
+    input: &str,
+) -> Result<std::sync::Arc<ast::ArithmeticExpr>, error::WordParseError> {
+    type Parsed = rustc_hash::FxHashMap<Box<str>, std::sync::Arc<ast::ArithmeticExpr>>;
+    thread_local! {
+        static PARSED: std::cell::RefCell<Parsed> = std::cell::RefCell::default();
+    }
+    if let Some(found) = PARSED.with_borrow(|parsed| parsed.get(input).cloned()) {
+        return Ok(found);
+    }
+    let expr = std::sync::Arc::new(
+        arithmetic::full_expression(input)
+            .map_err(|e| error::WordParseError::ArithmeticExpression(e.into()))?,
+    );
+    PARSED.with_borrow_mut(|parsed| {
+        if parsed.len() >= 256 {
+            parsed.clear();
+        }
+        parsed.insert(input.into(), std::sync::Arc::clone(&expr));
+    });
+    Ok(expr)
+}
+
 #[cached::macros::cached(max_size = 64, key = "String", convert = r#"{ input.to_owned() }"#)]
 fn cacheable_parse(input: &str) -> Result<ast::ArithmeticExpr, error::WordParseError> {
     tracing::debug!(target: "arithmetic", "parsing arithmetic expression: '{input}'");

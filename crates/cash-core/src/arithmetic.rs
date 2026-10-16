@@ -99,14 +99,22 @@ pub(crate) async fn expand_and_eval(
     expr: &str,
     trace_if_needed: bool,
 ) -> Result<i64, EvalError> {
-    // Per documentation, first shell-expand it.
-    let options = expansion::ExpanderOptions {
-        tilde_expand: false,
-        ..Default::default()
+    // Per documentation, first shell-expand it. Text with nothing to expand is its own
+    // expansion: the condition and step of a `for ((...))` loop went through the word
+    // expander on every turn, a fifth of an `echo` loop's time.
+    let expanded_self: Cow<'_, str> = if expr.contains(['$', '`', '\'', '"', '\\']) {
+        let options = expansion::ExpanderOptions {
+            tilde_expand: false,
+            ..Default::default()
+        };
+        Cow::Owned(
+            expansion::basic_expand_word_with_options(shell, params, expr, &options)
+                .await
+                .map_err(|_e| EvalError::FailedToExpandExpression(expr.to_owned()))?,
+        )
+    } else {
+        Cow::Borrowed(expr)
     };
-    let expanded_self = expansion::basic_expand_word_with_options(shell, params, expr, &options)
-        .await
-        .map_err(|_e| EvalError::FailedToExpandExpression(expr.to_owned()))?;
 
     // Traced as Bash traces it, the expanded text as it is, before it is parsed: it was
     // the parsed expression printed again, `((  x = 3  ))` as `(( x = 3 ))`.
@@ -123,7 +131,7 @@ pub(crate) async fn expand_and_eval(
     }
 
     // Now parse.
-    let expr = cash_parser::arithmetic::parse(&expanded_self)
+    let expr = cash_parser::arithmetic::parse_shared(&expanded_self)
         .map_err(|e| syntax_error(&expanded_self, e.arithmetic_offset()))?;
 
     // Now evaluate.
