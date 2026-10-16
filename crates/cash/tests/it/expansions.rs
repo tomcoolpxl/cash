@@ -271,3 +271,32 @@ fn only_a_bare_dollar_opens_ansi_c_quoting() {
         (r"echo \\$'a\tb'", "\\a\tb"),
     ]);
 }
+
+#[test]
+fn a_brace_word_before_a_redirection_is_a_word_unless_it_names_a_variable() {
+    // `{name}>file` puts a new descriptor in `name`, as in Bash, only when the braces hold
+    // a name and touch the operator; anything else is a word. `echo {1..3} > f` failed
+    // with "failed to parse parameter '1..3'".
+    let scratch = crate::common::Scratch::new("brace-word-redirection");
+    for (script, expected) in [
+        ("echo {1..3} > f; cat f", "1 2 3"),
+        ("echo {a,b}>g; cat g", "a b"),
+        ("echo {abc} > h; cat h", "{abc}"),
+        (
+            "echo {x}>k hi; cat k; [[ $x =~ ^[0-9]+$ ]] && echo fd",
+            "hi\nfd",
+        ),
+        (
+            "echo {a[1]}>m hi; cat m; [[ ${a[1]} ]] && echo fd",
+            "hi\nfd",
+        ),
+    ] {
+        let out = crate::common::run_in(scratch.path(), script);
+        assert_eq!(
+            (out.stdout.as_str(), out.code),
+            (expected, 0),
+            "{script}: {}",
+            out.stderr
+        );
+    }
+}

@@ -620,15 +620,21 @@ peg::parser! {
         rule io_fd() -> u32 =
             w:[Token::Word(_, _)] {? w.to_str().parse().or(Err("io_fd u32")) }
 
+        // As Bash's: a name, or an array element, in braces, touching the operator.
+        // Anything else is a word: `echo {1..3} > f` and `echo {a,b}>f` brace-expand,
+        // where they failed as "failed to parse parameter".
         rule io_variable() -> String =
-            [Token::Word(w, _)] {?
+            [Token::Word(w, var_loc)]
+            &([Token::Operator(o, redir_loc) if
+                    o.starts_with(['<', '>']) &&
+                    locations_are_contiguous(var_loc, redir_loc)]) {?
                 let Some(name) = w.strip_prefix('{').and_then(|s| s.strip_suffix('}')) else {
                     return Err("I/O variable");
                 };
-                if name.is_empty() || name.contains('}') {
-                    Err("I/O variable")
-                } else {
+                if is_io_variable_name(name) {
                     Ok(name.to_owned())
+                } else {
+                    Err("I/O variable")
                 }
             }
 
@@ -837,6 +843,22 @@ fn add_pipe_extension_redirection(c: &mut ast::Command) {
 #[inline]
 fn locations_are_contiguous(loc_left: &crate::SourceSpan, loc_right: &crate::SourceSpan) -> bool {
     loc_left.end.index == loc_right.start.index
+}
+
+/// Whether `name`, from `{name}>file`, is what Bash allocates a descriptor into: a
+/// variable's name, or an array element's (`a[1]`).
+fn is_io_variable_name(name: &str) -> bool {
+    let (base, subscript) = match name.split_once('[') {
+        Some((base, rest)) => (base, Some(rest)),
+        None => (name, None),
+    };
+    let mut chars = base.chars();
+    let starts_well = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+    starts_well
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && subscript.is_none_or(|rest| rest.len() > 1 && rest.ends_with(']'))
 }
 
 // Called by the grammar as `##gap_before()` and `##exact_text(from)`, to keep the text of
