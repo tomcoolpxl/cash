@@ -84,6 +84,19 @@ What the phases now in DONE.md left open, each where its phase says more.
   - `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command;
   - `Shell::clone` copies the builtins table for every subshell;
   - coolfetch asks sysinfo for everything on each run, nothing kept between runs.
+- **Nothing watches the upstreams cash took in as its own** (2026-10-16): Dependabot
+  sees only crates.io dependencies, all 205 of which are on their newest line since the
+  merge of the same day. Taken in, and so left behind unless someone looks: crossterm
+  0.29.0 (current), reedline 0.51.0 (0.52.1 out), sevenz-rust2 0.23.0 (0.24.0 out:
+  its CRC fix is for a writer cash replaced, and cash copies raw blocks itself),
+  uutils coreutils 0.12.0 (current), diffutils 0.6.0, uutils sed, and posixutils awk
+  and bc at a git revision. A check that lists each against upstream's newest release
+  would make looking routine.
+- **reedline 0.52's fixes, against cash-reedline** (taken from 0.51.0): panics on a vi
+  count past `u16::MAX`, an empty `UntilFound` keybinding, a failed history search in
+  the hinter, and in the menu's selection parsing, among about twenty fixes. cash had
+  already fixed the `SubstringSearch` `todo!()` (`engine.rs`); the rest want comparing
+  one by one.
 - **A write to a closed standard output says too much** (2026-10-16): `echo hi >&-`
   says `echo: i/o error: I/O write error: standard output not available`, where Bash
   says `echo: write error: Bad file descriptor`; both exit 1.
