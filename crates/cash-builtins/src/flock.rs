@@ -205,8 +205,6 @@ struct Reading {
     length: Option<u64>,
     close: bool,
     no_fork: bool,
-    help: bool,
-    version: bool,
 }
 
 impl Reading {
@@ -220,8 +218,6 @@ impl Reading {
             'n' => self.nonblock = true,
             'w' => self.timeout = Some(parse_timeout(value.unwrap_or_default())?),
             'E' => self.conflict_code = Some(parse_exit_code(value.unwrap_or_default())?),
-            'h' => self.help = true,
-            'V' => self.version = true,
             // `-o` closes nothing: there is no fork, and the command never sees the
             // handle. `-F` runs the command as every command here runs. Together they
             // are still refused, as util-linux refuses them. `--fcntl` is the only kind
@@ -289,17 +285,17 @@ fn parse(args: &[String]) -> Result<Options, Refusal> {
     let getopt = Getopt::new(&shorts, LONG_OPTIONS).order(Order::StopAtOperand);
     for next in getopt.read(args) {
         match next.map_err(|problem| Refusal::usage(problem.to_string()))? {
+            // Help and version end the reading where they stand, as util-linux's loop
+            // exits there: `flock -h -w x` is the help.
+            Item::Option { id: 'h', .. } => return Ok(Options::for_action(&reading, Action::Help)),
+            Item::Option { id: 'V', .. } => {
+                return Ok(Options::for_action(&reading, Action::Version));
+            }
             Item::Option { id, value, .. } => reading.apply(id, value.as_deref())?,
             Item::Operand { value, .. } => rest.push(value),
         }
     }
 
-    if reading.help {
-        return Ok(Options::for_action(&reading, Action::Help));
-    }
-    if reading.version {
-        return Ok(Options::for_action(&reading, Action::Version));
-    }
     if reading.close && reading.no_fork {
         return Err(Refusal::value(
             "the --no-fork and --close options are incompatible".to_owned(),
@@ -820,6 +816,11 @@ mod tests {
         assert_eq!(parsed("--help").action, Action::Help);
         assert_eq!(parsed("-V").action, Action::Version);
         assert_eq!(parsed("-nV f").action, Action::Version);
+        // Where they stand, as util-linux's loop exits there: a mistake after them is not
+        // read, one before them is said.
+        assert_eq!(parsed("-h -w x").action, Action::Help);
+        assert_eq!(parsed("-V --zzz").action, Action::Version);
+        assert_eq!(refused("--zzz -h"), usage("unrecognized option '--zzz'"));
     }
 
     #[test]

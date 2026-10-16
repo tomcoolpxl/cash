@@ -192,6 +192,15 @@ fn parse_options(args: &[String], env_interval: Option<&str>) -> Result<Options,
                 value,
                 ..
             } => set_valued(&mut options, letter, &value.unwrap_or_default())?,
+            // Help and version end the reading where they stand, as procps' loop exits
+            // there: `watch -h -n x` is the help.
+            Item::Option {
+                id: letter @ ('h' | 'v'),
+                ..
+            } => {
+                set_flag(&mut options, letter)?;
+                break;
+            }
             Item::Option { id, .. } => set_flag(&mut options, id)?,
             Item::Operand { value, .. } => options.command.push(value),
         }
@@ -260,6 +269,17 @@ fn parse_interval(text: &str) -> Option<f64> {
 
 impl builtins::Command for WatchCommand {
     type Error = cash_core::Error;
+
+    /// The words as they are: clap would take a leading `--` for itself, and
+    /// `watch -- -x` would read `-x` as `--exec` where procps runs a command `-x`.
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        Ok(Self {
+            args: args.into_iter().skip(1).collect(),
+        })
+    }
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
@@ -1109,6 +1129,17 @@ mod tests {
         let options = parse(&["--", "-x"]).unwrap();
         assert_eq!(options.command, ["-x"]);
         assert!(!options.exec);
+        // The words reach the parser as they are: clap took the leading `--` for itself.
+        let words = ["watch", "--", "-x"].map(str::to_owned);
+        let command = <WatchCommand as builtins::Command>::new(words).unwrap();
+        assert_eq!(command.args, ["--", "-x"]);
+    }
+
+    #[test]
+    fn help_and_version_end_the_reading_where_they_stand() {
+        assert!(parse(&["-h", "-n", "x"]).unwrap().help);
+        assert!(parse(&["-v", "--bogus"]).unwrap().version);
+        assert!(parse(&["--bogus", "-h"]).is_err());
     }
 
     #[test]

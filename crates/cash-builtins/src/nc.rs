@@ -304,7 +304,6 @@ const fn refusal(letter: char) -> Option<&'static str> {
 /// The options as they are read.
 struct Reading {
     options: Options,
-    help: bool,
 }
 
 impl Reading {
@@ -320,7 +319,6 @@ impl Reading {
             // SO_DEBUG: nothing to switch on here.
             'D' => {}
             'd' => options.no_stdin = true,
-            'h' => self.help = true,
             'I' => {
                 let size = number(value, 1, 65536 << 14, "TCP receive window")?;
                 options.recv_buffer = Some(u32::try_from(size).unwrap_or(u32::MAX));
@@ -395,19 +393,18 @@ impl Reading {
 fn parse(args: &[String]) -> Result<Parsed, Refusal> {
     let mut reading = Reading {
         options: Options::default(),
-        help: false,
     };
     let mut operands: Vec<String> = Vec::new();
     let shorts = cash_getopt::optstring(GETOPT);
     let getopt: Getopt<'_, '_, char> = Getopt::new(&shorts, &[]);
     for next in getopt.read(args) {
         match next.map_err(|problem| Refusal::usage(problem.to_string()))? {
+            // The help ends the reading where it stands, as netcat's `help()` exits there:
+            // `nc -h -Q` is the help.
+            Item::Option { id: 'h', .. } => return Ok(Parsed::Help),
             Item::Option { id, value, .. } => reading.apply(id, value.as_deref())?,
             Item::Operand { value, .. } => operands.push(value),
         }
-    }
-    if reading.help {
-        return Ok(Parsed::Help);
     }
     let read = reading.options;
 
@@ -1529,6 +1526,9 @@ mod tests {
         assert_eq!(refused("-V"), usage("option requires an argument -- 'V'"));
         assert_eq!(parse(&args("-h")), Ok(Parsed::Help));
         assert_eq!(parse(&args("-lh 1 extra junk")), Ok(Parsed::Help));
+        // Where it stands: a mistake after it is not read, one before it is said.
+        assert_eq!(parse(&args("-h -Q")), Ok(Parsed::Help));
+        assert_eq!(refused("-Q -h"), usage("invalid option -- 'Q'"));
     }
 
     #[test]
