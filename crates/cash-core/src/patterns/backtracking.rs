@@ -35,7 +35,7 @@ enum Node {
 struct Plain {
     /// The text as an anchored regular expression, for when the DFA cannot be built or
     /// gives up.
-    regex: fancy_regex::Regex,
+    regex: std::sync::Arc<fancy_regex::Regex>,
     dfa: Option<dfa::DFA>,
     cache: Mutex<Option<dfa::Cache>>,
 }
@@ -168,6 +168,11 @@ impl BacktrackingMatcher {
         case_insensitive: bool,
         multiline: bool,
     ) -> Result<Option<Self>, error::Error> {
+        // Only a `!(…)` needs this matcher, and finding out by parsing the pattern built a
+        // regular expression for each plain part of it, for every expansion of `${s/b/B}`.
+        if !pattern.contains("!(") {
+            return Ok(None);
+        }
         let chars: Vec<char> = pattern.chars().collect();
         let mut parser = Parser {
             chars: &chars,

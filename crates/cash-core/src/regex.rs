@@ -6,13 +6,20 @@ use std::cell::RefCell;
 use crate::error;
 use cached::Cached;
 
-/// Cache mapping a (pattern, case-insensitive, multiline) key to a compiled regex.
-type RegexCache = cached::LruCache<(String, bool, bool), fancy_regex::Regex>;
+/// Cache mapping a (pattern, case-insensitive, multiline) key to a compiled regex, handed
+/// out shared: a copy of a regex starts with empty search caches, and `${s/b/B}` built
+/// them again for every expansion.
+type RegexCache = cached::LruCache<(String, bool, bool), std::sync::Arc<fancy_regex::Regex>>;
 
-/// The same for the lazy DFAs that find the longest match; `None` for a pattern one cannot
-/// be built for.
-type LongestMatchCache =
-    cached::LruCache<(String, bool, bool), Option<regex_automata::hybrid::dfa::DFA>>;
+/// The same for the lazy DFAs that find the longest match, each with the cache its
+/// searches use; `None` for a pattern one cannot be built for.
+type LongestMatchCache = cached::LruCache<
+    (String, bool, bool),
+    Option<(
+        regex_automata::hybrid::dfa::DFA,
+        regex_automata::hybrid::dfa::Cache,
+    )>,
+>;
 
 thread_local! {
     // Wrapped in `Option` so that if cache construction ever fails we gracefully
@@ -150,13 +157,40 @@ pub(crate) fn longest_match_end(
 ) -> Option<usize> {
     use regex_automata::{Anchored, Input};
 
-    let dfa = every_match_dfa(pattern, case_insensitive, multiline)?;
-    let mut cache = dfa.create_cache();
+    let key = (pattern.to_owned(), case_insensitive, multiline);
     let input = Input::new(haystack).range(start..).anchored(Anchored::Yes);
-    dfa.try_search_fwd(&mut cache, &input)
-        .ok()
-        .flatten()
-        .map(|found| found.offset())
+    let search = |entry: &mut (
+        regex_automata::hybrid::dfa::DFA,
+        regex_automata::hybrid::dfa::Cache,
+    )| {
+        let (dfa, cache) = entry;
+        dfa.try_search_fwd(cache, &input)
+            .ok()
+            .flatten()
+            .map(|found| found.offset())
+    };
+    // The DFA's cache is kept with it: making one each time was a fifth of an expansion
+    // like `${s/b/B}`.
+    let found = LONGEST_MATCH_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let entry = cache.as_mut()?.cache_get_mut(&key)?;
+        Some(entry.as_mut().and_then(search))
+    });
+    if let Some(found) = found {
+        return found;
+    }
+    let dfa = build_every_match_dfa(pattern, case_insensitive, multiline);
+    let mut entry = dfa.map(|dfa| {
+        let cache = dfa.create_cache();
+        (dfa, cache)
+    });
+    let found = entry.as_mut().and_then(search);
+    LONGEST_MATCH_CACHE.with(|cache| {
+        if let Some(c) = cache.borrow_mut().as_mut() {
+            c.cache_set(key, entry);
+        }
+    });
+    found
 }
 
 /// A lazy DFA for `pattern` that reports every match, not the first alternative's; the
@@ -166,42 +200,54 @@ pub(crate) fn every_match_dfa(
     case_insensitive: bool,
     multiline: bool,
 ) -> Option<regex_automata::hybrid::dfa::DFA> {
-    use regex_automata::{MatchKind, hybrid::dfa::DFA, util::syntax};
-
     let key = (pattern.to_owned(), case_insensitive, multiline);
     let cached = LONGEST_MATCH_CACHE.with(|cache| {
-        cache
-            .borrow_mut()
-            .as_mut()
-            .and_then(|c| c.cache_get(&key).cloned())
+        cache.borrow_mut().as_mut().and_then(|c| {
+            c.cache_get(&key)
+                .map(|entry| entry.as_ref().map(|(dfa, _)| dfa.clone()))
+        })
     });
     if let Some(dfa) = cached {
-        dfa
-    } else {
-        let prepared = add_missing_escape_chars_to_regex(pattern);
-        let dfa = DFA::builder()
-            .configure(DFA::config().match_kind(MatchKind::All))
-            .syntax(
-                syntax::Config::new()
-                    .case_insensitive(case_insensitive)
-                    .dot_matches_new_line(multiline),
-            )
-            .build(prepared.as_ref())
-            .ok();
-        LONGEST_MATCH_CACHE.with(|cache| {
-            if let Some(c) = cache.borrow_mut().as_mut() {
-                c.cache_set(key, dfa.clone());
-            }
-        });
-        dfa
+        return dfa;
     }
+    let dfa = build_every_match_dfa(pattern, case_insensitive, multiline);
+    LONGEST_MATCH_CACHE.with(|cache| {
+        if let Some(c) = cache.borrow_mut().as_mut() {
+            let entry = dfa.clone().map(|dfa| {
+                let cache = dfa.create_cache();
+                (dfa, cache)
+            });
+            c.cache_set(key, entry);
+        }
+    });
+    dfa
+}
+
+/// Builds the lazy DFA [`every_match_dfa`] keeps.
+fn build_every_match_dfa(
+    pattern: &str,
+    case_insensitive: bool,
+    multiline: bool,
+) -> Option<regex_automata::hybrid::dfa::DFA> {
+    use regex_automata::{MatchKind, hybrid::dfa::DFA, util::syntax};
+
+    let prepared = add_missing_escape_chars_to_regex(pattern);
+    DFA::builder()
+        .configure(DFA::config().match_kind(MatchKind::All))
+        .syntax(
+            syntax::Config::new()
+                .case_insensitive(case_insensitive)
+                .dot_matches_new_line(multiline),
+        )
+        .build(prepared.as_ref())
+        .ok()
 }
 
 pub(crate) fn compile_regex(
     regex_str: String,
     case_insensitive: bool,
     multiline: bool,
-) -> Result<fancy_regex::Regex, error::Error> {
+) -> Result<std::sync::Arc<fancy_regex::Regex>, error::Error> {
     // Move regex_str into the key to avoid cloning on cache-hit path.
     let key = (regex_str, case_insensitive, multiline);
 
@@ -232,7 +278,7 @@ pub(crate) fn compile_regex(
     builder.case_insensitive(case_insensitive);
 
     let re = match builder.build() {
-        Ok(re) => re,
+        Ok(re) => std::sync::Arc::new(re),
         Err(e) => return Err(error::ErrorKind::InvalidRegexError(e, regex_str.to_string()).into()),
     };
 

@@ -12,7 +12,7 @@ use std::{
 /// with `!(…)`, which no regular expression can express, the backtracking matcher.
 #[derive(Debug)]
 pub(crate) enum PatternMatcher {
-    Regex(fancy_regex::Regex),
+    Regex(std::sync::Arc<fancy_regex::Regex>),
     Backtracking(backtracking::BacktrackingMatcher),
 }
 
@@ -41,7 +41,7 @@ pub(crate) struct PatternFinder {
 #[derive(Debug)]
 enum FinderKind {
     Regex {
-        regex: fancy_regex::Regex,
+        regex: std::sync::Arc<fancy_regex::Regex>,
         /// The pattern as an unanchored regular expression, for the longest end.
         longest: String,
         case_insensitive: bool,
@@ -617,7 +617,7 @@ impl Pattern {
         &self,
         strict_prefix_match: bool,
         strict_suffix_match: bool,
-    ) -> Result<fancy_regex::Regex, error::Error> {
+    ) -> Result<std::sync::Arc<fancy_regex::Regex>, error::Error> {
         let regex_str = self.to_regex_str(strict_prefix_match, strict_suffix_match)?;
 
         tracing::debug!(target: trace_categories::PATTERN, "pattern: '{self:?}' => regex: '{regex_str}'");
