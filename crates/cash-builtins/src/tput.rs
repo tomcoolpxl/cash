@@ -22,6 +22,7 @@ use std::borrow::Cow;
 use std::io::{Read, Write};
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Order, Problem, Short};
 use clap::Parser;
 
 use crate::screen::{CLEAR, CLEAR_KEEP_SCROLLBACK, is_vt};
@@ -797,48 +798,43 @@ struct Options {
     words: Vec<String>,
 }
 
-/// Why the options could not be parsed, with the text getopt prints.
-enum OptionError {
-    Invalid(char),
-    MissingArgument,
+/// ncurses' `ST:Vvx`, which it reads with plain `getopt`: no long options.
+const SHORTS: &[Short<char>] = &[
+    Short::new('S', Arg::No, 'S'),
+    Short::new('T', Arg::Required, 'T'),
+    Short::new('V', Arg::No, 'V'),
+    Short::new('v', Arg::No, 'v'),
+    Short::new('x', Arg::No, 'x'),
+];
+
+/// `--help`, which ncurses' tput has not, taken whole for `help tput`.
+fn help_word(word: &str) -> Option<char> {
+    (word == "--help").then_some('h')
 }
 
-fn parse_options(args: &[String]) -> Result<Options, OptionError> {
+/// Reads the options as ncurses' `getopt` loop does, in order: `-V` and `--help` end the
+/// reading where they stand, before any mistake after them.
+fn parse_options(args: &[String], order: Order) -> Result<Options, Problem> {
     let mut options = Options::default();
-    let mut only_words = false;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        if only_words || arg == "-" || !arg.starts_with('-') {
-            options.words.push(arg.clone());
-            continue;
-        }
-        if arg == "--" {
-            only_words = true;
-            continue;
-        }
-        if arg == "--help" {
-            options.help = true;
-            continue;
-        }
-        let mut letters = arg.strip_prefix('-').unwrap_or_default().chars();
-        while let Some(letter) = letters.next() {
-            match letter {
-                'S' => options.from_stdin = true,
-                'V' => options.version = true,
-                'v' => {}
-                'x' => options.keep_scrollback = true,
-                'T' => {
-                    let rest = letters.as_str();
-                    let term = if rest.is_empty() {
-                        args.next().ok_or(OptionError::MissingArgument)?.clone()
-                    } else {
-                        rest.to_owned()
-                    };
-                    options.term = Some(term);
-                    break;
-                }
-                other => return Err(OptionError::Invalid(other)),
+    for item in Getopt::new(SHORTS, &[])
+        .order(order)
+        .claim(help_word)
+        .read(args)
+    {
+        match item? {
+            Item::Operand { value, .. } => options.words.push(value),
+            Item::Option { id: 'h', .. } => {
+                options.help = true;
+                break;
             }
+            Item::Option { id: 'V', .. } => {
+                options.version = true;
+                break;
+            }
+            Item::Option { id: 'S', .. } => options.from_stdin = true,
+            Item::Option { id: 'x', .. } => options.keep_scrollback = true,
+            Item::Option { id: 'T', value, .. } => options.term = value,
+            Item::Option { .. } => {}
         }
     }
     Ok(options)
@@ -988,18 +984,11 @@ impl builtins::Command for TputCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let options = match parse_options(&self.args) {
+        let options = match parse_options(&self.args, crate::options::gnu_order(&context)) {
             Ok(options) => options,
-            Err(error) => {
+            Err(problem) => {
                 let mut stderr = context.stderr();
-                match error {
-                    OptionError::Invalid(letter) => {
-                        writeln!(stderr, "tput: invalid option -- '{letter}'")?;
-                    }
-                    OptionError::MissingArgument => {
-                        writeln!(stderr, "tput: option requires an argument -- 'T'")?;
-                    }
-                }
+                writeln!(stderr, "tput: {problem}")?;
                 stderr.write_all(USAGE.as_bytes())?;
                 return Ok(ExecutionResult::new(2));
             }

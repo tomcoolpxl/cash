@@ -790,6 +790,7 @@ rc=3
 -T foo -V rc=0
 -V rc=0
 -V bold rc=0
+-V -Z rc=0
 Usage: tput [options] [command]
 
 Options:
