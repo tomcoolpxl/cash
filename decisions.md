@@ -713,6 +713,26 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
 - **`flock`'s help says the lock lasts until the command exits** (the user, 2026-10-11),
   not until its detached children do, which no tool can see. Turned down: leaving it
   unsaid, as util-linux's manual does.
+- **A builtin's output is gathered into larger writes, and a builtin that streams says
+  so** (the user, 2026-10-16; `cash_core::output`): in blocks of up to 64 KiB, as C's
+  standard output into a pipe or a file, but never held more than 50 ms, on a terminal
+  or not: a watching thread writes it when the builtin writes nothing more, so a builtin
+  that hangs still shows what it wrote. It is written before the builtin's standard
+  error, a read of its input, a program or command it runs, and when it returns. `top`, `watch`, `nc`, `free`, the pagers and
+  `croot` stream; a test lists them. `stdbuf -oL` and `-o0` make any builtin stream.
+  Turned down: each builtin buffering on its own (opting in), which `ls` did first.
+- **A folder's link count is 1 in `ls -l`, counted in `stat`** (the user, 2026-10-16):
+  1 is Git Bash's figure and the "not counted" of Cygwin, btrfs and CIFS; counting means
+  listing every folder shown, which made `ls -la` in TEMP list 164,757 folders for `..`.
+  `stat`, where one goes to find the number, counts 2 plus the subfolders, as Linux has
+  it, and `ls --count-links` counts in a listing too. Turned down: 2 for every folder.
+- **A file's link count and identity are asked by name** (the user, 2026-10-16):
+  `GetFileInformationByName` (Windows 11 24H2) gives them without opening the file; an
+  open is the fallback, also where Windows leaves the volume's serial number out.
+- **Facts about the session live in one place** (the user, 2026-10-16;
+  `cash_win32::facts`): the account, the machine's name, account names by SID, and a
+  Terminal profile's font, each with its own rule for going stale. Turned down: a cache
+  beside each caller.
 
 ## 8. Archives and compression
 
