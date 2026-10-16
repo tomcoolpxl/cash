@@ -1,4 +1,4 @@
-use clap::{CommandFactory as _, FromArgMatches as _, Parser};
+use clap::{FromArgMatches as _, Parser};
 use itertools::Itertools;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -97,7 +97,7 @@ impl builtins::Command for ReadCommand {
     where
         I: IntoIterator<Item = String>,
     {
-        let matches = Self::command().try_get_matches_from(args)?;
+        let matches = builtins::clap_command::<Self>().try_get_matches_from(args)?;
         let lower_n = last_indexed_value(&matches, "return_after_n_chars");
         let capital_n = last_indexed_value(&matches, "return_after_n_chars_no_delimiter");
         let ordered_char_limit = match (lower_n, capital_n) {

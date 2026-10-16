@@ -75,7 +75,7 @@ impl builtins::Command for HelpCommand {
         let args: Vec<String> = args.into_iter().collect();
         let marker = format!("--{}", helpdocs::CASH_SUBCOMMAND_OPTION);
         let cash_subcommand = args.contains(&marker);
-        match Self::try_parse_from(&args) {
+        match builtins::parse_args::<Self, _>(&args) {
             Err(error)
                 if cash_subcommand && error.kind() == clap::error::ErrorKind::UnknownArgument =>
             {

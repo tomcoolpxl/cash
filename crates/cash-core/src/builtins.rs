@@ -44,6 +44,30 @@ pub type CommandSpawnFunc<SE: extensions::ShellExtensions> =
 pub type CommandContentFunc =
     fn(&str, ContentType, &ContentOptions) -> Result<String, error::Error>;
 
+/// `C`'s clap command, a repeated option overriding the one before it.
+///
+/// So it is in Bash's builtins and GNU's tools, where clap refuses an option given twice:
+/// an alias that sets an option (`alias ls='ls --color=auto'`) leaves it free to set again
+/// (`ls --color=never`). Options that gather (`-e A -e B`) or count (`-vv`) still do.
+pub fn clap_command<C: clap::CommandFactory>() -> clap::Command {
+    C::command().args_override_self(true)
+}
+
+/// Parses `args` as `C`'s command line ([`clap_command`]).
+///
+/// # Errors
+///
+/// When `C` does not take the command line.
+pub fn parse_args<C: clap::Parser, I>(args: I) -> Result<C, clap::Error>
+where
+    I: IntoIterator,
+    I::Item: Into<std::ffi::OsString> + Clone,
+{
+    let mut command = clap_command::<C>();
+    let mut matches = command.try_get_matches_from_mut(args)?;
+    C::from_arg_matches_mut(&mut matches).map_err(|error| error.format(&mut command))
+}
+
 /// Trait implemented by built-in shell commands.
 pub trait Command: clap::Parser {
     /// The error type returned by the command.
@@ -59,7 +83,7 @@ pub trait Command: clap::Parser {
         I: IntoIterator<Item = String>,
     {
         if !Self::takes_plus_options() {
-            Self::try_parse_from(args)
+            parse_args(args)
         } else {
             let args = args.into_iter();
 
@@ -76,7 +100,7 @@ pub trait Command: clap::Parser {
                 }
             }
 
-            Self::try_parse_from(updated_args)
+            parse_args(updated_args)
         }
     }
 
@@ -432,7 +456,7 @@ pub fn try_parse_known<T: clap::Parser>(
         }
         !is_hyphen
     });
-    let parsed_args = T::try_parse_from(args_before_hyphen)?;
+    let parsed_args = parse_args(args_before_hyphen)?;
 
     let raw_args = hyphen.map(|hyphen| std::iter::once(hyphen).chain(args));
     Ok((parsed_args, raw_args))

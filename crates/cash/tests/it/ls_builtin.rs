@@ -158,6 +158,25 @@ fn ls_one_column_and_classification() {
 }
 
 #[test]
+fn a_repeated_option_overrides_the_one_before() {
+    // As in GNU ls and Bash's builtins: `alias ls='ls --color=auto'` and then
+    // `ls --color=never` gives `--color` twice, which clap refused ("cannot be used
+    // multiple times", status 2). The rest of the builtins parsed by clap share it.
+    let scratch = Scratch::new("repeated");
+    std::fs::create_dir(scratch.path().join("sub")).unwrap();
+    let dir = scratch.as_script_path();
+    let out = cash(&format!(
+        "cd '{dir}' && ls -F -F && ls --color=always --color=never && \
+         shopt -s expand_aliases && alias ls='ls --color=always'
+         ls --color=never; tree -a -a --noreport ."
+    ));
+    assert_eq!(
+        (out.stdout.as_str(), out.stderr.as_str(), out.code),
+        ("sub/\nsub\nsub\n.\n└── sub", "", 0)
+    );
+}
+
+#[test]
 fn ls_dotfiles_filtering() {
     let scratch = Scratch::new("dotfiles");
     std::fs::write(scratch.path().join("normal.txt"), b"1").unwrap();

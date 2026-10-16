@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use clap::{CommandFactory as _, FromArgMatches as _, Parser, parser::ValueSource};
+use clap::{FromArgMatches as _, Parser, parser::ValueSource};
 
 use cash_core::{ExecutionResult, builtins};
 
@@ -8,9 +8,8 @@ use crate::lookup::{self, Resolved};
 
 /// Inspect the type of a named shell item.
 #[derive(Parser)]
-// Bash accepts `type -t -p -t`; a repeat replaces the earlier occurrence, so the index
-// `new` compares is the last one.
-#[command(args_override_self = true)]
+// Bash accepts `type -t -p -t`; a repeat replaces the earlier occurrence
+// (`builtins::clap_command`), so the index `new` compares is the last one.
 pub(crate) struct TypeCommand {
     /// Display all locations of the specified name, not just the first.
     #[arg(short = 'a')]
@@ -44,7 +43,7 @@ impl builtins::Command for TypeCommand {
     where
         I: IntoIterator<Item = String>,
     {
-        let matches = Self::command().try_get_matches_from(args)?;
+        let matches = builtins::clap_command::<Self>().try_get_matches_from(args)?;
         let mut command = Self::from_arg_matches(&matches)?;
 
         // Bash's `-t`, `-p` and `-P` each switch off the others' output form, so whichever

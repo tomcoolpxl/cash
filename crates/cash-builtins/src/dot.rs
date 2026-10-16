@@ -6,7 +6,6 @@ use clap::Parser;
 
 /// Evaluate the provided script in the current shell environment.
 #[derive(Parser)]
-#[command(args_override_self = true)]
 pub(crate) struct DotCommand {
     /// Colon-separated path to search instead of PATH (Bash 5.3).
     #[arg(short = 'p', value_name = "PATH")]

@@ -167,7 +167,7 @@ impl builtins::Command for UlimitCommand {
     where
         I: IntoIterator<Item = String>,
     {
-        let parsed = Self::try_parse_from(args)?;
+        let parsed = builtins::parse_args::<Self, _>(args)?;
         // `-a` reports and ignores operands in Bash. Otherwise the first operand is
         // validated even though Win32 has no corresponding limit to apply.
         if !parsed.all
