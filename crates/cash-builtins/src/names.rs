@@ -10,13 +10,16 @@
 //! (`C:`) stays with what comes before (`dirname C:x` is `C:`, `dirname C:\dir\` is `C:`);
 //! exactly two leading separators (`//srv`, `\\srv`) are a root of their own, and one or
 //! three or more are one. A spelling comes back as the script gave it, never rewritten
-//! (D3). uutils' had `basename /` print `\`. GNU's options: `-a`, `-s`, `-z` for basename,
-//! `-z` for dirname, long ones by any unique prefix, options anywhere until `--`; and GNU
-//! coreutils 9's messages, with status 1.
+//! (D3). uutils' had `basename /` print `\`. GNU's options, read by cash-getopt as
+//! coreutils' `getopt_long` reads them: `+as:z` for basename, whose options end at the
+//! first operand (`basename foo-bar -bar` is `foo`), and `z` for dirname, whose options
+//! go anywhere until `--`; long ones by any unique prefix; GNU coreutils 9's messages,
+//! with status 1.
 
 use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Order, Short};
 use clap::Parser;
 
 /// Whether `c` separates path components on Windows.
@@ -133,92 +136,49 @@ enum Early {
     Usage(String),
 }
 
-/// The long option `given` (without `--`) names among `known`: exactly, or by a prefix
-/// only one of them has.
-fn long_option<'a>(given: &str, known: &[&'a str]) -> Option<&'a str> {
-    if let Some(exact) = known.iter().find(|name| **name == given) {
-        return Some(exact);
-    }
-    let mut matching = known.iter().filter(|name| name.starts_with(given));
-    match (matching.next(), matching.next()) {
-        (Some(only), None) if !given.is_empty() => Some(only),
-        _ => None,
-    }
-}
+/// basename's options, coreutils' `+as:z`, and its long ones; help and version have no
+/// letter.
+const BASENAME_SHORTS: &[Short<char>] = &[
+    Short::new('a', Arg::No, 'a'),
+    Short::new('s', Arg::Required, 's'),
+    Short::new('z', Arg::No, 'z'),
+];
+const BASENAME_LONGS: &[Long<'static, char>] = &[
+    Long::new("help", Arg::No, 'h'),
+    Long::new("multiple", Arg::No, 'a'),
+    Long::new("suffix", Arg::Required, 's'),
+    Long::new("version", Arg::No, 'v'),
+    Long::new("zero", Arg::No, 'z'),
+];
+/// dirname's options, coreutils' `z`.
+const DIRNAME_SHORTS: &[Short<char>] = &[Short::new('z', Arg::No, 'z')];
+const DIRNAME_LONGS: &[Long<'static, char>] = &[
+    Long::new("help", Arg::No, 'h'),
+    Long::new("version", Arg::No, 'v'),
+    Long::new("zero", Arg::No, 'z'),
+];
 
-/// Reads GNU's options for `tool` (`basename`, whose short options are `a`, `s:` and `z`,
-/// or `dirname`, with `z` alone), anywhere among the operands until `--`.
+/// Reads GNU's options for `tool`, `basename` or `dirname`, in order, as coreutils does:
+/// `--help` before a mistake after it is the help.
 fn parse(tool: &str, args: &[String]) -> Result<Request, Early> {
     let basename = tool == "basename";
-    let longs: &[&str] = if basename {
-        &["help", "multiple", "suffix", "version", "zero"]
+    let getopt = if basename {
+        Getopt::new(BASENAME_SHORTS, BASENAME_LONGS).order(Order::StopAtOperand)
     } else {
-        &["help", "version", "zero"]
+        Getopt::new(DIRNAME_SHORTS, DIRNAME_LONGS)
     };
     let mut request = Request::default();
-    let mut args = args.iter();
-    let mut operands_only = false;
-    while let Some(arg) = args.next() {
-        if operands_only || arg == "-" || !arg.starts_with('-') {
-            request.names.push(arg.clone());
-            continue;
-        }
-        if arg == "--" {
-            operands_only = true;
-            continue;
-        }
-        if let Some(long) = arg.strip_prefix("--") {
-            let (given, value) = match long.split_once('=') {
-                Some((given, value)) => (given, Some(value)),
-                None => (long, None),
-            };
-            let Some(name) = long_option(given, longs) else {
-                return Err(Early::Usage(format!("unrecognized option '--{given}'")));
-            };
-            if name == "suffix" {
-                let value = match value {
-                    Some(value) => value.to_owned(),
-                    None => args.next().cloned().ok_or_else(|| {
-                        Early::Usage("option '--suffix' requires an argument".to_owned())
-                    })?,
-                };
-                request.suffix = Some(value);
+    for item in getopt.read(args) {
+        match item.map_err(|problem| Early::Usage(problem.to_string()))? {
+            Item::Option { id: 'h', .. } => return Err(Early::Help),
+            Item::Option { id: 'v', .. } => return Err(Early::Version),
+            Item::Option { id: 'a', .. } => request.multiple = true,
+            Item::Option { id: 's', value, .. } => {
+                request.suffix = value;
                 request.multiple = true;
-                continue;
             }
-            if value.is_some() {
-                return Err(Early::Usage(format!(
-                    "option '--{name}' doesn't allow an argument"
-                )));
-            }
-            match name {
-                "help" => return Err(Early::Help),
-                "version" => return Err(Early::Version),
-                "multiple" => request.multiple = true,
-                _ => request.zero = true,
-            }
-            continue;
-        }
-        let cluster = arg.get(1..).unwrap_or_default();
-        for (at, letter) in cluster.char_indices() {
-            match letter {
-                'z' => request.zero = true,
-                'a' if basename => request.multiple = true,
-                's' if basename => {
-                    let rest = cluster.get(at + 1..).unwrap_or_default();
-                    let value = if rest.is_empty() {
-                        args.next().cloned().ok_or_else(|| {
-                            Early::Usage("option requires an argument -- 's'".to_owned())
-                        })?
-                    } else {
-                        rest.to_owned()
-                    };
-                    request.suffix = Some(value);
-                    request.multiple = true;
-                    break;
-                }
-                other => return Err(Early::Usage(format!("invalid option -- '{other}'"))),
-            }
+            Item::Option { .. } => request.zero = true,
+            Item::Operand { value, .. } => request.names.push(value),
         }
     }
     if request.names.is_empty() {
@@ -468,9 +428,16 @@ mod tests {
         let request = parse("basename", &words("--suf=.c --mul a.c b.c")).unwrap();
         assert_eq!(request.suffix.as_deref(), Some(".c"));
         assert_eq!(request.names, ["a.c", "b.c"]);
-        let request = parse("basename", &words("x -- -y")).unwrap();
-        assert_eq!(request.names, ["x"]);
-        assert_eq!(request.suffix.as_deref(), Some("-y"));
+        let request = parse("basename", &words("-- -y")).unwrap();
+        assert_eq!(request.names, ["-y"]);
+        // The options end at the first operand, as Git Bash's: what follows is a suffix,
+        // or more names under `-a`.
+        let request = parse("basename", &words("foo-bar -bar")).unwrap();
+        assert_eq!(request.suffix.as_deref(), Some("-bar"));
+        let request = parse("basename", &words("x --version")).unwrap();
+        assert_eq!(request.suffix.as_deref(), Some("--version"));
+        let request = parse("basename", &words("-a x -s")).unwrap();
+        assert_eq!(request.names, ["x", "-s"]);
         let request = parse("dirname", &words("a/b -z c/d")).unwrap();
         assert_eq!((request.names.len(), request.zero), (2, true));
     }
@@ -485,13 +452,14 @@ mod tests {
         assert_eq!(usage("basename", "a b c"), "extra operand 'c'");
         assert_eq!(usage("basename", "-q x"), "invalid option -- 'q'");
         assert_eq!(
-            usage("basename", "--bogus x"),
-            "unrecognized option '--bogus'"
+            usage("basename", "--bogus=1 x"),
+            "unrecognized option '--bogus=1'"
         );
         assert_eq!(
-            usage("basename", "x -s"),
+            usage("basename", "-s"),
             "option requires an argument -- 's'"
         );
+        assert_eq!(usage("basename", "x -- -y"), "extra operand '-y'");
         assert_eq!(
             usage("basename", "--zero=1 x"),
             "option '--zero' doesn't allow an argument"
@@ -500,7 +468,7 @@ mod tests {
         assert_eq!(usage("dirname", ""), "missing operand");
         assert_eq!(parse("dirname", &words("--he")), Err(Early::Help));
         assert_eq!(
-            parse("basename", &words("x --version")),
+            parse("basename", &words("--version --bogus")),
             Err(Early::Version)
         );
     }
