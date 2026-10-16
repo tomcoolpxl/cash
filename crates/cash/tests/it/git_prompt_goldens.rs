@@ -10,8 +10,10 @@
 //!
 //! It runs in the Git Bash of the Git for Windows that provides the scripts: the fixtures
 //! are made with git, and only the cases run under cash. Without Git for Windows the test
-//! fails rather than passing without a word, and when Git for Windows updates its scripts
-//! it fails and says to re-freeze, as decided on 2026-10-04.
+//! fails rather than passing without a word. When Git for Windows has updated its scripts
+//! since the freeze, the cases run in that Git Bash too and cash is held to its output
+//! (the user, 2026-10-16); it failed and asked for a re-freeze, which CI's runners, whose
+//! Git updates without notice, made a red build until someone had the same Git.
 
 #![allow(
     clippy::tests_outside_test_module,

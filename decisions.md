@@ -870,6 +870,10 @@ that changes overnight surprises script authors; a paid certificate or SignPath.
 - **The git-prompt goldens are frozen against the installed Git for Windows** (the user,
   2026-10-04): the test fails and says to re-freeze when the scripts' hashes change.
   Turned down: vendoring the GPL-2.0 `git-prompt.sh`, and a by-hand differential.
+  Changed (the user, 2026-10-16): when the hashes changed, the cases run in the installed
+  Git Bash and cash is held to that, with a note to re-freeze; CI's runners updated Git
+  without notice and the build stayed red until someone had the same Git. Turned down:
+  updating the local Git to the runners' and re-freezing, and re-freezing on CI.
 - **Timing-sensitive tests run on an idle machine, and failures under load are never
   fixed** (the user, 2026-10-02): such a test is run again with the CPU free and judged
   from that; no timeout is lengthened and no test rewritten for load.

@@ -12,7 +12,8 @@
 # --freeze writes the oracle's output and status for each case into tests/git-prompt/,
 # with the hashes of the scripts it came from; --check runs cash alone against them, and
 # is what `it/git_prompt_goldens.rs` runs (BIN-05). When Git for Windows updates its
-# scripts, --check says so: re-freeze, and look at what changed.
+# scripts, --check says so and compares with the Git Bash running it instead; re-freeze
+# when convenient, and look at what changed.
 #
 # Run it from Git Bash on Windows; it finds the scripts through `git --exec-path`.
 set -uo pipefail
@@ -53,11 +54,14 @@ sources() {
         fi
     done
 }
+# Scripts Git for Windows has changed since the freeze (CI's runners update Git without
+# notice) have no frozen output to be held to: each case runs in the Git Bash running this
+# instead, as the comparing mode runs them, and cash is held to that.
 if [[ $mode == check ]] && ! diff <(sources) "$G/SOURCES" >/dev/null 2>&1; then
     printf 'the installed scripts are not the ones tests/git-prompt was frozen from:\n' >&2
     diff <(sources) "$G/SOURCES" >&2
-    printf 're-freeze with `bash tests/git-prompt-differential.sh --freeze` and look at what changed\n' >&2
-    exit 3
+    printf 'comparing with this Git Bash instead; re-freeze with `bash tests/git-prompt-differential.sh --freeze`\n' >&2
+    mode=compare oracle=$BASH
 fi
 
 W=$(cygpath -m "$(mktemp -d)")
