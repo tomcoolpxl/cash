@@ -72,6 +72,19 @@ What the phases now in DONE.md left open, each where its phase says more.
   the clipboard first and fails with "the clipboard is in use by another program" on a
   busy desktop (a clipboard manager, an app copying). A short retry of the open, in
   `cash_win32::clipboard` or in the test, would ride it out.
+- **Work done again on every call, from the 2026-10-16 survey** (after `ls` was found
+  re-reading Windows Terminal's settings per listing; the session facts now have one
+  place, `cash_win32::facts`). Still worked out each time:
+  - `which <builtin>` and `type -a` scan all of PATH on every call;
+  - the completion menu runs the PATH scan (or carapace) again on every keystroke while
+    it is open;
+  - a name not found is not remembered, so each miss probes PATH twice;
+  - a script's shebang interpreter is looked up twice, past the hash table;
+  - each `.ps1` run scans PATH for pwsh;
+  - `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command;
+  - `Shell::clone` copies the builtins table for every subshell;
+  - coolfetch asks sysinfo for everything on each run, nothing kept between runs;
+  - `tar -cf -` writes 512-byte blocks, one write each, into a pipe.
 - **zstd compresses at ruzstd's fast level only** (phase 28, 2026-10-07): every level
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
