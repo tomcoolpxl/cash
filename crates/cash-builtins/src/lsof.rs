@@ -487,6 +487,7 @@ fn rows_below(
     recursive: bool,
     walk: Option<&Walk>,
     options: &Options,
+    stop: &cash_core::StopToken,
     stderr: &mut impl Write,
 ) -> std::io::Result<Vec<Row>> {
     let canonical = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
@@ -507,7 +508,7 @@ fn rows_below(
         }
     };
 
-    let below = fileuse::held_below(root, recursive, walk);
+    let below = fileuse::held_below(root, recursive, walk, stop);
     if below.unasked > 0 && !options.quiet {
         writeln!(
             stderr,
@@ -674,6 +675,7 @@ fn run(
             *recursive,
             full_walk.as_ref(),
             options,
+            &context.stop_token(),
             &mut stderr,
         )?;
         file_keys.extend(found.iter().filter_map(|row| row.file.clone()));

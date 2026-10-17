@@ -243,9 +243,10 @@ fn parse(
 fn file_uses(
     path: &std::path::Path,
     walk: Option<&cash_win32::handles::Walk>,
+    stop: &cash_core::StopToken,
 ) -> std::io::Result<Vec<Use>> {
     let holders = if path.is_dir() {
-        fileuse::held_below(path, true, walk)
+        fileuse::held_below(path, true, walk, stop)
             .held
             .into_iter()
             .map(|held| match held {
@@ -396,7 +397,11 @@ fn run(
                 if path.is_dir() && walk.is_none() {
                     walk = Some(cash_win32::handles::open_files(None).ok());
                 }
-                match file_uses(&path, walk.as_ref().and_then(Option::as_ref)) {
+                match file_uses(
+                    &path,
+                    walk.as_ref().and_then(Option::as_ref),
+                    &context.stop_token(),
+                ) {
                     Ok(uses) => (display, uses),
                     Err(error) => {
                         let error = cash_core::error::os_error_text(&error);

@@ -7,8 +7,11 @@
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
+use cash_core::StopToken;
 use cash_win32::handles::{OpenFile, Walk};
 use cash_win32::{process, restart};
+
+use crate::walk as walker;
 
 /// How a process uses a file, as far as Windows lets us tell.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -167,30 +170,32 @@ fn module_holders(
         .collect()
 }
 
-/// Every regular file below `dir`, not following directory links or junctions; `None`
-/// once more than `limit` entries (files and folders) have been seen: a folder such as
-/// `TEMP` can hold tens of thousands of folders.
-pub(crate) fn files_below_within(dir: &Path, limit: usize) -> Option<Vec<PathBuf>> {
+/// The regular files at or below `dir` (directly in it unless `recursive`), going through
+/// no folder link or junction below it; `None` once more than `limit` entries (files and
+/// folders) have been seen: a folder such as `TEMP` can hold tens of thousands of folders.
+/// A stopped walk finds nothing.
+fn files_below_within(
+    dir: &Path,
+    recursive: bool,
+    limit: usize,
+    stop: &StopToken,
+) -> Option<Vec<PathBuf>> {
+    let options = walker::WalkOptions {
+        links: walker::Links::Roots,
+        order: walker::Order::Listing,
+        min_depth: 1,
+        max_depth: if recursive { usize::MAX } else { 1 },
+        ..walker::WalkOptions::default()
+    };
     let mut files = Vec::new();
-    let mut pending = vec![dir.to_path_buf()];
-    let mut seen = 0usize;
-    while let Some(next) = pending.pop() {
-        let Ok(entries) = std::fs::read_dir(&next) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            seen += 1;
-            if seen > limit {
-                return None;
-            }
-            let Ok(kind) = entry.file_type() else {
-                continue;
-            };
-            if kind.is_dir() {
-                pending.push(entry.path());
-            } else if kind.is_file() {
-                files.push(entry.path());
-            }
+    for (seen, next) in walker::Walk::new("", dir, &options, stop.clone()).enumerate() {
+        if seen >= limit {
+            return None;
+        }
+        match next {
+            Ok(entry) if entry.kind == walker::Kind::File => files.push(entry.path),
+            Err(walker::WalkError::Stopped) => return Some(Vec::new()),
+            _ => {}
         }
     }
     files.sort();
@@ -219,11 +224,12 @@ pub(crate) struct HeldBelow<'w> {
 /// What processes hold at or below the folder `root` (directly in it unless `recursive`):
 /// open files from the handle walk, executables and modules from every process, and for
 /// the processes the walk could not open (every process without a walk), the Restart
-/// Manager over the files below, asked in halves.
+/// Manager over the files below, asked in halves. A stop ends the looking.
 pub(crate) fn held_below<'w>(
     root: &Path,
     recursive: bool,
     walk: Option<&'w Walk>,
+    stop: &StopToken,
 ) -> HeldBelow<'w> {
     let root_key = path_key(root);
     let root_key = root_key.trim_end_matches('\\');
@@ -244,6 +250,9 @@ pub(crate) fn held_below<'w>(
         .collect();
     let listed = process::list();
     for pid in listed.iter().map(|p| p.pid) {
+        if stop.requested() {
+            return HeldBelow { held, unasked: 0 };
+        }
         let image = process::image_path(pid);
         if let Some(image) = image.as_ref().filter(|image| inside(image)) {
             held.push(Held::File(FileHolder {
@@ -270,24 +279,8 @@ pub(crate) fn held_below<'w>(
     if wanted.is_empty() {
         return HeldBelow { held, unasked: 0 };
     }
-    let files: Option<Vec<PathBuf>> = if recursive {
-        files_below_within(root, RESTART_MANAGER_FOLDER_LIMIT)
-    } else {
-        std::fs::read_dir(root).map_or(Some(Vec::new()), |entries| {
-            let entries: Vec<_> = entries
-                .flatten()
-                .take(RESTART_MANAGER_FOLDER_LIMIT + 1)
-                .collect();
-            (entries.len() <= RESTART_MANAGER_FOLDER_LIMIT).then(|| {
-                entries
-                    .iter()
-                    .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
-                    .map(std::fs::DirEntry::path)
-                    .collect()
-            })
-        })
-    };
-    let Some(files) = files else {
+    let Some(files) = files_below_within(root, recursive, RESTART_MANAGER_FOLDER_LIMIT, stop)
+    else {
         return HeldBelow {
             held,
             unasked: wanted.len(),
