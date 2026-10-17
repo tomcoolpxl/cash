@@ -206,3 +206,26 @@ fn stat_change_is_the_files_change_time() {
     assert_eq!(modified, "1590000000", "{out}");
     assert!(changed.parse::<u64>().unwrap() > 1_700_000_000, "{out}");
 }
+
+/// A time is shown as Git Bash's stat shows it: in the zone an exported `TZ` names, to
+/// the 100 ns NTFS keeps, with the zone's offset. It was UTC to the second, `+0000`.
+#[test]
+fn stat_shows_a_time_in_the_zone_to_the_tick() {
+    let scratch = Scratch::new("stat-zone");
+    let file = scratch.join("dated.txt");
+    std::fs::write(&file, "x").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH + std::time::Duration::new(1_590_000_000, 123_456_700))
+        .unwrap();
+    let posix = file.to_string_lossy().replace('\\', "/");
+    let out = cash(&format!(
+        "export TZ=UTC; stat -c %y '{posix}'; TZ=JST-9 stat -c %y '{posix}'"
+    ));
+    assert_eq!(
+        out,
+        "2020-05-20 18:40:00.123456700 +0000\n2020-05-21 03:40:00.123456700 +0900"
+    );
+}

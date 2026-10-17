@@ -3,6 +3,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use cash_core::timefmt::Zone;
 use cash_core::{ExecutionResult, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long, Order, Short};
 use cash_win32::unix::{Kind, mode_string, permissions};
@@ -199,7 +200,12 @@ impl builtins::Command for StatCommand {
                 };
 
                 match metadata_res {
-                    Ok(meta) => FileStatInfo::from_path_and_meta(path, &resolved, &meta),
+                    Ok(meta) => FileStatInfo::from_path_and_meta(
+                        path,
+                        &resolved,
+                        &meta,
+                        &Zone::of_shell(context.shell),
+                    ),
                     Err(e) => {
                         writeln!(
                             context.stderr(),
@@ -286,8 +292,14 @@ struct FileStatInfo {
 }
 
 impl FileStatInfo {
-    /// `path` as written, for the report, and as resolved, to ask the file.
-    fn from_path_and_meta(written: &Path, path: &Path, meta: &std::fs::Metadata) -> Self {
+    /// `path` as written, for the report, and as resolved, to ask the file; its times shown
+    /// in `zone`.
+    fn from_path_and_meta(
+        written: &Path,
+        path: &Path,
+        meta: &std::fs::Metadata,
+        zone: &Zone,
+    ) -> Self {
         let name = written.to_string_lossy().to_string();
         let size = meta.len();
         let blocks = size.div_ceil(512);
@@ -334,12 +346,11 @@ impl FileStatInfo {
             .group
             .map_or_else(|| (user.clone(), uid), |group| (group.name, group.rid));
 
-        let (atime, mtime, btime) = {
-            let a = filetime_to_unix(meta.last_access_time());
-            let m = filetime_to_unix(meta.last_write_time());
-            let b = filetime_to_unix(meta.creation_time());
-            (a, m, b)
-        };
+        let (atime, mtime, btime) = (
+            meta.last_access_time(),
+            meta.last_write_time(),
+            meta.creation_time(),
+        );
 
         // NTFS keeps a change time of its own, of the contents, the name or the attributes,
         // which Git Bash's stat shows as Change, as `ls -c` does; the modification time
@@ -347,7 +358,7 @@ impl FileStatInfo {
         let ctime = cash_win32::fs::file_facts(path, !meta.is_symlink())
             .map(|facts| facts.change_time)
             .filter(|&time| time != 0)
-            .map_or(mtime, filetime_to_unix);
+            .unwrap_or(mtime);
 
         Self {
             name,
@@ -364,21 +375,21 @@ impl FileStatInfo {
             uid,
             group,
             gid,
-            access_time_secs: atime,
-            access_time_str: format_unix_time(atime),
-            modify_time_secs: mtime,
-            modify_time_str: format_unix_time(mtime),
-            change_time_secs: ctime,
-            change_time_str: format_unix_time(ctime),
-            birth_time_secs: btime,
-            birth_time_str: format_unix_time(btime),
+            access_time_secs: filetime_to_unix(atime),
+            access_time_str: human_time(filetime_to_utc(atime), zone),
+            modify_time_secs: filetime_to_unix(mtime),
+            modify_time_str: human_time(filetime_to_utc(mtime), zone),
+            change_time_secs: filetime_to_unix(ctime),
+            change_time_str: human_time(filetime_to_utc(ctime), zone),
+            birth_time_secs: filetime_to_unix(btime),
+            birth_time_str: human_time(filetime_to_utc(btime), zone),
             device_type: None,
         }
     }
 
     /// What `stat` says of a `/dev` name that is no file (D7): of the type and mode
-    /// given, empty, with one link, owned by the user, and as new as now.
-    fn special(name: &Path, file_type: &str, raw_mode: u32) -> Self {
+    /// given, empty, with one link, owned by the user, and as new as now, shown in `zone`.
+    fn special(name: &Path, file_type: &str, raw_mode: u32, zone: &Zone) -> Self {
         let perms = raw_mode & 0o777;
         let letter = match raw_mode & 0o170_000 {
             0o020_000 => 'c',
@@ -399,9 +410,9 @@ impl FileStatInfo {
             || (cash_win32::fs::current_user(), 65534),
             |owner| (owner.name, owner.rid),
         );
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |since| since.as_secs());
+        let clock = chrono::Utc::now();
+        let now = u64::try_from(clock.timestamp()).unwrap_or(0);
+        let shown = human_time(clock, zone);
         Self {
             name: name.to_string_lossy().to_string(),
             size: 0,
@@ -418,13 +429,13 @@ impl FileStatInfo {
             user,
             uid,
             access_time_secs: now,
-            access_time_str: format_unix_time(now),
+            access_time_str: shown.clone(),
             modify_time_secs: now,
-            modify_time_str: format_unix_time(now),
+            modify_time_str: shown.clone(),
             change_time_secs: now,
-            change_time_str: format_unix_time(now),
+            change_time_str: shown.clone(),
             birth_time_secs: now,
-            birth_time_str: format_unix_time(now),
+            birth_time_str: shown,
             device_type: None,
         }
     }
@@ -445,24 +456,32 @@ fn dev_info<SE: cash_core::ShellExtensions>(
     use cash_core::openfiles::FileKind;
     use cash_win32::devices::DevName;
 
+    let zone = Zone::of_shell(context.shell);
     let DevName::Descriptor(number) = name else {
-        let mut info = FileStatInfo::special(written, "character special file", 0o020_666);
+        let mut info = FileStatInfo::special(written, "character special file", 0o020_666, &zone);
         info.device_type = name.numbers();
         return Some(info);
     };
     let open = context.try_fd(cash_core::ShellFd::try_from(number).ok()?)?;
     if !dereference {
-        return Some(FileStatInfo::special(written, "symbolic link", 0o120_777));
+        return Some(FileStatInfo::special(
+            written,
+            "symbolic link",
+            0o120_777,
+            &zone,
+        ));
     }
     Some(match open.kind() {
         FileKind::Pipe { reads, writes } => {
             let mode = 0o010_000 | if reads { 0o400 } else { 0 } | if writes { 0o200 } else { 0 };
-            FileStatInfo::special(written, "fifo", mode)
+            FileStatInfo::special(written, "fifo", mode, &zone)
         }
-        FileKind::File(metadata) => FileStatInfo::from_path_and_meta(written, written, &metadata),
-        FileKind::Socket => FileStatInfo::special(written, "socket", 0o140_777),
+        FileKind::File(metadata) => {
+            FileStatInfo::from_path_and_meta(written, written, &metadata, &zone)
+        }
+        FileKind::Socket => FileStatInfo::special(written, "socket", 0o140_777, &zone),
         FileKind::Device | FileKind::Other => {
-            FileStatInfo::special(written, "character special file", 0o020_666)
+            FileStatInfo::special(written, "character special file", 0o020_666, &zone)
         }
     })
 }
@@ -489,44 +508,21 @@ const fn filetime_to_unix(filetime: u64) -> u64 {
     filetime.saturating_sub(UNIX_EPOCH_FILETIME) / 10_000_000
 }
 
-fn format_unix_time(secs: u64) -> String {
-    let s = secs % 60;
-    let m = (secs / 60) % 60;
-    let h = (secs / 3600) % 24;
-    let mut days = secs / 86400;
-
-    let mut year = 1970;
-    loop {
-        let leap = is_leap_year(year);
-        let days_in_year = if leap { 366 } else { 365 };
-        if days < days_in_year {
-            break;
-        }
-        days -= days_in_year;
-        year += 1;
-    }
-
-    let days_in_months: [u64; 12] = if is_leap_year(year) {
-        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    } else {
-        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    };
-
-    let mut month = 1;
-    for &dim in &days_in_months {
-        if days < dim {
-            break;
-        }
-        days -= dim;
-        month += 1;
-    }
-    let day = days + 1;
-
-    format!("{year:04}-{month:02}-{day:02} {h:02}:{m:02}:{s:02}.000000000 +0000")
+/// A time Windows keeps, 100-ns ticks since 1601, as a time chrono knows: one before
+/// 1970 too, which [`filetime_to_unix`] makes 0.
+fn filetime_to_utc(filetime: u64) -> chrono::DateTime<chrono::Utc> {
+    const UNIX_EPOCH_FILETIME: i64 = 116_444_736_000_000_000;
+    let since = i64::try_from(filetime)
+        .unwrap_or(i64::MAX)
+        .saturating_sub(UNIX_EPOCH_FILETIME);
+    let nanos = u32::try_from(since.rem_euclid(10_000_000) * 100).unwrap_or(0);
+    chrono::DateTime::from_timestamp(since.div_euclid(10_000_000), nanos).unwrap_or_default()
 }
 
-const fn is_leap_year(year: u64) -> bool {
-    (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
+/// A time as GNU stat shows it, in the zone `TZ` names, else Windows': to the nanosecond,
+/// with the zone's offset, as Git Bash's stat shows it to the 100 ns NTFS keeps.
+fn human_time(when: chrono::DateTime<chrono::Utc>, zone: &Zone) -> String {
+    zone.format(when, "%Y-%m-%d %H:%M:%S.%f %z")
 }
 
 /// `spec` with each `%X` replaced by `field(X)` (an unknown one kept as written) and,
