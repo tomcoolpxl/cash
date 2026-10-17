@@ -55,6 +55,11 @@ What the phases now in DONE.md left open, each where its phase says more.
 
 ## Found along the way
 
+- **The installer's links test kept an old version once** (2026-10-17, `ci full` before
+  1.20.0): `installer::links_make_the_tools_first_on_path_and_an_upgrade_refreshes_and_sweeps`
+  failed its first try with "kept 9.9.9: its cash.exe is running" where it expects
+  "removed 9.9.9", and passed the second: the run of the step before, not yet gone
+  when the upgrade looked, most likely. The test could wait for that process to end.
 - **A cash-sed test timed out once in CI** (2026-10-17, run 39024431762, slow lane
   1/4): `test_sed::ranges_ended_by_a_line_number_match_gnu_sed` took over 45 s on its
   first try and passed on the second. Look at what it runs before raising a limit.
