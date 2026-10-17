@@ -1967,3 +1967,10 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   entries 50 times takes 697 ms, where 1.23.0 took 809 and the build before the
   regression 676 (the rest is the second query of the folder and the new options'
   bookkeeping).
+- **A TERM trap never ran on cash's own `kill -TERM`** (found 2026-10-17 with `timeout`;
+  the user's pick after 1.23.0): settled as a limitation. `kill -TERM` from another
+  process ends a cash script at once with 143 (it sends a Ctrl-Break only to a group
+  leader, and terminates any other console program), so its `TERM` and `EXIT` traps do
+  not run; Ctrl-C and `kill -TERM $$` run them. A channel of cash's own to carry
+  signals between cash processes was turned down; spec.md §4 #31, `help differences`
+  and `help trap` say so.

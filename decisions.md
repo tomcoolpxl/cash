@@ -794,6 +794,12 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   `which <builtin>`'s walk of PATH, the search for pwsh on each `.ps1` run, and
   `erasedups`' scan of the whole history. The user published 1.23.0 to Scoop and asked
   for a benchmark against the last big one and the first one, step by step.
+- **A TERM trap from another process is a limitation, not a fix** (the user, 2026-10-18):
+  a cash script that another process sends `TERM`, `HUP`, `INT` or `QUIT` ends at once
+  with 128 + N, its `TERM` and `EXIT` traps not run; documented in spec.md §4 #31,
+  `help differences` and `help trap`. Ctrl-C and `kill -TERM $$` run the traps. Turned
+  down: a channel of cash's own (a named event per cash process) to carry signals
+  between cash processes.
 - **`ls -la`'s 20% at 1.23.0 is won back first** (the user, 2026-10-17, after the
   benchmark, `research/benchmarks-1.23.0.md`): the file facts are taken from the folder
   listing (one directory query) instead of a call for each file; and for keeping the
