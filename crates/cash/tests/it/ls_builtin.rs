@@ -1198,8 +1198,9 @@ fn ls_quotes_names_as_gnu_ls_does() {
 }
 
 /// Names that need no quotes get a space before them in `-l` and `-C` where others are
-/// quoted, as GNU ls 9.10 lines them up; headers and link targets are quoted too, and a
-/// style or a `QUOTING_STYLE` GNU does not know is refused or passed over as GNU's are.
+/// quoted, in the shell styles and c-maybe and not without a width, as GNU ls 9.10 lines
+/// them up; headers and link targets are quoted too, and a style or a `QUOTING_STYLE` GNU
+/// does not know is refused or passed over as GNU's are.
 #[test]
 fn ls_lines_up_quoted_names_as_gnu_ls_does() {
     let scratch = quoting_fixture("ls-quoting-lined-up");
@@ -1207,7 +1208,9 @@ fn ls_lines_up_quoted_names_as_gnu_ls_does() {
         scratch.path(),
         "ls -l --time-style=+T --quoting-style=shell | sed -n 's/^.* T //p'; \
          ls -Cd --quoting-style=shell -- 'a b' \"it's\" plain 'sub dir'; \
-         ls -R --quoting-style=shell 'sub dir'",
+         ls -R --quoting-style=shell 'sub dir'; \
+         ls -Cd -w 0 --quoting-style=shell -- 'a b' plain; \
+         ls -Cd --quoting-style=c-maybe -- c* plain",
     );
     let lines: Vec<&str> = out.stdout.lines().collect();
     assert_eq!(
@@ -1232,6 +1235,10 @@ fn ls_lines_up_quoted_names_as_gnu_ls_does() {
                 "'a b'  \"it's\"   plain  'sub dir'",
                 "'sub dir':",
                 "inner",
+                // Without a width GNU lines nothing up; c-maybe lines up as the shell
+                // styles do.
+                "'a b'  plain",
+                "\"c\\177d\"   plain",
             ][..]
         ),
         "{}",

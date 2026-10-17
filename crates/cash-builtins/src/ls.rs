@@ -903,7 +903,7 @@ impl QuotingStyle {
     /// Whether names are quoted only where they need it, so that GNU ls puts a space before
     /// the others where some are (`-l`, `-C`, `-x`).
     const fn aligns(self) -> bool {
-        matches!(self, Self::Shell | Self::ShellEscape)
+        matches!(self, Self::Shell | Self::ShellEscape | Self::CMaybe)
     }
 
     /// `name` as this style writes it, and whether it came out in quotes.
@@ -2121,7 +2121,8 @@ impl LsCommand {
         // Columns are measured in the cells a name takes on screen, not its bytes: an
         // icon, an accented letter or a CJK name is one or two cells whatever its length.
         let blocks_width = self.blocks_width(items, look);
-        let align = align_names(items, look);
+        // Not without a width (`-w 0`), as GNU ls has it.
+        let align = look.width.is_some() && align_names(items, look);
         let names: Vec<(usize, String)> = items
             .iter()
             .map(|i| {
