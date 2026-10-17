@@ -13,8 +13,8 @@ use crate::bc_util::instructions::Variable;
 
 use super::{
     instructions::{
-        BuiltinFunction, ConditionInstruction, ExprInstruction, Function, FunctionArgument,
-        NamedExpr, Program, Register, StmtInstruction,
+        BuiltinFunction, ExprInstruction, Function, FunctionArgument, NamedExpr, Program, Register,
+        StmtInstruction,
     },
     number::Number,
     output::OutputWriter,
@@ -621,35 +621,22 @@ impl Interpreter {
                 .eval_expr(lhs, out)?
                 .pow(&self.eval_expr(rhs, out)?, self.scale)
                 .map_err(ExecutionError::from),
+            ExprInstruction::Relation { op, lhs, rhs } => {
+                let lhs = self.eval_expr(lhs, out)?;
+                let rhs = self.eval_expr(rhs, out)?;
+                Ok(Number::from(u64::from(op.holds(lhs.cmp(&rhs)))))
+            }
         }
     }
 
+    /// A condition holds when its value is nonzero; a relational expression is
+    /// valued 1 or 0, so it holds exactly when the relation does.
     fn eval_condition(
         &mut self,
-        condition: &ConditionInstruction,
+        condition: &ExprInstruction,
         out: &mut OutputWriter,
     ) -> ExecutionResult<bool> {
-        match condition {
-            ConditionInstruction::Expr(expr) => self.eval_expr(expr, out).map(|val| !val.is_zero()),
-            ConditionInstruction::Eq(lhs, rhs) => {
-                Ok(self.eval_expr(lhs, out)? == self.eval_expr(rhs, out)?)
-            }
-            ConditionInstruction::Ne(lhs, rhs) => {
-                Ok(self.eval_expr(lhs, out)? != self.eval_expr(rhs, out)?)
-            }
-            ConditionInstruction::Lt(lhs, rhs) => {
-                Ok(self.eval_expr(lhs, out)? < self.eval_expr(rhs, out)?)
-            }
-            ConditionInstruction::Gt(lhs, rhs) => {
-                Ok(self.eval_expr(lhs, out)? > self.eval_expr(rhs, out)?)
-            }
-            ConditionInstruction::Leq(lhs, rhs) => {
-                Ok(self.eval_expr(lhs, out)? <= self.eval_expr(rhs, out)?)
-            }
-            ConditionInstruction::Geq(lhs, rhs) => {
-                Ok(self.eval_expr(lhs, out)? >= self.eval_expr(rhs, out)?)
-            }
-        }
+        Ok(!self.eval_expr(condition, out)?.is_zero())
     }
 
     fn eval_stmt(
@@ -835,6 +822,7 @@ impl Interpreter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bc_util::instructions::RelOp;
 
     #[test]
     fn test_print_number() {
@@ -1086,7 +1074,7 @@ mod tests {
         let output = interpreter
             .exec_to_string(
                 vec![StmtInstruction::While {
-                    condition: ConditionInstruction::Expr(ExprInstruction::Number("1".to_string())),
+                    condition: ExprInstruction::Number("1".to_string()),
                     instruction_count: 2,
                     body: vec![
                         StmtInstruction::Break,
@@ -1173,7 +1161,7 @@ mod tests {
         let output = interpreter
             .exec_to_string(
                 vec![StmtInstruction::If {
-                    condition: ConditionInstruction::Expr(ExprInstruction::Number("1".to_string())),
+                    condition: ExprInstruction::Number("1".to_string()),
                     instruction_count: 1,
                     body: vec![StmtInstruction::Expr(ExprInstruction::Number(
                         "5".to_string(),
@@ -1196,7 +1184,7 @@ mod tests {
         let output = interpreter
             .exec_to_string(
                 vec![StmtInstruction::If {
-                    condition: ConditionInstruction::Expr(ExprInstruction::Number("0".to_string())),
+                    condition: ExprInstruction::Number("0".to_string()),
                     instruction_count: 1,
                     body: vec![StmtInstruction::Expr(ExprInstruction::Number(
                         "5".to_string(),
@@ -1297,9 +1285,7 @@ mod tests {
             .exec_to_string(
                 vec![
                     StmtInstruction::If {
-                        condition: ConditionInstruction::Expr(ExprInstruction::Number(
-                            "0".to_string(),
-                        )),
+                        condition: ExprInstruction::Number("0".to_string()),
                         instruction_count: 2,
                         body: vec![
                             StmtInstruction::Expr(ExprInstruction::Number("1".to_string())),
@@ -1329,9 +1315,7 @@ mod tests {
             .exec_to_string(
                 vec![
                     StmtInstruction::While {
-                        condition: ConditionInstruction::Expr(ExprInstruction::Number(
-                            "0".to_string(),
-                        )),
+                        condition: ExprInstruction::Number("0".to_string()),
                         instruction_count: 2,
                         body: vec![
                             StmtInstruction::Expr(ExprInstruction::Number("2".to_string())),
@@ -1575,7 +1559,7 @@ mod tests {
             function: Function::default(),
         };
         let nested = StmtInstruction::If {
-            condition: ConditionInstruction::Expr(ExprInstruction::Number("1".to_string())),
+            condition: ExprInstruction::Number("1".to_string()),
             instruction_count: 1,
             body: vec![define],
         };
@@ -1621,12 +1605,13 @@ mod tests {
                         value: Box::new(ExprInstruction::Number("1".to_string())),
                     }),
                     StmtInstruction::While {
-                        condition: ConditionInstruction::Gt(
-                            ExprInstruction::Named(NamedExpr::VariableNumber('i')),
-                            ExprInstruction::UnaryMinus(Box::new(ExprInstruction::Number(
-                                "1".to_string(),
+                        condition: ExprInstruction::Relation {
+                            op: RelOp::Gt,
+                            lhs: Box::new(ExprInstruction::Named(NamedExpr::VariableNumber('i'))),
+                            rhs: Box::new(ExprInstruction::UnaryMinus(Box::new(
+                                ExprInstruction::Number("1".to_string()),
                             ))),
-                        ),
+                        },
                         instruction_count: 3,
                         body: vec![
                             StmtInstruction::Expr(ExprInstruction::Number("1".to_string())),
@@ -1665,10 +1650,11 @@ mod tests {
                         value: Box::new(ExprInstruction::Number("0".to_string())),
                     }),
                     StmtInstruction::While {
-                        condition: ConditionInstruction::Lt(
-                            ExprInstruction::Named(NamedExpr::VariableNumber('i')),
-                            ExprInstruction::Number("10".to_string()),
-                        ),
+                        condition: ExprInstruction::Relation {
+                            op: RelOp::Lt,
+                            lhs: Box::new(ExprInstruction::Named(NamedExpr::VariableNumber('i'))),
+                            rhs: Box::new(ExprInstruction::Number("10".to_string())),
+                        },
                         instruction_count: 1,
                         body: vec![StmtInstruction::Expr(ExprInstruction::PreIncrement(
                             NamedExpr::VariableNumber('i'),
@@ -1702,9 +1688,7 @@ mod tests {
             .exec_to_string(Program {
                 instructions: vec![
                     StmtInstruction::While {
-                        condition: ConditionInstruction::Expr(ExprInstruction::Number(
-                            "0".to_string(),
-                        )),
+                        condition: ExprInstruction::Number("0".to_string()),
                         instruction_count: 4,
                         body: vec![
                             StmtInstruction::Expr(ExprInstruction::Number("1".to_string())),
@@ -1742,12 +1726,13 @@ mod tests {
                         named: NamedExpr::VariableNumber('a'),
                         value: Box::new(ExprInstruction::Number("0".to_string())),
                     },
-                    condition: ConditionInstruction::Gt(
-                        ExprInstruction::Named(NamedExpr::VariableNumber('a')),
-                        ExprInstruction::UnaryMinus(Box::new(ExprInstruction::Number(
-                            "1".to_string(),
+                    condition: ExprInstruction::Relation {
+                        op: RelOp::Gt,
+                        lhs: Box::new(ExprInstruction::Named(NamedExpr::VariableNumber('a'))),
+                        rhs: Box::new(ExprInstruction::UnaryMinus(Box::new(
+                            ExprInstruction::Number("1".to_string()),
                         ))),
-                    ),
+                    },
                     update: ExprInstruction::PreDecrement(NamedExpr::VariableNumber('a')),
                     instruction_count: 3,
                     body: vec![
@@ -1783,10 +1768,11 @@ mod tests {
                             named: NamedExpr::VariableNumber('a'),
                             value: Box::new(ExprInstruction::Number("0".to_string())),
                         },
-                        condition: ConditionInstruction::Lt(
-                            ExprInstruction::Named(NamedExpr::VariableNumber('a')),
-                            ExprInstruction::Number("5".to_string()),
-                        ),
+                        condition: ExprInstruction::Relation {
+                            op: RelOp::Lt,
+                            lhs: Box::new(ExprInstruction::Named(NamedExpr::VariableNumber('a'))),
+                            rhs: Box::new(ExprInstruction::Number("5".to_string())),
+                        },
                         update: ExprInstruction::PostIncrement(NamedExpr::VariableNumber('a')),
                         instruction_count: 1,
                         body: vec![StmtInstruction::Expr(ExprInstruction::Number(
@@ -1825,9 +1811,7 @@ mod tests {
                             named: NamedExpr::VariableNumber('a'),
                             value: Box::new(ExprInstruction::Number("0".to_string())),
                         },
-                        condition: ConditionInstruction::Expr(ExprInstruction::Number(
-                            "0".to_string(),
-                        )),
+                        condition: ExprInstruction::Number("0".to_string()),
                         update: ExprInstruction::PostIncrement(NamedExpr::VariableNumber('a')),
                         instruction_count: 4,
                         body: vec![
@@ -1861,7 +1845,7 @@ mod tests {
         let err = interpreter
             .exec_to_string(Program {
                 instructions: vec![StmtInstruction::If {
-                    condition: ConditionInstruction::Expr(ExprInstruction::Number("1".to_string())),
+                    condition: ExprInstruction::Number("1".to_string()),
                     instruction_count: 2,
                     body: vec![
                         StmtInstruction::Expr(ExprInstruction::Number("1".to_string())),
@@ -1891,9 +1875,7 @@ mod tests {
             .exec_to_string(Program {
                 instructions: vec![
                     StmtInstruction::If {
-                        condition: ConditionInstruction::Expr(ExprInstruction::Number(
-                            "1".to_string(),
-                        )),
+                        condition: ExprInstruction::Number("1".to_string()),
                         instruction_count: 1,
                         body: vec![StmtInstruction::Expr(ExprInstruction::Number(
                             "1".to_string(),
@@ -1927,9 +1909,7 @@ mod tests {
             .exec_to_string(Program {
                 instructions: vec![
                     StmtInstruction::If {
-                        condition: ConditionInstruction::Expr(ExprInstruction::Number(
-                            "0".to_string(),
-                        )),
+                        condition: ExprInstruction::Number("0".to_string()),
                         instruction_count: 4,
                         body: vec![
                             StmtInstruction::Expr(ExprInstruction::Number("1".to_string())),

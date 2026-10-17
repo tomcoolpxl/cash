@@ -29,7 +29,7 @@ runs from `crates/cash/tests/bc.rs`.
 5. **GNU options accepted:** `-q`/`--quiet`, `-s`/`--standard` and `-w`/`--warn` change
    nothing (there is no banner, and this bc is always POSIX bc); `--mathlib` is `-l`;
    `-i`/`--interactive` recovers from errors as a terminal session does.
-6. **GNU extensions named:** POSIX bc only, by decision. When input fails to parse,
+6. **GNU extensions named:** POSIX bc only, by decision, but for comparisons (9). When input fails to parse,
    `src/gnu.rs` names the first GNU-only construct in it — `print`, `read()`, `else`,
    `&&`, `||`, `!`, `#` comments, `last`, `halt`, `continue`, `limits`, multi-letter
    names — so a GNU script fails with a reason rather than only "expected a newline".
@@ -40,3 +40,11 @@ runs from `crates/cash/tests/bc.rs`.
    acceptance.
 8. **Tests:** `tests/cases/mod.rs` reaches its helpers through `crate::plib`, which
    `crates/cash/tests/bc.rs` provides by running `bc` inside cash.
+9. **Comparisons are expressions (2026-10-17, the user's choice):** upstream's change of
+   0.9.1 (`5acc57e0`), taken whole: `<`, `>`, `<=`, `>=`, `==` and `!=` may stand in any
+   expression, valued 1 or 0, binding looser than assignment and associating left, as
+   in GNU bc, so `echo "1.5 > 1.2" | bc` prints 1 where it was a syntax error. Conditions
+   are ordinary expressions, true when not 0. `tests/cases/relational_expressions` is
+   upstream's, its expected output GNU bc 1.07.1's. posixutils-rs' other commits to
+   0.9.1 build and test on Windows or word a write to a full device, which cash's bc
+   does not meet; `upstreams.toml` says reviewed to it.

@@ -1761,3 +1761,10 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   first input, and bytes that are not UTF-8 written back as read (a Windows-1252 file
   came out of `awk '{ print }'` as UTF-8). Not taken, in the crate's README: bytes as
   characters in the C locale and three gawk corners.
+
+- **posixutils-rs bc's commits up to 0.9.1** (found 2026-10-16, done 2026-10-17): a
+  comparison is an expression valued 1 or 0, as in GNU bc, so `echo "1.5 > 1.2" | bc`
+  prints 1 where it was a syntax error; taken whole on the user's choice, though cash's
+  bc is otherwise POSIX bc, with upstream's GNU bc 1.07.1 fixture. The other commits
+  build on Windows or word a write to a full device. With this, every upstream in
+  `upstreams.toml` is reviewed to its newest.

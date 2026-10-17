@@ -76,3 +76,6 @@ crate = "crates/cash-bc"
 repository = "https://github.com/rustcoreutils/posixutils-rs"
 revision = "96bd8a372541cf7e4c427010a5414a40cf20c805"
 path = "calc"
+# 2026-10-17, to 0.9.1: comparisons as expressions taken; the rest builds and tests on
+# Windows or words a write to a full device (the crate's README, item 9).
+reviewed = "a212e7a7f2c31982f4f1424c575149632d3959ec"
