@@ -624,6 +624,27 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             None => all || censor.wants(&item.path, item.is_dir),
         })
         .collect();
+    let (out_dir, base) = match &options.output_dir {
+        Some(dir) => {
+            let mut base = dir.replace('\\', "/");
+            if !base.ends_with('/') {
+                base.push('/');
+            }
+            (env.path(dir), base)
+        }
+        None => (env.path("."), "./".to_owned()),
+    };
+    // Made before anything is looked for in the archive, as 7-Zip makes it: a run that
+    // extracts nothing still leaves the folder.
+    if !test && !options.stdout && options.output_dir.is_some() {
+        fs::create_dir_all(&out_dir).map_err(|e| {
+            Stop::Message(format!(
+                "Cannot create output directory : {} : {}",
+                text::system_message(&e),
+                out_dir.display()
+            ))
+        })?;
+    }
     if !wanted.contains(&true) {
         console.so("\nNo files to process\n");
         return Ok(0);
@@ -639,27 +660,8 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         opened.set_password(&typed);
         *password = Some(typed);
     }
-    let (out_dir, base) = match &options.output_dir {
-        Some(dir) => {
-            let mut base = dir.replace('\\', "/");
-            if !base.ends_with('/') {
-                base.push('/');
-            }
-            (env.path(dir), base)
-        }
-        None => (env.path("."), "./".to_owned()),
-    };
     let elim = elim_prefix(options, &items);
     let target = |item: &Item, keep| target(&out_dir, item, keep, elim.as_deref());
-    if !test && !options.stdout && options.output_dir.is_some() {
-        fs::create_dir_all(&out_dir).map_err(|e| {
-            Stop::Message(format!(
-                "Cannot create output directory : {} : {}",
-                text::system_message(&e),
-                out_dir.display()
-            ))
-        })?;
-    }
     let mut overwrite = options.overwrite;
     let mut errors = 0u64;
     let mut folder_times: Vec<(PathBuf, u64)> = Vec::new();
