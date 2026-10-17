@@ -291,7 +291,7 @@ impl builtins::Command for FindCommand {
                     }
                     Err(
                         walker::WalkError::Io { shown, error }
-                        | walker::WalkError::Unlisted { shown, error },
+                        | walker::WalkError::Unlisted { shown, error, .. },
                     ) => {
                         // Quoted, as GNU's find quotes a name it could not read.
                         writeln!(

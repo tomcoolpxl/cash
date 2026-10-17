@@ -22,6 +22,7 @@ use super::repack::Repack;
 use super::{Rar, Stop, code};
 use super::{identical, list};
 use crate::rardata;
+use crate::walk as tree;
 
 /// Which files are put in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -176,6 +177,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         mut sources,
         missing,
         held,
+        unlisted,
     } = collect(rar, parsed)?;
     for (shown, error) in missing.iter().chain(&held) {
         rar.console.err(&format!(
@@ -185,6 +187,18 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     }
     if !missing.is_empty() {
         rar.fail(code::NO_FILES);
+    }
+    // A folder that could not be listed, by its whole path, as rar names it.
+    for (path, error) in &unlisted {
+        let path = path.display().to_string().replace('/', "\\");
+        let path = path.strip_prefix(r"\\?\").unwrap_or(&path);
+        rar.console.err(&format!(
+            "\nCannot read contents of {path}\n{}",
+            open::system_message(error)
+        ));
+    }
+    if !unlisted.is_empty() {
+        rar.fail(code::OPEN);
     }
     if solid && compressing && !switches.no_sort {
         sort_solid(rar, &mut sources);
@@ -1903,12 +1917,14 @@ fn place(order: &[String], name: &str, file: &str) -> Option<usize> {
     chosen
 }
 
-/// What the names give: the sources, the names not there with Windows' errors, and the
-/// files another program holds open for writing, with theirs.
+/// What the names give: the sources, the names not there with Windows' errors, the
+/// files another program holds open for writing, with theirs, and the folders that could
+/// not be listed.
 struct Collected {
     sources: Vec<Source>,
     missing: Vec<(String, io::Error)>,
     held: Vec<(String, io::Error)>,
+    unlisted: Vec<(PathBuf, io::Error)>,
 }
 
 /// The files and folders the names give, by rar's rules: a folder named alone is put in
@@ -1955,6 +1971,7 @@ fn collect<SE: cash_core::ShellExtensions>(
         found: Vec::new(),
         missing: Vec::new(),
         held: Vec::new(),
+        unlisted: Vec::new(),
         walk: 0,
     };
     for name in &names {
@@ -1964,6 +1981,7 @@ fn collect<SE: cash_core::ShellExtensions>(
         found,
         missing,
         held,
+        unlisted,
         ..
     } = walker;
     // Each once, where it was first found; files first, then the folders deepest first.
@@ -1985,6 +2003,7 @@ fn collect<SE: cash_core::ShellExtensions>(
         sources: files,
         missing,
         held,
+        unlisted,
     })
 }
 
@@ -1996,6 +2015,7 @@ struct Walker<'r, 'a, SE: cash_core::ShellExtensions> {
     found: Vec<Source>,
     missing: Vec<(String, io::Error)>,
     held: Vec<(String, io::Error)>,
+    unlisted: Vec<(PathBuf, io::Error)>,
     walk: usize,
 }
 
@@ -2069,16 +2089,54 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
         }
     }
 
+    /// What is below the folder `path`, shown as `shown`, in the file system's order, on
+    /// the shared walker: only what is in it unless `deep`. Through links as [`Self::seen`]
+    /// takes them; a link back to a folder above is passed by, where rar goes round it
+    /// until the path is too long, so each file is stored once.
+    fn below(&self, path: &Path, shown: &str, deep: bool) -> tree::Walk {
+        let options = tree::WalkOptions {
+            links: if self.rar.switches.links.is_some() {
+                tree::Links::Never
+            } else {
+                tree::Links::All
+            },
+            order: tree::Order::Listing,
+            min_depth: 1,
+            max_depth: if deep { usize::MAX } else { 1 },
+            ..tree::WalkOptions::default()
+        };
+        tree::Walk::new(shown, path, &options, self.rar.context.stop_token())
+    }
+
+    /// One step of a walk: the entry and its own metadata, or nothing for what is passed
+    /// over. A folder that cannot be listed is kept to be said, as rar says it.
+    fn step(
+        &mut self,
+        next: Result<tree::Entry, tree::WalkError>,
+    ) -> Option<(tree::Entry, std::fs::Metadata)> {
+        match next {
+            Ok(entry) => {
+                let metadata = entry.own_metadata().ok()?;
+                Some((entry, metadata))
+            }
+            Err(tree::WalkError::Unlisted { path, error, .. }) => {
+                self.unlisted.push((path, error));
+                None
+            }
+            Err(_) => None,
+        }
+    }
+
     /// A folder, then what it holds in the file system's order, each folder in turn.
     fn folder(&mut self, path: &Path, shown: &str, base: &str, metadata: &std::fs::Metadata) {
         self.keep(path, shown, base, metadata, Kind::Folder);
-        for (name, metadata) in listing(path) {
-            let child = path.join(&name);
-            let shown = format!("{shown}/{name}");
-            match self.seen(&child, &metadata) {
-                Kind::Folder => self.folder(&child, &shown, base, &metadata),
+        for next in self.below(path, shown, true) {
+            let Some((entry, metadata)) = self.step(next) else {
+                continue;
+            };
+            match self.seen(&entry.path, &metadata) {
                 Kind::Skip => {}
-                kind => self.keep(&child, &shown, base, &metadata, kind),
+                kind => self.keep(&entry.path, &entry.shown, base, &metadata, kind),
             }
         }
     }
@@ -2087,28 +2145,22 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
     /// it matches.
     fn masked(&mut self, folder: &str, mask: &str, base: &str, deep: bool) {
         let path = self.rar.path(if folder.is_empty() { "." } else { folder });
-        let prefix = if folder.is_empty() {
-            String::new()
-        } else {
-            format!("{folder}/")
-        };
-        for (name, metadata) in listing(&path) {
-            let shown = format!("{prefix}{name}");
-            let child = path.join(&name);
-            match self.seen(&child, &metadata) {
+        for next in self.below(&path, folder, deep) {
+            let Some((entry, metadata)) = self.step(next) else {
+                continue;
+            };
+            let name = entry.name().to_string_lossy().into_owned();
+            match self.seen(&entry.path, &metadata) {
                 Kind::Folder => {
-                    if deep {
-                        if open::mask_matches(mask, &name) {
-                            self.keep(&child, &shown, base, &metadata, Kind::Folder);
-                        }
-                        self.masked(&shown, mask, base, deep);
+                    if deep && open::mask_matches(mask, &name) {
+                        self.keep(&entry.path, &entry.shown, base, &metadata, Kind::Folder);
                     }
                 }
                 Kind::Skip => {}
                 // A link stored, a folder's too, is taken as a file is.
                 kind => {
                     if open::mask_matches(mask, &name) {
-                        self.keep(&child, &shown, base, &metadata, kind);
+                        self.keep(&entry.path, &entry.shown, base, &metadata, kind);
                     }
                 }
             }
@@ -2377,20 +2429,6 @@ fn open_unshared(path: &Path) -> io::Result<std::fs::File> {
         .read(true)
         .share_mode(FILE_SHARE_READ)
         .open(path)
-}
-
-/// A folder's files and folders, in the order the file system gives them.
-fn listing(path: &Path) -> Vec<(String, std::fs::Metadata)> {
-    let Ok(entries) = std::fs::read_dir(path) else {
-        return Vec::new();
-    };
-    entries
-        .flatten()
-        .filter_map(|entry| {
-            let metadata = entry.metadata().ok()?;
-            Some((entry.file_name().to_string_lossy().into_owned(), metadata))
-        })
-        .collect()
 }
 
 /// Whether `-x` or `-n`'s mask takes a source: one with a wildcard and no folder matches

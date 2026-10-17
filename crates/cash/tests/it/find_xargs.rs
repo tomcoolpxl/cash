@@ -728,3 +728,33 @@ fn a_name_find_cannot_read_is_quoted() {
     assert_eq!(out.stdout, "rc=1");
     assert_eq!(out.stderr, "find: 'nosuch': No such file or directory");
 }
+
+/// With `-L`, a folder that cannot be listed is shown, then said, as GNU's find shows and
+/// says it: walkdir's own following lost it, opening it to read for its loop check.
+#[test]
+fn l_shows_a_folder_it_cannot_list_then_says_so() {
+    let scratch = Scratch::new("find-l-shut");
+    for dir in ["open", "shut"] {
+        std::fs::create_dir_all(scratch.path().join("l").join(dir)).unwrap();
+        std::fs::write(scratch.path().join("l").join(dir).join("f"), "x").unwrap();
+    }
+    let user = std::env::var("USERNAME").unwrap();
+    let shut = scratch.path().join("l").join("shut");
+    let icacls = |args: &[&str]| {
+        let status = Command::new("icacls")
+            .arg(&shut)
+            .args(args)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success(), "icacls {args:?}");
+    };
+    icacls(&["/deny", &format!("{user}:(RX)")]);
+    let out = run_in(
+        scratch.path(),
+        r#"find -L l | sort; echo "rc=${PIPESTATUS[0]}""#,
+    );
+    icacls(&["/remove:d", &user]);
+    assert_eq!(out.stdout, "l\nl/open\nl/open/f\nl/shut\nrc=1");
+    assert_eq!(out.stderr, "find: 'l/shut': Permission denied");
+}

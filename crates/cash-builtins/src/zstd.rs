@@ -2141,7 +2141,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                     walker::Kind::File | walker::Kind::Other => into.push(entry.shown),
                 },
                 Err(WalkError::Stopped) => break,
-                Err(WalkError::Io { shown, error } | WalkError::Unlisted { shown, error }) => {
+                Err(WalkError::Io { shown, error } | WalkError::Unlisted { shown, error, .. }) => {
                     self.say(
                         1,
                         &format!("Cannot open directory '{shown}': {}\n", strerror(&error)),

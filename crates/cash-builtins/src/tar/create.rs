@@ -459,7 +459,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                     self.error(&format!("{shown}: File system loop detected; not dumped"))?;
                     continue;
                 }
-                Err(walker::WalkError::Unlisted { shown, error }) => {
+                Err(walker::WalkError::Unlisted { shown, error, .. }) => {
                     let shown = self.quote_colon(shown.replace('\\', "/").as_bytes());
                     self.error(&format!("{shown}: Cannot open: {}", strerror(&error)))?;
                     continue;

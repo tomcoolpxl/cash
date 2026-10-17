@@ -133,6 +133,7 @@ impl builtins::Command for ChmodCommand {
                         | WalkError::Unlisted {
                             ref shown,
                             ref error,
+                            ..
                         }),
                     ) => {
                         if !self.silent {

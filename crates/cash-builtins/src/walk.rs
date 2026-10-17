@@ -1,14 +1,17 @@
 //! The folder walks the builtins share (decisions.md, "Builtins share their option parsing,
 //! input opening and folder walks"; `research/central-components-design.md`).
 //!
-//! Built on walkdir, which iterates rather than recurses, follows links or does not, finds
-//! a loop by file identity and names the folder it goes back to, sorts, limits the depth,
-//! keeps to one file system and prunes. cash adds what every walk here needs beside it:
+//! Built on walkdir, which iterates rather than recurses, sorts, limits the depth, keeps
+//! to one file system and prunes. cash adds what every walk here needs beside it:
 //! - the name each entry is shown by: the root as the user gave it, then `/name`s, with no
 //!   doubled `/`;
 //! - one answer to what a link is: a symlink or a junction (a name surrogate), as std and
 //!   walkdir say, never another reparse point (a cloud placeholder, a deduplicated file),
 //!   which is the file or folder it holds;
+//! - the links below a root followed here, each into a walk of its own, and a loop found
+//!   by file identity: walkdir's own following opens every folder it goes into to read,
+//!   for its loop check, so a folder that cannot be read was lost, and its error said
+//!   without a name;
 //! - the stop token, asked before each entry;
 //! - every error handed to the tool, which words it, sets its status and goes on.
 
@@ -89,8 +92,10 @@ pub(crate) struct Entry {
     /// How deep: 0 for the root.
     pub(crate) depth: usize,
     pub(crate) kind: Kind,
-    /// walkdir's entry; none for a dangling link ([`WalkError::Dangling`]).
+    /// walkdir's entry; none for a root link whose target is not there.
     listed: Option<walkdir::DirEntry>,
+    /// A link the walk went through: what it is, is what it names.
+    followed: bool,
 }
 
 impl Entry {
@@ -101,9 +106,21 @@ impl Entry {
             .unwrap_or_else(|| self.path.as_os_str())
     }
 
+    /// What it is itself, a link not followed: free from the listing where Windows gave
+    /// it, a link's read again.
+    pub(crate) fn own_metadata(&self) -> std::io::Result<std::fs::Metadata> {
+        match &self.listed {
+            Some(entry) if !entry.path_is_symlink() => entry.metadata().map_err(into_io),
+            _ => std::fs::symlink_metadata(&self.path),
+        }
+    }
+
     /// What it is, through a link the walk follows; free from the listing where Windows
     /// gave it. A dangling link's is its own.
     pub(crate) fn metadata(&self) -> std::io::Result<std::fs::Metadata> {
+        if self.followed {
+            return std::fs::metadata(&self.path);
+        }
         match &self.listed {
             Some(entry) => entry.metadata().map_err(into_io),
             None => std::fs::symlink_metadata(&self.path),
@@ -122,6 +139,7 @@ pub(crate) enum WalkError {
     /// A folder that could not be listed: handed out first, then this.
     Unlisted {
         shown: String,
+        path: PathBuf,
         error: std::io::Error,
     },
     /// An entry that could not be looked at: a root that is not there.
@@ -135,33 +153,46 @@ pub(crate) enum WalkError {
 
 /// A walk of the tree under one root.
 pub(crate) struct Walk {
-    inner: walkdir::IntoIter,
-    links: Links,
+    /// walkdir's walks under way: the root's, then one inside each link to a folder the
+    /// walk goes through, the innermost last.
+    walks: Vec<Inner>,
+    /// The walk inside the link to a folder just handed out, gone into on the next step
+    /// unless [`Self::skip_folder`] says not to.
+    pending: Option<Inner>,
+    options: WalkOptions,
     root: PathBuf,
     shown: String,
     stop: StopToken,
     stopped: bool,
 }
 
+/// One of walkdir's walks: the root's, or the one inside a link the walk goes through.
+struct Inner {
+    iter: walkdir::IntoIter,
+    /// How deep its root is in the whole walk.
+    depth: usize,
+    /// With `contents_first`, the link it is inside, handed out once it is done.
+    deferred: Option<Entry>,
+}
+
 impl Walk {
     /// A walk of `actual`, shown as `shown`: what the user typed, empty for the working
     /// directory searched with no name.
     pub(crate) fn new(shown: &str, actual: &Path, options: &WalkOptions, stop: StopToken) -> Self {
-        let mut walk = walkdir::WalkDir::new(actual)
-            .follow_links(options.links == Links::All)
-            .follow_root_links(options.links != Links::Never)
-            .contents_first(options.contents_first)
-            .min_depth(options.min_depth)
-            .max_depth(options.max_depth)
-            .same_file_system(options.one_file_system);
-        walk = match options.order {
-            Order::Listing => walk,
-            Order::Ordinal => walk.sort_by_file_name(),
-            Order::FilesFirst => walk.sort_by_key(files_first),
+        let root = Inner {
+            iter: walkdir_of(
+                actual,
+                options,
+                options.links != Links::Never,
+                options.max_depth,
+            ),
+            depth: 0,
+            deferred: None,
         };
         Self {
-            inner: walk.into_iter(),
-            links: options.links,
+            walks: vec![root],
+            pending: None,
+            options: *options,
             root: actual.to_path_buf(),
             shown: shown.to_owned(),
             stop,
@@ -172,7 +203,11 @@ impl Walk {
     /// Goes no further into the folder just handed out (`find -prune`, an excluded
     /// folder).
     pub(crate) fn skip_folder(&mut self) {
-        self.inner.skip_current_dir();
+        if self.pending.take().is_none()
+            && let Some(walk) = self.walks.last_mut()
+        {
+            walk.iter.skip_current_dir();
+        }
     }
 
     /// The name `path`, under the root, is shown by.
@@ -188,29 +223,23 @@ impl Walk {
         join_shown(&self.shown, &below.join("/"))
     }
 
-    fn entry(&self, entry: walkdir::DirEntry) -> Entry {
-        let kind = kind(entry.file_type());
+    fn entry(&self, entry: walkdir::DirEntry, depth: usize) -> Entry {
         Entry {
             shown: self.shown(entry.path()),
             path: entry.path().to_path_buf(),
-            depth: entry.depth(),
-            kind,
+            depth: depth + entry.depth(),
+            kind: kind(entry.file_type()),
             listed: Some(entry),
+            followed: false,
         }
     }
 
-    fn error(&self, error: walkdir::Error) -> WalkError {
+    fn error(&self, error: walkdir::Error, depth: usize) -> WalkError {
         let shown = error
             .path()
             .map_or_else(|| self.shown.clone(), |path| self.shown(path));
-        if let Some(ancestor) = error.loop_ancestor() {
-            return WalkError::Loop {
-                shown,
-                ancestor: self.shown(ancestor),
-            };
-        }
         let dangling = error.path().filter(|path| {
-            self.links != Links::Never
+            self.options.links != Links::Never
                 && error
                     .io_error()
                     .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
@@ -220,21 +249,83 @@ impl Walk {
             return WalkError::Dangling(Entry {
                 shown,
                 path: path.to_path_buf(),
-                depth: error.depth(),
+                depth: depth + error.depth(),
                 kind: Kind::Link,
                 listed: None,
+                followed: false,
             });
         }
         // walkdir words both alike; what failed on a folder is its listing.
-        let listing = error
+        let listed = error
             .path()
-            .is_some_and(|path| std::fs::metadata(path).is_ok_and(|m| m.is_dir()));
+            .filter(|path| std::fs::metadata(path).is_ok_and(|m| m.is_dir()))
+            .map(Path::to_path_buf);
         let error = into_io(error);
-        if listing {
-            WalkError::Unlisted { shown, error }
-        } else {
-            WalkError::Io { shown, error }
+        match listed {
+            Some(path) => WalkError::Unlisted { shown, path, error },
+            None => WalkError::Io { shown, error },
         }
+    }
+
+    /// A link below the root the walk goes through: what it names, its walk set to go
+    /// into it when a folder (after it, or before it with `contents_first`, when nothing
+    /// is handed out now); or why it is not gone through.
+    fn follow(&mut self, mut entry: Entry) -> Option<Result<Entry, WalkError>> {
+        let target = match std::fs::metadata(&entry.path) {
+            Ok(target) => target,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Some(Err(WalkError::Dangling(entry)));
+            }
+            Err(error) => {
+                return Some(Err(WalkError::Io {
+                    shown: entry.shown,
+                    error,
+                }));
+            }
+        };
+        entry.followed = true;
+        entry.kind = kind_of(&target);
+        if entry.kind != Kind::Folder || entry.depth >= self.options.max_depth {
+            return Some(Ok(entry));
+        }
+        if let Some(ancestor) = self.ancestor(&entry.path) {
+            return Some(Err(WalkError::Loop {
+                shown: entry.shown,
+                ancestor,
+            }));
+        }
+        let mut inner = Inner {
+            iter: walkdir_of(
+                &entry.path,
+                &self.options,
+                true,
+                self.options.max_depth - entry.depth,
+            ),
+            depth: entry.depth,
+            deferred: None,
+        };
+        if self.options.contents_first {
+            inner.deferred = Some(entry);
+            self.walks.push(inner);
+            return None;
+        }
+        self.pending = Some(inner);
+        Some(Ok(entry))
+    }
+
+    /// The folder at or above the root that the link `link` names, shown: a loop.
+    fn ancestor(&self, link: &Path) -> Option<String> {
+        let identity = |path: &Path| {
+            cash_win32::fs::file_info(path)
+                .ok()
+                .map(|info| (info.volume, info.index))
+        };
+        let target = identity(link)?;
+        link.ancestors()
+            .skip(1)
+            .take_while(|folder| folder.starts_with(&self.root))
+            .find(|folder| identity(folder) == Some(target))
+            .map(|folder| self.shown(folder))
     }
 }
 
@@ -249,10 +340,90 @@ impl Iterator for Walk {
             self.stopped = true;
             return Some(Err(WalkError::Stopped));
         }
-        Some(match self.inner.next()? {
-            Ok(entry) => Ok(self.entry(entry)),
-            Err(error) => Err(self.error(error)),
-        })
+        if let Some(inner) = self.pending.take() {
+            self.walks.push(inner);
+        }
+        loop {
+            let nested = self.walks.len() > 1;
+            let (next, depth) = {
+                let walk = self.walks.last_mut()?;
+                (walk.iter.next(), walk.depth)
+            };
+            let Some(next) = next else {
+                let done = self.walks.pop()?;
+                if let Some(link) = done.deferred
+                    && link.depth >= self.options.min_depth
+                {
+                    return Some(Ok(link));
+                }
+                continue;
+            };
+            let found = match next {
+                Ok(found) => found,
+                Err(error) => return Some(Err(self.error(error, depth))),
+            };
+            // A link's own entry was handed out from the walk around the walk inside it.
+            if nested && found.depth() == 0 {
+                continue;
+            }
+            let mut entry = self.entry(found, depth);
+            if self.options.links == Links::All && entry.kind == Kind::Link {
+                if entry.depth == 0 {
+                    // The root's link, which walkdir went through itself.
+                    if let Ok(target) = std::fs::metadata(&entry.path) {
+                        entry.followed = true;
+                        entry.kind = kind_of(&target);
+                    }
+                } else {
+                    match self.follow(entry) {
+                        Some(Ok(followed)) => entry = followed,
+                        Some(Err(error)) => return Some(Err(error)),
+                        None => continue,
+                    }
+                }
+            }
+            if entry.depth < self.options.min_depth {
+                // Not handed out, and so not to be skipped: what is in it is walked.
+                if let Some(inner) = self.pending.take() {
+                    self.walks.push(inner);
+                }
+                continue;
+            }
+            return Some(Ok(entry));
+        }
+    }
+}
+
+/// walkdir's walk of `path`, `max_depth` deep, through the root's link when
+/// `follow_root`, and through no other: [`Walk`] goes through those itself.
+fn walkdir_of(
+    path: &Path,
+    options: &WalkOptions,
+    follow_root: bool,
+    max_depth: usize,
+) -> walkdir::IntoIter {
+    let walk = walkdir::WalkDir::new(path)
+        .follow_links(false)
+        .follow_root_links(follow_root)
+        .contents_first(options.contents_first)
+        .max_depth(max_depth)
+        .same_file_system(options.one_file_system);
+    match options.order {
+        Order::Listing => walk,
+        Order::Ordinal => walk.sort_by_file_name(),
+        Order::FilesFirst => walk.sort_by_key(files_first),
+    }
+    .into_iter()
+}
+
+/// What a followed link names is, by its metadata.
+fn kind_of(target: &std::fs::Metadata) -> Kind {
+    if target.is_dir() {
+        Kind::Folder
+    } else if target.is_file() {
+        Kind::File
+    } else {
+        Kind::Other
     }
 }
 
@@ -316,7 +487,9 @@ mod tests {
                 Ok(entry) => format!("{} {:?}", entry.shown, entry.kind),
                 Err(WalkError::Loop { shown, ancestor }) => format!("{shown} loops to {ancestor}"),
                 Err(WalkError::Dangling(entry)) => format!("{} dangling", entry.shown),
-                Err(WalkError::Unlisted { shown, error }) => format!("{shown} unlisted {error}"),
+                Err(WalkError::Unlisted { shown, error, .. }) => {
+                    format!("{shown} unlisted {error}")
+                }
                 Err(WalkError::Io { shown, error }) => format!("{shown} {error}"),
                 Err(WalkError::Stopped) => "stopped".to_owned(),
             })
@@ -384,5 +557,50 @@ mod tests {
             walked(root, "top", &all)
         );
         std::fs::remove_dir(&link).unwrap();
+    }
+
+    #[test]
+    fn a_followed_link_is_gone_into_in_its_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("top");
+        let other = dir.path().join("other");
+        std::fs::create_dir_all(root.join("a")).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(root.join("a").join("f"), "x").unwrap();
+        std::fs::write(other.join("o"), "x").unwrap();
+        cash_win32::junction::point(&root.join("a").join("j"), &other).unwrap();
+        let all = WalkOptions {
+            links: Links::All,
+            min_depth: 1,
+            ..WalkOptions::default()
+        };
+        assert_eq!(
+            walked(&root, "t", &all),
+            ["t/a Folder", "t/a/f File", "t/a/j Folder", "t/a/j/o File"]
+        );
+        let last = WalkOptions {
+            contents_first: true,
+            ..all
+        };
+        assert_eq!(
+            walked(&root, "t", &last),
+            ["t/a/f File", "t/a/j/o File", "t/a/j Folder", "t/a Folder"]
+        );
+        // A link above the shallowest entry shown is still gone into.
+        let deep = WalkOptions {
+            min_depth: 3,
+            ..all
+        };
+        assert_eq!(walked(&root, "t", &deep), ["t/a/j/o File"]);
+        // Its depth counts from the root, and the walk inside it stops at the deepest.
+        let shallow = WalkOptions {
+            max_depth: 2,
+            ..all
+        };
+        assert_eq!(
+            walked(&root, "t", &shallow),
+            ["t/a Folder", "t/a/f File", "t/a/j Folder"]
+        );
+        std::fs::remove_dir(root.join("a").join("j")).unwrap();
     }
 }
