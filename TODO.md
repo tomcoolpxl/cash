@@ -108,9 +108,17 @@ What the phases now in DONE.md left open, each where its phase says more.
     missing command given arguments (looked into 2026-10-17), as the globbing decision
     (D81) looks the name up as the second word is expanded, and the dispatch looks
     again; carrying "missing" from the one to the other would save the second;
-  - a script's shebang interpreter is looked up twice, past the hash table;
-  - each `.ps1` run scans PATH for pwsh;
-  - `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command;
+  - a script's shebang interpreter is looked up twice, past the hash table (looked into
+    2026-10-17): `execute_via_external` reads the script's head and resolves the
+    interpreter to answer a script whose interpreter is `true` or `false` at once, and
+    the spawn reads and resolves again; the second costs a PATH walk next to starting
+    the interpreter, tens of milliseconds for any real one;
+  - each `.ps1` run scans PATH for pwsh (looked into 2026-10-17): one walk for `pwsh`,
+    then `powershell`, next to PowerShell's own start of a few hundred milliseconds;
+  - `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command
+    (looked into 2026-10-17): 1 to 2 ms after Enter, which the starter `.bashrc` turns
+    on; an index from command line to entries would make it a lookup, at the cost of
+    keeping that index right through loading, `history -d` and trimming to `HISTSIZE`;
   - coolfetch asks sysinfo for everything on each run, nothing kept between runs.
 - **What the upstreams cash took in have done since** (2026-10-16, `cargo xtask
   upstreams`; the weekly Upstreams workflow keeps an `upstreams` issue): uutils
