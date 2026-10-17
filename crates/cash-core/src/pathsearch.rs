@@ -24,19 +24,28 @@ where
     type Item = PathBuf;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(path) = self.paths.pop_front() {
-            let path = PathBuf::from(path.as_ref()).join(self.filename.as_ref());
+        while let Some(dir) = self.paths.pop_front() {
+            let dir = dir.as_ref();
+            // The name's spellings that are in the folder, from one look at it, as
+            // `resolve_command` has them: a file check for each PATHEXT extension in each
+            // folder made `type -a cmd` 43 ms over 79 folders.
+            let listed = listed_names(dir, self.filename.as_ref());
+            if listed.as_ref().is_some_and(Vec::is_empty) {
+                continue;
+            }
+            let present = |name: &std::ffi::OsStr| {
+                listed.as_ref().is_none_or(|listed| {
+                    listed.contains(&cash_win32::fold::name_key(&name.to_string_lossy()))
+                })
+            };
+            let path = dir.join(self.filename.as_ref());
 
-            // Ask the platform to resolve the path to an actual executable file, which on
-            // Windows may involve appending a PATHEXT extension. The helper takes ownership
-            // so Unix — where no resolution is needed — can return the path unchanged
-            // without allocating.
-            //
-            // A directory carries the execute bit on Unix but is never a command. Filter
-            // the *resolved* path rather than the input: on Windows, resolution appends a
-            // PATHEXT extension, so a `prog` directory must not stop `prog.exe` in the
-            // same PATH entry from being found.
-            if let Some(resolved) = sys::fs::resolve_executable(path, &self.extensions)
+            // Resolve the path to an actual executable file, which may append a PATHEXT
+            // extension. A directory is never a command: the *resolved* path is checked,
+            // so a `prog` directory does not stop `prog.exe` in the same folder from being
+            // found.
+            if let Some(resolved) =
+                sys::fs::resolve_executable_among(path, &self.extensions, present)
                 && !resolved.is_dir()
             {
                 return Some(resolved);

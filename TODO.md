@@ -37,13 +37,9 @@ order. The phase before, released as 1.22.0, is in DONE.md.
    DONE.md).
 4. **`stat`'s blocks are the size's, not the allocation's**: done (2026-10-17, DONE.md).
 5. **A script's shebang interpreter is looked up twice**: done (2026-10-17, DONE.md).
-6. **The PATH search that checks each extension is slow** (2026-10-17, found with the
-   missing-command lookup): `find_executables_in_path` (`pathsearch::search_for_executable`)
-   tries every `PATHEXT` extension in every folder, a file check each, about 38 ms on this
-   machine's 80 folders, where `resolve_command` reads each folder once (`names_beginning`).
-   Still used by `type -a` and `which -a` (every match), `hash NAME`, and carapace's first
-   look for itself; the winglob decision moved off it (DONE.md). The one look per folder
-   would serve them too.
+6. **The PATH search that checks each extension is slow**: done (2026-10-17, DONE.md).
+
+All six are done (the first settled as not cash's); the phase ends with release 1.23.0.
 
 ## Left over from finished phases
 
@@ -81,7 +77,13 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   15 s once, then passed in 1.3 s. The whole archive takes about a second, so it
   waited, not worked: plausibly a `kill` that lands before the builtin reads its stop,
   with `wait` left waiting. Which of the three it was is not known; the test should name
-  the tool it is on, and a loop of the three under load should catch it.
+  the tool it is on, and a loop of the three under load should catch it. On run
+  39066508176 (2026-10-17) it and two other tests that `kill` background jobs
+  (`busy_background_jobs_leave_the_foreground_free`, 40 busy loops, and
+  `a_compressor_kill_stops_on_standard_input_leaves_a_broken_archive`) timed out at
+  15 s on all four tries, side by side, on a runner whose tool install had failed; the
+  next run, with the same code, passed all three. A starved runner, then, or the same
+  wait, which load brings out.
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against

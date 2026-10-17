@@ -1941,3 +1941,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   now (`interpreter_exit`, which a test holds to `resolve_interpreter`'s answers), and
   the start's is the one search: a `#!/usr/bin/env cash` script ran in 84 ms where it
   took 102 ms (best of 3 × 20, debug build).
+- **The PATH search that checked each extension was slow** (the user's pick after
+  1.22.0, found with the missing-command lookup): the search for every match
+  (`pathsearch::search_for_executable`, under `type -a`, `which -a`, `hash NAME` and
+  carapace's first look for itself) checked each `PATHEXT` extension in each folder, a
+  file check each. It looks at each folder once now, as running a command does
+  (`listed_names`, `resolve_executable_among`), and finds the same files: `type -a cmd`
+  and `which -a cmd` take 8.5 ms where they took 43 over 79 folders, `hash cmd` 1.3 ms
+  where it took 3.8 (debug build).

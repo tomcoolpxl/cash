@@ -165,3 +165,44 @@ fn pathext_match_still_beats_the_extensionless_script() {
         out.stdout
     );
 }
+
+#[test]
+fn type_a_and_which_a_find_every_folders_match_from_one_look_at_each() {
+    // `type -a` and `which -a` checked each PATHEXT extension in each folder, 43 ms over
+    // 79 folders; they look at each folder once now, as running a command does. What
+    // they find is the same: a folder named `prog` is no command beside `PROG.CMD`, an
+    // extension is matched whatever its case, a folder without the name is passed.
+    let first = tempfile::tempdir().expect("scratch dir");
+    let none = tempfile::tempdir().expect("scratch dir");
+    let second = tempfile::tempdir().expect("scratch dir");
+    std::fs::create_dir(first.path().join("prog")).unwrap();
+    std::fs::write(first.path().join("PROG.CMD"), "@echo one\r\n").unwrap();
+    std::fs::write(none.path().join("other.cmd"), "@echo other\r\n").unwrap();
+    std::fs::write(second.path().join("prog.bat"), "@echo two\r\n").unwrap();
+    let path = format!(
+        r"{};{};{};C:\WINDOWS\system32",
+        first.path().display(),
+        none.path().display(),
+        second.path().display()
+    );
+    let out = output_of(
+        cash_command()
+            .args(["-c", "type -a prog; which -a prog"])
+            .env("PATH", path),
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 4, "{}", out.stdout);
+    for (line, folder, file) in [
+        (lines[0], first.path(), "prog.cmd"),
+        (lines[1], second.path(), "prog.bat"),
+        (lines[2], first.path(), "prog.cmd"),
+        (lines[3], second.path(), "prog.bat"),
+    ] {
+        let want = folder.join(file).to_string_lossy().replace('\\', "/");
+        assert!(
+            line.to_lowercase().ends_with(&want.to_lowercase()),
+            "{line} for {want}: {}",
+            out.stdout
+        );
+    }
+}
