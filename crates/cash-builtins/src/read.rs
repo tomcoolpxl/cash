@@ -21,7 +21,7 @@ const DEFAULT_DELIMITER: char = '\n';
 const NUL_DELIMITER: char = '\0';
 
 /// Parse standard input.
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 pub(crate) struct ReadCommand {
     /// Optionally, name of an array variable to receive read words
     /// of input.
@@ -93,10 +93,27 @@ pub(crate) struct ReadCommand {
 impl builtins::Command for ReadCommand {
     type Error = cash_core::Error;
 
+    /// The command line as clap parsed it the last time it was the same, as it is for each
+    /// line of `while read -r line`: clap's parse of read's thirteen options was a large
+    /// part of each line's time.
     fn new<I>(args: I) -> Result<Self, clap::Error>
     where
         I: IntoIterator<Item = String>,
     {
+        builtins::parse_remembered(args.into_iter().collect(), Self::parse_line)
+    }
+
+    async fn execute<SE: cash_core::ShellExtensions>(
+        &self,
+        context: cash_core::ExecutionContext<'_, SE>,
+    ) -> Result<cash_core::ExecutionResult, Self::Error> {
+        self.run(context).await
+    }
+}
+
+impl ReadCommand {
+    /// The command line, as clap parses it, with which of `-n` and `-N` came last.
+    fn parse_line(args: Vec<String>) -> Result<Self, clap::Error> {
         let matches = builtins::clap_command::<Self>().try_get_matches_from(args)?;
         let lower_n = last_indexed_value(&matches, "return_after_n_chars");
         let capital_n = last_indexed_value(&matches, "return_after_n_chars_no_delimiter");
@@ -117,10 +134,10 @@ impl builtins::Command for ReadCommand {
         Ok(command)
     }
 
-    async fn execute<SE: cash_core::ShellExtensions>(
+    async fn run<SE: cash_core::ShellExtensions>(
         &self,
         mut context: cash_core::ExecutionContext<'_, SE>,
-    ) -> Result<cash_core::ExecutionResult, Self::Error> {
+    ) -> Result<cash_core::ExecutionResult, cash_core::Error> {
         // Validate timeout value if provided.
         if let Some(result) = self.validate_timeout(&context)? {
             return Ok(result);

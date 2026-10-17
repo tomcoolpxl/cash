@@ -86,6 +86,49 @@ where
     C::from_arg_matches_mut(&mut matches).map_err(|error| error.format(&mut command))
 }
 
+/// `parse(args)`, kept for the next call with the same words, for each thread.
+///
+/// A builtin whose words repeat (`read -r line` in a loop, `local -i n`) skips clap, whose
+/// parse sets and takes back a default for every option on each call. A line that does
+/// not parse is not kept, so its error is said each time. Up to 64 lines a builtin.
+///
+/// # Errors
+///
+/// What `parse` gives.
+pub fn parse_remembered<C, F>(args: Vec<String>, parse: F) -> Result<C, clap::Error>
+where
+    C: Clone + 'static,
+    F: FnOnce(Vec<String>) -> Result<C, clap::Error>,
+{
+    type Remembered = rustc_hash::FxHashMap<
+        std::any::TypeId,
+        rustc_hash::FxHashMap<Vec<String>, Box<dyn std::any::Any>>,
+    >;
+    thread_local! {
+        static PARSED: std::cell::RefCell<Remembered> = std::cell::RefCell::default();
+    }
+    let kind = std::any::TypeId::of::<C>();
+    let known = PARSED.with_borrow(|parsed| {
+        parsed
+            .get(&kind)
+            .and_then(|lines| lines.get(&args))
+            .and_then(|known| known.downcast_ref::<C>())
+            .cloned()
+    });
+    if let Some(known) = known {
+        return Ok(known);
+    }
+    let fresh = parse(args.clone())?;
+    PARSED.with_borrow_mut(|parsed| {
+        let lines = parsed.entry(kind).or_default();
+        if lines.len() >= 64 {
+            lines.clear();
+        }
+        lines.insert(args, Box::new(fresh.clone()));
+    });
+    Ok(fresh)
+}
+
 /// Parses `args` as `C`'s command line ([`parse_args`]), `C` taking options with a `+` as
 /// well as a `-` (`declare +x`).
 ///
