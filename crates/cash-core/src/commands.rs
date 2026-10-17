@@ -427,6 +427,13 @@ if ($LASTEXITCODE -ne $null) {\r\n\
     Ok(runner_path)
 }
 
+/// The PowerShell found for the `PATH` and folder last asked about, with them: each `.ps1`
+/// run walked `PATH` for `pwsh`, then `powershell`, again.
+static POWERSHELL_FOUND: std::sync::Mutex<Option<(String, PathBuf, PathBuf)>> =
+    std::sync::Mutex::new(None);
+
+/// The PowerShell a script is run by: `pwsh`, else Windows' `powershell`, on `PATH`; found
+/// again only when `PATH` or the folder has changed, or the one found has gone.
 fn find_powershell_binary<SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
 ) -> PathBuf {
@@ -435,25 +442,31 @@ fn find_powershell_binary<SE: extensions::ShellExtensions>(
         .env()
         .get_str("PATH", context.shell)
         .unwrap_or_default();
+    let folder = context.shell.working_dir();
+    if let Ok(found) = POWERSHELL_FOUND.lock()
+        && let Some((path, dir, exe)) = found.as_ref()
+        && **path == *path_var
+        && dir == folder
+        && exe.is_file()
+    {
+        return exe.clone();
+    }
     let path_entries: Vec<PathBuf> = crate::sys::fs::split_paths(path_var.as_ref()).collect();
     let pathext: Vec<String> = cash_win32::resolve::DEFAULT_PATHEXT
         .iter()
         .map(|s| (*s).to_string())
         .collect();
-    if let Some(d) =
-        cash_win32::resolve::resolve("pwsh", &path_entries, &pathext, context.shell.working_dir())
-    {
-        return d.target().to_path_buf();
+    let found = ["pwsh", "powershell"].into_iter().find_map(|name| {
+        cash_win32::resolve::resolve(name, &path_entries, &pathext, folder)
+            .map(|d| d.target().to_path_buf())
+    });
+    let Some(exe) = found else {
+        return PathBuf::from("powershell.exe");
+    };
+    if let Ok(mut remembered) = POWERSHELL_FOUND.lock() {
+        *remembered = Some((path_var.into_owned(), folder.to_path_buf(), exe.clone()));
     }
-    if let Some(d) = cash_win32::resolve::resolve(
-        "powershell",
-        &path_entries,
-        &pathext,
-        context.shell.working_dir(),
-    ) {
-        return d.target().to_path_buf();
-    }
-    PathBuf::from("powershell.exe")
+    exe
 }
 
 /// What the spawn adds to a command built for a program.

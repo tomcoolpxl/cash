@@ -1983,3 +1983,14 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   the one remedy taken is the rule's own: the test that starts 40 busy loops, which the
   two others had timed out beside, runs alone now (`threads-required`), as the test that
   spins two threads per processor does.
+- **`which <builtin>` walked all of PATH** (the user's pick after 1.23.0, from the
+  2026-10-16 survey): for a bundled tool `which` looks along PATH for a `cash
+  --link-tools` link to this cash. The search for every match looks at each folder once
+  since the PATH search above (`which ls` 96 ms, now 16, bench builds), and the first
+  link found ends it now, where every match was gathered before any was compared.
+  Without a link the whole of PATH is still looked at once: a link can be in any folder.
+- **Each `.ps1` run searched PATH for pwsh** (the user's pick after 1.23.0, from the
+  same survey): one walk for `pwsh`, then `powershell`, before each script. The one
+  found is remembered with the `PATH` and folder it was found for, and found again only
+  when either changes or it has gone (a script run with Windows PowerShell's folder alone
+  on `PATH` gets that one).
