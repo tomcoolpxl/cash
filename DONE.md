@@ -1622,3 +1622,12 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   - `[ "$i" = 5 ]`, 100,000 times: 0.80 / 0.57 / 0.61 (`test` takes its words without
     clap).
   printf, the parse caches and `cd` are in TODO.md.
+
+- **GNU ls's common options** (the user's choice of 2026-10-17, done the same day), each
+  checked against Git Bash's coreutils: `-p`, `--file-type`, `--indicator-style`, `-m`,
+  `-x`, `--format`, `-w`, `-o`, `-g`, `-G`, `-I`/`--ignore`, `--hide`, `-B`,
+  `--full-time`, `--time-style` (and `TIME_STYLE`, in an exported `TZ`'s zone), `-L`
+  (`-RL` says a junction loop, status 2). `-C` lays columns out as GNU does, each as wide
+  as its widest name, where every column took the widest name's width; the width is
+  `COLUMNS`, the terminal's, or 80 into a pipe, where the console's was taken. `ls -l` on
+  a link to a folder shows the link, as GNU's does. `help ls` gives `ls --help`'s options.

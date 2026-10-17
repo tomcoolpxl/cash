@@ -79,14 +79,13 @@ What the phases now in DONE.md left open, each where its phase says more.
   **xz is 20% slower on one block** (6.5 s against 5.4 s; lzma-rust2's encoder) and
   decodes at two thirds of XZ Utils' speed; zip on one large member has no parallelism
   to use (2.2 s against 1.9 s).
-- **GNU ls options cash's ls has not** (2026-10-17): since ls reads GNU coreutils 9's
-  whole option table, these are named as not supported, where clap called them
-  unexpected: `-p`, `-m`, `-x`, `-Q`, `-o`, `-g`, `-G`, `-n`, `-s`, `-i`, `-c`, `-u`,
-  `-I`/`--ignore`, `--hide`, `-B`, `-w`, `--full-time`, `--time-style`, `--time`, `-L`,
-  `-H`, `--format`, `--indicator-style`, `--file-type`, `--quoting-style`, `-b`, `-q`,
-  `-N`, `-k`, `--si`, `--block-size`, `-T`, `--zero`, `--hyperlink`, `-Z`, `--author`,
-  `-D`. The common ones (`-p`, `-m`, `-x`, `-o`, `-g`, `-G`, `-I`, `--hide`, `-B`,
-  `--full-time`, `--time-style`, `-L`) want doing, each against Git Bash.
+- **GNU ls options cash's ls has not** (2026-10-17): named as not supported: `-Q`,
+  `-n`, `-s`, `-i`, `-c`, `-u`, `--time`, `-H`, `--quoting-style`, `-b`, `-q`, `-N`,
+  `-k`, `--si`, `--block-size`, `-T`, `--zero`, `--hyperlink`, `-Z`, `--author`, `-D`.
+  The common ones are done (DONE.md).
+- **ls's words for a bad `--color` or `--classify`** (2026-10-17): `Valid arguments
+  are: 'always', 'auto', 'never'`, status 2, where GNU's ls lists them three to a line
+  (`'always', 'yes', 'force'` and so on), status 1, as cash's `--format` now does.
 - **The clipboard test fails while another program holds the clipboard** (2026-10-16):
   `clipboard_and_small_tools::pbcopy_and_pbpaste_round_trip_through_the_clipboard` reads
   the clipboard first and fails with "the clipboard is in use by another program" on a

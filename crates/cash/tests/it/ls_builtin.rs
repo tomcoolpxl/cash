@@ -727,3 +727,220 @@ fn ls_tree_reports_a_directory_it_cannot_open() {
     );
     assert_eq!(out.code, 1);
 }
+
+/// A tree of names to lay out, as GNU ls's options were checked on in Git Bash.
+fn layout_fixture(name: &str) -> Scratch {
+    let scratch = Scratch::new(name);
+    for dir in ["dir1", "sub"] {
+        std::fs::create_dir(scratch.join(dir)).unwrap();
+    }
+    for file in [
+        "a.txt",
+        "b~",
+        ".hidden",
+        "c d",
+        "e.sh",
+        "zz.log",
+        "another-long-file-name.txt",
+        "yet-another-long-name.md",
+    ] {
+        std::fs::write(scratch.join(file), "x").unwrap();
+    }
+    scratch
+}
+
+/// `script` in `dir`, 60 columns wide and in UTC, as the expectations were taken.
+fn ls_in(dir: &Path, script: &str) -> Output {
+    output_of(
+        cash_command()
+            .args(["-c", script])
+            .current_dir(dir)
+            .env("COLUMNS", "60")
+            .env("TZ", "UTC"),
+    )
+}
+
+/// `-x`, `-C` and `-m` lay names out as GNU ls does in Git Bash, each column as wide as
+/// its widest name (spaces where GNU writes tabs), and `-p` marks folders.
+#[test]
+fn ls_layouts_fill_the_width_as_gnu_ls_does() {
+    let scratch = layout_fixture("ls-layouts");
+    let out = ls_in(
+        scratch.path(),
+        "ls -x; echo; ls -C; echo; ls -m; echo; ls -w 40 -x; echo; ls --format=commas -p; \
+         echo; ls -p",
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(
+        out.stdout,
+        "a.txt  another-long-file-name.txt  b~      c d  dir1  e.sh\n\
+         sub    yet-another-long-name.md    zz.log\n\
+         \n\
+         a.txt                       c d   sub\n\
+         another-long-file-name.txt  dir1  yet-another-long-name.md\n\
+         b~                          e.sh  zz.log\n\
+         \n\
+         a.txt, another-long-file-name.txt, b~, c d, dir1, e.sh, sub,\n\
+         yet-another-long-name.md, zz.log\n\
+         \n\
+         a.txt   another-long-file-name.txt\n\
+         b~      c d\n\
+         dir1    e.sh\n\
+         sub     yet-another-long-name.md\n\
+         zz.log\n\
+         \n\
+         a.txt, another-long-file-name.txt, b~, c d, dir1/, e.sh,\n\
+         sub/, yet-another-long-name.md, zz.log\n\
+         \n\
+         a.txt\nanother-long-file-name.txt\nb~\nc d\ndir1/\ne.sh\nsub/\nyet-another-long-name.md\nzz.log"
+    );
+}
+
+/// `-I` and `-B` leave names out however `-a` asks, `--hide` only without `-a` or `-A`.
+#[test]
+fn ls_leaves_out_what_ignore_hide_and_backups_name() {
+    let scratch = layout_fixture("ls-ignore");
+    let line = |script: &str| {
+        let out = ls_in(scratch.path(), &format!("{script} | tr '\\n' ' '"));
+        assert_eq!(out.code, 0, "{script}: {}", out.stderr);
+        out.stdout
+    };
+    assert_eq!(
+        line("ls -I '*.txt'"),
+        "b~ c d dir1 e.sh sub yet-another-long-name.md zz.log"
+    );
+    assert_eq!(
+        line("ls -a --ignore='*.txt'"),
+        ". .. .hidden b~ c d dir1 e.sh sub yet-another-long-name.md zz.log"
+    );
+    assert_eq!(
+        line("ls --hide='*.txt'"),
+        "b~ c d dir1 e.sh sub yet-another-long-name.md zz.log"
+    );
+    assert_eq!(
+        line("ls -A --hide='*.txt'"),
+        ".hidden a.txt another-long-file-name.txt b~ c d dir1 e.sh sub \
+         yet-another-long-name.md zz.log"
+    );
+    assert_eq!(
+        line("ls -aB"),
+        ". .. .hidden a.txt another-long-file-name.txt c d dir1 e.sh sub \
+         yet-another-long-name.md zz.log"
+    );
+    assert_eq!(
+        line("ls --hide='*.txt' --hide='*.md'"),
+        "b~ c d dir1 e.sh sub zz.log"
+    );
+}
+
+/// The long format's options and times, as GNU ls shows them: `-o` leaves out the group,
+/// `-g` the owner; `--full-time` and each `--time-style`, in `TZ`'s zone.
+#[test]
+fn ls_long_options_and_time_styles_as_gnu_ls_has_them() {
+    let scratch = Scratch::new("ls-times");
+    std::fs::write(scratch.join("a.txt"), "abc").unwrap();
+    std::fs::write(scratch.join("old.txt"), "").unwrap();
+    let at = |name: &str, seconds: u64, nanos: u32| {
+        let file = std::fs::File::options()
+            .write(true)
+            .open(scratch.join(name))
+            .unwrap();
+        file.set_modified(std::time::UNIX_EPOCH + std::time::Duration::new(seconds, nanos))
+            .unwrap();
+    };
+    at("a.txt", 1_767_319_445, 123_456_700);
+    at("old.txt", 1_741_080_030, 0);
+    let out = ls_in(
+        scratch.path(),
+        "ls -l | awk 'NR > 1 {print NF}'; ls -o | awk 'NR > 1 {print NF}'; \
+         ls -og | awk 'NR > 1 {print NF}'; \
+         for style in full-iso long-iso iso locale +%Y/%m/%d posix-long-iso; do \
+           ls -o --time-style=$style a.txt | cut -d' ' -f4-; done; \
+         ls --full-time old.txt | cut -d' ' -f6-; \
+         TIME_STYLE=long-iso ls -o a.txt | cut -d' ' -f4-; \
+         ls --time-style=bogus a.txt; echo \"rc=$?\"",
+    );
+    assert_eq!(
+        out.stdout,
+        "9\n9\n8\n8\n7\n7\n\
+         3 2026-01-02 02:04:05.123456700 +0000 a.txt\n\
+         3 2026-01-02 02:04 a.txt\n\
+         3 2026-01-02  a.txt\n\
+         3 Jan  2  2026 a.txt\n\
+         3 2026/01/02 a.txt\n\
+         3 Jan  2  2026 a.txt\n\
+         2025-03-04 09:20:30.000000000 +0000 old.txt\n\
+         3 2026-01-02 02:04 a.txt\n\
+         a.txt\n\
+         rc=0",
+        "{}",
+        out.stderr
+    );
+    let out = ls_in(scratch.path(), "ls -l --time-style=bogus");
+    assert_eq!(out.code, 2);
+    assert_eq!(
+        out.stderr,
+        "ls: invalid argument 'bogus' for 'time style'\n\
+         Valid arguments are:\n  - [posix-]full-iso\n  - [posix-]long-iso\n  - [posix-]iso\n  \
+         - [posix-]locale\n  - +FORMAT (e.g., +%H:%M) for a 'date'-style format\n\
+         Try 'ls --help' for more information."
+    );
+}
+
+/// A word that is none of `--format`'s or `--indicator-style`'s ends `ls` with GNU's list
+/// and status 1; a width that is no number with status 2.
+#[test]
+fn ls_refuses_a_bad_value_as_gnu_ls_does() {
+    let scratch = Scratch::new("ls-bad-values");
+    let out = ls_in(scratch.path(), "ls --format=bogus");
+    assert_eq!(out.code, 1);
+    assert_eq!(
+        out.stderr,
+        "ls: invalid argument 'bogus' for '--format'\n\
+         Valid arguments are:\n  - 'verbose', 'long'\n  - 'commas'\n  - 'horizontal', 'across'\n  \
+         - 'vertical'\n  - 'single-column'\n\
+         Try 'ls --help' for more information."
+    );
+    let out = ls_in(scratch.path(), "ls --indicator-style=bogus");
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    let out = ls_in(scratch.path(), "ls -w abc");
+    assert_eq!(out.code, 2);
+    assert_eq!(out.stderr, "ls: invalid line width: 'abc'");
+}
+
+/// `-L` shows what a junction names, and with `-R` goes into it, but not round a junction
+/// back to a folder above: said as GNU ls says it, status 2.
+#[test]
+fn ls_l_shows_and_walks_what_a_link_names() {
+    let scratch = Scratch::new("ls-dereference");
+    std::fs::create_dir_all(scratch.join("d").join("sub")).unwrap();
+    std::fs::create_dir(scratch.join("real")).unwrap();
+    std::fs::write(scratch.join("real").join("f"), "x").unwrap();
+    cash_win32::junction::point(
+        &scratch.join("d").join("sub").join("up"),
+        &scratch.join("d"),
+    )
+    .unwrap();
+    cash_win32::junction::point(&scratch.join("j"), &scratch.join("real")).unwrap();
+    let out = ls_in(
+        scratch.path(),
+        "ls -l j | cut -c1; ls -lL -d j | cut -c1; ls -RL d; echo \"rc=$?\"",
+    );
+    assert_eq!(
+        out.stdout, "l\nd\nd:\nsub\n\nd/sub:\nup\nrc=2",
+        "{}",
+        out.stderr
+    );
+    assert_eq!(
+        out.stderr,
+        "ls: d/sub/up: not listing already-listed directory"
+    );
+}
+
+/// `help ls` gives `ls --help`'s options under its usage, the new ones among them: it gave
+/// clap's page of the few options clap knew.
+#[test]
+fn help_ls_gives_ls_help_options() {
+    let out = cash("help ls | grep -c -- '--time-style=STYLE\\|-L, --dereference'");
+    assert_eq!(out.stdout, "2", "{}", out.stderr);
+}

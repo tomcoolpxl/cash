@@ -18,9 +18,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use cash_core::builtins::{ContentOptions, ContentType};
+use cash_core::timefmt::Zone;
 use cash_core::{ExecutionResult, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long, Order};
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Utc};
 use clap::Parser;
 use unicode_width::UnicodeWidthStr as _;
 
@@ -34,23 +36,48 @@ List information about the FILEs (the current directory by default).
   -a, --all                  do not ignore entries starting with . or files
                                both hidden and system, as Explorer hides them
   -A, --almost-all           like -a, but do not list implied . and ..
+  -B, --ignore-backups       do not list implied entries ending with ~
   -C                         list entries by columns
   -d, --directory            list directories themselves, not their contents
   -F, --classify             append indicator (one of */@) to entries
+      --file-type            likewise, except do not append '*'
+      --format=WORD          across -x, commas -m, horizontal -x, long -l,
+                               single-column -1, verbose -l, vertical -C
+      --full-time            like -l --time-style=full-iso
+  -g                         like -l, but do not list the owner
+  -G, --no-group             in a long listing, do not print the group
   -h, --human-readable       with -l, print sizes like 1K 234M 2G
+      --hide=PATTERN         do not list implied entries matching shell PATTERN
+                               (overridden by -a or -A)
+  -I, --ignore=PATTERN       do not list implied entries matching shell PATTERN
+      --indicator-style=WORD  append an indicator with style WORD to names:
+                               none (the default), slash (-p),
+                               file-type (--file-type), classify (-F)
   -l                         use a long listing format
+  -L, --dereference          show what a link names rather than the link
+  -m                         fill the width with names separated by commas
+  -o                         like -l, but do not list the group
+  -p, --indicator-style=slash
+                             append / to directories
   -r, --reverse              reverse order while sorting
   -R, --recursive            list subdirectories recursively
   -S                         sort by file size, largest first
   -t                         sort by time, newest first
   -U                         do not sort; list entries in directory order
   -v                         natural sort of (version) numbers within text
+  -w, --width=COLS           set the output width to COLS; 0 means no limit
+  -x                         list entries by lines instead of by columns
   -X                         sort alphabetically by entry extension
   -1                         list one file per line
       --sort=WORD            sort by WORD instead of name: none (-U), size (-S),
                                time (-t), version (-v), extension (-X), name
       --group-directories-first
                              group directories before files
+      --time-style=STYLE     how -l shows times: full-iso, long-iso, iso,
+                               locale (the default), or +FORMAT, strftime's,
+                               FORMAT1 and FORMAT2 on two lines for old and
+                               recent files; posix-STYLE is the default here;
+                               TIME_STYLE gives it when the option is not given
       --color[=WHEN]         color the output: always, auto (the default), never;
                                names take LS_COLORS's colors, or dircolors'
                                defaults; with -l, the other columns take lsd's
@@ -93,21 +120,9 @@ pub(crate) struct LsCommand {
     #[arg(short = 'A', long = "almost-all")]
     almost_all: bool,
 
-    /// List one file per line.
-    #[arg(short = '1')]
-    one_column: bool,
-
-    /// List entries by columns.
-    #[arg(short = 'C')]
-    multi_column: bool,
-
     /// List directories themselves, not their contents.
     #[arg(short = 'd', long = "directory")]
     directory: bool,
-
-    /// Append indicator (one of */=>@|) to entries.
-    #[arg(short = 'F', long = "classify")]
-    classify: bool,
 
     /// With -l, print sizes like 1K 234M 2G etc.
     #[arg(short = 'h', long = "human-readable")]
@@ -193,9 +208,53 @@ pub(crate) struct LsCommand {
     #[arg(value_name = "FILE")]
     paths: Vec<String>,
 
+    /// How entries are laid out outside the long format: `-1`, `-C`, `-x`, `-m`.
+    #[arg(skip)]
+    layout: Layout,
+
+    /// The marks after names: `-p`, `--file-type`, `-F`, `--indicator-style`.
+    #[arg(skip)]
+    indicator: Indicator,
+
     /// `--classify=auto`: the marks only on a terminal, which `execute` says in `tty`.
     #[arg(skip)]
     classify_auto: bool,
+
+    /// `-g`: the long format without the owner.
+    #[arg(skip)]
+    no_owner: bool,
+
+    /// `-o`, `-G`: the long format without the group.
+    #[arg(skip)]
+    no_group: bool,
+
+    /// `-w`: the line's width, 0 for no limit.
+    #[arg(skip)]
+    width: Option<usize>,
+
+    /// `-I`: names not listed, however `-a` asks.
+    #[arg(skip)]
+    ignore: Vec<NamePattern>,
+
+    /// `--hide`: names not listed unless `-a` or `-A` asks.
+    #[arg(skip)]
+    hide: Vec<NamePattern>,
+
+    /// `-B`: names ending with `~` not listed.
+    #[arg(skip)]
+    ignore_backups: bool,
+
+    /// `--time-style`, or `full-iso` from `--full-time`.
+    #[arg(skip)]
+    time_style: Option<String>,
+
+    /// `-L`: what a link names is shown, and gone into with `-R`.
+    #[arg(skip)]
+    dereference: bool,
+
+    /// A folder `-RL` would have gone round: said, status 2.
+    #[arg(skip)]
+    looped: std::sync::atomic::AtomicBool,
 
     /// Whether the command's output is a terminal, for `--classify=auto`.
     #[arg(skip)]
@@ -216,8 +275,68 @@ enum Early {
     Version,
     /// A mistake `getopt_long` finds, or a value refused: said with the Try line.
     Usage(String),
-    /// One of GNU's options cash's ls does not have.
-    Refused(String),
+    /// A word that is none of an option's own (`--format=x`), said with the Try line and
+    /// status 1, as GNU's `argmatch` says it.
+    Argmatch(String),
+    /// Said as it is, status 2: one of GNU's options cash's ls does not have, or a width
+    /// that is no number.
+    Said(String),
+}
+
+/// How entries are laid out outside the long format.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Layout {
+    /// One per line into a pipe or a file, in columns on a terminal.
+    #[default]
+    Default,
+    /// `-1`.
+    OneColumn,
+    /// `-C`: down the columns.
+    Columns,
+    /// `-x`: across the lines.
+    Across,
+    /// `-m`: separated by commas.
+    Commas,
+}
+
+/// The marks after names, GNU's `--indicator-style`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Indicator {
+    #[default]
+    None,
+    /// `/` after a folder (`-p`).
+    Slash,
+    /// `-F`'s marks but `*` (`--file-type`).
+    FileType,
+    /// `*/@|` (`-F`).
+    Classify,
+}
+
+/// A shell pattern of `-I` or `--hide`, matched as GNU ls matches it: `fnmatch` with
+/// `FNM_PERIOD`, a leading dot matched only by a dot. One that does not parse matches
+/// itself.
+#[derive(Debug)]
+struct NamePattern {
+    text: String,
+    pattern: Option<glob::Pattern>,
+}
+
+impl NamePattern {
+    fn new(text: String) -> Self {
+        let pattern = glob::Pattern::new(&text).ok();
+        Self { text, pattern }
+    }
+
+    fn matches(&self, name: &str) -> bool {
+        let options = glob::MatchOptions {
+            case_sensitive: true,
+            require_literal_separator: false,
+            require_literal_leading_dot: true,
+        };
+        self.pattern.as_ref().map_or(self.text == name, |pattern| {
+            pattern.matches_with(name, options)
+        })
+    }
 }
 
 /// GNU coreutils 9's short options, each known by its letter.
@@ -298,10 +417,7 @@ impl LsCommand {
             long: false,
             all: false,
             almost_all: false,
-            one_column: false,
-            multi_column: false,
             directory: false,
-            classify: false,
             human_readable: false,
             reverse: false,
             recursive: false,
@@ -320,7 +436,18 @@ impl LsCommand {
             tree: false,
             depth: None,
             paths: Vec::new(),
+            layout: Layout::Default,
+            indicator: Indicator::None,
             classify_auto: false,
+            no_owner: false,
+            no_group: false,
+            width: None,
+            ignore: Vec::new(),
+            hide: Vec::new(),
+            ignore_backups: false,
+            time_style: None,
+            dereference: false,
+            looped: std::sync::atomic::AtomicBool::new(false),
             tty: false,
             raw: Vec::new(),
             early: None,
@@ -356,27 +483,27 @@ impl LsCommand {
                 "l" => command.long = true,
                 "a" => command.all = true,
                 "A" => command.almost_all = true,
-                "1" => command.one_column = true,
-                "C" => command.multi_column = true,
-                "d" => command.directory = true,
-                "F" => match value.as_deref() {
-                    None | Some("always" | "yes" | "force") => {
-                        command.classify = true;
-                        command.classify_auto = false;
-                    }
-                    Some("never" | "no" | "none") => command.classify = false,
-                    Some("auto" | "tty" | "if-tty") => {
-                        command.classify = true;
-                        command.classify_auto = true;
-                    }
-                    Some(other) => {
-                        command.early = Some(Early::Usage(format!(
-                            "invalid argument '{other}' for '--classify'\n\
-                             Valid arguments are: 'always', 'auto', 'never'"
-                        )));
+                "1" | "C" | "x" | "m" | "o" | "g" | "G" | "format" | "w" | "full-time"
+                | "time-style" | "p" | "file-type" | "indicator-style" | "F" => {
+                    let taken = if matches!(id, "p" | "file-type" | "indicator-style" | "F") {
+                        command.indicator_option(id, value)
+                    } else {
+                        command.layout_option(id, value)
+                    };
+                    if let Err(early) = taken {
+                        command.early = Some(early);
                         return command;
                     }
-                },
+                }
+                "I" => command
+                    .ignore
+                    .push(NamePattern::new(value.unwrap_or_default())),
+                "hide" => command
+                    .hide
+                    .push(NamePattern::new(value.unwrap_or_default())),
+                "B" => command.ignore_backups = true,
+                "L" => command.dereference = true,
+                "d" => command.directory = true,
                 "h" => command.human_readable = true,
                 "r" => command.reverse = true,
                 "R" => command.recursive = true,
@@ -409,7 +536,7 @@ impl LsCommand {
                     command.depth = Some(depth);
                 }
                 _ => {
-                    command.early = Some(Early::Refused(format!(
+                    command.early = Some(Early::Said(format!(
                         "{written} is not supported by cash's ls"
                     )));
                     return command;
@@ -417,6 +544,113 @@ impl LsCommand {
             }
         }
         command
+    }
+
+    /// `-1`, `-C`, `-x`, `-m`, `-o`, `-g`, `-G`, `--format`, `-w`, `--full-time` and
+    /// `--time-style`: how entries are laid out, and the long format's times.
+    fn layout_option(&mut self, id: &str, value: Option<String>) -> Result<(), Early> {
+        match id {
+            // -1 does nothing after -l, as GNU's own source says; -C, -x and -m end it.
+            "1" if !self.long => self.layout = Layout::OneColumn,
+            "1" => {}
+            "C" | "x" | "m" => {
+                self.long = false;
+                self.layout = match id {
+                    "C" => Layout::Columns,
+                    "x" => Layout::Across,
+                    _ => Layout::Commas,
+                };
+            }
+            "o" => {
+                self.long = true;
+                self.no_group = true;
+            }
+            "g" => {
+                self.long = true;
+                self.no_owner = true;
+            }
+            "G" => self.no_group = true,
+            "w" => {
+                let text = value.unwrap_or_default();
+                let Ok(width) = text.trim().parse() else {
+                    return Err(Early::Said(format!("invalid line width: '{text}'")));
+                };
+                self.width = Some(width);
+            }
+            "full-time" => {
+                self.long = true;
+                self.time_style = Some("full-iso".to_owned());
+            }
+            "time-style" => self.time_style = value,
+            "format" => {
+                let word = value.unwrap_or_default();
+                match word.as_str() {
+                    "verbose" | "long" => self.long = true,
+                    "commas" | "horizontal" | "across" | "vertical" | "single-column" => {
+                        self.long = false;
+                        self.layout = match word.as_str() {
+                            "commas" => Layout::Commas,
+                            "vertical" => Layout::Columns,
+                            "single-column" => Layout::OneColumn,
+                            _ => Layout::Across,
+                        };
+                    }
+                    _ => {
+                        return Err(Early::Argmatch(format!(
+                            "invalid argument '{word}' for '--format'\n\
+                                 Valid arguments are:\n  - 'verbose', 'long'\n  - 'commas'\n  \
+                                 - 'horizontal', 'across'\n  - 'vertical'\n  - 'single-column'"
+                        )));
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// `-p`, `--file-type`, `--indicator-style` and `-F`: the marks after names.
+    fn indicator_option(&mut self, id: &str, value: Option<String>) -> Result<(), Early> {
+        match id {
+            "p" => self.indicator = Indicator::Slash,
+            "file-type" => self.indicator = Indicator::FileType,
+            "indicator-style" => {
+                let word = value.unwrap_or_default();
+                self.indicator = match word.as_str() {
+                    "none" => Indicator::None,
+                    "slash" => Indicator::Slash,
+                    "file-type" => Indicator::FileType,
+                    "classify" => Indicator::Classify,
+                    _ => {
+                        return Err(Early::Argmatch(format!(
+                            "invalid argument '{word}' for '--indicator-style'\n\
+                                 Valid arguments are:\n  - 'none'\n  - 'slash'\n  \
+                                 - 'file-type'\n  - 'classify'"
+                        )));
+                    }
+                };
+                self.classify_auto = false;
+            }
+            "F" => match value.as_deref() {
+                None | Some("always" | "yes" | "force") => {
+                    self.indicator = Indicator::Classify;
+                    self.classify_auto = false;
+                }
+                Some("never" | "no" | "none") => self.indicator = Indicator::None,
+                Some("auto" | "tty" | "if-tty") => {
+                    self.indicator = Indicator::Classify;
+                    self.classify_auto = true;
+                }
+                Some(other) => {
+                    return Err(Early::Usage(format!(
+                        "invalid argument '{other}' for '--classify'\n\
+                             Valid arguments are: 'always', 'auto', 'never'"
+                    )));
+                }
+            },
+            _ => {}
+        }
+        Ok(())
     }
 }
 
@@ -479,6 +713,69 @@ struct Look {
     icons: bool,
     /// This process's account, whose files `-l` shows in the owner's colour.
     me: String,
+    /// The zone `-l` shows times in: an exported `TZ`'s, as GNU ls, else Windows'.
+    zone: Zone,
+    /// How `-l` shows times.
+    dates: DateFormats,
+    /// The width a line may take, none for no limit.
+    width: Option<usize>,
+}
+
+/// How `-l` shows a time (`--time-style`): a strftime format for a file changed within
+/// half a year, and one for the rest.
+struct DateFormats {
+    recent: String,
+    old: String,
+}
+
+impl Default for DateFormats {
+    fn default() -> Self {
+        Self {
+            recent: "%b %e %H:%M".to_owned(),
+            old: "%b %e  %Y".to_owned(),
+        }
+    }
+}
+
+/// The formats a `--time-style` names, as GNU ls reads them. `posix-` before a style keeps
+/// the default in the POSIX locale, which is cash's; `+FORMAT` is strftime's, and two
+/// formats on two lines are the old files' and the recent ones'. `%N`, GNU's nanoseconds,
+/// is chrono's `%f`.
+fn date_formats(style: Option<&str>) -> Result<DateFormats, Invalid> {
+    let both = |format: &str| DateFormats {
+        recent: format.to_owned(),
+        old: format.to_owned(),
+    };
+    let Some(style) = style else {
+        return Ok(DateFormats::default());
+    };
+    if let Some(format) = style.strip_prefix('+') {
+        let format = format.replace("%N", "%f");
+        return Ok(match format.split_once('\n') {
+            Some((old, recent)) => DateFormats {
+                recent: recent.to_owned(),
+                old: old.to_owned(),
+            },
+            None => both(&format),
+        });
+    }
+    if style.starts_with("posix-") {
+        return Ok(DateFormats::default());
+    }
+    match style {
+        "full-iso" => Ok(both("%Y-%m-%d %H:%M:%S.%f %z")),
+        "long-iso" => Ok(both("%Y-%m-%d %H:%M")),
+        "iso" => Ok(DateFormats {
+            recent: "%m-%d %H:%M".to_owned(),
+            old: "%Y-%m-%d ".to_owned(),
+        }),
+        "locale" => Ok(DateFormats::default()),
+        _ => Err(Invalid(format!(
+            "invalid argument '{style}' for 'time style'\n\
+             Valid arguments are:\n  - [posix-]full-iso\n  - [posix-]long-iso\n  \
+             - [posix-]iso\n  - [posix-]locale\n  - +FORMAT (e.g., +%H:%M) for a 'date'-style format"
+        ))),
+    }
 }
 
 /// A command line `ls` refuses, with its message.
@@ -499,6 +796,24 @@ fn when(value: Option<&str>, option: &str, is_tty: bool) -> Result<bool, Invalid
 
 impl builtins::Command for LsCommand {
     type Error = cash_core::Error;
+
+    /// `help ls` shows what `ls --help` shows.
+    fn get_content(
+        name: &str,
+        content_type: ContentType,
+        _options: &ContentOptions,
+    ) -> Result<String, cash_core::Error> {
+        Ok(match content_type {
+            ContentType::DetailedHelp => HELP.to_owned(),
+            ContentType::ShortUsage => format!("{name}: {name} [OPTION]... [FILE]...\n"),
+            ContentType::ShortDescription => format!(
+                "{name} - List information about the FILEs (the current directory by default).\n"
+            ),
+            ContentType::ManPage => {
+                return cash_core::error::unimp("man page rendering is not yet implemented");
+            }
+        })
+    }
 
     /// The words as they are, read by GNU's option loop in `execute`.
     fn new<I>(args: I) -> Result<Self, clap::Error>
@@ -539,7 +854,10 @@ impl LsCommand {
             Some(Early::Usage(message)) => {
                 options::gnu_usage_error(context, name, message, 2).map(Some)
             }
-            Some(Early::Refused(message)) => {
+            Some(Early::Argmatch(message)) => {
+                options::gnu_usage_error(context, name, message, 1).map(Some)
+            }
+            Some(Early::Said(message)) => {
                 writeln!(context.stderr(), "{name}: {message}")?;
                 Ok(Some(ExecutionResult::new(2)))
             }
@@ -622,8 +940,9 @@ impl LsCommand {
                 continue;
             }
 
-            if self.directory || !path.is_dir() {
-                if let Some(item) = inspect_path(&path, path_str, self.long, None) {
+            if self.shown_as_entry(&path) {
+                let followed = self.followed(&path, None);
+                if let Some(item) = inspect_path(&path, path_str, self.long, followed) {
                     file_items.push(item);
                 }
             } else {
@@ -673,7 +992,10 @@ impl LsCommand {
         if context.stop_token().requested() {
             return context.stopped().await;
         }
-        Ok(gnu_status(had_error, had_minor_error))
+        Ok(gnu_status(
+            had_error || self.looped.load(std::sync::atomic::Ordering::Relaxed),
+            had_minor_error,
+        ))
     }
 }
 
@@ -774,6 +1096,19 @@ impl LsCommand {
         };
         self.sort_key()?;
 
+        // The time style is read for the long format only, as in GNU ls: elsewhere a wrong
+        // one is not said. `TIME_STYLE`, a variable of the shell's, gives it without the
+        // option.
+        let dates = if self.long {
+            let style = self
+                .time_style
+                .clone()
+                .or_else(|| context.shell.env_str("TIME_STYLE").map(Into::into));
+            date_formats(style.as_deref())?
+        } else {
+            DateFormats::default()
+        };
+
         let colors = color.then(|| {
             // The shell's own variable, which `export` need not have reached the process.
             parsed_ls_colors(context.shell.env_str("LS_COLORS").as_deref())
@@ -786,7 +1121,58 @@ impl LsCommand {
             },
             colors,
             icons,
+            zone: Zone::of_shell(context.shell),
+            dates,
+            width: self.line_width(context, is_tty),
         })
+    }
+
+    /// The width a line may take, as GNU ls finds it: `-w`, else `COLUMNS`, else the
+    /// terminal's when the output is one, else 80; none for no limit (`-w 0`). The
+    /// console's width was taken into a pipe too.
+    fn line_width<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        is_tty: bool,
+    ) -> Option<usize> {
+        let width = self
+            .width
+            .or_else(|| {
+                context
+                    .shell
+                    .env_str("COLUMNS")
+                    .and_then(|columns| columns.trim().parse().ok())
+                    .filter(|&columns: &usize| columns > 0)
+            })
+            .unwrap_or_else(|| {
+                if is_tty {
+                    crossterm::terminal::size().map_or(80, |(columns, _)| usize::from(columns))
+                } else {
+                    80
+                }
+            });
+        (width > 0).then_some(width)
+    }
+
+    /// Whether an operand is shown as an entry rather than listed as a folder: a file, `-d`,
+    /// or a link named on the command line that `-l` or `-F` asks about itself, as GNU ls
+    /// decides; `-L` goes through a link always.
+    fn shown_as_entry(&self, path: &Path) -> bool {
+        let link = path
+            .symlink_metadata()
+            .is_ok_and(|metadata| metadata.file_type().is_symlink());
+        self.directory
+            || !path.is_dir()
+            || (link && !self.dereference && (self.long || self.indicator == Indicator::Classify))
+    }
+
+    /// `-L`: what `path`, a link, names, when it is there; otherwise what the listing knew.
+    fn followed(&self, path: &Path, known: Option<Metadata>) -> Option<Metadata> {
+        if self.dereference {
+            std::fs::metadata(path).ok().or(known)
+        } else {
+            known
+        }
     }
 
     fn sort_key(&self) -> Result<SortKey, Invalid> {
@@ -856,13 +1242,17 @@ impl LsCommand {
     fn read_entries(&self, dir_path: &Path, dots: bool) -> Result<Vec<ItemInfo>, std::io::Error> {
         let mut items = Vec::new();
 
-        // Include . and .. if -a is set.
+        // Include . and .. if -a is set, unless a pattern of -I leaves them out.
         if self.all && dots {
-            if let Some(dot) = inspect_dot(dir_path, ".", self.long) {
+            if !self.ignored(".")
+                && let Some(dot) = inspect_dot(dir_path, ".", self.long)
+            {
                 items.push(dot);
             }
             let parent = dir_path.parent().unwrap_or(dir_path);
-            if let Some(dotdot) = inspect_dot(parent, "..", self.long) {
+            if !self.ignored("..")
+                && let Some(dotdot) = inspect_dot(parent, "..", self.long)
+            {
                 items.push(dotdot);
             }
         }
@@ -872,7 +1262,7 @@ impl LsCommand {
             let file_name = entry.file_name().to_string_lossy().into_owned();
             let is_dotfile = file_name.starts_with('.');
 
-            if is_dotfile && !self.all && !self.almost_all {
+            if (is_dotfile && !self.all && !self.almost_all) || self.ignored(&file_name) {
                 continue;
             }
 
@@ -888,6 +1278,7 @@ impl LsCommand {
             }
 
             let entry_path = entry.path();
+            let known = self.followed(&entry_path, known);
             if let Some(item) = inspect_path(&entry_path, &file_name, self.long, known) {
                 items.push(item);
             }
@@ -934,6 +1325,20 @@ impl LsCommand {
                 if item.kind == EntryKind::Dir && item.name != "." && item.name != ".." {
                     // Joined once: `ls -R foo/` printed `foo//bar:`.
                     let sub_str = crate::walk::join_shown(dir_str, &item.name);
+                    // With -L a link to a folder above is not gone round, as GNU ls says.
+                    if self.dereference
+                        && crate::walk::loop_ancestor(&item.path, item.path.ancestors().skip(1))
+                            .is_some()
+                    {
+                        writeln!(
+                            context.stderr(),
+                            "{}: {sub_str}: not listing already-listed directory",
+                            context.command_name
+                        )?;
+                        self.looped
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                        continue;
+                    }
                     match self.read_entries(&item.path, true) {
                         Ok(sub_items) => {
                             writeln!(out)?;
@@ -1043,11 +1448,14 @@ impl LsCommand {
         }
 
         if self.long {
-            self.render_long(out, items, look, None)?;
-        } else if self.one_column || (!is_tty && !self.multi_column) {
-            self.render_single_column(out, items, look)?;
-        } else {
-            self.render_grid(out, items, look)?;
+            return self.render_long(out, items, look, None);
+        }
+        match self.layout {
+            Layout::OneColumn => self.render_single_column(out, items, look)?,
+            Layout::Default if !is_tty => self.render_single_column(out, items, look)?,
+            Layout::Default | Layout::Columns => self.render_grid(out, items, look, true)?,
+            Layout::Across => self.render_grid(out, items, look, false)?,
+            Layout::Commas => self.render_commas(out, items, look)?,
         }
 
         Ok(())
@@ -1092,7 +1500,7 @@ impl LsCommand {
 
         for (index, item) in items.iter().enumerate() {
             let size_str = size_text(item);
-            let date_str = format_date(item.mtime);
+            let date_str = format_date(item.mtime, look);
             let display_name = self.format_name(item, look);
             let prefix = prefixes
                 .and_then(|prefixes| prefixes.get(index))
@@ -1123,11 +1531,17 @@ impl LsCommand {
             } else {
                 (owner, group, size, date_str)
             };
-            writeln!(
-                out,
-                "{permissions} {:>max_links_len$} {owner} {group} {size} {date} {prefix}{display_name}",
-                links[index],
-            )?;
+            // -g leaves the owner out, -o and -G the group.
+            let mut line = std::format!("{permissions} {:>max_links_len$} ", links[index]);
+            if !self.no_owner {
+                line.push_str(&owner);
+                line.push(' ');
+            }
+            if !self.no_group {
+                line.push_str(&group);
+                line.push(' ');
+            }
+            writeln!(out, "{line}{size} {date} {prefix}{display_name}")?;
         }
 
         Ok(())
@@ -1146,18 +1560,20 @@ impl LsCommand {
         Ok(())
     }
 
+    /// Entries in columns as GNU ls lays them out: as many columns as fit the width, each
+    /// as wide as its widest name and two spaces, down the columns (`-C`) or across the
+    /// lines (`-x`). Spaces where GNU writes tabs. Every column took the widest name's
+    /// width, so fewer fitted than GNU's.
     fn render_grid(
         &self,
         out: &mut impl Write,
         items: &[ItemInfo],
         look: &Look,
+        down: bool,
     ) -> Result<(), std::io::Error> {
-        let (term_width, _) = crossterm::terminal::size().unwrap_or((80, 24));
-        let term_width = (term_width as usize).max(20);
-
         // Columns are measured in the cells a name takes on screen, not its bytes: an
         // icon, an accented letter or a CJK name is one or two cells whatever its length.
-        let pairs: Vec<(usize, String)> = items
+        let names: Vec<(usize, String)> = items
             .iter()
             .map(|i| {
                 (
@@ -1166,49 +1582,109 @@ impl LsCommand {
                 )
             })
             .collect();
+        let count = names.len();
+        let lengths: Vec<usize> = names.iter().map(|(width, _)| *width).collect();
+        let (columns, widths) = column_layout(&lengths, look.width, down);
+        let rows = count.div_ceil(columns);
+        let pad = |line: &mut String, column: usize, width: usize| {
+            let room = widths.get(column).copied().unwrap_or(0);
+            line.extend(std::iter::repeat_n(' ', room.saturating_sub(width)));
+        };
 
-        let max_len = pairs.iter().map(|(width, _)| *width).max().unwrap_or(1);
-        let col_width = max_len + 2;
-        let num_cols = (term_width / col_width).max(1);
-        let num_rows = pairs.len().div_ceil(num_cols);
-
-        for r in 0..num_rows {
-            let mut line = String::new();
-            for c in 0..num_cols {
-                let idx = c * num_rows + r;
-                if idx < pairs.len() {
-                    let (width, ref colored) = pairs[idx];
-                    line.push_str(colored);
-                    if c + 1 < num_cols && (c + 1) * num_rows + r < pairs.len() {
-                        let pad = col_width.saturating_sub(width);
-                        for _ in 0..pad {
-                            line.push(' ');
-                        }
+        if down {
+            for row in 0..rows {
+                let mut line = String::new();
+                let mut index = row;
+                let mut column = 0;
+                while let Some((width, shown)) = names.get(index) {
+                    line.push_str(shown);
+                    index += rows;
+                    if index < count {
+                        pad(&mut line, column, *width);
                     }
+                    column += 1;
+                }
+                writeln!(out, "{line}")?;
+            }
+        } else {
+            let mut line = String::new();
+            for (index, (width, shown)) in names.iter().enumerate() {
+                let column = index % columns;
+                if column == 0 && index > 0 {
+                    writeln!(out, "{line}")?;
+                    line.clear();
+                }
+                line.push_str(shown);
+                if column + 1 < columns && index + 1 < count {
+                    pad(&mut line, column, *width);
                 }
             }
             writeln!(out, "{line}")?;
         }
-
         Ok(())
     }
 
-    /// Whether names get their `-F` marks: `--classify=auto` only on a terminal.
-    const fn classifies(&self) -> bool {
-        self.classify && (!self.classify_auto || self.tty)
+    /// Entries separated by commas, as many to a line as fit the width (`-m`), as GNU ls
+    /// writes them.
+    fn render_commas(
+        &self,
+        out: &mut impl Write,
+        items: &[ItemInfo],
+        look: &Look,
+    ) -> Result<(), std::io::Error> {
+        let mut text = String::new();
+        let mut position = 0;
+        for (index, item) in items.iter().enumerate() {
+            let length = self.format_name_plain(item, look).width();
+            if index > 0 {
+                text.push(',');
+                if look.width.is_none_or(|width| position + length + 2 < width) {
+                    text.push(' ');
+                    position += 2;
+                } else {
+                    text.push('\n');
+                    position = 0;
+                }
+            }
+            text.push_str(&self.format_name(item, look));
+            position += length;
+        }
+        writeln!(out, "{text}")
     }
 
-    /// The `-F` indicator for an entry.
+    /// Whether names get their `-F` marks: `--classify=auto` only on a terminal.
+    fn classifies(&self) -> bool {
+        self.indicator == Indicator::Classify && (!self.classify_auto || self.tty)
+    }
+
+    /// The marks names get: `--classify=auto` none off a terminal.
+    fn indicator_style(&self) -> Indicator {
+        match self.indicator {
+            Indicator::Classify if !self.classifies() => Indicator::None,
+            style => style,
+        }
+    }
+
+    /// The mark after an entry's name: `/` for a folder with any style, `@` for a link
+    /// with `--file-type` and `-F`, and `*` for a program with `-F` alone.
     fn indicator(&self, item: &ItemInfo) -> Option<char> {
-        if !self.classifies() {
-            return None;
+        match (self.indicator_style(), item.kind) {
+            (Indicator::None, _) | (_, EntryKind::CharDevice) => None,
+            (_, EntryKind::Dir) => Some('/'),
+            (Indicator::Slash, _) => None,
+            (_, EntryKind::Symlink) => Some('@'),
+            (Indicator::Classify, EntryKind::File) => item.is_executable().then_some('*'),
+            (_, EntryKind::File) => None,
         }
-        match item.kind {
-            EntryKind::Dir => Some('/'),
-            EntryKind::Symlink => Some('@'),
-            EntryKind::File => item.is_executable().then_some('*'),
-            EntryKind::CharDevice => None,
-        }
+    }
+
+    /// Whether `-I`, `-B` or, without `-a` and `-A`, `--hide` leaves `name` out.
+    fn ignored(&self, name: &str) -> bool {
+        (self.ignore_backups && name.ends_with('~'))
+            || self.ignore.iter().any(|pattern| pattern.matches(name))
+            || (!self.all
+                && !self.almost_all
+                && self.hide.iter().any(|pattern| pattern.matches(name)))
     }
 
     /// The name as it shows, without colour: for measuring.
@@ -1240,9 +1716,11 @@ impl LsCommand {
             Some(target) if self.long => {
                 s.push_str(" -> ");
                 s.push_str(target);
-                if self.classifies() {
+                let style = self.indicator_style();
+                if style != Indicator::None {
                     let mark = match item.target {
                         Some((_, true)) => Some('/'),
+                        _ if style == Indicator::Slash => None,
                         _ => item.target_mark,
                     };
                     s.extend(mark);
@@ -1788,16 +2266,61 @@ fn format_human_size(bytes: u64) -> String {
     }
 }
 
-fn format_date(mtime: SystemTime) -> String {
-    let dt: DateTime<Local> = mtime.into();
-    let now = Local::now();
-    let six_months = chrono::Duration::days(182);
-
-    if dt > now - six_months && dt <= now + chrono::Duration::hours(1) {
-        dt.format("%b %e %H:%M").to_string()
+/// `-l`'s time of a file, in the zone and the style `look` has: the recent format within
+/// half a year, as GNU ls.
+fn format_date(mtime: SystemTime, look: &Look) -> String {
+    let when: DateTime<Utc> = mtime.into();
+    let now = Utc::now();
+    let recent =
+        when > now - chrono::Duration::days(182) && when <= now + chrono::Duration::hours(1);
+    let format = if recent {
+        &look.dates.recent
     } else {
-        dt.format("%b %e  %Y").to_string()
+        &look.dates.old
+    };
+    look.zone.format(when, format)
+}
+
+/// The columns GNU ls lays `lengths` out in (`calculate_columns`): for each number of
+/// columns the width allows, each column as wide as its widest name and two spaces, the
+/// last without them, at least three; the most columns whose line stays under the width.
+fn column_layout(lengths: &[usize], width: Option<usize>, down: bool) -> (usize, Vec<usize>) {
+    const MIN_COLUMN_WIDTH: usize = 3;
+    let count = lengths.len().max(1);
+    let most = width.map_or(count, |width| (width / MIN_COLUMN_WIDTH).clamp(1, count));
+    let mut candidates: Vec<(bool, usize, Vec<usize>)> = (1..=most)
+        .map(|columns| {
+            (
+                true,
+                columns * MIN_COLUMN_WIDTH,
+                vec![MIN_COLUMN_WIDTH; columns],
+            )
+        })
+        .collect();
+    for (index, &length) in lengths.iter().enumerate() {
+        for (offset, (fits, line, widths)) in candidates.iter_mut().enumerate() {
+            if !*fits {
+                continue;
+            }
+            let columns = offset + 1;
+            let column = if down {
+                index / count.div_ceil(columns)
+            } else {
+                index % columns
+            };
+            let wanted = length + if column + 1 == columns { 0 } else { 2 };
+            if let Some(room) = widths.get_mut(column)
+                && *room < wanted
+            {
+                *line += wanted - *room;
+                *room = wanted;
+                *fits = width.is_none_or(|width| *line < width);
+            }
+        }
     }
+    let best = candidates.iter().rposition(|(fits, ..)| *fits).unwrap_or(0);
+    let widths = candidates.swap_remove(best).2;
+    (best + 1, widths)
 }
 
 #[cfg(test)]
@@ -1829,20 +2352,18 @@ mod tests {
         // GNU's options cash's ls has not are named, not called invalid.
         assert_eq!(
             parsed("-i").early,
-            Some(Early::Refused(
-                "-i is not supported by cash's ls".to_owned()
-            ))
+            Some(Early::Said("-i is not supported by cash's ls".to_owned()))
         );
         assert_eq!(
-            parsed("--time-style iso").early,
-            Some(Early::Refused(
-                "--time-style is not supported by cash's ls".to_owned()
+            parsed("--quoting-style c").early,
+            Some(Early::Said(
+                "--quoting-style is not supported by cash's ls".to_owned()
             ))
         );
         // coreutils 9's --classify[=WHEN]; -f is -a and -U.
-        assert!(!parsed("-F --classify=never").classify);
+        assert_eq!(parsed("-F --classify=never").indicator, Indicator::None);
         let auto = parsed("--classify=auto");
-        assert!(auto.classify && auto.classify_auto && !auto.classifies());
+        assert!(auto.indicator == Indicator::Classify && auto.classify_auto && !auto.classifies());
         let command = parsed("-f");
         assert!(command.all && command.unsorted);
         // Help and version end the reading where they stand.
