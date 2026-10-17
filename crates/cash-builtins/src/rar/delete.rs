@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::time::SystemTime;
 
-use cash_archive::rar::{Builder, WriterResources};
+use cash_archive::rar::Builder;
 
 use super::add;
 use super::cmdline::Parsed;
@@ -147,7 +147,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         builder = builder.recovery_percent(Some(percent));
         rar.console.msg("\nAdding the data recovery record     ");
     }
-    let resources = WriterResources::default().with_temp_dir(add::work_dir(rar, &found.path));
+    let resources = add::writer_resources().with_temp_dir(add::work_dir(rar, &found.path));
     if let Err(error) = builder.write_to_path_with_resources(&found.path, &resources, None) {
         rar.console
             .err(&format!("\nCannot create {display}\n{error}"));

@@ -12,8 +12,8 @@ use std::time::SystemTime;
 
 use cash_archive::rar::{
     self, ArchiveFamily, ArchiveMemberDetail, ArchiveReadOptions, ArchiveReader, ArchiveVersion,
-    AttrSource, Builder, EntrySource, FileTimes, FileTimestamp, RewriteStaging, WriteOperation,
-    WriteProgressEvent, WriterResources,
+    AttrSource, Builder, DEFAULT_WRITER_MEMORY_LIMIT, EntrySource, FileTimes, FileTimestamp,
+    RewriteStaging, WriteOperation, WriteProgressEvent, WriterResources,
 };
 
 use super::cmdline::{Command, Name, Parsed};
@@ -411,7 +411,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         }
     }
 
-    let resources = WriterResources::default().with_temp_dir(work_dir(rar, &path));
+    let resources = writer_resources().with_temp_dir(work_dir(rar, &path));
     let written = match volume_size(rar) {
         Some(size) => write_volumes(
             rar,
@@ -1370,6 +1370,19 @@ fn dos_time(zone: &cash_core::timefmt::Zone, time: SystemTime) -> u32 {
         | (local.hour() << 11)
         | (local.minute() << 5)
         | (local.second() / 2)
+}
+
+/// The writer's working memory, half the machine's.
+///
+/// Compressing a member as RAR 5 does takes many times its dictionary (741 MB for the
+/// default 32 MiB, 456 MB for a 16 MiB file), and the writer's default budget of
+/// 256 MiB refused every file of 16 MiB or more. The budget decides how many members
+/// are compressed at once.
+pub(super) fn writer_resources() -> WriterResources {
+    let memory = cash_win32::memory::counts().map_or(DEFAULT_WRITER_MEMORY_LIMIT, |counts| {
+        (counts.physical_total / 2).max(DEFAULT_WRITER_MEMORY_LIMIT)
+    });
+    WriterResources::new(memory)
 }
 
 /// What the writer reported, as the lines need it.

@@ -1660,3 +1660,9 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   folder that holds its own; a relative operand after that names nothing, as on Linux,
   and `..` is still refused. §4 #13 now names the other bundled tools (`rmdir`), and
   spec §8 says why an in-process tool would have fixed it.
+
+- **`rar a` refused every file of 16 MiB or more** (found and done 2026-10-17, while
+  testing the above; 1.19.0 too): "compression needs at least 456130560 bytes of
+  working memory for a 16777216-byte dictionary, above the configured limit of
+  268435456 bytes". RAR 5's compression takes many times its dictionary, and the writer
+  ran on the library's default budget of 256 MiB; it gets half the machine's memory now.

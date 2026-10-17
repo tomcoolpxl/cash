@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use cash_archive::rar::{ArchiveFamily, Builder, WriterResources};
+use cash_archive::rar::{ArchiveFamily, Builder};
 
 use super::add;
 use super::cmdline::{Command, Name, Overwrite, Parsed};
@@ -572,7 +572,7 @@ fn rewrite<SE: cash_core::ShellExtensions>(
             rar.fail(code::WARNING);
         }
     }
-    let resources = WriterResources::default().with_temp_dir(add::work_dir(rar, path));
+    let resources = add::writer_resources().with_temp_dir(add::work_dir(rar, path));
     if let Err(error) = builder.write_to_path_with_resources(path, &resources, None) {
         rar.console
             .err(&format!("\nCannot create {}\n{error}", path.display()));
