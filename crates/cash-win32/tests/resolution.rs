@@ -392,3 +392,21 @@ fn a_file_is_named_as_the_disk_spells_it() {
     assert_eq!(real, dir.join("Tool.Exe"));
     assert_eq!(unchanged, missing);
 }
+
+/// A file without a program's extension runs by its contents when it is a PE image
+/// Windows starts, not a DLL, which completion offered as a command (`noise.dll`).
+#[test]
+fn a_dll_is_no_command_by_its_contents() {
+    let dir = scratch("dll-content");
+    let system32 = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32");
+    fs::copy(system32.join("kernel32.dll"), dir.join("library")).unwrap();
+    fs::copy(system32.join("where.exe"), dir.join("program")).unwrap();
+    fs::write(dir.join("stub"), b"MZ").unwrap();
+    let answers = [
+        cash_win32::resolve::has_executable_content(&dir.join("library")),
+        cash_win32::resolve::has_executable_content(&dir.join("program")),
+        cash_win32::resolve::has_executable_content(&dir.join("stub")),
+    ];
+    let _ = fs::remove_dir_all(&dir);
+    assert_eq!(answers, [false, true, true]);
+}

@@ -210,17 +210,55 @@ pub fn real_case(path: &Path) -> PathBuf {
         )
 }
 
+/// Whether the file is a PE image Windows can start: `MZ`, and not a DLL (`IMAGE_FILE_DLL`
+/// in its COFF header), which `CreateProcess` refuses and which completion offered as a
+/// command (`noise.dll` from System32). One read of the file's first 512 bytes, where the
+/// header lies in practice; a header beyond them is read where it is.
 fn is_pe_file(path: &Path) -> bool {
-    use std::io::Read as _;
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    const IMAGE_FILE_DLL: u16 = 0x2000;
+
     let Ok(mut file) = std::fs::File::open(path) else {
         return false;
     };
-    let mut magic = [0u8; 2];
-    if file.read_exact(&mut magic).is_ok() {
-        magic == *b"MZ"
-    } else {
-        false
+    let mut head = [0u8; 512];
+    let mut length = 0;
+    while length < head.len() {
+        match file.read(head.get_mut(length..).unwrap_or_default()) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => length += read,
+        }
     }
+    let head = head.get(..length).unwrap_or_default();
+    if head.get(..2) != Some(b"MZ") {
+        return false;
+    }
+    // Where the COFF header is: `e_lfanew`, then `PE\0\0`, then its characteristics at 22.
+    let Some(pe) = head
+        .get(0x3C..0x40)
+        .and_then(|bytes| bytes.try_into().ok())
+        .map(|bytes| u32::from_le_bytes(bytes) as usize)
+    else {
+        // Too short for a DOS header's pointer: taken as before, a PE image.
+        return true;
+    };
+    let coff = if let Some(coff) = head.get(pe..pe + 24) {
+        coff.to_vec()
+    } else {
+        let mut coff = vec![0u8; 24];
+        if file.seek(SeekFrom::Start(pe as u64)).is_err() || file.read_exact(&mut coff).is_err() {
+            return true;
+        }
+        coff
+    };
+    if coff.get(..4) != Some(b"PE\0\0") {
+        // An old DOS program, which Windows still starts.
+        return true;
+    }
+    let characteristics = coff
+        .get(22..24)
+        .map_or(0, |bytes| u16::from_le_bytes([bytes[0], bytes[1]]));
+    characteristics & IMAGE_FILE_DLL == 0
 }
 
 /// Whether a file's own bytes make it runnable: a `#!` line, or a PE image (`MZ`).

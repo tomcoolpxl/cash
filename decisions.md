@@ -325,6 +325,11 @@ those rules. Turned down: the C runtime's encoding for every program, which Cygw
 - **`exec -a NAME` and `exec -l` are refused for a program other than cash** (the user,
   2026-10-04): the standard library cannot set another program's `argv[0]`. Turned down:
   a spawn of cash's own to set it, and ignoring the option in silence.
+- **A DLL is no command, though it is a PE image** (2026-10-18, the user's pick after
+  1.24.0): an extensionless file runs by its contents, and a PE image counts only when
+  its COFF header does not set `IMAGE_FILE_DLL`, so completion, `type` and `which` leave
+  System32's `noise.dll` out. An `MZ` file too short for the header still counts.
+  Turned down: the old rule, where any `MZ` file counted and running a DLL failed.
 
 ## 4. Processes, jobs and signals
 
@@ -805,6 +810,8 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   listing (one directory query) instead of a call for each file; and for keeping the
   access time while reading for `#!`, a cheaper way is looked for before it is kept.
   Turned down: leaving the 7% of the per-file facts; reverting the access time unseen.
+- **The phase after 1.24.0** (the user, 2026-10-18): the DLLs completion offered as
+  commands. The user published 1.24.0 to Scoop.
 
 ## 8. Archives and compression
 

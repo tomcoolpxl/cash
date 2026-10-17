@@ -44,6 +44,9 @@ order. The phases before, released as 1.22.0 and 1.23.0, are in DONE.md.
 
 All eight are done or settled; the phase ends with release 1.24.0.
 
+After 1.24.0 the user picked the DLLs completion offered as commands: done (2026-10-18,
+DONE.md).
+
 ## Left over from finished phases
 
 What the phases now in DONE.md left open, each where its phase says more. Not now
@@ -65,11 +68,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
-- **Command completion offers DLLs** (2026-10-18, found with the completion menu's
-  index): `compgen -c no` lists `noise.dll` from System32, as 1.23.0's scan did too: a
-  file without a `PATHEXT` extension counts as runnable by its contents, and a DLL is a
-  PE image (D46). Running `noise.dll` fails; the content check could take a PE image only
-  when it is an executable, not a DLL (the `IMAGE_FILE_DLL` flag in its file header).
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against

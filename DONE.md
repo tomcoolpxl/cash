@@ -2012,3 +2012,10 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   once and remembered until the folder changes; until the index is ready, the scan
   answers as before. `compgen -c no` takes 1.9 ms (debug build), and gives the same
   names as 1.23.0 for `no`, `a`, `g` and `s` (17, 355, 180, 765).
+- **Command completion offered DLLs** (found 2026-10-18 with the menu's index; the
+  user's pick after 1.24.0): a file without a `PATHEXT` extension runs by its contents,
+  and a DLL is a PE image, so `compgen -c no` offered `noise.dll` and `type -a` found it,
+  where running it fails. A PE image counts only when its COFF header does not mark it a
+  DLL (`IMAGE_FILE_DLL`), from one read of the file's first 512 bytes, where the header
+  lies in practice, instead of two: no slower. An `MZ` too short for the header still
+  counts, as before.
