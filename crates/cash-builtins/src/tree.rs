@@ -56,7 +56,9 @@ impl builtins::Command for TreeCommand {
 
         writeln!(stdout, "{}", render(&shown))?;
 
-        let metadata = match std::fs::symlink_metadata(&actual) {
+        // The root is looked at through a link, as GNU's tree lists the folder a link it
+        // is given names.
+        let metadata = match std::fs::metadata(&actual) {
             Ok(metadata) => metadata,
             Err(error) => {
                 let error = cash_core::error::os_error_text(&error);
@@ -65,7 +67,7 @@ impl builtins::Command for TreeCommand {
             }
         };
 
-        if !metadata.is_dir() || is_reparse_point(&metadata) {
+        if !metadata.is_dir() {
             if !self.noreport {
                 writeln!(stdout, "\n0 directories, 1 file")?;
             }
@@ -133,6 +135,7 @@ impl TreeCommand {
             let entry = match result {
                 Ok(entry) => entry,
                 Err(error) => {
+                    let error = cash_core::error::os_error_text(&error);
                     writeln!(context.stderr(), "tree: {}: {error}", render(shown))?;
                     state.failed = true;
                     continue;
@@ -142,9 +145,12 @@ impl TreeCommand {
             if !self.all && name.to_string_lossy().starts_with('.') {
                 continue;
             }
-            let metadata = match std::fs::symlink_metadata(entry.path()) {
-                Ok(metadata) => metadata,
+            // What it is comes free with the listing; a link is not gone into, and a
+            // cloud placeholder or a deduplicated folder is the folder it holds.
+            let file_type = match entry.file_type() {
+                Ok(file_type) => file_type,
                 Err(error) => {
+                    let error = cash_core::error::os_error_text(&error);
                     writeln!(
                         context.stderr(),
                         "tree: {}: {error}",
@@ -154,7 +160,7 @@ impl TreeCommand {
                     continue;
                 }
             };
-            let directory = metadata.is_dir() && !is_reparse_point(&metadata);
+            let directory = crate::walk::kind(file_type) == crate::walk::Kind::Folder;
             if self.directories_only && !directory {
                 continue;
             }
@@ -213,12 +219,6 @@ const fn plural<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str
 
 fn render(path: &Path) -> String {
     cash_win32::path::render(path)
-}
-
-fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
 
 fn parse_depth(value: &str) -> Result<usize, String> {

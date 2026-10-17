@@ -73,3 +73,30 @@ fn common_filters_are_supported() {
         "{directories}"
     );
 }
+
+#[test]
+fn a_linked_root_is_listed_through_and_a_link_inside_is_not_gone_into() {
+    // tree refused a folder it was given through a junction ("0 directories, 1 file"),
+    // where GNU's lists the folder the link names; a junction inside is shown and not
+    // gone into. Links are told by the walker's one answer (a name surrogate).
+    let scratch = tree("tree-links");
+    let base = scratch.as_script_path();
+    cash_win32::junction::point(&scratch.join("beta/up"), scratch.path()).unwrap();
+    let linked = Scratch::new("tree-links-root");
+    cash_win32::junction::point(&linked.join("root"), &scratch.join("beta")).unwrap();
+    let output = cash(&format!(
+        "tree --noreport '{base}/beta'; tree --noreport '{}/root'",
+        linked.as_script_path()
+    ));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout.lines().skip(1).take(3).collect();
+    assert_eq!(
+        lines,
+        ["├── deep", "│   └── leaf.txt", "└── up"],
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("root\n├── deep\n│   └── leaf.txt"),
+        "{stdout}"
+    );
+}

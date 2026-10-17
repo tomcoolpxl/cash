@@ -186,16 +186,7 @@ impl Walk {
     }
 
     fn entry(&self, entry: walkdir::DirEntry) -> Entry {
-        let file_type = entry.file_type();
-        let kind = if file_type.is_symlink() {
-            Kind::Link
-        } else if file_type.is_dir() {
-            Kind::Folder
-        } else if file_type.is_file() {
-            Kind::File
-        } else {
-            Kind::Other
-        };
+        let kind = kind(entry.file_type());
         Entry {
             shown: self.shown(entry.path()),
             path: entry.path().to_path_buf(),
@@ -251,6 +242,22 @@ impl Iterator for Walk {
             Ok(entry) => Ok(self.entry(entry)),
             Err(error) => Err(self.error(error)),
         })
+    }
+}
+
+/// What a listing's entry is, by the one answer the builtins give: a link is a symlink or
+/// a junction (a name surrogate), as std says; another reparse point (a cloud
+/// placeholder, a deduplicated file) is the file or folder it holds. For a walk of its
+/// own that needs a folder whole before it shows any of it, as `tree` draws its branches.
+pub(crate) fn kind(file_type: std::fs::FileType) -> Kind {
+    if file_type.is_symlink() {
+        Kind::Link
+    } else if file_type.is_dir() {
+        Kind::Folder
+    } else if file_type.is_file() {
+        Kind::File
+    } else {
+        Kind::Other
     }
 }
 
