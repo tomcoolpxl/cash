@@ -873,15 +873,7 @@ const LONG_OPTIONS: &[Long<'static, &str>] = &[
 const SHORT_OPTIONS: &str = "C:c:dE:eH:hi:JKl:LN:n:mO:o:p:R:r:S:s:T:tVW:x";
 
 /// Options that cannot be combined, each with the long name its message uses.
-const EXCLUSIVE: &[&[(&str, &str)]] = &[
-    &[
-        ("C", "table-column"),
-        ("K", "table-header-as-columns"),
-        ("N", "table-columns"),
-    ],
-    &[("J", "json"), ("x", "fillrows")],
-    &[("t", "table"), ("x", "fillrows")],
-];
+const EXCLUSIVE: &[&[&str]] = &[&["C", "K", "N"], &["J", "x"], &["t", "x"]];
 
 /// How the input is laid out.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -947,28 +939,23 @@ impl Options {
     /// Applies one option; `shown` is how it was typed, for a refusal.
     fn apply(
         &mut self,
-        id: &str,
+        id: &'static str,
         value: Option<String>,
         shown: &str,
-        seen: &mut Vec<String>,
+        exclusive: &mut cash_getopt::Exclusive<'_, &'static str>,
     ) -> Result<(), Early> {
         let fail = |message: String| Early::Error {
             message,
             hint: false,
         };
-        for group in EXCLUSIVE {
-            if let Some((_, this)) = group.iter().find(|(c, _)| *c == id) {
-                if let Some((_, other)) = group
-                    .iter()
-                    .find(|(c, _)| *c != id && seen.iter().any(|s| s == c))
-                {
-                    return Err(fail(std::format!(
-                        "options --{other} and --{this} cannot be combined"
-                    )));
-                }
-            }
+        if let Err((earlier, this)) = exclusive.check(id) {
+            let name = |id| cash_getopt::long_name(LONG_OPTIONS, &id).unwrap_or_default();
+            return Err(fail(std::format!(
+                "options --{} and --{} cannot be combined",
+                name(earlier),
+                name(this)
+            )));
         }
-        seen.push(id.to_owned());
         let value = value.unwrap_or_default();
         match id {
             "h" => return Err(Early::Help),
@@ -1038,13 +1025,13 @@ impl Options {
     /// in any order, clusters, `--name=value`, unique prefixes, `--` ending the options.
     fn parse(args: &[String]) -> Result<Self, Early> {
         let mut options = Self::new();
-        let mut seen = Vec::new();
+        let mut exclusive = cash_getopt::Exclusive::new(EXCLUSIVE);
         let shorts = cash_getopt::optstring_ids(SHORT_OPTIONS);
         for next in Getopt::new(&shorts, LONG_OPTIONS).read(args) {
             match next.map_err(|problem| hinted(problem.to_string()))? {
                 Item::Option {
                     id, value, written, ..
-                } => options.apply(id, value, &written.to_string(), &mut seen)?,
+                } => options.apply(id, value, &written.to_string(), &mut exclusive)?,
                 Item::Operand { value, .. } => options.files.push(value),
             }
         }

@@ -71,14 +71,16 @@ const LONG_OPTIONS: &[Long<'static, char>] = &[
 
 /// The options that cannot be combined, a row each; the first one given of a row is
 /// named with the next one given.
-const EXCLUSIVE: &[&str] = &["67mrst", "Cms", "Nrt", "nrt"];
+const EXCLUSIVE: &[&[char]] = &[
+    &['6', '7', 'm', 'r', 's', 't'],
+    &['C', 'm', 's'],
+    &['N', 'r', 't'],
+    &['n', 'r', 't'],
+];
 
 /// The long name of the option `letter`.
 fn long_name(letter: char) -> &'static str {
-    LONG_OPTIONS
-        .iter()
-        .find(|long| long.id == letter)
-        .map_or("", |long| long.name)
+    cash_getopt::long_name(LONG_OPTIONS, &letter).unwrap_or_default()
 }
 
 /// What the options asked for.
@@ -137,7 +139,7 @@ impl Failure {
 /// and words that are not options are ignored.
 fn parse(args: &[String]) -> Result<Parsed, Failure> {
     let mut request = Request::default();
-    let mut first_of_row: Vec<Option<char>> = vec![None; EXCLUSIVE.len()];
+    let mut exclusive = cash_getopt::Exclusive::new(EXCLUSIVE);
     let shorts: Vec<Short<char>> = LONG_OPTIONS
         .iter()
         .map(|long| Short::new(long.id, long.arg, long.id))
@@ -147,7 +149,7 @@ fn parse(args: &[String]) -> Result<Parsed, Failure> {
             Item::Option { id, value, .. } => (id, value),
             Item::Operand { .. } => continue,
         };
-        if let Some(early) = apply(&mut request, &mut first_of_row, letter, value)? {
+        if let Some(early) = apply(&mut request, &mut exclusive, letter, value)? {
             return Ok(early);
         }
     }
@@ -158,25 +160,16 @@ fn parse(args: &[String]) -> Result<Parsed, Failure> {
 /// refuses it; `-h` and `-V` end the parse.
 fn apply(
     request: &mut Request,
-    first_of_row: &mut [Option<char>],
+    exclusive: &mut cash_getopt::Exclusive<'_, char>,
     letter: char,
     value: Option<String>,
 ) -> Result<Option<Parsed>, Failure> {
-    for (row, first) in EXCLUSIVE.iter().zip(first_of_row.iter_mut()) {
-        if !row.contains(letter) {
-            continue;
-        }
-        match first {
-            None => *first = Some(letter),
-            Some(earlier) if *earlier != letter => {
-                return Err(Failure::plain(format!(
-                    "options --{} and --{} cannot be combined",
-                    long_name(*earlier),
-                    long_name(letter)
-                )));
-            }
-            Some(_) => {}
-        }
+    if let Err((earlier, letter)) = exclusive.check(letter) {
+        return Err(Failure::plain(format!(
+            "options --{} and --{} cannot be combined",
+            long_name(earlier),
+            long_name(letter)
+        )));
     }
     match letter {
         'h' => return Ok(Some(Parsed::Help)),

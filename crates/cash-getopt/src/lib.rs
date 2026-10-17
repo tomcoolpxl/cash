@@ -695,6 +695,53 @@ impl<Id: Copy + PartialEq, W: Word> Reader<'_, '_, '_, Id, W> {
     }
 }
 
+/// Options that exclude each other, in rows, as util-linux's `err_exclusive_options` keeps
+/// them: the first option of a row met stands, and another of that row after it is a
+/// conflict.
+#[derive(Debug)]
+pub struct Exclusive<'r, Id> {
+    rows: &'r [&'r [Id]],
+    first: Vec<Option<Id>>,
+}
+
+impl<'r, Id: Copy + PartialEq> Exclusive<'r, Id> {
+    /// Nothing met yet, of these rows.
+    #[must_use]
+    pub fn new(rows: &'r [&'r [Id]]) -> Self {
+        Self {
+            rows,
+            first: vec![None; rows.len()],
+        }
+    }
+
+    /// Notes that `id` was met.
+    ///
+    /// # Errors
+    ///
+    /// The option of one of `id`'s rows met before it, and `id`, when they differ.
+    pub fn check(&mut self, id: Id) -> Result<(), (Id, Id)> {
+        for (row, first) in self.rows.iter().zip(self.first.iter_mut()) {
+            if !row.contains(&id) {
+                continue;
+            }
+            match *first {
+                None => *first = Some(id),
+                Some(earlier) if earlier != id => return Err((earlier, id)),
+                Some(_) => {}
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The long name of the option known by `id` in `longs`, for a message that names it.
+pub fn long_name<'n, Id: PartialEq>(longs: &[Long<'n, Id>], id: &Id) -> Option<&'n str> {
+    longs
+        .iter()
+        .find(|long| long.id == *id)
+        .map(|long| long.name)
+}
+
 /// GNU tar's old-style keys, as dashed options.
 ///
 /// When the first word does not start with `-`, each of its letters is an option, and
@@ -751,6 +798,19 @@ mod tests {
 
     fn parser() -> Getopt<'static, 'static, &'static str> {
         Getopt::new(SHORTS, LONGS)
+    }
+
+    #[test]
+    fn exclusive_rows_keep_the_first_option_met() {
+        const ROWS: &[&[char]] = &[&['r', 't'], &['t', 'x']];
+        let mut exclusive = Exclusive::new(ROWS);
+        assert_eq!(exclusive.check('t'), Ok(()));
+        // The same option again is no conflict; another of its row is, named after it.
+        assert_eq!(exclusive.check('t'), Ok(()));
+        assert_eq!(exclusive.check('x'), Err(('t', 'x')));
+        assert_eq!(exclusive.check('r'), Err(('t', 'r')));
+        assert_eq!(long_name(LONGS, &"label"), Some("label"));
+        assert_eq!(long_name(LONGS, &"none"), None);
     }
 
     #[test]
