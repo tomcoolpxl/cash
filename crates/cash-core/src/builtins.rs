@@ -49,8 +49,26 @@ pub type CommandContentFunc =
 /// So it is in Bash's builtins and GNU's tools, where clap refuses an option given twice:
 /// an alias that sets an option (`alias ls='ls --color=auto'`) leaves it free to set again
 /// (`ls --color=never`). Options that gather (`-e A -e B`) or count (`-vv`) still do.
-pub fn clap_command<C: clap::CommandFactory>() -> clap::Command {
-    C::command().args_override_self(true)
+///
+/// Made and built once for each thread, and a copy handed out: made for every call, the
+/// command and clap's pass over it cost each builtin on clap about 2 µs, as much again
+/// as the call itself (`shift 0` against `true` in a loop). A copy keeps clap's mark
+/// that it is built, and takes its program name from the call's first word, as before.
+pub fn clap_command<C: clap::CommandFactory + 'static>() -> clap::Command {
+    thread_local! {
+        static BUILT: std::cell::RefCell<rustc_hash::FxHashMap<std::any::TypeId, clap::Command>> =
+            std::cell::RefCell::default();
+    }
+    BUILT.with_borrow_mut(|built| {
+        built
+            .entry(std::any::TypeId::of::<C>())
+            .or_insert_with(|| {
+                let mut command = C::command().args_override_self(true);
+                command.build();
+                command
+            })
+            .clone()
+    })
 }
 
 /// Parses `args` as `C`'s command line ([`clap_command`]).
@@ -58,7 +76,7 @@ pub fn clap_command<C: clap::CommandFactory>() -> clap::Command {
 /// # Errors
 ///
 /// When `C` does not take the command line.
-pub fn parse_args<C: clap::Parser, I>(args: I) -> Result<C, clap::Error>
+pub fn parse_args<C: clap::Parser + 'static, I>(args: I) -> Result<C, clap::Error>
 where
     I: IntoIterator,
     I::Item: Into<std::ffi::OsString> + Clone,
@@ -68,8 +86,36 @@ where
     C::from_arg_matches_mut(&mut matches).map_err(|error| error.format(&mut command))
 }
 
+/// Parses `args` as `C`'s command line ([`parse_args`]), `C` taking options with a `+` as
+/// well as a `-` (`declare +x`).
+///
+/// # Errors
+///
+/// When `C` does not take the command line.
+pub fn parse_plus_options<C: clap::Parser + 'static, I>(args: I) -> Result<C, clap::Error>
+where
+    I: IntoIterator<Item = String>,
+{
+    let args = args.into_iter();
+
+    let (lower, _) = args.size_hint();
+
+    // N.B. clap doesn't support named options like '+x'. To work around this, we
+    // establish a pattern of renaming them.
+    let mut updated_args = Vec::with_capacity(lower);
+    for arg in args {
+        if let Some(plus_options) = arg.strip_prefix("+") {
+            updated_args.extend(plus_options.chars().map(|c| format!("--+{c}")));
+        } else {
+            updated_args.push(arg);
+        }
+    }
+
+    parse_args(updated_args)
+}
+
 /// Trait implemented by built-in shell commands.
-pub trait Command: clap::Parser {
+pub trait Command: clap::Parser + 'static {
     /// The error type returned by the command.
     type Error: BuiltinError + 'static;
 
@@ -82,25 +128,10 @@ pub trait Command: clap::Parser {
     where
         I: IntoIterator<Item = String>,
     {
-        if !Self::takes_plus_options() {
-            parse_args(args)
+        if Self::takes_plus_options() {
+            parse_plus_options(args)
         } else {
-            let args = args.into_iter();
-
-            let (lower, _) = args.size_hint();
-
-            // N.B. clap doesn't support named options like '+x'. To work around this, we
-            // establish a pattern of renaming them.
-            let mut updated_args = Vec::with_capacity(lower);
-            for arg in args {
-                if let Some(plus_options) = arg.strip_prefix("+") {
-                    updated_args.extend(plus_options.chars().map(|c| format!("--+{c}")));
-                } else {
-                    updated_args.push(arg);
-                }
-            }
-
-            parse_args(updated_args)
+            parse_args(args)
         }
     }
 
@@ -444,7 +475,7 @@ where
 /// Similar to [`parse_known`] but with [`clap::Parser::try_parse_from`]
 /// This function is used to parse arguments in builtins such as
 /// `crate::echo::EchoCommand`
-pub fn try_parse_known<T: clap::Parser>(
+pub fn try_parse_known<T: clap::Parser + 'static>(
     args: impl IntoIterator<Item = String>,
 ) -> Result<(T, Option<impl Iterator<Item = String>>), clap::Error> {
     let mut args = args.into_iter();

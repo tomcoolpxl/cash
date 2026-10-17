@@ -315,7 +315,7 @@ fn write_alias_definition(
 #[macro_export]
 macro_rules! minus_or_plus_flag_arg {
     ($struct_name:ident, $flag_char:literal, $desc:literal) => {
-        #[derive(clap::Parser)]
+        #[derive(clap::Parser, Clone)]
         pub(crate) struct $struct_name {
             #[arg(short = $flag_char, name = concat!(stringify!($struct_name), "_enable"), action = clap::ArgAction::SetTrue, help = $desc)]
             _enable: bool,

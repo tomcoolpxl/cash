@@ -16,18 +16,16 @@ pub(crate) struct TestCommand {
 impl builtins::Command for TestCommand {
     type Error = cash_core::Error;
 
-    /// Override the default [`builtins::Command::new`] function to handle clap's limitation related
-    /// to `--`. See [`builtins::parse_known`] for more information
-    /// TODO(test): we can safely remove this after the issue is resolved
+    /// Every word after the command's name is the expression's, `--` and words like options
+    /// among them: `test` takes no option. They went through clap, which gave back each as
+    /// it was, at the cost of the call itself again (`[ "$i" = 5 ]` in a loop).
     fn new<I>(args: I) -> Result<Self, clap::Error>
     where
         I: IntoIterator<Item = String>,
     {
-        let (mut this, rest_args) = cash_core::builtins::try_parse_known::<Self>(args)?;
-        if let Some(args) = rest_args {
-            this.args.extend(args);
-        }
-        Ok(this)
+        Ok(Self {
+            args: args.into_iter().skip(1).collect(),
+        })
     }
 
     async fn execute<SE: cash_core::ShellExtensions>(

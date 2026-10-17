@@ -52,7 +52,7 @@ crate::minus_or_plus_flag_arg!(MakeExportedFlag, 'x', "Mark the variable for exp
 type StringAssignment = (String, Option<String>, bool, String);
 
 /// Display or update variables and their attributes.
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[clap(override_usage = "declare [OPTIONS] [DECLARATIONS]...")]
 pub(crate) struct DeclareCommand {
     /// Constrain to function names or definitions.
@@ -130,6 +130,32 @@ impl builtins::DeclarationCommand for DeclareCommand {
 impl builtins::Command for DeclareCommand {
     fn takes_plus_options() -> bool {
         true
+    }
+
+    /// With no option, which is how `local x=1`, `declare x=1` and `readonly x` come, the
+    /// command is clap's for none, parsed once for each thread: clap set and took back a
+    /// default for each of declare's two dozen options on every call, `local x=1` 15 µs
+    /// where a function call is 4.
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        thread_local! {
+            static NO_OPTIONS: std::cell::OnceCell<DeclareCommand> =
+                const { std::cell::OnceCell::new() };
+        }
+        let args: Vec<String> = args.into_iter().collect();
+        if args.len() > 1 {
+            return builtins::parse_plus_options(args);
+        }
+        NO_OPTIONS.with(|parsed| {
+            if let Some(parsed) = parsed.get() {
+                return Ok(parsed.clone());
+            }
+            let fresh: Self = builtins::parse_plus_options(args)?;
+            let _ = parsed.set(fresh.clone());
+            Ok(fresh)
+        })
     }
 
     type Error = cash_core::Error;
