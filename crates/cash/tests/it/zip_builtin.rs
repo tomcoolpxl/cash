@@ -345,3 +345,30 @@ fn a_wildcard_names_several_archives() {
         out.stderr
     );
 }
+
+/// `zip -r` goes through a junction, and past one back to a folder above, storing each
+/// file once, where Info-ZIP's zip 3.0 goes round until the system refuses the path; with
+/// `-y` both are stored as links.
+#[test]
+fn r_goes_through_junctions_and_stores_each_file_once() {
+    let scratch = Scratch::new("zip-walk");
+    let d = scratch.path().join("d");
+    std::fs::create_dir_all(d.join("sub")).expect("folders");
+    std::fs::create_dir_all(scratch.path().join("other")).expect("a folder");
+    std::fs::write(d.join("a.txt"), "a").expect("a file");
+    std::fs::write(d.join("sub").join("b.txt"), "b").expect("a file");
+    std::fs::write(scratch.path().join("other").join("o.txt"), "o").expect("a file");
+    cash_win32::junction::point(&d.join("out"), &scratch.path().join("other")).expect("a junction");
+    cash_win32::junction::point(&d.join("sub").join("up"), &d).expect("a junction");
+    let out = run_in(
+        scratch.path(),
+        "zip -rq f.zip d; echo \"rc=$?\"; unzip -Z1 f.zip | sort; \
+         zip -ryq y.zip d; echo \"rc=$?\"; unzip -Z1 y.zip | sort",
+    );
+    assert_eq!(
+        out.stdout,
+        "rc=0\nd/\nd/a.txt\nd/out/\nd/out/o.txt\nd/sub/\nd/sub/b.txt\n\
+         rc=0\nd/\nd/a.txt\nd/out\nd/sub/\nd/sub/b.txt\nd/sub/up"
+    );
+    assert_eq!(out.stderr, "");
+}

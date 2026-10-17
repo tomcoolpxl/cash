@@ -21,6 +21,7 @@ use cash_win32::unix::{self, Replacement, UnixView};
 use super::help::{ZIP_USAGE, ZIP_VERSION};
 use super::{Clock, Say, Source as ArchiveSource, matches, name_text, read_line};
 use crate::compress::{is_terminal, strerror};
+use crate::walk as walker;
 
 mod fix;
 
@@ -1053,7 +1054,42 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
         Ok(Ok(out))
     }
 
+    /// `given`, whose `view` is known, and with `-r` what is below it, on the shared walker:
+    /// through links unless `-y`, as zip goes through them. A link back to a folder above
+    /// is passed by, where Info-ZIP's zip 3.0 goes round until the system refuses the path,
+    /// so each file is stored once; a folder that cannot be listed is passed over in
+    /// silence, as zip passes it.
     fn walk(&self, given: &str, path: &std::path::Path, view: UnixView, out: &mut Vec<Source>) {
+        let options = walker::WalkOptions {
+            links: if self.options.symlinks {
+                walker::Links::Never
+            } else {
+                walker::Links::All
+            },
+            order: walker::Order::Listing,
+            max_depth: if self.options.recurse { usize::MAX } else { 0 },
+            ..walker::WalkOptions::default()
+        };
+        let mut root = Some(view);
+        for next in walker::Walk::new(given, path, &options, self.context.stop_token()) {
+            let entry = match next {
+                Ok(entry) => entry,
+                Err(walker::WalkError::Stopped) => return,
+                Err(_) => continue,
+            };
+            let view = match root.take() {
+                Some(view) if entry.depth == 0 => view,
+                _ => match unix::unix_view(&entry.path, !self.options.symlinks) {
+                    Ok(view) => view,
+                    Err(_) => continue,
+                },
+            };
+            self.gather(&entry.shown, entry.path, view, out);
+        }
+    }
+
+    /// One name of the walk, unless an option leaves it out.
+    fn gather(&self, given: &str, path: PathBuf, view: UnixView, out: &mut Vec<Source>) {
         let is_dir = view.kind == unix::Kind::Dir;
         let name = internal_name(given, is_dir, self.options.junk);
         let modified = seconds_of(view.times.modified);
@@ -1075,30 +1111,10 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
         if wanted {
             out.push(Source {
                 given: given.to_owned(),
-                path: Some(path.to_path_buf()),
+                path: Some(path),
                 name,
                 view: Some(view),
             });
-        }
-        if is_dir && self.options.recurse {
-            let Ok(children) = fs::read_dir(path) else {
-                return;
-            };
-            let names: Vec<String> = children
-                .filter_map(Result::ok)
-                .map(|c| c.file_name().to_string_lossy().into_owned())
-                .collect();
-            for child in names {
-                let child_given = if given.ends_with('/') || given.ends_with('\\') {
-                    format!("{given}{child}")
-                } else {
-                    format!("{given}/{child}")
-                };
-                let child_path = path.join(&child);
-                if let Ok(view) = unix::unix_view(&child_path, !self.options.symlinks) {
-                    self.walk(&child_given, &child_path, view, out);
-                }
-            }
         }
     }
 
