@@ -203,6 +203,8 @@ mod refusals;
 mod resolution_honesty;
 // `rm -r` takes a junction inside a folder away as the link it is, its target or not.
 mod rm_links;
+// `rm` removes the folder it runs in, the shell's, as a trap at exit asks.
+mod rm_own_folder;
 // EXE-07: a script that does not parse runs a complete command at a time, up to the error.
 mod run_by_command;
 // `select`, a bash construct cash could not parse at all.

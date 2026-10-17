@@ -1652,3 +1652,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   4096 lines of one of 128 KiB, all in 1.19.0; and `tail -f --use-polling` printed a
   file again on each change, saying it had been replaced. tail is taken into
   `cash-uutils`, as head was, and each is fixed there; checked against Git Bash's tail.
+
+- **`d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"` left `$d` behind** (spec §4 #13;
+  the spec's claim that an in-process `rm` could not fix it was found wrong 2026-10-16,
+  done 2026-10-17): the bundled `rm` ran in the shell's folder, which Windows will not
+  let a process remove. cash's own `rm` moves to the volume's root before it removes a
+  folder that holds its own; a relative operand after that names nothing, as on Linux,
+  and `..` is still refused. §4 #13 now names the other bundled tools (`rmdir`), and
+  spec §8 says why an in-process tool would have fixed it.

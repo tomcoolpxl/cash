@@ -45,6 +45,13 @@ as it registers the uutils tools it uses unchanged.
   on a broken pipe: cash's relay of a bundled tool's output ends it with 141.
 - **`rm`'s trailing separators**: `d/../////` is trimmed to `d/../` with either
   separator; uutils looked for `\` alone on Windows.
+- **`rm` removes the folder it runs in** (2026-10-17): the bundled `rm` runs in the
+  shell's folder, and Windows will not remove a folder a process sits in, so
+  `d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"` left `$d` behind (spec §4 #13).
+  Before it removes a folder that holds its own, `rm` moves to the volume's root, and a
+  relative operand goes on as its full path; a relative operand after that names
+  nothing, as on Linux once the working folder is gone. An operand ending in `.` or
+  `..` is still refused. Marked `// cash:` (`leave_folder_for`).
 - **`head` leaves a file under its standard input just after what it printed**
   (2026-10-17), as GNU head does: `{ head -n1; cat; } < file` lost what head had read
   ahead, as uutils seeks back on Unix alone. A head that comes to the file under way

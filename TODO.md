@@ -135,8 +135,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   cash's relay ends it then. `cash -c 'tail -f g | head -1; echo done'` prints `a` and
   `done`, then waits for tail before it exits; Git Bash's tail waits too, before `done`;
   GNU's tail on Linux ends at once. The relay could ask its pipe's reader between polls.
-- **spec.md §8 says an in-process `rm` could not fix §4 #13** (2026-10-16): it could, as
-  cash's process never sits in the shell's folder (D10); the text wants correcting.
 - **The DEBUG trap misses a command that only assigns** (2026-10-16): `trap '...' DEBUG;
   x=1` runs the trap before `x=1` in Bash, not in cash, which fires it only for a
   command with a name (`commands::on_preexecute`).

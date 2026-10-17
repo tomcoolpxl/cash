@@ -219,12 +219,13 @@ fn every_corpus_script_runs_with_crlf_endings() {
 
 #[test]
 fn a_trap_can_remove_a_directory_it_moved_out_of() {
-    // §4: a bundled builtin re-enters the binary as a child process and inherits the
+    // §4 #13: a bundled builtin re-enters the binary as a child process and inherits the
     // shell's working directory, so `cd "$d"; rm -rf "$d"` is a process deleting its own
-    // current directory — which Windows refuses.
+    // current directory — which Windows refuses. `rm` moves out of it first since
+    // 2026-10-17 (`rm_own_folder.rs`); the other bundled tools do not.
     //
-    // The workaround is to leave the directory first, which is good practice regardless.
-    // Asserting it here means the recommended form stays working.
+    // Leaving the directory first is good practice regardless. Asserting it here means
+    // the recommended form stays working.
     let out = cash_command()
         .args([
             "-c",

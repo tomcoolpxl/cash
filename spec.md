@@ -117,7 +117,7 @@ someone who expected bash, so additions need to earn their place.
 | 10 | A `>(...)` runs in the shell, which waits for it before it exits; handed as a path it is a named pipe to a builtin, and to a program or function a temp file read as it is written, a moment behind | Windows has no `/dev/fd` to hand a pipe on, and no `fork`; a named pipe cannot be created or truncated | D17 |
 | 11 | `[ -s file ]` is false for App Execution Aliases | They are genuinely 0 bytes | D46 |
 | 12 | Elevated and `detach`ed processes, and GUI applications, survive cash; other processes it started do not | Integrity boundary; breakaway flag; an editor should outlive the shell (`cashctl gui-apps close` to reap them) | D6, D42, D45 |
-| 13 | A bundled builtin cannot delete the shell's current directory | It re-enters the binary as a child inheriting that cwd, and Windows refuses to delete a process's own cwd | D48 |
+| 13 | A bundled builtin other than `rm` (`rmdir`, for one) cannot delete the shell's current directory; `rm` moves out of it first | It re-enters the binary as a child inheriting that cwd, and Windows refuses to delete a process's own cwd | D48 |
 | 14 | `$!` for a background job that starts no program is a number of cash's own (4n + 1) that no process has; `kill` and `wait` take it to mean the job | bash forks and reports the subshell's pid; cash runs the job on a thread of its own process, so there is no process to name | D70 |
 | 15 | `kill 0` signals the trees cash spawned, not a process group | Windows has no process group that excludes the terminal; the console-wide alternative would kill it | D22 |
 | 16 | `kill -1` is refused | "every process I may signal" on Windows reaches far past anything a script could mean | D22 |
@@ -403,14 +403,19 @@ the reference bash — a genuine cross-check, because the script deliberately av
 d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"
 ```
 
-fails at the `rm`. A bundled builtin (D48) re-enters the binary as a child process and
+failed at the `rm`. A bundled builtin (D48) re-enters the binary as a child process and
 inherits the shell's working directory, so this is a process deleting its own current
 directory, which Windows refuses. bash-on-Windows succeeds because Cygwin emulates POSIX
 unlink semantics.
 
-It cannot be fixed by running the builtin in-process: re-entry is exactly what makes
-redirections and pipes work for uutils. The workaround — `trap 'cd /; rm -rf "$d"' EXIT`
-— is good practice anyway, and is asserted by a test so it stays working.
+Running the builtin in-process would fix it, since cash's own process never sits in the
+shell's folder (D10); it is not done because re-entry is exactly what makes redirections
+and pipes work for uutils. Since 2026-10-17 `rm`, cash's own code, moves its process to
+the volume's root before it removes a folder that holds it, and the idiom works; a
+relative operand after that names nothing, as on Linux once the working directory is
+gone. The other bundled tools still cannot (`rmdir "$d"` from inside `$d`). The form
+`trap 'cd /; rm -rf "$d"' EXIT` is good practice anyway, and is asserted by a test so it
+stays working.
 
 **Acceptance corpus.** M2 generalises into the spec's executable form: a collection of
 real scripts that must pass, plus a test per row of §4. Worth starting early — it converts

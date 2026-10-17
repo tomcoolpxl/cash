@@ -9,12 +9,13 @@ use crate::messages::translate;
 use clap::builder::{PossibleValue, ValueParser};
 use clap::{Arg, ArgAction, Command, parser::ValueSource};
 use indicatif::{ProgressBar, ProgressStyle};
+use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata};
 use std::io::{self, IsTerminal, Write, stdin};
 use std::ops::BitOr;
 use std::path::MAIN_SEPARATOR;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use thiserror::Error;
 use uucore::display::Quotable;
@@ -555,8 +556,21 @@ pub fn remove(files: &[&OsStr], options: &Options) -> bool {
     let mut progress_bar: Option<ProgressBar> = None;
     let mut any_files_processed = false;
 
+    // cash: the folder rm sits in, while it still does (see `leave_folder_for`).
+    let mut sits_in = std::env::current_dir().ok();
+
     for filename in files {
-        let file = Path::new(filename);
+        let Some(file) = leave_folder_for(Path::new(filename), &mut sits_in, options) else {
+            if !options.force {
+                show_error!(
+                    "{}",
+                    RmError::CannotRemoveNoSuchFile(filename.to_os_string())
+                );
+                had_err = true;
+            }
+            continue;
+        };
+        let file = file.as_ref();
 
         // Check if the path (potentially with trailing slash) resolves to root
         // This needs to happen before symlink_metadata to catch cases like "rootlink/"
@@ -615,6 +629,52 @@ pub fn remove(files: &[&OsStr], options: &Options) -> bool {
     }
 
     had_err
+}
+
+/// cash: the path to remove `file` by, after rm has left the folder it sits in when
+/// `file` holds it, or `None` when `file` names nothing because rm has left already.
+///
+/// Windows will not remove a folder a process sits in, and the bundled rm runs in the
+/// shell's folder, so `d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"` left `$d`
+/// behind. When `file` is a folder that holds rm's working folder and rm is to remove
+/// folders, rm moves to the root of its volume first, and a relative `file` goes on as
+/// its full path. From then on a relative operand names nothing, as on Linux once the
+/// working folder is gone; it is never looked for from the root. An operand that ends
+/// in `.` or `..` is left as it is, for `handle_dir` to refuse.
+fn leave_folder_for<'a>(
+    file: &'a Path,
+    sits_in: &mut Option<PathBuf>,
+    options: &Options,
+) -> Option<Cow<'a, Path>> {
+    let Some(cwd) = sits_in.as_deref() else {
+        return file.has_root().then_some(Cow::Borrowed(file));
+    };
+    if !(options.recursive || options.dir) || path_is_current_or_parent_directory(file) {
+        return Some(Cow::Borrowed(file));
+    }
+    let holder = std::path::absolute(file).ok().filter(|full| {
+        full.symlink_metadata()
+            .is_ok_and(|metadata| metadata.is_dir())
+            && match (cwd.canonicalize(), full.canonicalize()) {
+                (Ok(cwd), Ok(full)) => cwd.starts_with(full),
+                _ => false,
+            }
+    });
+    let Some(full) = holder else {
+        return Some(Cow::Borrowed(file));
+    };
+    let Some(root) = full.ancestors().last() else {
+        return Some(Cow::Borrowed(file));
+    };
+    if std::env::set_current_dir(root).is_err() {
+        return Some(Cow::Borrowed(file));
+    }
+    *sits_in = None;
+    Some(if file.has_root() {
+        Cow::Borrowed(file)
+    } else {
+        Cow::Owned(full)
+    })
 }
 
 /// Whether the given directory is empty.
