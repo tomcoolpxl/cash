@@ -276,6 +276,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             completion_config: completion::Config::default(),
             builtins: std::sync::Arc::default(),
             program_location_cache: pathcache::PathCache::default(),
+            missing_command: None,
             path_index: crate::pathindex::PathIndex::default(),
             abbreviations: crate::abbreviations::Abbreviations::default(),
             directory_history: crate::dirhistory::DirectoryHistory::default(),

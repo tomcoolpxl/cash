@@ -30,12 +30,7 @@ for working through it. What is done, phases and findings, is in DONE.md.
 The user's picks of 2026-10-17 (decisions.md, "ls takes GNU's remaining options" and
 "`tail -f` ends when the reader of its output is gone"), in this order.
 
-1. **Two costs paid on every call** (from the 2026-10-16 survey, below):
-   - a name not found is not remembered, so each miss probes PATH twice: only for a
-     missing command given arguments (looked into 2026-10-17), as the globbing decision
-     (D81) looks the name up as the second word is expanded, and the dispatch looks
-     again; carrying "missing" from the one to the other would save the second;
-   - coolfetch asks sysinfo for everything on each run, nothing kept between runs.
+1. **Two costs paid on every call**: done (2026-10-17, DONE.md).
 2. **GNU ls options cash's ls has not** (2026-10-17): named as not supported: `-Q`,
    `-n`, `-s`, `-i`, `-c`, `-u`, `--time`, `-H`, `--quoting-style`, `-b`, `-q`, `-N`,
    `-k`, `--si`, `--block-size`, `-T`, `--zero`, `--hyperlink`, `-Z`, `--author`, `-D`.
@@ -76,6 +71,13 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **The PATH search that checks each extension is slow** (2026-10-17, found with the
+  missing-command lookup): `find_executables_in_path` (`pathsearch::search_for_executable`)
+  tries every `PATHEXT` extension in every folder, a file check each, about 38 ms on this
+  machine's 80 folders, where `resolve_command` reads each folder once (`names_beginning`).
+  Still used by `type -a` and `which -a` (every match), `hash NAME`, and carapace's first
+  look for itself; the winglob decision moved off it (DONE.md). The one look per folder
+  would serve them too.
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against

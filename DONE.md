@@ -1785,3 +1785,17 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
     Roslyn cold on a fresh runner, plausibly past the 30 s the tests wait. The helper is
     compiled once, before the ConPTY starts, into a DLL in the temporary folder named
     by its source and PowerShell, with its time printed; the script loads it.
+
+- **Two costs paid on every call** (the user's pick of 2026-10-17, from the 2026-10-16
+  survey):
+  - **A missing command given arguments probed PATH twice**, at the prompt where
+    `winglob` is on: the decision of who globs (D81) looks the name up as the second word
+    is expanded, and the dispatch looked again. The first used the search that tries
+    every `PATHEXT` extension in every folder, about 39 ms; it now uses the dispatch's,
+    which reads each folder once, and remembers a miss, which the dispatch takes while
+    `PATH`, `PATHEXT`, the working folder and the count of exit statuses are as they were
+    (a command substitution in a later word can make the program, and it is found).
+    `nosuchcommand x` 200 times with `winglob` on: 9.2 s, now 1.4 s; the first run of a
+    program given arguments at the prompt saves the same.
+  - **coolfetch asks for everything on each run**: looked into, about 30 ms over an empty
+    command, once for each new window from the starter `.bashrc`; the user: fine as it is.

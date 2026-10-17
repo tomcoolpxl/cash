@@ -83,7 +83,7 @@ fn is_system_program<SE: extensions::ShellExtensions>(shell: &mut Shell<SE>, nam
     let path = if name.contains(['/', '\\']) {
         shell.absolute_path(Path::new(name))
     } else {
-        let Some(found) = shell.find_first_executable_in_path_using_cache(name) else {
+        let Some(found) = shell.find_command_for_decision(name) else {
             return false;
         };
         found

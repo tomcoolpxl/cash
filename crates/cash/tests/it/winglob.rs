@@ -149,3 +149,25 @@ fn a_function_and_a_builtin_are_the_shells() {
         "a.txt b.txt"
     );
 }
+
+/// The name is looked up as the second word is expanded, to decide who globs, and found
+/// missing; the lookup that runs it must look again when a command ran in between, as
+/// here the command substitution in a later word made the program. Bash, which looks
+/// after the expansions, finds it. A missing command given words is still missing.
+#[test]
+fn a_command_made_by_a_later_word_is_found_and_a_missing_one_is_not() {
+    assert_eq!(
+        among_two_files(
+            false,
+            r#"shopt -s winglob; PATH="$PWD:$PATH"; madelater x "$(printf '@echo made %%1\r\n' > madelater.bat)"; echo "status $?""#
+        ),
+        "made x\nstatus 0"
+    );
+    assert_eq!(
+        among_two_files(
+            false,
+            "shopt -s winglob; nosuchcommand x y 2>/dev/null; echo status $?; nosuchcommand x 2>/dev/null; echo status $?"
+        ),
+        "status 127\nstatus 127"
+    );
+}

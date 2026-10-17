@@ -331,6 +331,37 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         }
     }
 
+    /// Finds the command `name` runs, for deciding before it runs who globs its words
+    /// (D81): as [`Self::resolve_command_in_path_using_cache`] will find it to run it, but
+    /// counting no hit. A miss is remembered ([`MissingCommand`]), so that the lookup that
+    /// runs the command does not walk PATH again for a name that is not there: a missing
+    /// command given arguments probed every folder twice.
+    pub(crate) fn find_command_for_decision(&mut self, name: &str) -> Option<PathBuf> {
+        if let Some(cached_path) = self.program_location_cache.get(name) {
+            return Some(cached_path);
+        }
+        if let Some(found_path) = self.resolve_command_in_path(name) {
+            // See `find_first_executable_in_path_using_cache`.
+            if !self.executable_search_dirs().1 {
+                self.program_location_cache.set(name, found_path.clone());
+            }
+            return Some(found_path);
+        }
+        self.missing_command = Some(self.missing_command_key(name));
+        None
+    }
+
+    /// What a search for `name` that finds nothing depends on, now.
+    fn missing_command_key(&self, name: &str) -> MissingCommand {
+        MissingCommand {
+            name: name.to_owned(),
+            path: self.env.get("PATH").map(|(_, var)| var.stamp()),
+            pathext: self.env.get("PATHEXT").map(|(_, var)| var.stamp()),
+            working_dir: self.working_dir.clone(),
+            statuses: self.last_exit_status_change_count(),
+        }
+    }
+
     /// Resolves a command name by searching the shell's current PATH.
     ///
     /// Unlike [`Self::find_first_executable_in_path`], a non-executable entry in the PATH
@@ -364,6 +395,14 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         if let Some(cached_path) = self.program_location_cache.get(&candidate_name) {
             self.program_location_cache.record_hit(&candidate_name);
             return Some(cached_path);
+        }
+        // Not found a moment ago, with nothing changed since that could make it found.
+        if self
+            .missing_command
+            .as_ref()
+            .is_some_and(|missing| *missing == self.missing_command_key(candidate_name.as_ref()))
+        {
+            return None;
         }
 
         let found_path = self.resolve_command_in_path(candidate_name.as_ref())?;
@@ -513,4 +552,17 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     pub(crate) const fn persistent_open_files(&self) -> &openfiles::OpenFiles {
         &self.open_files
     }
+}
+
+/// A name a PATH search did not find, with what that answer depends on: `PATH` and
+/// `PATHEXT` (by their stamps), the working folder (for a relative `PATH` entry), and how
+/// many exit statuses have been set, which changes whenever a command runs, and so with
+/// anything a command could have done to make the name found (`cmd x $(make cmd)`).
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct MissingCommand {
+    name: String,
+    path: Option<u64>,
+    pathext: Option<u64>,
+    working_dir: PathBuf,
+    statuses: usize,
 }

@@ -169,6 +169,11 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Shell program location cache.
     program_location_cache: pathcache::PathCache,
 
+    /// The last name a PATH search did not find, and what that answer holds for
+    /// ([`fs::MissingCommand`]).
+    #[cfg_attr(feature = "serde", serde(skip))]
+    missing_command: Option<fs::MissingCommand>,
+
     /// Background listing of the `PATH` directories, for lookups that must not block.
     #[cfg_attr(feature = "serde", serde(skip))]
     path_index: crate::pathindex::PathIndex,
@@ -254,6 +259,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             completion_config: self.completion_config.clone(),
             builtins: self.builtins.clone(),
             program_location_cache: self.program_location_cache.clone(),
+            missing_command: self.missing_command.clone(),
             path_index: self.path_index.clone(),
             abbreviations: self.abbreviations.clone(),
             directory_history: self.directory_history.clone(),
