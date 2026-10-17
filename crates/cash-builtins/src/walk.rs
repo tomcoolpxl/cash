@@ -35,12 +35,9 @@ pub(crate) enum Order {
     Listing,
     /// By name, unit for unit: GNU's tools in the C locale (`find`, `grep`, `tree`).
     Ordinal,
-    /// By name, without regard to case.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "where -r walks in this order, next")
-    )]
-    Folded,
+    /// A folder's files before its folders, each by name as Windows folds names:
+    /// `where`, as `where.exe` lists them.
+    FilesFirst,
 }
 
 /// What a walk does.
@@ -155,7 +152,7 @@ impl Walk {
         walk = match options.order {
             Order::Listing => walk,
             Order::Ordinal => walk.sort_by_file_name(),
-            Order::Folded => walk.sort_by(|a, b| folded(a.file_name()).cmp(&folded(b.file_name()))),
+            Order::FilesFirst => walk.sort_by_key(files_first),
         };
         Self {
             inner: walk.into_iter(),
@@ -278,9 +275,16 @@ fn join_shown(root: &str, below: &str) -> String {
     }
 }
 
-/// A name without regard to case, for [`Order::Folded`].
-fn folded(name: &OsStr) -> String {
-    name.to_string_lossy().to_lowercase()
+/// Where an entry goes in [`Order::FilesFirst`]: after the files when it is a folder or a
+/// link to one (a junction, a folder symlink, which Windows marks as folders), then by its
+/// name as Windows folds names.
+fn files_first(entry: &walkdir::DirEntry) -> (bool, String) {
+    use std::os::windows::fs::FileTypeExt;
+    let kind = entry.file_type();
+    (
+        kind.is_dir() || kind.is_symlink_dir(),
+        cash_win32::fold::name_key(&entry.file_name().to_string_lossy()),
+    )
 }
 
 /// walkdir's error as the I/O error under it, or one that says it.
@@ -338,15 +342,15 @@ mod tests {
                 "top/b/deep/f File"
             ]
         );
-        let folded = WalkOptions {
-            order: Order::Folded,
+        let files_first = WalkOptions {
+            order: Order::FilesFirst,
             max_depth: 1,
             min_depth: 1,
             ..WalkOptions::default()
         };
         assert_eq!(
-            walked(root, "top/", &folded),
-            ["top/a.txt File", "top/b Folder", "top/B.txt File"]
+            walked(root, "top/", &files_first),
+            ["top/a.txt File", "top/B.txt File", "top/b Folder"]
         );
         // A junction back to the root: a link not followed, a loop when followed.
         let link = root.join("b").join("up");

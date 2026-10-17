@@ -16,11 +16,14 @@
 //! Unlike `which`, it knows nothing of builtins, functions or aliases: it answers where the
 //! files are, which is the question `where.exe` answers.
 
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use cash_core::{ExecutionExitCode, ExecutionResult, builtins};
+use cash_core::{ExecutionExitCode, ExecutionResult, StopToken, builtins};
 use clap::Parser;
+
+use crate::walk::{Kind, Links, Order, Walk, WalkError, WalkOptions};
 
 const HELP: &str = "\
 Usage: where [-r DIR] [-q] [-f] [-t] PATTERN...
@@ -296,21 +299,41 @@ fn name_patterns(name: &str, pathext: &[String]) -> Vec<String> {
 
 /// Whether a file name matches a pattern as Windows matches it: `*` and `?`, any case,
 /// a trailing `.` meaning no extension, and `NAME.*` matching `NAME` too.
+#[cfg(test)]
 fn matches(pattern: &str, name: &str) -> bool {
+    fits(&fold_pattern(pattern), &cash_win32::fold::name_key(name))
+}
+
+/// A pattern folded as Windows folds names, a trailing `.` taken off: what [`fits`]
+/// matches a folded name against, folded once for every name it is matched with.
+fn fold_pattern(pattern: &str) -> String {
     let pattern = cash_win32::fold::name_key(pattern);
-    let name = cash_win32::fold::name_key(name);
     let trimmed = pattern.trim_end_matches('.');
-    let trimmed = if trimmed.is_empty() {
-        pattern.as_str()
+    if trimmed.is_empty() {
+        pattern
     } else {
-        trimmed
-    };
-    if wildcard(trimmed, &name) {
-        return true;
+        trimmed.to_owned()
     }
-    trimmed
-        .strip_suffix(".*")
-        .is_some_and(|stem| !name.contains('.') && wildcard(stem, &name))
+}
+
+/// `matches`, for a pattern from [`fold_pattern`] and a name already folded.
+fn fits(pattern: &str, name: &str) -> bool {
+    wildcard(pattern, name)
+        || pattern
+            .strip_suffix(".*")
+            .is_some_and(|stem| !name.contains('.') && wildcard(stem, name))
+}
+
+/// Whether a folded name fits any of a search's folded patterns.
+fn fits_any(patterns: &[String], name: &str) -> bool {
+    patterns.iter().any(|pattern| fits(pattern, name))
+}
+
+/// A file's name folded as Windows folds names.
+fn folded_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| cash_win32::fold::name_key(&name.to_string_lossy()))
+        .unwrap_or_default()
 }
 
 fn wildcard(pattern: &str, name: &str) -> bool {
@@ -336,59 +359,88 @@ fn wildcard(pattern: &str, name: &str) -> bool {
     pattern[p..].iter().all(|c| *c == '*')
 }
 
-/// A folder's entries, files and folders apart, each in the order Windows lists them.
-fn list(folder: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(folder) else {
-        return (Vec::new(), Vec::new());
+/// The files at and below `folder` in `where.exe`'s order: a folder's own files, then
+/// each folder in it with what is below it, by name as Windows folds names; only `folder`'s
+/// own unless `recursive`. A link is gone through, a junction to a folder as a folder, as
+/// `where.exe` goes through it, and a link back to a folder above is passed by: `where.exe`
+/// goes round it until the path is too long, so each file is listed once here. A folder
+/// that cannot be listed is passed over, as `where.exe` passes it, and an app execution
+/// alias (`WindowsApps`, a reparse point Windows runs as a program) is a file.
+fn each_file(folder: &Path, recursive: bool, stop: StopToken, mut found: impl FnMut(&Path)) {
+    use std::os::windows::fs::FileTypeExt;
+    let options = WalkOptions {
+        links: Links::All,
+        order: Order::FilesFirst,
+        min_depth: 1,
+        max_depth: if recursive { usize::MAX } else { 1 },
+        ..WalkOptions::default()
     };
-    let mut files = Vec::new();
-    let mut folders = Vec::new();
-    for entry in entries.flatten() {
-        let Ok(kind) = entry.file_type() else {
-            continue;
-        };
-        let path = entry.path();
-        if kind.is_dir() {
-            folders.push(path);
-        } else if kind.is_symlink() && std::fs::metadata(&path).is_ok_and(|m| m.is_dir()) {
-            // A link to a folder is not followed below, which could loop, nor a file.
-        } else {
-            // Files, links to them, and app execution aliases (`WindowsApps`), which
-            // are reparse points Windows runs as programs.
-            files.push(path);
+    for next in Walk::new("", folder, &options, stop) {
+        match next {
+            Ok(entry) if entry.kind != Kind::Folder => found(&entry.path),
+            // A link to a file that is not there is still a name in the folder.
+            Err(WalkError::Dangling(entry))
+                if !std::fs::symlink_metadata(&entry.path)
+                    .is_ok_and(|m| m.file_type().is_symlink_dir()) =>
+            {
+                found(&entry.path);
+            }
+            Err(WalkError::Stopped) => return,
+            Ok(_) | Err(_) => {}
         }
     }
-    let order = |path: &PathBuf| {
-        path.file_name()
-            .map(|name| cash_win32::fold::name_key(&name.to_string_lossy()))
-            .unwrap_or_default()
-    };
-    files.sort_by_key(order);
-    folders.sort_by_key(order);
-    (files, folders)
 }
 
-/// The files in `folder` that match any of `patterns`.
-fn matching(folder: &Path, patterns: &[String]) -> Vec<PathBuf> {
-    list(folder)
-        .0
-        .into_iter()
-        .filter(|path| {
-            path.file_name().is_some_and(|name| {
-                let name = name.to_string_lossy();
-                patterns.iter().any(|pattern| matches(pattern, &name))
-            })
+/// What each search finds, in order: below `root` in one walk for every pattern, or in
+/// the folders each search names, each listed once however many searches look in it.
+fn find<SE: cash_core::ShellExtensions>(
+    shell: &cash_core::Shell<SE>,
+    searches: &[Search],
+    root: Option<&Path>,
+    stop: &StopToken,
+) -> Vec<Vec<PathBuf>> {
+    let pathext = shell.pathext();
+    let patterns: Vec<Vec<String>> = searches
+        .iter()
+        .map(|search| {
+            name_patterns(&search.name, &pathext)
+                .iter()
+                .map(|pattern| fold_pattern(pattern))
+                .collect()
         })
-        .collect()
-}
-
-/// The files at and below `folder` that match, a folder's own files before those of the
-/// folders in it.
-fn matching_below(folder: &Path, patterns: &[String], found: &mut Vec<PathBuf>) {
-    found.extend(matching(folder, patterns));
-    for below in list(folder).1 {
-        matching_below(&below, patterns, found);
+        .collect();
+    let mut found: Vec<Vec<PathBuf>> = vec![Vec::new(); searches.len()];
+    if let Some(root) = root {
+        each_file(root, true, stop.clone(), |path| {
+            let name = folded_name(path);
+            for (patterns, found) in patterns.iter().zip(&mut found) {
+                if fits_any(patterns, &name) {
+                    found.push(path.to_path_buf());
+                }
+            }
+        });
+        return found;
     }
+    // A folder's files with their folded names, for the next search that looks in it.
+    let mut listings: HashMap<PathBuf, Vec<(PathBuf, String)>> = HashMap::new();
+    for ((search, patterns), found) in searches.iter().zip(&patterns).zip(&mut found) {
+        for folder in folders(shell, &search.scope) {
+            let files = listings.entry(folder).or_insert_with_key(|folder| {
+                let mut files = Vec::new();
+                each_file(folder, false, stop.clone(), |path| {
+                    files.push((path.to_path_buf(), folded_name(path)));
+                });
+                files
+            });
+            found.extend(
+                files
+                    .iter()
+                    .filter(|(_, name)| fits_any(patterns, name))
+                    .map(|(path, _)| path.clone()),
+            );
+        }
+    }
+    found
 }
 
 /// The dash spelling of a `where.exe` option written with a slash (`/q` is `-q`).
@@ -504,11 +556,15 @@ impl builtins::Command for WhereCommand {
             Err(Usage(lines)) => return usage_error(&context, &lines),
         };
 
-        let pathext = shell.pathext();
+        let stop = context.stop_token();
+        let found = find(shell, &searches, root.as_deref(), &stop);
+        if stop.requested() {
+            return Ok(ExecutionResult::new(130));
+        }
 
         let mut any_found = false;
         let mut missing = Vec::new();
-        for search in &searches {
+        for (search, found) in searches.iter().zip(found) {
             if let Scope::MissingVariable(name) = &search.scope
                 && !request.quiet
             {
@@ -516,16 +572,6 @@ impl builtins::Command for WhereCommand {
                     context.stderr(),
                     "ERROR: Environment variable \"{name}\" is not found."
                 )?;
-            }
-            let names = name_patterns(&search.name, &pathext);
-            let mut found = Vec::new();
-            match &root {
-                Some(root) => matching_below(root, &names, &mut found),
-                None => {
-                    for folder in folders(shell, &search.scope) {
-                        found.extend(matching(&folder, &names));
-                    }
-                }
             }
             if found.is_empty() {
                 missing.push(&search.given);

@@ -133,6 +133,25 @@ fn recursive_lists_a_folders_files_before_the_folders_below_it() {
 }
 
 #[test]
+fn recursive_goes_through_junctions_as_folders_and_once_round_a_loop() {
+    // where.exe goes through a junction met below the folder, sorted with the folders, and
+    // round a junction back up until the path is too long; cash lists each file once.
+    let dir = fixture("junctions");
+    let d = shown(&dir);
+    let other = Scratch::new("where-junction-target");
+    std::fs::write(other.join("foo.exe"), "x").unwrap();
+    cash_win32::junction::point(&dir.join("sub").join("aaa"), other.path()).unwrap();
+    cash_win32::junction::point(&dir.join("sub").join("up"), &dir).unwrap();
+    let (status, stdout, stderr) = run(&dir, "", "where -r . foo.exe");
+    assert_eq!(status, 0, "{stderr}");
+    assert_eq!(
+        stdout,
+        format!("{d}/foo.exe\n{d}/sub/foo.exe\n{d}/sub/aaa/foo.exe\n")
+    );
+    assert_eq!(stderr, "");
+}
+
+#[test]
 fn folder_and_variable_forms_search_only_there() {
     let dir = fixture("forms");
     let d = shown(&dir);
