@@ -1,6 +1,6 @@
 [package]
 name = "cash-uutils"
-description = "rm, sort, tee, uniq and shuf for cash, taken from uutils coreutils and made its own"
+description = "rm, sort, tee, uniq, shuf and head for cash, taken from uutils coreutils and made its own"
 version.workspace = true
 authors.workspace = true
 categories.workspace = true

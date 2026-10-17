@@ -1,11 +1,11 @@
 # cash-uutils
 
-`rm`, `sort`, `tee`, `uniq` and `shuf` for cash: taken from
+`rm`, `sort`, `tee`, `uniq`, `shuf` and `head` for cash: taken from
 [uutils coreutils](https://github.com/uutils/coreutils) 0.12.0 (`uu_rm`, `uu_sort`,
-`uu_tee`, `uu_uniq`, `uu_shuf`), © the uutils developers, under the MIT License
-(`LICENSE`), and made cash's own on 2026-10-10. Until then they were carried in
-`vendor/uutils` as patched copies; the other uutils tools cash bundles are used from
-crates.io as published.
+`uu_tee`, `uu_uniq`, `uu_shuf`, `uu_head`), © the uutils developers, under the MIT
+License (`LICENSE`), and made cash's own on 2026-10-10 (`head` on 2026-10-17). Until
+then the first five were carried in `vendor/uutils` as patched copies, and `head` was
+used from crates.io as published, as the other uutils tools cash bundles still are.
 
 Each tool is a module with its own `uumain`, which `cash-coreutils-builtins` registers
 as it registers the uutils tools it uses unchanged.
@@ -38,6 +38,12 @@ as it registers the uutils tools it uses unchanged.
   SIGINT, with a console handler that the programs it starts do not inherit.
 - **`rm`'s trailing separators**: `d/../////` is trimmed to `d/../` with either
   separator; uutils looked for `\` alone on Windows.
+- **`head` leaves a file under its standard input just after what it printed**
+  (2026-10-17), as GNU head does: `{ head -n1; cat; } < file` lost what head had read
+  ahead, as uutils seeks back on Unix alone. A head that comes to the file under way
+  reads what is left of it, also for `-n -N` and `-c -N` on a large file, which uutils
+  measured from the file's start. A pipe or a console is read as before. Marked
+  `// cash:`.
 - **What could panic** now says why it cannot, or is an error the tool reports, under
   the workspace's lints:
   - `sort`: a temporary file that cannot be written says `write failed: PATH: REASON`
@@ -46,5 +52,9 @@ as it registers the uutils tools it uses unchanged.
     file list is empty input; a poisoned lock is taken over.
   - `shuf`: an empty list to choose from is `no lines to repeat`.
   - `rm`: a progress template that will not parse falls back to the default bar.
+  - `head`: the loop that holds lines back copies everything when it is to hold none
+    back, where it asserted that it never was (its caller sees to `-n -0`), and looks
+    for a line's end where it assumed one; the buffer it searches a file's end in is
+    on the heap, not 64 KiB of stack.
 - **Style.** The workspace's style lints that uutils was not written to are allowed in
   `src/lib.rs`, as for `cash-sed`; the lints for code that can panic apply in full.

@@ -1,7 +1,7 @@
 // This file is part of cash. The tools below came from the uutils coreutils package;
 // for their copyright and licence, see the LICENSE file beside this crate's manifest.
 
-//! `rm`, `sort`, `tee`, `uniq` and `shuf`, taken from uutils coreutils 0.12.0 and made
+//! `rm`, `sort`, `tee`, `uniq`, `shuf` and `head`, taken from uutils coreutils 0.12.0 and made
 //! cash's own: what changed on the way in is in this crate's `README.md`. cash runs each
 //! through its `uumain`, as it runs the uutils tools it bundles unchanged.
 
@@ -32,6 +32,7 @@
 
 mod messages;
 
+pub mod head;
 pub mod rm;
 pub mod shuf;
 pub mod sort;

@@ -37,6 +37,8 @@ use std::ffi::OsString;
 
 // cash: the tools taken from uutils and made cash's own, under the names their
 // adapters give uucore for its own messages.
+#[cfg(feature = "coreutils.head")]
+use cash_uutils::head as uu_head;
 #[cfg(feature = "coreutils.rm")]
 use cash_uutils::rm as uu_rm;
 #[cfg(feature = "coreutils.shuf")]

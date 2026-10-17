@@ -1637,3 +1637,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   20 ms apart, and a clipboard manager or a program copying can hold it longer. It tries
   for two seconds now, the wait doubling from 20 ms up to 250 ms; a unit test holds it
   from another thread for half a second.
+
+- **`{ head -n1; cat; } < file` lost what head read ahead** (found 2026-10-16, done
+  2026-10-17): uutils' head seeks a shared input back on Unix alone. head is taken into
+  `cash-uutils` and leaves a file under its standard input just after what it printed,
+  as GNU head does; a head that comes to the file under way reads what is left of it,
+  also for `-n -N` and `-c -N` on a large file, which uutils measured from the file's
+  start (`{ head -n1; head -n -1 | wc -c; } < file` counted 43352 of 108886 bytes). Each
+  mode checked against Git Bash's head.

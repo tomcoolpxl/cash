@@ -1,8 +1,8 @@
 //! The tools cash took from uutils and made its own (`rm`, `sort`, `tee`, `uniq`,
-//! `shuf`, in `crates/cash-uutils`) say their messages in English. A release printed
-//! their message ids instead (`sort: sort-cannot-read`, `Usage: tee-usage`): uucore
-//! finds a tool's messages in the cargo registry, where a tool that is not a crates.io
-//! crate is not, on a clean machine. Each now carries its own.
+//! `shuf`, `head`, in `crates/cash-uutils`) say their messages in English. A release
+//! printed their message ids instead (`sort: sort-cannot-read`, `Usage: tee-usage`):
+//! uucore finds a tool's messages in the cargo registry, where a tool that is not a
+//! crates.io crate is not, on a clean machine. Each now carries its own.
 
 #![allow(
     clippy::tests_outside_test_module,
@@ -28,12 +28,17 @@ fn the_tools_taken_from_uutils_speak_english_not_message_ids() {
             "rm /no/such",
             "rm: cannot remove '/no/such': No such file or directory",
         ),
+        (
+            "head /no/such",
+            "head: cannot open '/no/such' for reading: No such file or directory",
+        ),
+        ("head -n x", "head: invalid number of lines: 'x'"),
     ] {
         let out = run(script);
         let text = format!("{}{}", out.stdout, out.stderr);
         assert!(text.contains(want), "{script}: {text}");
         // An id is the tool's name, a dash and more words: `sort-cannot-read`.
-        for tool in ["rm", "sort", "tee", "uniq", "shuf"] {
+        for tool in ["rm", "sort", "tee", "uniq", "shuf", "head"] {
             assert!(
                 !text.contains(&format!("{tool}-usage"))
                     && !text.contains(&format!("{tool}-error")),

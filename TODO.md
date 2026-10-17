@@ -124,9 +124,13 @@ What the phases now in DONE.md left open, each where its phase says more.
   write (`StopToken::writer`). Nothing is lost: the archive is abandoned and the file
   kept. Acting at once would need the coding on a thread of its own, left to wind down
   writing nowhere, or a stop inside lzma-rust2's block loop.
-- **`{ head -n1; cat; } < file` loses what head read ahead** (2026-10-16): uutils' `head`
-  seeks the shared input back on Unix only (`uu_head` 0.12.0 `head.rs:460-489`); GNU head
-  leaves a seekable input just after what it printed.
+- **`tail -c N` on a pipe prints far more than N bytes** (2026-10-17): `head -n -1 big |
+  tail -c 8` printed 2,000 to 10,000 bytes, a different count each run, in 1.19.0 too;
+  `seq 1 20000 | tail -c 8` is right. uu_tail 0.12.0's `BytesChunkBuffer::fill`
+  (`chunks.rs`) drops at most one old chunk per read, so a pipe that hands over reads of
+  mixed sizes leaves chunks it no longer needs, and the offset into the first of them
+  runs past its end. cash bundles uu_tail unchanged: it is to be taken into
+  `cash-uutils`, as head was, and the drop made a loop.
 - **spec.md §8 says an in-process `rm` could not fix §4 #13** (2026-10-16): it could, as
   cash's process never sits in the shell's folder (D10); the text wants correcting.
 - **The DEBUG trap misses a command that only assigns** (2026-10-16): `trap '...' DEBUG;

@@ -141,7 +141,7 @@ default = []
 'coreutils.false' = ["dep:uu_false"]
 'coreutils.fmt' = ["dep:uu_fmt"]
 'coreutils.fold' = ["dep:uu_fold"]
-'coreutils.head' = ["dep:uu_head"]
+'coreutils.head' = ["dep:cash-uutils"]
 'coreutils.hostname' = ["dep:uu_hostname"]
 'coreutils.join' = ["dep:uu_join"]
 'coreutils.link' = ["dep:uu_link"]
@@ -198,7 +198,7 @@ default = []
 workspace = true
 
 [dependencies]
-# rm, sort, tee, uniq and shuf: uutils' tools made cash's own.
+# rm, sort, tee, uniq, shuf and head: uutils' tools made cash's own.
 cash-uutils = { workspace = true, optional = true }
 uucore = { workspace = true, features = [
     "signals",
@@ -237,7 +237,6 @@ uu_factor = { version = "0.12.0", optional = true }
 uu_false = { version = "0.12.0", optional = true }
 uu_fmt = { version = "0.12.0", optional = true }
 uu_fold = { version = "0.12.0", optional = true }
-uu_head = { version = "0.12.0", optional = true }
 uu_hostname = { version = "0.12.0", optional = true }
 uu_join = { version = "0.12.0", optional = true }
 uu_link = { version = "0.12.0", optional = true }

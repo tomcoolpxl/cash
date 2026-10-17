@@ -120,9 +120,11 @@ mod git_prompt;
 mod git_prompt_goldens;
 // `grep`, `egrep` and `fgrep`: GNU grep 3.12's golden output, and the CRLF rule.
 mod grep_builtin;
-// `gzip`, `gunzip` and `zcat`: GNU gzip 1.14's golden output, and the file handling.
 mod gui_apps_outlive;
+// `gzip`, `gunzip` and `zcat`: GNU gzip 1.14's golden output, and the file handling.
 mod gzip_builtin;
+// `head`: where it leaves a file under its standard input.
+mod head_builtin;
 mod held_descriptors;
 // `help` and `cash help`: the catalogue covers every builtin, and its pages, topics and
 // search.
