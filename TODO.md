@@ -31,13 +31,7 @@ One tool at a time, each against its tests and Git Bash; its messages stay its
 upstream's.
 
 1. **Options**: done (2026-10-17, DONE.md).
-2. **Inputs** (`ExecutionContext::open_input`):
-   - grep (`/dev/stdin`);
-   - rev, column (a folder is "Is a directory"), hexdump, iconv, xxd and logger;
-   - dos2unix and the pager;
-   - the compressors (bzip2's third open of a pipe);
-   - tar's `-T`/`-X` (cash's path spellings), and 7z's and rar's list files (7z's
-     resolve against the folder cash started in).
+2. **Inputs**: done (2026-10-17, DONE.md).
 3. **Walks** (walkdir with a cash layer):
    - grep -r/-R (link loops);
    - find (its loop code goes, its message stays), and `-H` becomes real;

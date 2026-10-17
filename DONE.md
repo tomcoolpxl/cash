@@ -1568,3 +1568,18 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
     options beside it, `--classify[=WHEN]`, `-f`, `--version`), stat (`-t`,
     `--cached`, and `-f`, which had done nothing, now reports the volume), pgrep
     (procps' table); find answers `-help` and `-version` and takes a leading `--`.
+
+- **Shared parts for the builtins, 2: inputs** (done 2026-10-17):
+  `ExecutionContext::open_input` (`cash_core::input`) opens a name as the shell's `<`
+  does: the shell's folder, the devices, `/dev/stdin` and `/dev/fd/N` as the shell's
+  descriptors; one open, the handle's metadata, "Is a directory" for a folder, the read
+  through the stop token; `Input::rewinder` reads a file again without opening it again.
+  A read the stop fails, passed up with `?`, ends a builtin as stopped, in silence.
+  - grep, rev, column, hexdump, xxd, iconv, logger and the pagers read `/dev/stdin` and
+    the rest, and word a folder as their upstreams do (checked against WSL);
+  - gzip, bzip2, xz and zstd open once and decide from the handle; bzip2 `-f` no longer
+    opens a process substitution's pipe a third time; dos2unix calls a device's name no
+    regular file;
+  - tar reads cash's spellings (`/c/x`) for names, `-C`, `-T` and `-X`, and devices for
+    its lists and archive; 7z reads its list files from the shell's folder;
+  - `< dir`, `> dir` and `source dir` say "Is a directory".
