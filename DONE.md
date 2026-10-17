@@ -1720,3 +1720,9 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   own memo now (`cash_parser::memo`), looked up by the text as it is, 4,096 kept (256
   programs): 200,000 words over 101 distinct ones took 776 ms, now 647 ms. A hit still
   copies its value.
+
+- **Every subshell copied the table of builtins** (from the 2026-10-16 survey of work
+  done on every call, done 2026-10-17): `Shell::clone` copied its 200-odd entries for
+  each `( )` and `$( )`. Subshells share it now, and the one that changes it (`enable`)
+  copies it then: a `( : )` took 20.1 µs, now 15.7, and a `$(true)` 4.4 µs less of its
+  74. `enable -n` in a subshell stays in it, as in Bash; a test says so.

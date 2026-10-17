@@ -17,7 +17,7 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
         name: S,
         registration: builtins::Registration<SE>,
     ) {
-        self.builtins.insert(name.into(), registration);
+        std::sync::Arc::make_mut(&mut self.builtins).insert(name.into(), registration);
     }
 
     /// Register a builtin only if no builtin with that name is already registered.
@@ -31,21 +31,24 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
         name: S,
         registration: builtins::Registration<SE>,
     ) {
-        self.builtins.entry(name.into()).or_insert(registration);
+        std::sync::Arc::make_mut(&mut self.builtins)
+            .entry(name.into())
+            .or_insert(registration);
     }
 
     /// Tries to retrieve a mutable reference to an existing builtin registration.
-    /// Returns `None` if no such registration exists.
+    /// Returns `None` if no such registration exists. The table is this shell's own from
+    /// then on, copied if a shell it was cloned from or into shares it.
     ///
     /// # Arguments
     ///
     /// * `name` - The name of the builtin to lookup.
     pub fn builtin_mut(&mut self, name: &str) -> Option<&mut builtins::Registration<SE>> {
-        self.builtins.get_mut(name)
+        std::sync::Arc::make_mut(&mut self.builtins).get_mut(name)
     }
 
     /// Returns the registered builtins for the shell.
-    pub const fn builtins(&self) -> &HashMap<String, builtins::Registration<SE>> {
+    pub fn builtins(&self) -> &HashMap<String, builtins::Registration<SE>> {
         &self.builtins
     }
 }

@@ -951,6 +951,18 @@ fn exit_and_return_in_err_and_debug_traps_take_effect() {
 }
 
 #[test]
+fn enable_in_a_subshell_stays_in_it() {
+    // A subshell shares its parent's table of builtins and copies it when it changes it:
+    // `enable -n` in `( )` or `$( )` is the subshell's alone, as in Bash, and the parent's
+    // goes into the subshells it starts after.
+    let (code, stdout) = output(
+        r#"(enable -n shopt; type -t shopt || echo none); type -t shopt; x=$(enable -n shopt; type -t shopt || echo none); echo "$x"; type -t shopt; enable -n shopt; (type -t shopt || echo none)"#,
+    );
+    assert_eq!(code, 0);
+    assert_eq!(stdout, "none\nbuiltin\nnone\nbuiltin\nnone");
+}
+
+#[test]
 fn a_closed_descriptor_is_said_and_read_as_bash_does() {
     // `echo hi >&-` said "echo: i/o error: I/O write error: standard output not
     // available"; `read` and `mapfile` on a closed standard input said "invalid file

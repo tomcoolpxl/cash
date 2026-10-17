@@ -101,7 +101,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   - a script's shebang interpreter is looked up twice, past the hash table;
   - each `.ps1` run scans PATH for pwsh;
   - `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command;
-  - `Shell::clone` copies the builtins table for every subshell;
   - coolfetch asks sysinfo for everything on each run, nothing kept between runs.
 - **What the upstreams cash took in have done since** (2026-10-16, `cargo xtask
   upstreams`; the weekly Upstreams workflow keeps an `upstreams` issue): uutils

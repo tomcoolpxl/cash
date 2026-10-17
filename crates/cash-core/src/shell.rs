@@ -160,9 +160,11 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Completion configuration.
     completion_config: crate::completion::Config,
 
-    /// Shell built-in commands.
+    /// Shell built-in commands: shared by the subshells cloned from this shell, and
+    /// copied only when one of them changes it (`enable`). Each `$(...)` copied the
+    /// table of 200-odd builtins.
     #[cfg_attr(feature = "serde", serde(skip))]
-    builtins: HashMap<String, builtins::Registration<SE>>,
+    builtins: std::sync::Arc<HashMap<String, builtins::Registration<SE>>>,
 
     /// Shell program location cache.
     program_location_cache: pathcache::PathCache,
@@ -325,7 +327,7 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
                     .map_or_else(std::env::current_dir, Ok)?
                     .as_path(),
             ),
-            builtins: options.builtins,
+            builtins: std::sync::Arc::new(options.builtins),
             key_bindings: options.key_bindings,
             ..Self::default()
         };

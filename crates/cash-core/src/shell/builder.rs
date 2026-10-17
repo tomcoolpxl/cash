@@ -274,7 +274,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             call_stack: callstack::CallStack::new(),
             directory_stack: vec![],
             completion_config: completion::Config::default(),
-            builtins: HashMap::default(),
+            builtins: std::sync::Arc::default(),
             program_location_cache: pathcache::PathCache::default(),
             path_index: crate::pathindex::PathIndex::default(),
             abbreviations: crate::abbreviations::Abbreviations::default(),
