@@ -341,6 +341,45 @@ fn a_sh_shebang_ignores_stray_test_hooks() {
     assert_ne!(target, PathBuf::from(elsewhere));
 }
 
+/// `interpreter_exit` gives the exits `resolve_interpreter` gives, without its search of
+/// `PATH`, and nothing for an interpreter that is a program.
+#[test]
+fn an_interpreter_that_ends_at_once_is_told_without_a_search() {
+    let dir = scratch("interpreter-exit");
+    fs::write(dir.join("python.exe"), b"MZ").unwrap();
+    let ends_false = dir.join("ends-false");
+    fs::write(&ends_false, "#!/bin/false\n").unwrap();
+    let ends_false = ends_false.to_string_lossy().replace('\\', "/");
+    let pe = pathext();
+    let words = |words: &[&str]| -> Vec<String> { words.iter().map(|&w| w.to_owned()).collect() };
+    for (interpreter, args, want) in [
+        ("/bin/true", words(&[]), Some(0)),
+        ("/bin/false", words(&[]), Some(1)),
+        ("FALSE", words(&[]), Some(1)),
+        ("/usr/bin/env", words(&["true", "x"]), Some(0)),
+        ("/usr/bin/env", words(&["python", "-u"]), None),
+        ("/usr/bin/python", words(&[]), None),
+        // A script given as the interpreter is started, not followed.
+        (ends_false.as_str(), words(&[]), None),
+    ] {
+        let resolved =
+            resolve_interpreter(interpreter, &args, std::slice::from_ref(&dir), &pe, &dir)
+                .and_then(|(dispatch, _)| match dispatch {
+                    Dispatch::Exit(code) => Some(code),
+                    _ => None,
+                });
+        assert_eq!(
+            (
+                cash_win32::resolve::interpreter_exit(interpreter, &args),
+                resolved
+            ),
+            (want, want),
+            "{interpreter} {args:?}"
+        );
+    }
+    let _ = fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_file_is_named_as_the_disk_spells_it() {
     let dir = scratch("real-case");

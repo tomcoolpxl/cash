@@ -1934,3 +1934,10 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   volume gives the file, from the facts stat reads for the change time anyway, so `%b`
   times `%B` is its space on the disk: 16 for a file of 5000 bytes on 8 KiB, where Git
   Bash's stat says 8 of 1024; it was 10, the size's.
+- **A script's shebang interpreter was looked up twice** (the user's pick after 1.22.0,
+  from the 2026-10-16 survey): before starting a script the shell resolved its
+  interpreter, searching `PATH`, only to answer one whose interpreter is `true` or
+  `false` at once, and the start resolved it again. Those two are told without a search
+  now (`interpreter_exit`, which a test holds to `resolve_interpreter`'s answers), and
+  the start's is the one search: a `#!/usr/bin/env cash` script ran in 84 ms where it
+  took 102 ms (best of 3 × 20, debug build).

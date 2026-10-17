@@ -378,6 +378,40 @@ fn resolve_named_interpreter(
     resolve(name, path_entries, pathext, cwd)
 }
 
+/// The status a shebang's interpreter would end with at once, as [`resolve_interpreter`]
+/// gives it as [`Dispatch::Exit`], told without searching `PATH`.
+///
+/// Only `true` and `false` end so, named or through `/usr/bin/env`; an interpreter given
+/// as a file is classified as `resolve_interpreter` classifies it. The shell asks before
+/// it starts a script, to
+/// answer one of those at once; asking `resolve_interpreter` searched `PATH` for every
+/// real interpreter, which the start then searched for again.
+#[must_use]
+pub fn interpreter_exit(interpreter: &str, args: &[String]) -> Option<u8> {
+    let name = if interpreter == "/usr/bin/env" || interpreter.ends_with("/env") {
+        args.first()?.as_str()
+    } else if (interpreter.contains('/') || interpreter.contains('\\'))
+        && Path::new(interpreter).is_file()
+    {
+        return match classify(Path::new(interpreter)) {
+            Dispatch::Exit(code) => Some(code),
+            _ => None,
+        };
+    } else {
+        interpreter
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(interpreter)
+    };
+    if name.eq_ignore_ascii_case("false") {
+        Some(1)
+    } else if name.eq_ignore_ascii_case("true") {
+        Some(0)
+    } else {
+        None
+    }
+}
+
 /// Resolve the interpreter named by a shebang line.
 ///
 /// D7 keeps a virtual `/usr/bin/env`: `#!/usr/bin/env bash` resolves without a fake

@@ -1528,24 +1528,12 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                     ref line,
                     ..
                 } => {
-                    let path_var = shell.env().get_str("PATH", &shell).unwrap_or_default();
-                    let path_entries: Vec<PathBuf> =
-                        crate::sys::fs::split_paths_preserving_empty(path_var.as_ref()).collect();
-                    let pathext = shell.pathext();
+                    // `true` and `false` are answered here, told without a search of
+                    // `PATH`: the start of any other interpreter searches for it.
                     crate::shebang_env::interpreter(interpreter, args, line)
                         .ok()
                         .and_then(|found| {
-                            cash_win32::resolve::resolve_interpreter(
-                                &found.command,
-                                &found.args,
-                                &path_entries,
-                                &pathext,
-                                shell.working_dir(),
-                            )
-                        })
-                        .and_then(|(d, _)| match d {
-                            cash_win32::resolve::Dispatch::Exit(c) => Some(c),
-                            _ => None,
+                            cash_win32::resolve::interpreter_exit(&found.command, &found.args)
                         })
                 }
                 _ => None,

@@ -36,11 +36,7 @@ order. The phase before, released as 1.22.0, is in DONE.md.
 3. **`ls -l` moves the access time of a file it reads for `#!`**: done (2026-10-17,
    DONE.md).
 4. **`stat`'s blocks are the size's, not the allocation's**: done (2026-10-17, DONE.md).
-5. **A script's shebang interpreter is looked up twice**, past the hash table (looked into
-   2026-10-17): `execute_via_external` reads the script's head and resolves the
-   interpreter to answer a script whose interpreter is `true` or `false` at once, and
-   the spawn reads and resolves again; the second costs a PATH walk next to starting
-   the interpreter, tens of milliseconds for any real one.
+5. **A script's shebang interpreter is looked up twice**: done (2026-10-17, DONE.md).
 6. **The PATH search that checks each extension is slow** (2026-10-17, found with the
    missing-command lookup): `find_executables_in_path` (`pathsearch::search_for_executable`)
    tries every `PATHEXT` extension in every folder, a file check each, about 38 ms on this
