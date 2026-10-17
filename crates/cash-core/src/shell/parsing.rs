@@ -119,12 +119,25 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     }
 }
 
-#[cached::macros::cached(
-    max_size = 64,
-    key = "(String, cash_parser::ParserOptions)",
-    convert = r#"{ (s.to_owned(), parser_options.to_owned()) }"#
-)]
+/// The program `s` is, from this thread's memo when it was parsed before
+/// (`cash_parser::memo`): `eval` in a loop parses the same text again and again. A
+/// program can be a sourced file's, so 256 are kept, not the 4,096 words are.
 fn parse_string_impl(
+    s: &str,
+    parser_options: &cash_parser::ParserOptions,
+) -> Result<cash_parser::ast::Program, cash_parser::ParseError> {
+    type Parsed = cash_parser::ast::Program;
+    thread_local! {
+        static PROGRAMS: std::cell::RefCell<
+            cash_parser::memo::Memo<cash_parser::ParserOptions, Parsed>,
+        > = std::cell::RefCell::new(cash_parser::memo::Memo::keeping(256));
+    }
+    cash_parser::memo::remembered(&PROGRAMS, s, parser_options, || {
+        parse_string_unremembered(s, parser_options)
+    })
+}
+
+fn parse_string_unremembered(
     s: &str,
     parser_options: &cash_parser::ParserOptions,
 ) -> Result<cash_parser::ast::Program, cash_parser::ParseError> {

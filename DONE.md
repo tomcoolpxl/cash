@@ -1712,3 +1712,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   (a link or a junction still goes through `metadata`), and renders its path once:
   55.6 µs a call, against 233 µs in Git Bash. The rest is Windows': one attribute query
   costs 43 to 48 µs on this machine outside cash too, and `cd` must ask once.
+
+- **The parse caches were 64-entry LRUs behind a global lock** (found 2026-10-17 in the
+  hot-paths survey, done the same day): words, tokens, patterns, arithmetic and `eval`'s
+  programs; each lookup copied its key and took the lock, and a loop over more than 64
+  distinct words missed on every one, as an LRU cycled through does. They are a thread's
+  own memo now (`cash_parser::memo`), looked up by the text as it is, 4,096 kept (256
+  programs): 200,000 words over 101 distinct ones took 776 ms, now 647 ms. A hit still
+  copies its value.

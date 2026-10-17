@@ -138,11 +138,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
   real; until then the page says so.
-- **The parse caches are 64-entry LRUs behind a global lock** (2026-10-17): words,
-  tokens, patterns and `eval`'s programs (the `cached` crate); each hit copies its key and
-  its value, and past 64 distinct words in a loop a word costs 1.8 µs against 1.3. An
-  `eval` in a loop copies its whole program on each hit. A thread's own map, larger, as
-  arithmetic's `parse_shared` has, would take neither the lock nor the key's copy.
 
 ---
 

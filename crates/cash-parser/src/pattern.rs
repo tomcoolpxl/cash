@@ -31,12 +31,21 @@ pub fn pattern_to_regex_str(
 
 /// The translation, kept for the patterns used last: `${s/b/B}` in a loop translated the
 /// same pattern on every pass.
-#[cached::macros::cached(
-    max_size = 64,
-    key = "(String, bool)",
-    convert = r#"{ (pattern.to_owned(), enable_extended_globbing) }"#
-)]
 fn cacheable_pattern_to_regex_str(
+    pattern: &str,
+    enable_extended_globbing: bool,
+) -> Result<String, error::WordParseError> {
+    type Translated = String;
+    thread_local! {
+        static PATTERNS: std::cell::RefCell<crate::memo::Memo<bool, Translated>> =
+            std::cell::RefCell::default();
+    }
+    crate::memo::remembered(&PATTERNS, pattern, &enable_extended_globbing, || {
+        pattern_to_regex_str_unremembered(pattern, enable_extended_globbing)
+    })
+}
+
+fn pattern_to_regex_str_unremembered(
     pattern: &str,
     enable_extended_globbing: bool,
 ) -> Result<String, error::WordParseError> {

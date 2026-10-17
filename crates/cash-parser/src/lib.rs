@@ -2,6 +2,7 @@
 
 pub mod arithmetic;
 pub mod ast;
+pub mod memo;
 pub mod pattern;
 pub mod prompt;
 pub mod readline_binding;

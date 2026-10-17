@@ -547,17 +547,20 @@ pub fn tokenize_str_with_options(
     uncached_tokenize_string(input, options)
 }
 
-#[cached::macros::cached(
-    name = "TOKENIZE_CACHE",
-    max_size = 64,
-    key = "(String, TokenizerOptions)",
-    convert = r#"{ (input.to_owned(), options.to_owned()) }"#
-)]
+/// The tokens of `input`, from this thread's memo when it was tokenized before
+/// ([`crate::memo`]).
 fn uncached_tokenize_string(
     input: &str,
     options: &TokenizerOptions,
 ) -> Result<Vec<Token>, TokenizerError> {
-    uncached_tokenize_str(input, options)
+    type Tokenized = Vec<Token>;
+    thread_local! {
+        static TOKENIZED: std::cell::RefCell<crate::memo::Memo<TokenizerOptions, Tokenized>> =
+            std::cell::RefCell::default();
+    }
+    crate::memo::remembered(&TOKENIZED, input, options, || {
+        uncached_tokenize_str(input, options)
+    })
 }
 
 /// Break the given input shell script string into tokens, returning the tokens.

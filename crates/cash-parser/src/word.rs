@@ -605,12 +605,21 @@ fn name_bad_substitutions(pieces: &mut [WordPieceWithSource], word: &str, quoted
     }
 }
 
-#[cached::macros::cached(
-    max_size = 64,
-    key = "(String, ParserOptions)",
-    convert = r#"{ (word.to_owned(), options.to_owned()) }"#
-)]
+/// The pieces of `word`, from this thread's memo when it was parsed before
+/// ([`crate::memo`]).
 fn cacheable_parse(
+    word: &str,
+    options: &ParserOptions,
+) -> Result<Vec<WordPieceWithSource>, error::WordParseError> {
+    type Parsed = Vec<WordPieceWithSource>;
+    thread_local! {
+        static WORDS: std::cell::RefCell<crate::memo::Memo<ParserOptions, Parsed>> =
+            std::cell::RefCell::default();
+    }
+    crate::memo::remembered(&WORDS, word, options, || parse_unremembered(word, options))
+}
+
+fn parse_unremembered(
     word: &str,
     options: &ParserOptions,
 ) -> Result<Vec<WordPieceWithSource>, error::WordParseError> {

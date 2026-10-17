@@ -44,8 +44,18 @@ pub fn parse_shared(
     Ok(expr)
 }
 
-#[cached::macros::cached(max_size = 64, key = "String", convert = r#"{ input.to_owned() }"#)]
+/// The expression `input` is, from this thread's memo when it was parsed before
+/// ([`crate::memo`]).
 fn cacheable_parse(input: &str) -> Result<ast::ArithmeticExpr, error::WordParseError> {
+    type Parsed = ast::ArithmeticExpr;
+    thread_local! {
+        static PARSED: std::cell::RefCell<crate::memo::Memo<(), Parsed>> =
+            std::cell::RefCell::default();
+    }
+    crate::memo::remembered(&PARSED, input, &(), || parse_unremembered(input))
+}
+
+fn parse_unremembered(input: &str) -> Result<ast::ArithmeticExpr, error::WordParseError> {
     tracing::debug!(target: "arithmetic", "parsing arithmetic expression: '{input}'");
     arithmetic::full_expression(input)
         .map_err(|e| error::WordParseError::ArithmeticExpression(e.into()))

@@ -85,10 +85,13 @@ program cache: those showed no cost worth taking.
   one option, `-v`, is parsed by hand since (2026-10-17), as Bash's `internal_getopt`
   takes it: 100,000 calls of `printf '%s %d\n' x "$i"` took 1.030 s, now 0.719 s,
   against 0.698 s for Git Bash's bash. uucore still parses the format on every call.
-- The parse caches of words, tokens, patterns and `eval`'s programs are 64-entry LRUs
-  behind a global lock, and each hit copies its key and its result: past 64 distinct
-  words in a loop a word costs 1.8 µs against 1.3, and an `eval` in a loop copies its
-  whole program. A thread's own map, larger, would take neither the lock nor the copies.
+- The parse caches of words, tokens, patterns, arithmetic and `eval`'s programs were
+  64-entry LRUs behind a global lock, each hit copying its key and its result. They are
+  a thread's own memo now (2026-10-17, `cash_parser::memo`): looked up by the text as
+  it is, no lock, 4,096 parses kept (256 programs). A loop of 200,000 words with an
+  expansion, over 101 distinct ones, took 776 ms, now 647 ms, as fast as over 40,
+  which the LRU held (Git Bash: 529 ms). A hit still copies its value: the expansion
+  takes the pieces it is given, and an `Arc` would mean reworking it.
 - `cd` took 62 µs, against 2 to 4 for most builtins. It tells a folder with
   `GetFileAttributesW` now, without the handle `std::fs::metadata` opened, and renders
   its path once (2026-10-17): 40,000 calls took 2.349 s, now 2.224 s (55.6 µs a call),

@@ -848,7 +848,6 @@ version = "1.19.0"
 dependencies = [
  "anyhow",
  "bon",
- "cached",
  "criterion",
  "insta",
  "itertools 0.15.0",
