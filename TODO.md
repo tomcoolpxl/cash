@@ -31,13 +31,8 @@ The user's picks of 2026-10-17 (decisions.md, "ls takes GNU's remaining options"
 "`tail -f` ends when the reader of its output is gone"), in this order.
 
 1. **Two costs paid on every call**: done (2026-10-17, DONE.md).
-2. **GNU ls options cash's ls has not** (2026-10-17): named as not supported: `-Q`,
-   `-n`, `-i`, `-H`, `--quoting-style`, `-b`, `-q`, `-N`, `-T`, `--zero`, `--hyperlink`,
-   `-Z`, `--author`, `-D`. The common ones are done (DONE.md), the times and sizes
-   (`-c`, `-u`, `--time`, `-s`, `-k`, `--si`, `--block-size`), name quoting (`-Q`,
-   `--quoting-style`, `-b`, `-q`, `-N`) and the script helpers (`--zero`, `-i`, `-H`,
-   `-T`, `--hyperlink`), all 2026-10-17. Still wanted: the poor fits for Windows (`-n`,
-   `-Z`, `--author`, `-D`).
+2. **GNU ls options cash's ls has not**: done (2026-10-17, DONE.md), every one of
+   GNU coreutils 9's.
 3. **`tail -f file | head -1` runs until the file grows** (2026-10-17): uutils checks on
    Linux alone, between polls, whether its standard output still has a reader
    (`ensure_stdout_not_broken`); on Windows tail learns it only when it next writes, and

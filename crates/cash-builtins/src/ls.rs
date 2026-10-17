@@ -16,6 +16,8 @@ use std::cmp::Ordering;
 use std::fs::Metadata;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicU64;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use cash_core::builtins::{ContentOptions, ContentType};
@@ -36,6 +38,8 @@ List information about the FILEs (the current directory by default).
   -a, --all                  do not ignore entries starting with . or files
                                both hidden and system, as Explorer hides them
   -A, --almost-all           like -a, but do not list implied . and ..
+      --author               with -l, print the author of each file: its owner,
+                               as on Linux
   -b, --escape               print C-style escapes for nongraphic characters
   -B, --ignore-backups       do not list implied entries ending with ~
   -c                         with -lt: sort by, and show, the change time (when
@@ -44,6 +48,7 @@ List information about the FILEs (the current directory by default).
                                sort by name; otherwise: sort by it, newest first
   -C                         list entries by columns
   -d, --directory            list directories themselves, not their contents
+  -D, --dired                generate output designed for Emacs' dired mode
   -F, --classify             append indicator (one of */@) to entries
       --file-type            likewise, except do not append '*'
       --format=WORD          across -x, commas -m, horizontal -x, long -l,
@@ -78,6 +83,8 @@ List information about the FILEs (the current directory by default).
   -l                         use a long listing format
   -L, --dereference          show what a link names rather than the link
   -m                         fill the width with names separated by commas
+  -n, --numeric-uid-gid      like -l, but list numeric user and group IDs: the
+                               accounts' RIDs, as id and stat give them
   -N, --literal              print names as they are, without quoting
   -o                         like -l, but do not list the group
   -p, --indicator-style=slash
@@ -107,6 +114,8 @@ List information about the FILEs (the current directory by default).
   -w, --width=COLS           set the output width to COLS; 0 means no limit
   -x                         list entries by lines instead of by columns
   -X                         sort alphabetically by entry extension
+  -Z, --context              print any security context of each file: ?, as GNU
+                               ls prints it for a file with none
       --zero                 end each output line with NUL, not newline
   -1                         list one file per line
       --sort=WORD            sort by WORD instead of name: none (-U), size (-S),
@@ -305,6 +314,22 @@ pub(crate) struct LsCommand {
     /// `--hyperlink`'s WHEN, `always` when it has none.
     #[arg(skip)]
     hyperlink: Option<String>,
+
+    /// `-n`: owners and groups by number.
+    #[arg(skip)]
+    numeric: bool,
+
+    /// `-Z`: each entry's security context, which no Windows file has.
+    #[arg(skip)]
+    context: bool,
+
+    /// `--author`: with `-l`, the author, its owner, after the group.
+    #[arg(skip)]
+    author: bool,
+
+    /// `-D`: Emacs' dired output, the long format with the names' places after it.
+    #[arg(skip)]
+    dired: bool,
 
     /// A folder `-RL` would have gone round: said, status 2.
     #[arg(skip)]
@@ -508,6 +533,10 @@ const GROUPED_OPTIONS: &[&str] = &[
     "T",
     "zero",
     "hyperlink",
+    "n",
+    "Z",
+    "author",
+    "D",
 ];
 
 impl LsCommand {
@@ -554,6 +583,10 @@ impl LsCommand {
             inode: false,
             zero: false,
             hyperlink: None,
+            numeric: false,
+            context: false,
+            author: false,
+            dired: false,
             looped: std::sync::atomic::AtomicBool::new(false),
             tty: false,
             time_kind: TimeKind::Modification,
@@ -773,8 +806,8 @@ impl LsCommand {
         }
     }
 
-    /// `-L`, `-H`, `--dereference-command-line-symlink-to-dir`, `-i`, `-T`, `--zero` and
-    /// `--hyperlink`.
+    /// `-L`, `-H`, `--dereference-command-line-symlink-to-dir`, `-i`, `-T`, `--zero`,
+    /// `--hyperlink`, `-n`, `-Z`, `--author` and `-D`.
     fn helper_option(&mut self, id: &str, value: Option<String>) -> Result<(), Early> {
         match id {
             "L" => self.deref = Some(Deref::Always),
@@ -795,6 +828,16 @@ impl LsCommand {
                 self.quoting = Some(QuotingStyle::Literal);
             }
             "hyperlink" => self.hyperlink = Some(value.unwrap_or_else(|| "always".to_owned())),
+            "n" => {
+                self.numeric = true;
+                self.long = true;
+            }
+            "Z" => self.context = true,
+            "author" => self.author = true,
+            "D" => {
+                self.dired = true;
+                self.long = true;
+            }
             _ => {}
         }
         Ok(())
@@ -890,6 +933,9 @@ struct ItemInfo {
     allocation: Option<u64>,
     /// Its file index, NTFS's file ID, when `-i` asked for its facts.
     index: Option<u64>,
+    /// Its owner's and its group's numbers, their RIDs, for `-n`.
+    owner_id: u32,
+    group_id: u32,
     /// Windows' attribute bits: read-only, hidden, system, archive.
     attributes: u32,
     symlink_target: Option<String>,
@@ -1008,6 +1054,8 @@ enum QuotingStyle {
     Escape,
     /// Between ‘ and ’, with C's escapes.
     Locale,
+    /// As `Locale`, in a UTF-8 locale.
+    CLocale,
 }
 
 impl QuotingStyle {
@@ -1022,9 +1070,26 @@ impl QuotingStyle {
             "c" => Self::C,
             "c-maybe" => Self::CMaybe,
             "escape" => Self::Escape,
-            "locale" | "clocale" => Self::Locale,
+            "locale" => Self::Locale,
+            "clocale" => Self::CLocale,
             _ => return None,
         })
+    }
+
+    /// The word that names this style, as `--dired`'s last line gives it.
+    const fn word(self) -> &'static str {
+        match self {
+            Self::Literal => "literal",
+            Self::Shell => "shell",
+            Self::ShellAlways => "shell-always",
+            Self::ShellEscape => "shell-escape",
+            Self::ShellEscapeAlways => "shell-escape-always",
+            Self::C => "c",
+            Self::CMaybe => "c-maybe",
+            Self::Escape => "escape",
+            Self::Locale => "locale",
+            Self::CLocale => "clocale",
+        }
     }
 
     /// Whether names are quoted only where they need it, so that GNU ls puts a space before
@@ -1050,7 +1115,7 @@ impl QuotingStyle {
                 }
             }
             Self::Escape => (c_escaped(name, false, true), false),
-            Self::Locale => (
+            Self::Locale | Self::CLocale => (
                 std::format!("\u{2018}{}\u{2019}", c_escaped(name, false, false)),
                 true,
             ),
@@ -1251,6 +1316,9 @@ struct Look {
     eol: char,
     /// Whether names are links to their files (`--hyperlink`).
     hyperlink: bool,
+    /// `--dired`'s record of where names are, when it is in force: with `-l` and without
+    /// `--hyperlink`, as GNU ls has it.
+    dired: Option<Arc<Dired>>,
 }
 
 /// How `-l` shows a time (`--time-style`): a strftime format for a file changed within
@@ -1425,6 +1493,36 @@ impl LsCommand {
         }
     }
 
+    /// How the listing looks, or the status of a command line that asks for what cannot
+    /// be, said as GNU ls says it.
+    fn look_or_refusal<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        is_tty: bool,
+    ) -> Result<Result<Look, ExecutionResult>, cash_core::Error> {
+        let name = &context.command_name;
+        let look = match self.look(context, is_tty) {
+            Ok(look) => look,
+            Err(Invalid { message, status }) => {
+                writeln!(context.stderr(), "{name}: {message}")?;
+                writeln!(
+                    context.stderr(),
+                    "Try '{name} --help' for more information."
+                )?;
+                return Ok(Err(ExecutionResult::new(status)));
+            }
+        };
+        // GNU's check, once --dired is known to be in force.
+        if look.dired.is_some() && self.zero {
+            writeln!(
+                context.stderr(),
+                "{name}: --dired and --zero are incompatible"
+            )?;
+            return Ok(Err(ExecutionResult::new(2)));
+        }
+        Ok(Ok(look))
+    }
+
     /// Lists what the command line asked for.
     async fn list<SE: cash_core::ShellExtensions>(
         &self,
@@ -1437,17 +1535,9 @@ impl LsCommand {
         // The command's own standard output, which a pipeline or a redirection replaces
         // even though the shell's is still the terminal.
         let is_tty = self.tty;
-        let look = match self.look(&context, is_tty) {
+        let look = match self.look_or_refusal(&context, is_tty)? {
             Ok(look) => look,
-            Err(Invalid { message, status }) => {
-                writeln!(context.stderr(), "{}: {message}", context.command_name)?;
-                writeln!(
-                    context.stderr(),
-                    "Try '{} --help' for more information.",
-                    context.command_name
-                )?;
-                return Ok(ExecutionResult::new(status));
-            }
+            Err(refused) => return Ok(refused),
         };
 
         let mut paths = self.paths.clone();
@@ -1506,7 +1596,11 @@ impl LsCommand {
             }
         }
 
-        let mut out = context.stdout();
+        let mut out = Counted {
+            inner: context.stdout(),
+            dired: look.dired.clone(),
+            escape: Escape::None,
+        };
 
         // Print standalone files first.
         if !file_items.is_empty() {
@@ -1535,7 +1629,7 @@ impl LsCommand {
                 if i > 0 || !file_items.is_empty() {
                     writeln!(out)?;
                 }
-                writeln!(out, "{}:", header(dir_str, dir_path, &look))?;
+                write_header(&mut out, dir_str, dir_path, &look)?;
             }
 
             match self.list_operand(&context, &mut out, dir_path, dir_str, &look, is_tty)? {
@@ -1544,6 +1638,9 @@ impl LsCommand {
             }
         }
 
+        if let Some(dired) = &look.dired {
+            dired.write_end(&mut out, look.quoting)?;
+        }
         drop(out);
         if context.stop_token().requested() {
             return context.stopped().await;
@@ -1668,6 +1765,7 @@ impl LsCommand {
             DateFormats::default()
         };
 
+        let hyperlink = when(self.hyperlink.as_deref(), "hyperlink", is_tty)?;
         let colors = color.then(|| {
             // The shell's own variable, which `export` need not have reached the process.
             parsed_ls_colors(context.shell.env_str("LS_COLORS").as_deref())
@@ -1688,7 +1786,8 @@ impl LsCommand {
             // GNU ls hides them on a terminal unless told not to.
             hide_control: self.hide_control.unwrap_or(is_tty),
             eol: if self.zero { '\0' } else { '\n' },
-            hyperlink: when(self.hyperlink.as_deref(), "hyperlink", is_tty)?,
+            hyperlink,
+            dired: (self.dired && self.long && !hyperlink).then(|| Arc::new(Dired::default())),
         })
     }
 
@@ -1798,6 +1897,7 @@ impl LsCommand {
                     .max()
                     .unwrap_or(1)
             }),
+            context: self.context,
         }
     }
 
@@ -1806,6 +1906,7 @@ impl LsCommand {
         FieldWidths {
             index: if self.inode { Some(0) } else { None },
             blocks: if self.show_blocks { Some(0) } else { None },
+            context: self.context,
         }
     }
 
@@ -2011,7 +2112,13 @@ impl LsCommand {
         // ls counts them: their allocations, where it counted their sizes.
         if self.long || self.show_blocks {
             let total: u64 = items.iter().map(block_bytes).sum();
-            write!(out, "total {}{}", look.sizes.blocks.format(total), look.eol)?;
+            let indent = if look.dired.is_some() { "  " } else { "" };
+            write!(
+                out,
+                "{indent}total {}{}",
+                look.sizes.blocks.format(total),
+                look.eol
+            )?;
         }
 
         self.render_items(out, items, look, is_tty)?;
@@ -2043,7 +2150,7 @@ impl LsCommand {
                     match self.read_entries(&item.path, true) {
                         Ok(sub_items) => {
                             writeln!(out)?;
-                            writeln!(out, "{}:", header(&sub_str, &item.path, look))?;
+                            write_header(out, &sub_str, &item.path, look)?;
                             unreadable |= self.show_directory(
                                 context,
                                 out,
@@ -2193,8 +2300,18 @@ impl LsCommand {
             .map(|links| links.to_string().len())
             .max()
             .unwrap_or(1);
-        let max_owner_len = items.iter().map(|i| i.owner.len()).max().unwrap_or(1);
-        let max_group_len = items.iter().map(|i| i.group.len()).max().unwrap_or(1);
+        let account_widths = (
+            items
+                .iter()
+                .map(|i| self.owner_text(i).len())
+                .max()
+                .unwrap_or(1),
+            items
+                .iter()
+                .map(|i| self.group_text(i).len())
+                .max()
+                .unwrap_or(1),
+        );
         let size_text = |item: &ItemInfo| {
             if let Some((major, minor)) = item.device {
                 std::format!("{major}, {minor}")
@@ -2203,7 +2320,11 @@ impl LsCommand {
             }
         };
         let max_size_len = items.iter().map(|i| size_text(i).len()).max().unwrap_or(1);
-        let widths = self.field_widths(items.iter(), look);
+        // -Z's context has a column of its own here, after the group.
+        let widths = FieldWidths {
+            context: false,
+            ..self.field_widths(items.iter(), look)
+        };
         let align = align_names(items, look);
 
         for (index, item) in items.iter().enumerate() {
@@ -2225,39 +2346,31 @@ impl LsCommand {
                 permissions.push(' ');
                 permissions.push_str(&attribute_letters(item));
             }
-            let owner = std::format!("{:<max_owner_len$}", item.owner);
-            let group = std::format!("{:<max_group_len$}", item.group);
             let size = std::format!("{size_str:>max_size_len$}");
-            let (owner, group, size, date) = if colour {
-                let me = look.me.as_str();
+            let (size, date) = if colour {
                 (
-                    paint(owner_colour(&item.owner, me), &owner),
-                    paint(owner_colour(&item.group, me), &group),
                     paint(size_colour(item.size), &size),
                     paint(date_colour(item.time), &date_str),
                 )
             } else {
-                (owner, group, size, date_str)
+                (size, date_str)
             };
-            // -g leaves the owner out, -o and -G the group.
-            let mut line = std::format!(
-                "{}{permissions} {:>max_links_len$} ",
+            let before = std::format!(
+                "{}{permissions} {:>max_links_len$} {}{size} {date} {prefix}",
                 fields(item, look, widths),
-                links[index]
+                links[index],
+                self.account_columns(item, look, account_widths),
             );
-            if !self.no_owner {
-                line.push_str(&owner);
-                line.push(' ');
+            if let Some(dired) = &look.dired {
+                // The name's place in the output, after the indent, as visible bytes.
+                let start = dired.position()
+                    + 2
+                    + visible_len(&before)
+                    + self.name_offset(item, look, align);
+                dired.name(start, start + shown_name(&item.name, look).len() as u64);
+                out.write_all(b"  ")?;
             }
-            if !self.no_group {
-                line.push_str(&group);
-                line.push(' ');
-            }
-            write!(
-                out,
-                "{line}{size} {date} {prefix}{display_name}{}",
-                look.eol
-            )?;
+            write!(out, "{before}{display_name}{}", look.eol)?;
         }
 
         Ok(())
@@ -2427,6 +2540,67 @@ impl LsCommand {
         }
     }
 
+    /// The owner `-l` shows: its number under `-n`, as GNU ls shows it.
+    fn owner_text(&self, item: &ItemInfo) -> String {
+        if self.numeric {
+            item.owner_id.to_string()
+        } else {
+            item.owner.clone()
+        }
+    }
+
+    /// The group `-l` shows: its number under `-n`.
+    fn group_text(&self, item: &ItemInfo) -> String {
+        if self.numeric {
+            item.group_id.to_string()
+        } else {
+            item.group.clone()
+        }
+    }
+
+    /// `-l`'s owner, group, author and context columns, padded to `widths` (the owners',
+    /// the groups') and coloured, each with a space after it, as GNU ls writes them: `-g`
+    /// leaves the owner out, and the author with it, `-o` and `-G` the group.
+    fn account_columns(&self, item: &ItemInfo, look: &Look, widths: (usize, usize)) -> String {
+        let (owner_width, group_width) = widths;
+        let mut owner = std::format!("{:<owner_width$}", self.owner_text(item));
+        let mut group = std::format!("{:<group_width$}", self.group_text(item));
+        if look.colors.is_some() {
+            let me = look.me.as_str();
+            owner = paint(owner_colour(&item.owner, me), &owner);
+            group = paint(owner_colour(&item.group, me), &group);
+        }
+        let mut columns = String::new();
+        if !self.no_owner {
+            columns.push_str(&owner);
+            columns.push(' ');
+        }
+        if !self.no_group {
+            columns.push_str(&group);
+            columns.push(' ');
+        }
+        if self.author && !self.no_owner {
+            columns.push_str(&owner);
+            columns.push(' ');
+        }
+        if self.context {
+            columns.push_str("? ");
+        }
+        columns
+    }
+
+    /// Where the name starts in what [`Self::format_name`] shows, in visible bytes: after
+    /// the attributes, the icon and the space that lines it up.
+    fn name_offset(&self, item: &ItemInfo, look: &Look, align: bool) -> u64 {
+        let icon = if look.icons {
+            icon_for(item).len() + 1
+        } else {
+            0
+        };
+        let pad = usize::from(align && !look.quoting.quote(&item.name).1);
+        (self.attribute_prefix(item).len() + icon + pad) as u64
+    }
+
     /// The name as `format_name` shows it, without colour: for measuring.
     fn format_name_plain(&self, item: &ItemInfo, look: &Look, align: bool) -> String {
         let mut s = self.attribute_prefix(item);
@@ -2513,6 +2687,22 @@ fn shown_name(name: &str, look: &Look) -> String {
     } else {
         quoted
     }
+}
+
+/// A folder's header line: [`header`] and a colon, indented and its place kept under
+/// `--dired`, as GNU ls writes it.
+fn write_header(
+    out: &mut impl Write,
+    shown: &str,
+    path: &Path,
+    look: &Look,
+) -> Result<(), std::io::Error> {
+    if let Some(dired) = &look.dired {
+        let start = dired.position() + 2;
+        dired.subdir(start, start + shown_name(shown, look).len() as u64);
+        out.write_all(b"  ")?;
+    }
+    writeln!(out, "{}:", header(shown, path, look))
 }
 
 /// A folder's header, `shown` quoted, and a link to `path` under `--hyperlink`.
@@ -2900,6 +3090,8 @@ fn inspect_dot(dir_path: &Path, name: &str, want: Want) -> Option<ItemInfo> {
         time: want.time.of(&metadata),
         allocation: None,
         index: None,
+        owner_id: 0,
+        group_id: 0,
         attributes: attributes_of(&metadata),
         symlink_target: None,
         target: None,
@@ -2931,6 +3123,127 @@ fn take_facts(item: &mut ItemInfo, facts: Option<cash_win32::fs::FileFacts>, wan
     }
 }
 
+/// Where `--dired` output has put names and folder headers, in visible bytes from its
+/// start: escapes are not counted, as GNU ls counts none.
+#[derive(Debug, Default)]
+struct Dired {
+    /// The visible bytes written so far.
+    position: AtomicU64,
+    /// Each name's start and end.
+    names: Mutex<Vec<u64>>,
+    /// Each folder header's name's start and end.
+    subdirs: Mutex<Vec<u64>>,
+}
+
+impl Dired {
+    fn position(&self) -> u64 {
+        self.position.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn name(&self, start: u64, end: u64) {
+        if let Ok(mut names) = self.names.lock() {
+            names.extend([start, end]);
+        }
+    }
+
+    fn subdir(&self, start: u64, end: u64) {
+        if let Ok(mut subdirs) = self.subdirs.lock() {
+            subdirs.extend([start, end]);
+        }
+    }
+
+    /// The lines after the listing: the names' places, the headers', and the quoting
+    /// style, as GNU ls ends `--dired` output.
+    fn write_end(&self, out: &mut impl Write, quoting: QuotingStyle) -> std::io::Result<()> {
+        for (label, places) in [("//DIRED//", &self.names), ("//SUBDIRED//", &self.subdirs)] {
+            let places = places
+                .lock()
+                .map(|places| places.clone())
+                .unwrap_or_default();
+            if !places.is_empty() {
+                let numbers: Vec<String> = places.iter().map(u64::to_string).collect();
+                writeln!(out, "{label} {}", numbers.join(" "))?;
+            }
+        }
+        writeln!(out, "//DIRED-OPTIONS// --quoting-style={}", quoting.word())
+    }
+}
+
+/// Where a terminal escape stands, for counting the visible bytes around it.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum Escape {
+    #[default]
+    None,
+    /// After ESC.
+    Started,
+    /// In a CSI sequence, until its final byte.
+    Csi,
+    /// In an OSC sequence, until BEL or ESC `\`.
+    Osc,
+    /// After ESC inside an OSC sequence.
+    OscEsc,
+}
+
+impl Escape {
+    /// The state after `byte`, and whether `byte` is seen on screen.
+    const fn next(self, byte: u8) -> (Self, bool) {
+        match (self, byte) {
+            (Self::None, 0x1b) => (Self::Started, false),
+            (Self::None, _) => (Self::None, true),
+            (Self::Started, b'[') => (Self::Csi, false),
+            (Self::Started, b']') => (Self::Osc, false),
+            (Self::Started, _) => (Self::None, false),
+            (Self::Csi, 0x40..=0x7e) => (Self::None, false),
+            (Self::Csi, _) => (Self::Csi, false),
+            (Self::Osc, 0x07) => (Self::None, false),
+            (Self::Osc, 0x1b) => (Self::OscEsc, false),
+            (Self::Osc, _) => (Self::Osc, false),
+            (Self::OscEsc, _) => (Self::None, false),
+        }
+    }
+}
+
+/// The visible bytes of `text`: its escapes left out.
+fn visible_len(text: &str) -> u64 {
+    let mut state = Escape::None;
+    let mut count = 0;
+    for byte in text.bytes() {
+        let (next, seen) = state.next(byte);
+        state = next;
+        count += u64::from(seen);
+    }
+    count
+}
+
+/// The listing's output, its visible bytes counted for `--dired`.
+struct Counted<W> {
+    inner: W,
+    dired: Option<Arc<Dired>>,
+    escape: Escape,
+}
+
+impl<W: Write> Write for Counted<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let written = self.inner.write(buf)?;
+        if let Some(dired) = &self.dired {
+            let mut seen = 0;
+            for &byte in buf.get(..written).unwrap_or_default() {
+                let (next, visible) = self.escape.next(byte);
+                self.escape = next;
+                seen += u64::from(visible);
+            }
+            dired
+                .position
+                .fetch_add(seen, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 /// The widths the fields before names are padded to, `None` for one not shown.
 #[derive(Clone, Copy)]
 struct FieldWidths {
@@ -2938,6 +3251,8 @@ struct FieldWidths {
     index: Option<usize>,
     /// `-s`'s blocks.
     blocks: Option<usize>,
+    /// Whether `-Z`'s context is shown, `?` for every file.
+    context: bool,
 }
 
 /// What comes before an entry's name: its file index under `-i`, then its blocks under
@@ -2954,6 +3269,9 @@ fn fields(item: &ItemInfo, look: &Look, widths: FieldWidths) -> String {
             "{:>width$} ",
             look.sizes.blocks.format(block_bytes(item))
         );
+    }
+    if widths.context {
+        text.push_str("? ");
     }
     text
 }
@@ -3008,6 +3326,8 @@ fn dev_entry<SE: cash_core::ShellExtensions>(
         time: SystemTime::now(),
         allocation: Some(0),
         index: None,
+        owner_id: 0,
+        group_id: 0,
         attributes: 0,
         symlink_target: None,
         target: None,
@@ -3076,6 +3396,8 @@ fn inspect_path(
         time: want.time.of(&symlink_metadata),
         allocation: None,
         index: None,
+        owner_id: 0,
+        group_id: 0,
         attributes: attributes_of(&symlink_metadata),
         symlink_target,
         target,
@@ -3140,6 +3462,16 @@ fn fill_long_from(
         .owner
         .clone()
         .unwrap_or_else(cash_win32::fs::current_user);
+    // The numbers `id` and `stat` give: the RIDs, 65534 (nobody) where none can be read.
+    item.owner_id = security
+        .owner_account
+        .clone()
+        .or_else(cash_win32::fs::current_owner)
+        .map_or(65534, |owner| owner.rid);
+    item.group_id = security
+        .group
+        .as_ref()
+        .map_or(item.owner_id, |group| group.rid);
     // The file's primary group, read for what it is; where it cannot be read, the owner.
     item.group = security
         .group
@@ -3383,17 +3715,19 @@ mod tests {
             parsed("-y").early,
             Some(Early::Usage("invalid option -- 'y'".to_owned()))
         );
-        // GNU's options cash's ls has not are named, not called invalid.
-        assert_eq!(
-            parsed("-Z").early,
-            Some(Early::Said("-Z is not supported by cash's ls".to_owned()))
-        );
-        assert_eq!(
-            parsed("--auth").early,
-            Some(Early::Said(
-                "--author is not supported by cash's ls".to_owned()
-            ))
-        );
+        // Every option of GNU's is read: -n and -D are -l too; the last of -L, -H and
+        // --dereference-command-line-symlink-to-dir wins; --zero is one to a line unless
+        // -l, and a later -C undoes it.
+        let command = parsed("-Z --auth -n -D -L --dereference-command-line-s -H");
+        assert!(command.context && command.author && command.numeric && command.dired);
+        assert!(command.long);
+        assert_eq!(command.deref, Some(Deref::CommandLine));
+        let command = parsed("-x --zero");
+        assert!(command.zero && command.layout == Layout::OneColumn);
+        assert_eq!(command.quoting, Some(QuotingStyle::Literal));
+        assert_eq!(command.color.as_deref(), Some("never"));
+        assert_eq!(parsed("--zero -C").layout, Layout::Columns);
+        assert_eq!(parsed("-l --zero").layout, Layout::Default);
         // The last of -N, -b, -Q and --quoting-style wins, and -q or --show-control-chars.
         let command = parsed("-b --quoting-style c -N -Q dir -q --show-control-chars");
         assert_eq!(command.quoting, Some(QuotingStyle::C));

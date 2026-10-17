@@ -1395,3 +1395,96 @@ fn ls_hyperlinks_names_as_gnu_ls_does() {
     assert_eq!(lines.get(8..), Some(&["plain", "plain"][..]), "{lines:?}");
     assert!(!out.stdout.contains("?/"), "{}", out.stdout);
 }
+
+/// `-n`, `-Z` and `--author` as GNU ls 9.10 has them on a system without security
+/// contexts: the numbers `stat` gives, `?` for the context, the owner again as the
+/// author, beside the owner only.
+#[test]
+fn ls_numbers_contexts_and_authors_as_gnu_ls_has_them() {
+    let scratch = helpers_fixture("ls-poor-fits");
+    let out = ls_in(
+        scratch.path(),
+        "ls -nd --time-style=+T plain | sed 's/ 0 T plain$//; s/^[^ ]* [^ ]* //'; \
+         stat -c '%u %g' plain; ls -Z plain; ls -Zmd plain sub; ls -Zs1 plain; \
+         ls -l --time-style=+T plain; ls -l --author --time-style=+T plain; \
+         ls -lg --author --time-style=+T plain; ls -lg --time-style=+T plain; \
+         ls -lZ --time-style=+T plain | sed -n 's/.* \\(? 0 T plain\\)$/\\1/p'; \
+         stat -c '%U %G' plain",
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.first(), lines.get(1), "{}", out.stdout);
+    assert_eq!(
+        lines.get(2..5),
+        Some(&["? plain", "? plain, ? sub", "0 ? plain"][..]),
+        "{}",
+        out.stdout
+    );
+    let (owner, group) = lines.get(10).and_then(|line| line.split_once(' ')).unwrap();
+    let long = lines.get(5).copied().unwrap_or_default();
+    assert_eq!(
+        lines.get(6).copied(),
+        Some(&*long.replacen(
+            &format!(" {owner} {group} "),
+            &format!(" {owner} {group} {owner} "),
+            1
+        )),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(lines.get(7), lines.get(8), "{}", out.stdout);
+    assert_eq!(lines.get(9), Some(&"? 0 T plain"), "{}", out.stdout);
+}
+
+/// `-D` writes what Emacs' dired reads, as GNU ls 9.10 does: the long format indented by
+/// two spaces, then where each name and each folder header's name are, in bytes from
+/// the start, and the quoting style; not with `-C` or `--hyperlink`, and never with
+/// `--zero`.
+#[test]
+fn ls_dired_as_gnu_ls_has_it() {
+    let scratch = helpers_fixture("ls-dired");
+    let out = ls_in(
+        scratch.path(),
+        "ls -lD --time-style=+T --quoting-style=shell plain 'a b' sub",
+    );
+    let text = out.stdout.replace("\r\n", "\n");
+    let (listing, end) = text.split_once("//DIRED//").unwrap();
+    let places = |label: &str| -> Vec<&str> {
+        let tail = format!("//DIRED//{end}");
+        let numbers: Vec<usize> = tail
+            .lines()
+            .find_map(|line| line.strip_prefix(label)?.strip_prefix(' '))
+            .unwrap_or_default()
+            .split_whitespace()
+            .map(|number| number.parse().unwrap())
+            .collect();
+        numbers
+            .chunks(2)
+            .map(|pair| listing.get(pair[0]..pair[1]).unwrap_or("?"))
+            .collect()
+    };
+    assert_eq!(places("//DIRED//"), ["'a b'", "plain", "inner"], "{text}");
+    assert_eq!(places("//SUBDIRED//"), ["sub"], "{text}");
+    assert!(
+        text.ends_with("//DIRED-OPTIONS// --quoting-style=shell"),
+        "{text}"
+    );
+    let lines: Vec<&str> = listing.lines().collect();
+    assert!(
+        lines.first().is_some_and(|line| line.starts_with("  -rw")),
+        "{text}"
+    );
+    assert_eq!(lines.get(2..4), Some(&["", "  sub:"][..]), "{text}");
+    assert_eq!(lines.get(4), Some(&"  total 0"), "{text}");
+
+    let out = ls_in(
+        scratch.path(),
+        "ls -D -Cd plain sub; ls -lD --hyperlink=never -1 plain | tail -1; \
+         ls -lD --zero plain; echo $?",
+    );
+    assert_eq!(
+        out.stdout, "plain  sub\n//DIRED-OPTIONS// --quoting-style=literal\n2",
+        "{}",
+        out.stderr
+    );
+    assert_eq!(out.stderr, "ls: --dired and --zero are incompatible");
+}

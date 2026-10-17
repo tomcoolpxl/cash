@@ -1853,6 +1853,20 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
     GNU writes them; the URLs are `file:///C:/…`, with no host, the form Windows
     Terminal opens (decisions.md).
 
+- **GNU ls's poor fits for Windows** (the user's pick of 2026-10-17, the last group; ls
+  now reads every option of GNU coreutils 9's): checked against GNU coreutils 9.10.
+  - `-n` is `-l` with the owner's and the group's numbers, their RIDs, as `id` and
+    `stat` give them.
+  - `-Z` shows `?` for each file's security context, as GNU ls shows it for a file
+    without one: a field before the name, and a column after the group with `-l`.
+  - `--author` shows the owner again after the group with `-l`, as on Linux, and not
+    where `-g` leaves the owner out.
+  - `-D` (`--dired`) is `-l` for Emacs: each line indented by two spaces, then
+    `//DIRED//` with each name's start and end, `//SUBDIRED//` with each folder
+    header's, in bytes from the start of the output, escapes not counted, and
+    `//DIRED-OPTIONS// --quoting-style=…`; a later `-C`, `-x` or `-m`, or
+    `--hyperlink`, turns it off, and with `--zero` it is refused, as in GNU ls.
+
 - **PIPESTATUS after a compound command** (found 2026-10-17 by the quoting comparison,
   whose `${PIPESTATUS[0]}` after an `if` read 0): a compound command that is the whole
   pipeline (`if`, `for`, `case`, `while`, `{ }`) and a function's definition leave
