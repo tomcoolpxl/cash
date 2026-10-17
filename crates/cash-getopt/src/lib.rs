@@ -327,13 +327,36 @@ pub struct Getopt<'t, 'n, Id> {
     claim: Option<fn(&str) -> Option<Id>>,
 }
 
+std::thread_local! {
+    /// Whether [`posixly_correct`] is in force on this thread.
+    static POSIXLY_CORRECT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Runs `read` with glibc's `POSIXLY_CORRECT` in force when `on`.
+///
+/// Every parser `read` makes then ends its options at the first operand, unless it sets
+/// an order of its own. A tool's caller knows the variable (a shell variable, or the
+/// process's environment); the parser deep in the tool does not.
+pub fn posixly_correct<T>(on: bool, read: impl FnOnce() -> T) -> T {
+    let before = POSIXLY_CORRECT.replace(on);
+    let result = read();
+    POSIXLY_CORRECT.set(before);
+    result
+}
+
 impl<'t, 'n, Id: Copy + PartialEq> Getopt<'t, 'n, Id> {
-    /// A parser by these tables, permuting, long options with two dashes.
-    pub const fn new(shorts: &'t [Short<Id>], longs: &'t [Long<'n, Id>]) -> Self {
+    /// A parser by these tables, long options with two dashes, permuting unless
+    /// [`posixly_correct`] says the options end at the first operand.
+    pub fn new(shorts: &'t [Short<Id>], longs: &'t [Long<'n, Id>]) -> Self {
+        let order = if POSIXLY_CORRECT.get() {
+            Order::StopAtOperand
+        } else {
+            Order::Permute
+        };
         Self {
             shorts,
             longs,
-            order: Order::Permute,
+            order,
             long_only: false,
             claim: None,
         }
@@ -728,6 +751,21 @@ mod tests {
 
     fn parser() -> Getopt<'static, 'static, &'static str> {
         Getopt::new(SHORTS, LONGS)
+    }
+
+    #[test]
+    fn posixly_correct_ends_the_options_at_the_first_operand_while_in_force() {
+        let operands = |parsed: &Parsed<&str, String>| parsed.operands().count();
+        let line = words(&["x", "-r"]);
+        assert_eq!(operands(&parser().parse(&line).unwrap()), 1);
+        let inside = posixly_correct(true, || parser().parse(&line).unwrap());
+        assert_eq!(operands(&inside), 2);
+        // An order a parser sets is its own; the default comes back afterwards.
+        let own = posixly_correct(true, || {
+            parser().order(Order::Permute).parse(&line).unwrap()
+        });
+        assert_eq!(operands(&own), 1);
+        assert_eq!(operands(&parser().parse(&line).unwrap()), 1);
     }
 
     #[test]
