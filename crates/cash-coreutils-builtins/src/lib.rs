@@ -45,6 +45,8 @@ use cash_uutils::rm as uu_rm;
 use cash_uutils::shuf as uu_shuf;
 #[cfg(feature = "coreutils.sort")]
 use cash_uutils::sort as uu_sort;
+#[cfg(feature = "coreutils.tail")]
+use cash_uutils::tail as uu_tail;
 #[cfg(feature = "coreutils.tee")]
 use cash_uutils::tee as uu_tee;
 #[cfg(feature = "coreutils.uniq")]

@@ -225,8 +225,10 @@ mod subshell_levels;
 mod sudo;
 // `rar` and `unrar`: WinRAR 7.23's golden output.
 mod rar_builtin;
-// `tar`: GNU tar 1.35's golden output, Windows' own tar.exe, names and links.
 mod sevenzip_builtin;
+// `tail`: the end of a pipe, of a file of whole blocks, and of a followed file.
+mod tail_builtin;
+// `tar`: GNU tar 1.35's golden output, Windows' own tar.exe, names and links.
 mod tar_builtin;
 mod terminal_profile;
 // D48/D49/D56: the bundled awk, sed and bc in a pipeline.

@@ -1,7 +1,7 @@
 // This file is part of cash. The tools below came from the uutils coreutils package;
 // for their copyright and licence, see the LICENSE file beside this crate's manifest.
 
-//! `rm`, `sort`, `tee`, `uniq`, `shuf` and `head`, taken from uutils coreutils 0.12.0 and made
+//! `rm`, `sort`, `tee`, `uniq`, `shuf`, `head` and `tail`, taken from uutils coreutils 0.12.0 and made
 //! cash's own: what changed on the way in is in this crate's `README.md`. cash runs each
 //! through its `uumain`, as it runs the uutils tools it bundles unchanged.
 
@@ -16,6 +16,7 @@
     clippy::branches_sharing_code,
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
     clippy::derive_partial_eq_without_eq,
     clippy::doc_markdown,
@@ -36,5 +37,6 @@ pub mod head;
 pub mod rm;
 pub mod shuf;
 pub mod sort;
+pub mod tail;
 pub mod tee;
 pub mod uniq;

@@ -1645,3 +1645,10 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   also for `-n -N` and `-c -N` on a large file, which uutils measured from the file's
   start (`{ head -n1; head -n -1 | wc -c; } < file` counted 43352 of 108886 bytes). Each
   mode checked against Git Bash's head.
+
+- **tail gave too much of a pipe and nothing of a file of 64 KiB** (found and done
+  2026-10-17, while checking head): `head -n -1 big | tail -c 8` printed 2,000 to 10,000
+  bytes, `tail -n 2` printed nothing of a file of exactly 64 KiB, and `tail -n 5000` gave
+  4096 lines of one of 128 KiB, all in 1.19.0; and `tail -f --use-polling` printed a
+  file again on each change, saying it had been replaced. tail is taken into
+  `cash-uutils`, as head was, and each is fixed there; checked against Git Bash's tail.

@@ -1,11 +1,12 @@
 # cash-uutils
 
-`rm`, `sort`, `tee`, `uniq`, `shuf` and `head` for cash: taken from
+`rm`, `sort`, `tee`, `uniq`, `shuf`, `head` and `tail` for cash: taken from
 [uutils coreutils](https://github.com/uutils/coreutils) 0.12.0 (`uu_rm`, `uu_sort`,
-`uu_tee`, `uu_uniq`, `uu_shuf`, `uu_head`), © the uutils developers, under the MIT
-License (`LICENSE`), and made cash's own on 2026-10-10 (`head` on 2026-10-17). Until
-then the first five were carried in `vendor/uutils` as patched copies, and `head` was
-used from crates.io as published, as the other uutils tools cash bundles still are.
+`uu_tee`, `uu_uniq`, `uu_shuf`, `uu_head`, `uu_tail`), © the uutils developers, under
+the MIT License (`LICENSE`), and made cash's own on 2026-10-10 (`head` and `tail` on
+2026-10-17). Until then the first five were carried in `vendor/uutils` as patched
+copies, and `head` and `tail` were used from crates.io as published, as the other
+uutils tools cash bundles still are.
 
 Each tool is a module with its own `uumain`, which `cash-coreutils-builtins` registers
 as it registers the uutils tools it uses unchanged.
@@ -20,9 +21,11 @@ as it registers the uutils tools it uses unchanged.
   and `Usage: tee-usage`. Other languages' files were left out: cash speaks English.
 - **Windows only.** Code for Unix, Linux, Redox and WASI is gone (`rm`'s safe
   traversal, `tee`'s splicing and raw writes, `sort`'s resource limits, file
-  descriptor counts, permissions and single-threaded path), with the tests of it, and
-  so are the binaries' `main.rs` files. `sort` always had uucore's `i18n-collator`; its
-  feature switch went, the collator kept.
+  descriptor counts, permissions and single-threaded path, `head`'s and `tail`'s
+  splicing, `tail`'s non-blocking FIFO open and its watch of a file's folder on Linux),
+  with the tests of it, and so are the binaries' `main.rs` files. `sort` always had
+  uucore's `i18n-collator`; its feature switch went, the collator kept. `tail`'s one
+  rstest table is a loop over the same cases.
 - **A `>(...)` is opened as the pipe it is** (2026-09-30, then a patch). cash hands a
   `>(...)` to `tee`, `sort`, `uniq` and `shuf` as a named pipe (spec D17), which cannot
   be created, truncated or appended to: `echo x | tee >(cat)` failed with "The parameter
@@ -36,6 +39,10 @@ as it registers the uutils tools it uses unchanged.
   buffer from the memory Windows can hand out (`GetPerformanceInfo`), as uutils takes
   `MemAvailable` on Linux; it had the fixed 32 MiB. `tee -i` ignores Ctrl-C, Windows'
   SIGINT, with a console handler that the programs it starts do not inherit.
+  `tail -f` asks whether its standard input is a file before it warns that following it
+  is ineffective, as GNU tail does (uutils took any input for one), and `--pid` holds
+  the process through `cash_win32::process::Held`. `tail` no longer ends itself with 13
+  on a broken pipe: cash's relay of a bundled tool's output ends it with 141.
 - **`rm`'s trailing separators**: `d/../////` is trimmed to `d/../` with either
   separator; uutils looked for `\` alone on Windows.
 - **`head` leaves a file under its standard input just after what it printed**
@@ -44,6 +51,17 @@ as it registers the uutils tools it uses unchanged.
   reads what is left of it, also for `-n -N` and `-c -N` on a large file, which uutils
   measured from the file's start. A pipe or a console is read as before. Marked
   `// cash:`.
+- **`tail` gives the end of a pipe, and of a file of whole 64 KiB blocks** (2026-10-17),
+  two bugs of uutils': `head -n -1 big | tail -c 8` printed 2,000 to 10,000 bytes, a
+  different count each run, as `tail -c` dropped one unneeded chunk per read and a pipe
+  hands reads over in mixed sizes; `tail -n 2` printed nothing of a file of 64 KiB, and
+  `tail -n 5000` gave 4096 lines of one of 128 KiB, as the last block read back from the
+  end was taken to be the size's remainder, 0. Marked `// cash:`.
+- **`tail -f --use-polling` follows a file without printing it again** (2026-10-17):
+  `Metadata` has no file index on Windows without an unstable API, so uutils could not
+  tell a file from its replacement and, polling, took every change for a new file
+  (`has been replaced;  following new file`, and the file again from its start). The
+  identity (`cash_win32::fs::file_info`'s volume and index) is kept beside the metadata.
 - **What could panic** now says why it cannot, or is an error the tool reports, under
   the workspace's lints:
   - `sort`: a temporary file that cannot be written says `write failed: PATH: REASON`
@@ -56,5 +74,9 @@ as it registers the uutils tools it uses unchanged.
     back, where it asserted that it never was (its caller sees to `-n -0`), and looks
     for a line's end where it assumed one; the buffer it searches a file's end in is
     on the heap, not 64 KiB of stack.
+  - `tail`: a seek or a read of a file that fails is an error; a byte count past what a
+    seek takes is the whole file, where a cast wrapped it to a seek past the end; an
+    event for a path not followed, or without its new name, changes nothing; a watcher
+    that was not started is an error.
 - **Style.** The workspace's style lints that uutils was not written to are allowed in
   `src/lib.rs`, as for `cash-sed`; the lints for code that can panic apply in full.

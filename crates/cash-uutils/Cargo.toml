@@ -1,6 +1,6 @@
 [package]
 name = "cash-uutils"
-description = "rm, sort, tee, uniq, shuf and head for cash, taken from uutils coreutils and made its own"
+description = "rm, sort, tee, uniq, shuf, head and tail for cash, taken from uutils coreutils and made its own"
 version.workspace = true
 authors.workspace = true
 categories.workspace = true
@@ -32,6 +32,8 @@ uucore = { workspace = true, features = [
     "i18n-collator",
     "i18n-datetime",
 ] }
+# sort, head and tail
+memchr = "2.7.2"
 # rm
 indicatif = "0.18.0"
 # sort
@@ -39,7 +41,6 @@ bigdecimal = "0.4"
 ctrlc = { version = "3.5.2", features = ["termination"] }
 foldhash = "0.2.0"
 itertools = { workspace = true }
-memchr = "2.7.2"
 rayon = "1.10"
 self_cell = "1.0.4"
 tempfile = { workspace = true }
@@ -50,6 +51,8 @@ itoa = "1.0.15"
 rand_chacha = "0.10.0"
 rustc-hash = "2.1.1"
 sha3 = { version = "0.12.0", default-features = false, features = ["alloc"] }
+# tail
+notify = "8.2.0"
 
 [lints]
 workspace = true

@@ -778,7 +778,6 @@ dependencies = [
  "uu_sum",
  "uu_sync",
  "uu_tac",
- "uu_tail",
  "uu_test",
  "uu_timeout",
  "uu_touch",
@@ -991,6 +990,7 @@ dependencies = [
  "itertools 0.15.0",
  "itoa",
  "memchr",
+ "notify",
  "rand 0.10.3",
  "rand_chacha 0.10.0",
  "rayon",
@@ -5885,22 +5885,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "uucore",
-]
-
-[[package]]
-name = "uu_tail"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04ff141dd3fab47b991b2063fb8c1c9ff5ca4f9f23f5bcba75c691a247e1aca4"
-dependencies = [
- "clap",
- "fluent",
- "libc",
- "memchr",
- "notify",
- "rustix",
- "uucore",
- "windows-sys 0.61.2",
 ]
 
 [[package]]

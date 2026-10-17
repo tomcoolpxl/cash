@@ -1,5 +1,5 @@
 //! The tools cash took from uutils and made its own (`rm`, `sort`, `tee`, `uniq`,
-//! `shuf`, `head`, in `crates/cash-uutils`) say their messages in English. A release
+//! `shuf`, `head`, `tail`, in `crates/cash-uutils`) say their messages in English. A release
 //! printed their message ids instead (`sort: sort-cannot-read`, `Usage: tee-usage`):
 //! uucore finds a tool's messages in the cargo registry, where a tool that is not a
 //! crates.io crate is not, on a clean machine. Each now carries its own.
@@ -33,12 +33,16 @@ fn the_tools_taken_from_uutils_speak_english_not_message_ids() {
             "head: cannot open '/no/such' for reading: No such file or directory",
         ),
         ("head -n x", "head: invalid number of lines: 'x'"),
+        (
+            "tail /no/such",
+            "tail: cannot open '/no/such' for reading: No such file or directory",
+        ),
     ] {
         let out = run(script);
         let text = format!("{}{}", out.stdout, out.stderr);
         assert!(text.contains(want), "{script}: {text}");
         // An id is the tool's name, a dash and more words: `sort-cannot-read`.
-        for tool in ["rm", "sort", "tee", "uniq", "shuf", "head"] {
+        for tool in ["rm", "sort", "tee", "uniq", "shuf", "head", "tail"] {
             assert!(
                 !text.contains(&format!("{tool}-usage"))
                     && !text.contains(&format!("{tool}-error")),
