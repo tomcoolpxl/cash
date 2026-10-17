@@ -75,6 +75,8 @@ pub struct ProcessingContext {
     pub input_crlf: bool,
     /// Stop processing further input.
     pub stop_processing: bool,
+    /// Stop without writing a missing final newline (`Q`).
+    pub quit_silently: bool,
     /// Whether sed operates on bytes or UTF-8 characters
     pub character_mode: CharacterMode,
     /// Previously compiled RE, saved for reuse when specifying an empty RE
@@ -515,6 +517,7 @@ pub struct Command {
     pub addr2: Option<Address>,             // End address
     pub non_select: bool,                   // True if '!'
     pub start_line: Option<usize>,          // Start line number (or None if unlatched)
+    pub range_started: bool,                // True once the range has been entered
     pub data: CommandData,                  // Command-specific data
     pub next: Option<Rc<RefCell<Command>>>, // Pointer to next command
     pub location: ScriptLocation,           // Command's definition location
@@ -528,6 +531,7 @@ impl Default for Command {
             addr2: None,
             non_select: false,
             start_line: None,
+            range_started: false,
             data: CommandData::None,
             next: None,
             location: ScriptLocation::default(),
@@ -573,10 +577,22 @@ pub enum SpaceFlag {
 pub struct InputAction {
     /// Next command to execute (rather than commands from start)
     pub next_command: Option<Rc<RefCell<Command>>>,
-    /// Data to prepend to the read contents
-    pub prepend: Vec<u8>,
-    /// Whether the lines of that data ended in CRLF (`IOChunk::has_crlf_lines`)
-    pub crlf: bool,
+    /// How the line read becomes the pattern space
+    pub next_line: NextLine,
+}
+
+#[derive(Debug, Clone)]
+/// How a line read for `n` or `N` becomes the pattern space (uutils sed 3676eac3)
+pub enum NextLine {
+    /// Replace the pattern space with the line (`n`), which has gone out already
+    Replace,
+    /// Append the line, after a newline, to these contents (`N`)
+    Append {
+        /// The pattern space the line is appended to
+        prepend: Vec<u8>,
+        /// Whether its lines ended in CRLF (`IOChunk::has_crlf_lines`)
+        crlf: bool,
+    },
 }
 
 #[cfg(test)]

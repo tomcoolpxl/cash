@@ -543,6 +543,11 @@ impl OutputBuffer {
     /// read, a directory, is "read error on F: Is a directory" with status 4; nothing was
     /// written for a directory.
     pub fn copy_file(&mut self, path: &PathBuf) -> UResult<()> {
+        // A line the last output left without its end gets it first, as in GNU sed: the
+        // file's text was joined to it (`printf a | sed 'r f'`). It does so whatever the
+        // file turns out to be, missing, empty or a directory (uutils sed 8a7fc1be); a
+        // file that could not be opened left the line unended.
+        self.flush_pending_newline()?;
         if is_directory(path) {
             return Err(USimpleError::new(
                 4,
@@ -554,9 +559,6 @@ impl OutputBuffer {
             return Ok(());
         };
 
-        // A line the last output left without its end gets it first, as in GNU sed: the
-        // file's text was joined to it (`printf a | sed 'r f'`).
-        self.flush_pending_newline()?;
         let mut reader = BufReader::new(file);
         loop {
             let buffer = reader.fill_buf().map_err(|e| {

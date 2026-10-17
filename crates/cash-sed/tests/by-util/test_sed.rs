@@ -4400,3 +4400,769 @@ fn test_null_data_text_and_command_output() {
         check_output(args, b"a\x00b\x00", output);
     }
 }
+
+////////////////////////////////////////////////////////////
+// uutils sed's tests from c46dd6da to its main of 2026-10-17, with the errors they
+// expect in GNU sed's words, as cash-sed reports them; its rich diagnostics and the
+// Unix-only `e` test are not taken.
+
+#[test]
+fn test_next_continues_with_following_command() {
+    new_ucmd!()
+        .args(&["n;d"])
+        .pipe_in("1\n2\n3\n4\n")
+        .succeeds()
+        .stdout_is("1\n3\n");
+    new_ucmd!()
+        .args(&["-n", "-e", "a A", "-e", "n;p"])
+        .pipe_in("a\nb\n")
+        .succeeds()
+        .stdout_is("A\nb\n");
+    // At the end of input, `n` ends processing.
+    new_ucmd!()
+        .args(&["n;q5"])
+        .pipe_in("1\n")
+        .succeeds()
+        .stdout_is("1\n");
+}
+
+#[test]
+fn test_next_reads_across_files_unless_separate() {
+    new_ucmd!()
+        .args(&["n;s/^/X/", "-", "input/two-lines.txt"])
+        .pipe_in("a\n")
+        .succeeds()
+        .stdout_is("a\nXline one\nline two\n");
+    new_ucmd!()
+        .args(&["-s", "n;s/^/X/", "-", "input/two-lines.txt"])
+        .pipe_in("a\n")
+        .succeeds()
+        .stdout_is("a\nline one\nXline two\n");
+}
+
+#[test]
+fn read_one_line_reads_successive_lines() -> std::io::Result<()> {
+    let temp = NamedTempFile::new()?;
+    fs::write(temp.path(), "one\ntwo\n")?;
+    let cmd = format!("R {}", temp.path().display());
+
+    // One line of the file is queued per cycle; the third cycle finds EOF.
+    new_ucmd!()
+        .args(&["-e", &cmd])
+        .pipe_in("a\nb\nc\n")
+        .succeeds()
+        .stdout_is("a\none\nb\ntwo\nc\n");
+
+    Ok(())
+}
+
+#[test]
+fn read_one_line_missing_file_is_silent() {
+    new_ucmd!()
+        .args(&["-e", "R /nonexistent/xyzzy-42-does-not-exist"])
+        .pipe_in("a\nb\n")
+        .succeeds()
+        .stdout_is("a\nb\n");
+}
+
+#[test]
+fn sandbox_rejects_read_one_line_command() {
+    new_ucmd!()
+        .args(&["--sandbox", "R /tmp/out", LINES1])
+        .fails()
+        .stderr_contains("e/r/w commands disabled in sandbox mode");
+}
+
+#[test]
+fn read_one_line_with_r_command_is_non_posix() {
+    new_ucmd!()
+        .args(&["--posix", "R /tmp/out"])
+        .fails()
+        .code_is(1)
+        .stderr_is("sed: -e expression #1, char 1: unknown command: `R'\n");
+}
+
+#[test]
+fn read_one_line_appends_even_with_suppressed_autoprint() -> std::io::Result<()> {
+    let temp = NamedTempFile::new()?;
+    fs::write(temp.path(), "x1\nx2\n")?;
+    let cmd = format!("R {}", temp.path().display());
+
+    // `-n` suppresses the pattern space auto-print, but `R` still queues the
+    // file's lines to the output stream (like `a`/`r`).
+    new_ucmd!()
+        .args(&["-n", "-e", &cmd])
+        .pipe_in("a\nb\n")
+        .succeeds()
+        .stdout_is("x1\nx2\n");
+
+    Ok(())
+}
+
+#[test]
+fn read_one_line_stops_when_file_shorter_than_input() -> std::io::Result<()> {
+    let temp = NamedTempFile::new()?;
+    fs::write(temp.path(), "only\n")?;
+    let cmd = format!("R {}", temp.path().display());
+
+    // The file has one line; later cycles read nothing and emit no extra text.
+    new_ucmd!()
+        .args(&["-e", &cmd])
+        .pipe_in("a\nb\nc\n")
+        .succeeds()
+        .stdout_is("a\nonly\nb\nc\n");
+
+    Ok(())
+}
+
+#[test]
+fn read_one_line_preserves_last_line_without_newline() -> std::io::Result<()> {
+    let temp = NamedTempFile::new()?;
+    // Final line has no trailing newline.
+    fs::write(temp.path(), "N1\nN2")?;
+    let cmd = format!("R {}", temp.path().display());
+
+    // The unterminated last line is emitted verbatim, with no newline added.
+    new_ucmd!()
+        .args(&["-e", &cmd])
+        .pipe_in("a\nb\n")
+        .succeeds()
+        .stdout_is("a\nN1\nb\nN2");
+
+    Ok(())
+}
+
+#[test]
+fn read_one_line_honors_address_and_advances_only_when_run() -> std::io::Result<()> {
+    let temp = NamedTempFile::new()?;
+    fs::write(temp.path(), "f1\nf2\nf3\n")?;
+    let cmd = format!("2R {}", temp.path().display());
+
+    // `R` runs only on the matched cycle, so the cursor advances only then:
+    // line 2 pulls the file's first line, other cycles read nothing.
+    new_ucmd!()
+        .args(&["-e", &cmd])
+        .pipe_in("a\nb\nc\n")
+        .succeeds()
+        .stdout_is("a\nb\nf1\nc\n");
+
+    Ok(())
+}
+
+#[test]
+fn read_one_line_distinct_files_have_independent_cursors() -> std::io::Result<()> {
+    let f1 = NamedTempFile::new()?;
+    let f2 = NamedTempFile::new()?;
+    fs::write(f1.path(), "f1\nf2\nf3\n")?;
+    fs::write(f2.path(), "x1\nx2\n")?;
+    let r1 = format!("R {}", f1.path().display());
+    let r2 = format!("R {}", f2.path().display());
+
+    // Each `R` reads from its own file and advances its own cursor; the
+    // shorter file simply runs out first.
+    new_ucmd!()
+        .args(&["-e", &r1, "-e", &r2])
+        .pipe_in("a\nb\nc\n")
+        .succeeds()
+        .stdout_is("a\nf1\nx1\nb\nf2\nx2\nc\nf3\n");
+
+    Ok(())
+}
+
+#[test]
+fn read_one_line_same_file_shares_cursor() -> std::io::Result<()> {
+    let temp = NamedTempFile::new()?;
+    fs::write(temp.path(), "l1\nl2\n")?;
+    let cmd = format!("R {}", temp.path().display());
+
+    // Both `R` commands name the same file, so they share one cursor and read
+    // successive lines ("l1" then "l2") rather than each restarting at "l1".
+    new_ucmd!()
+        .args(&["-e", &cmd, "-e", &cmd])
+        .pipe_in("a\n")
+        .succeeds()
+        .stdout_is("a\nl1\nl2\n");
+
+    Ok(())
+}
+
+/// `l` shows an empty pattern space as `$`, even when the line lacked a
+/// newline, as GNU sed does.
+#[test]
+fn list_empty_line_without_newline() {
+    new_ucmd!()
+        .args(&["-n", "s/a//;l"])
+        .pipe_in("a")
+        .succeeds()
+        .stdout_is("$\n");
+}
+
+// `sed -i SCRIPT FILE`: the argument after `-i` is the script, not a suffix.
+#[test]
+fn in_place_edit_script_after_bare_i() -> std::io::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("input");
+
+    std::fs::write(&path, "hello, world\n")?;
+
+    new_ucmd!()
+        .args(&["-i", "s/world/universe/", path.to_str().unwrap()])
+        .succeeds();
+
+    let actual = std::fs::read_to_string(&path)?;
+    assert_eq!(actual, "hello, universe\n");
+    Ok(())
+}
+
+// As in GNU sed, BSD's detached suffix is a script or an input file.
+#[test]
+fn in_place_edit_detached_suffix_is_not_suffix() -> std::io::Result<()> {
+    let script = "s/world/universe/";
+    let cases: &[(&[&str], &str)] = &[
+        (&["-i", "", "-e", script], ""),
+        (&["-i", ".bak", "-e", script], ".bak"),
+        // The empty argument is the script, and the script is an input file.
+        (&["-i", "", script], "s/world/universe/"),
+    ];
+    for (args, missing) in cases {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("input");
+        std::fs::write(&path, "hello, world\n")?;
+
+        new_ucmd!()
+            .args(args)
+            .arg(&path)
+            .fails()
+            .stderr_contains(format!("can't read {missing}: No such file or directory"));
+    }
+    Ok(())
+}
+
+#[test]
+fn in_place_edit_backup_forms() -> std::io::Result<()> {
+    for (arg, expected) in [
+        ("-i.bak", "hello, universe\nhello, universe\n"),
+        ("--in-place=.bak", "hello, universe\nhello, universe\n"),
+        ("-ni.bak", "hello, universe\n"),
+    ] {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("input");
+        std::fs::write(&path, "hello, world\n")?;
+
+        new_ucmd!()
+            .args(&[arg, "s/world/universe/p", path.to_str().unwrap()])
+            .succeeds();
+
+        assert_eq!(std::fs::read_to_string(&path)?, expected, "{arg}");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("input.bak"))?,
+            "hello, world\n",
+            "{arg}"
+        );
+    }
+    Ok(())
+}
+
+// As in GNU sed, the value of `-f` is not taken as `-i`.
+#[test]
+fn script_file_named_like_in_place_option() -> std::io::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("-ifoo.sed"), "s/world/universe/\n")?;
+    std::fs::write(dir.path().join("input"), "hello, world\n")?;
+
+    new_ucmd!()
+        .current_dir(dir.path())
+        .args(&["-f", "-ifoo.sed", "input"])
+        .succeeds()
+        .stdout_is("hello, universe\n");
+
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("input"))?,
+        "hello, world\n"
+    );
+    Ok(())
+}
+
+/// Create two input files in a fresh temporary directory.
+/// The returned directory must be kept alive for the paths to stay valid.
+fn two_inputs(
+    first: &str,
+    second: &str,
+) -> std::io::Result<(tempfile::TempDir, std::path::PathBuf, std::path::PathBuf)> {
+    let dir = tempfile::tempdir()?;
+    let path1 = dir.path().join("input1");
+    let path2 = dir.path().join("input2");
+    std::fs::write(&path1, first)?;
+    std::fs::write(&path2, second)?;
+    Ok((dir, path1, path2))
+}
+
+#[test]
+fn in_place_edit_separate() -> std::io::Result<()> {
+    let a = "a1\na2\na3\n";
+    let b = "b1\nb2\nb3\n";
+
+    // Arguments, the two inputs, and the two expected results.
+    let cases: &[(&[&str], &str, &str, &str, &str)] = &[
+        // $ is the last line of each file, and line numbers restart.
+        (&["-i", "-e", "$d"], a, b, "a1\na2\n", "b1\nb2\n"),
+        (&["-i", "-e", "1d"], a, b, "a2\na3\n", "b2\nb3\n"),
+        (
+            &["-i", "-e", "="],
+            a,
+            b,
+            "1\na1\n2\na2\n3\na3\n",
+            "1\nb1\n2\nb2\n3\nb3\n",
+        ),
+        // A range left open at the end of a file does not continue into the next.
+        (&["-i", "-e", "/a3/,/b2/d"], a, b, "a1\na2\n", b),
+        // N does not join the last line of one file with the first of the next.
+        (
+            &["-i", "-e", r"N;s/\n/+/"],
+            a,
+            b,
+            "a1+a2\na3\n",
+            "b1+b2\nb3\n",
+        ),
+        // n on the last line of a file does not read the first line of the next.
+        (
+            &["-i", "-e", "n;s/^/X/"],
+            a,
+            b,
+            "a1\nXa2\na3\n",
+            "b1\nXb2\nb3\n",
+        ),
+        // Lines collected in the hold space stay in their own file.
+        (
+            &["-i", "-e", r"H;$!d;x;s/\n/,/g"],
+            a,
+            b,
+            ",a1,a2,a3\n",
+            ",b1,b2,b3\n",
+        ),
+        // Q on the last line of the first file: the second one is never opened.
+        (&["-i", "-e", "$Q"], a, b, "a1\na2\n", b),
+        // q still quits for good, leaving the second file alone.
+        (&["-i", "-e", "2q"], a, b, "a1\na2\n", b),
+        // With -n the pending N is dropped rather than carried into the next file.
+        (
+            &["-n", "-i", "-e", r"N;s/\n/+/;p"],
+            a,
+            b,
+            "a1+a2\n",
+            "b1+b2\n",
+        ),
+        (&["-n", "-i", "-e", "N;p"], "a1\n", b, "", "b1\nb2\n"),
+    ];
+
+    for (args, first, second, expected1, expected2) in cases {
+        let (_dir, path1, path2) = two_inputs(first, second)?;
+        let mut argv = args.to_vec();
+        argv.push(path1.to_str().unwrap());
+        argv.push(path2.to_str().unwrap());
+
+        new_ucmd!().args(&argv).succeeds();
+
+        assert_eq!(
+            std::fs::read_to_string(&path1)?,
+            *expected1,
+            "first file, {args:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&path2)?,
+            *expected2,
+            "second file, {args:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn in_place_edit_separate_backup() -> std::io::Result<()> {
+    let (dir, path1, path2) = two_inputs("a1\na2\na3\n", "b1\nb2\nb3\n")?;
+
+    new_ucmd!()
+        .args(&[
+            "-i.bak",
+            "-e",
+            "$d",
+            path1.to_str().unwrap(),
+            path2.to_str().unwrap(),
+        ])
+        .succeeds();
+
+    assert_eq!(std::fs::read_to_string(&path1)?, "a1\na2\n");
+    assert_eq!(std::fs::read_to_string(&path2)?, "b1\nb2\n");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("input1.bak"))?,
+        "a1\na2\na3\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("input2.bak"))?,
+        "b1\nb2\nb3\n"
+    );
+    Ok(())
+}
+
+#[test]
+fn join_lines_quiet_separate() -> std::io::Result<()> {
+    let (_dir, path1, path2) = two_inputs("a1\na2\na3\n", "b1\nb2\nb3\n")?;
+
+    // The same pending N, with -s instead of -i, writing to standard output.
+    new_ucmd!()
+        .args(&[
+            "-n",
+            "-s",
+            "-e",
+            r"N;s/\n/+/;p",
+            path1.to_str().unwrap(),
+            path2.to_str().unwrap(),
+        ])
+        .succeeds()
+        .stdout_is("a1+a2\nb1+b2\n");
+    Ok(())
+}
+
+#[test]
+fn test_unmatched_brace_points_at_the_open_block() {
+    // As in GNU sed, the location is that of the command that opened the
+    // block left open.
+    new_ucmd!()
+        .args(&["-e", "p", "-e", "{", "-e", "p"])
+        .fails()
+        .code_is(1)
+        .stderr_is("sed: -e expression #2, char 0: unmatched `{'\n");
+}
+
+#[test]
+fn test_unmatched_brace_points_at_the_innermost_block() {
+    // It is reported before an undefined label, as GNU sed does.
+    new_ucmd!()
+        .args(&["-e", "p;1{", "-e", "2{", "-e", "b nowhere"])
+        .fails()
+        .code_is(1)
+        .stderr_is("sed: -e expression #2, char 0: unmatched `{'\n");
+}
+
+#[test]
+fn test_unmatched_brace_points_at_the_address_of_the_block() {
+    // GNU sed names the expression and no place in it.
+    for script in ["1{;2{", "$!{;/re/{"] {
+        new_ucmd!()
+            .args(&["-e", script, "-e", "p"])
+            .fails()
+            .code_is(1)
+            .stderr_is("sed: -e expression #1, char 0: unmatched `{'\n");
+    }
+}
+
+#[test]
+fn test_error_at_end_of_script_keeps_its_position() {
+    // The script is exhausted when the error is found: report its last line,
+    // as GNU sed does ("-e expression #1").
+    new_ucmd!()
+        .args(&["s/a/b\\"])
+        .fails()
+        .code_is(1)
+        .stderr_is("sed: -e expression #1, char 6: unterminated `s' command\n");
+}
+
+#[test]
+fn test_error_at_end_of_script_file_keeps_its_position() {
+    // The replacement on the last line of a script file runs past its end:
+    // report that file and line.
+    let mut script = NamedTempFile::new().expect("create temporary sed script");
+    script
+        .write_all(b"p\n$!d\ns/one/two\\")
+        .expect("write temporary sed script");
+    let script_path = script.path().to_str().expect("temporary path is UTF-8");
+
+    new_ucmd!()
+        .args(&["-f", script_path])
+        .fails()
+        .code_is(1)
+        .stderr_is(format!(
+            "sed: file {script_path} line 3: unterminated `s' command\n"
+        ));
+}
+
+#[test]
+fn test_step_without_number_is_zero() {
+    // `N~` and `N,~` select line N alone, like a step of 0.
+    for script in ["3~=", "3,~=", "3,~0="] {
+        new_ucmd!()
+            .args(&["-n", script])
+            .pipe_in("q\nr\ns\nt\n")
+            .succeeds()
+            .stdout_is("3\n");
+    }
+}
+
+#[test]
+fn test_step_match_zero_closes_range() {
+    // `3~0` selects line 3 alone, so `c` prints its text there.
+    new_ucmd!()
+        .args(&["3~0c\\X"])
+        .pipe_in("1\n2\n3\n4\n5\n")
+        .succeeds()
+        .stdout_is("1\n2\nX\n4\n5\n");
+}
+
+#[test]
+fn test_range_numeric_start_already_passed() {
+    // The inner range is first evaluated on line 3, after its start line.
+    for (script, expected) in [
+        ("3,6{ 1,4p }", "3\n4\n"),
+        ("3,6{ 3,4p }", "3\n4\n"),
+        ("3,6{ 1,3p }", "3\n"),
+        ("3,6{ 1,2p }", ""),
+        ("3,6{ 1,~4p }", "3\n4\n"),
+        ("3,6{ 1,+1p }", "3\n4\n"),
+        ("3,6{ 1,/5/p }", "3\n4\n5\n"),
+        ("3,6{ 1,$p }", "3\n4\n5\n6\n"),
+        ("3,6{ 1,2!p }", "3\n4\n5\n6\n"),
+    ] {
+        new_ucmd!()
+            .args(&["-n", script])
+            .pipe_in("1\n2\n3\n4\n5\n6\n7\n")
+            .succeeds()
+            .stdout_is(expected);
+    }
+}
+
+#[test]
+fn test_range_numeric_start_passed_starts_once() {
+    // Once the range has ended, it does not start again.
+    for (script, expected) in [
+        ("/[2468]/{ 1,/[48]/p }", "2\n4\n"),
+        ("/[3579]/{ 2,/./p }", "3\n5\n"),
+        ("1,/3/p", "1\n2\n3\n"),
+        ("0,/2/p", "1\n2\n"),
+        ("/[3-9]/{ 0,/5/p }", "3\n4\n5\n"),
+    ] {
+        new_ucmd!()
+            .args(&["-n", script])
+            .pipe_in("1\n2\n3\n4\n5\n6\n7\n8\n9\n")
+            .succeeds()
+            .stdout_is(expected);
+    }
+}
+
+#[test]
+fn test_range_numeric_start_passed_separate_files() -> std::io::Result<()> {
+    // With -s the "started once" state is reset, so the range starts again in the second file.
+    let input = "1\n2\n3\n4\n5\n6\n7\n";
+    let (_dir, path1, path2) = two_inputs(input, input)?;
+
+    new_ucmd!()
+        .args(&[
+            "-n",
+            "-s",
+            "3,6{ 1,4p }",
+            path1.to_str().unwrap(),
+            path2.to_str().unwrap(),
+        ])
+        .succeeds()
+        .stdout_is("3\n4\n3\n4\n");
+    Ok(())
+}
+
+#[test]
+fn test_range_numeric_start_skipped_by_d() {
+    new_ucmd!()
+        .args(&["-e", "1,3d", "-e", "2,5s/$/!/"])
+        .pipe_in("a\nb\nc\nd\ne\nf\n")
+        .succeeds()
+        .stdout_is("d!\ne!\nf\n");
+}
+
+#[test]
+fn test_step_non_numeric() {
+    // GNU sed reads the step as none, and `/` as the command.
+    for (script, column) in [("1~/x/p", 3), ("1,~/x/p", 4)] {
+        new_ucmd!()
+            .args(&[script])
+            .fails()
+            .code_is(1)
+            .stderr_is(format!(
+                "sed: -e expression #1, char {column}: unknown command: `/'\n"
+            ));
+    }
+}
+
+#[test]
+fn test_step_without_number_at_end_of_line() {
+    new_ucmd!()
+        .args(&["7~"])
+        .fails()
+        .code_is(1)
+        .stderr_is("sed: -e expression #1, char 2: missing command\n");
+}
+
+#[test]
+fn test_addr0_step_zero() {
+    for script in ["0~0p", "0~p"] {
+        new_ucmd!()
+            .args(&[script])
+            .fails()
+            .code_is(1)
+            .stderr_contains("invalid usage of line address 0");
+    }
+}
+
+#[test]
+fn test_comma_without_second_address() {
+    for (script, column) in [("5,", 2), ("5,=", 3), ("5, x", 4)] {
+        new_ucmd!()
+            .args(&[script])
+            .fails()
+            .code_is(1)
+            .stderr_is(format!(
+                "sed: -e expression #1, char {column}: unexpected `,'\n"
+            ));
+    }
+}
+
+#[test]
+fn test_unterminated_s_or_y_command() {
+    for (script, column, command) in [
+        ("s", 1, 's'),
+        ("1s", 2, 's'),
+        ("p;s", 3, 's'),
+        ("y", 1, 'y'),
+        ("{y", 2, 'y'),
+    ] {
+        new_ucmd!()
+            .args(&[script])
+            .fails()
+            .code_is(1)
+            .stderr_is(format!(
+                "sed: -e expression #1, char {column}: unterminated `{command}' command\n"
+            ));
+    }
+}
+
+/// `Q` discards text queued by `a`, `r` and `R`, as GNU sed does.
+#[test]
+fn test_quit_silently_discards_appended_text() -> std::io::Result<()> {
+    new_ucmd!()
+        .args(&["-e", "a A", "-e", "Q"])
+        .pipe_in("x\n")
+        .succeeds()
+        .stdout_is("");
+
+    let dir = tempfile::tempdir()?;
+    let (one, two, text) = (
+        dir.path().join("1"),
+        dir.path().join("2"),
+        dir.path().join("text"),
+    );
+    fs::write(&one, "a")?;
+    fs::write(&two, "b\n")?;
+    fs::write(&text, "X\n")?;
+    new_ucmd!()
+        .args(&["-e", &format!("R {}", text.display()), "-e", "Q"])
+        .pipe_in("x\n")
+        .succeeds()
+        .stdout_is("");
+    new_ucmd!()
+        .args(&["-e", &format!("2r {}", text.display()), "-e", "2Q"])
+        .arg(&one)
+        .arg(&two)
+        .succeeds()
+        .stdout_is("a");
+    Ok(())
+}
+
+/// `Q` does not write a newline that the last line lacks, as GNU sed does.
+#[test]
+fn test_quit_silently_keeps_missing_newline() {
+    new_ucmd!()
+        .arg("p;Q")
+        .pipe_in("a")
+        .succeeds()
+        .stdout_is("a");
+}
+
+#[test]
+fn test_quit_after_print_adds_missing_newline() {
+    new_ucmd!()
+        .arg("p;q")
+        .pipe_in("a")
+        .succeeds()
+        .stdout_is("a\na\n");
+}
+
+#[test]
+fn test_quit_after_print_silent_adds_missing_newline() {
+    new_ucmd!()
+        .args(&["-n", "p;q"])
+        .pipe_in("a")
+        .succeeds()
+        .stdout_is("a\n");
+}
+
+/// `r` first writes a newline that the line lacks, even when the file is
+/// missing, and then copies the file unchanged, as GNU sed does.
+#[test]
+fn test_read_file_after_line_without_newline() -> std::io::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let (one, two, text) = (
+        dir.path().join("1"),
+        dir.path().join("2"),
+        dir.path().join("text"),
+    );
+    fs::write(&one, "a")?;
+    fs::write(&two, "b\n")?;
+    fs::write(&text, "X\nY")?;
+    new_ucmd!()
+        .arg(format!("1r {}", text.display()))
+        .arg(&one)
+        .arg(&two)
+        .succeeds()
+        .stdout_is("a\nX\nYb\n");
+
+    let missing = dir.path().join("missing");
+    new_ucmd!()
+        .arg(format!("r {}", missing.display()))
+        .pipe_in("x")
+        .succeeds()
+        .stdout_is("x\n");
+    // `n` reads the next line without starting a new cycle, so `r` is not
+    // applied to it.
+    new_ucmd!()
+        .args(&["-e", &format!("r {}", missing.display()), "-e", "n"])
+        .pipe_in("x\ny")
+        .succeeds()
+        .stdout_is("x\ny");
+
+    // Text queued by `R` that lacks a newline is not ended before `r`.
+    let unterminated = dir.path().join("unterminated");
+    fs::write(&unterminated, "R")?;
+    new_ucmd!()
+        .args(&["-e", &format!("R {}", unterminated.display())])
+        .args(&["-e", &format!("r {}", text.display())])
+        .pipe_in("x\ny\n")
+        .succeeds()
+        .stdout_is("x\nRX\nYy\nX\nY");
+    new_ucmd!()
+        .args(&["-n", "-e", &format!("R {}", unterminated.display())])
+        .args(&["-e", &format!("r {}", text.display())])
+        .pipe_in("x\ny\n")
+        .succeeds()
+        .stdout_is("RX\nYX\nY");
+    Ok(())
+}
+
+/// `R` copies a line lacking a newline unchanged, as GNU sed does.
+#[test]
+fn test_read_one_line_without_newline_is_copied_unchanged() -> std::io::Result<()> {
+    let temp = NamedTempFile::new()?;
+    fs::write(temp.path(), "x")?;
+    new_ucmd!()
+        .arg(format!("R {}", temp.path().display()))
+        .pipe_in("a\nb\n")
+        .succeeds()
+        .stdout_is("a\nxb\n");
+    Ok(())
+}

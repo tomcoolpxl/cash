@@ -28,6 +28,7 @@ use crate::sed::script_line_provider::ScriptValue;
 use clap::{Arg, ArgMatches, Command, arg};
 use std::collections::HashMap;
 use std::env;
+use std::ffi::OsString;
 use std::path::PathBuf;
 use uucore::error::{ExitCode, UResult, UUsageError};
 use uucore::format_usage;
@@ -36,39 +37,153 @@ const ABOUT: &str = "Stream editor for filtering and transforming text (part of 
 const USAGE: &str = "sed [OPTION]... [script] [file]...";
 const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (uutils)");
 
-pub fn normalize_sed_args<I, T>(args: I) -> Vec<std::ffi::OsString>
+/// The arguments with GNU's `-iSUFFIX` rewritten for clap (see `gnu_in_place_args`).
+///
+/// uutils sed's rewriter (e40667ff, 75fbaca1): an `-i` clustered after other flags
+/// (`-ni.bak`) is split from them, the value of `-f`, `-e` or `-l` is never taken for
+/// `-i` (`-f -ifoo.sed`), and everything after the `i` is the suffix, `-i=.bak` making
+/// `=.bak` as in GNU sed. Cash's check of the argument's start failed the first, took
+/// the second for `-i`, and read the third as `.bak`.
+pub fn normalize_sed_args<I, T>(args: I) -> Vec<OsString>
 where
     I: IntoIterator<Item = T>,
-    T: Into<std::ffi::OsString>,
+    T: Into<OsString>,
 {
-    let mut normalized = Vec::new();
-    let mut iter = args.into_iter();
-    if let Some(argv0) = iter.next() {
-        normalized.push(argv0.into());
-    }
-    let mut after_double_dash = false;
-    for arg in iter {
-        let arg = arg.into();
-        if after_double_dash {
-            normalized.push(arg);
-            continue;
-        }
-        if arg == "--" {
-            after_double_dash = true;
-            normalized.push(arg);
-            continue;
-        }
-        if let Some(s) = arg.to_str() {
-            if let Some(suffix) = s.strip_prefix("-i") {
-                if !suffix.is_empty() && !suffix.starts_with('=') {
-                    normalized.push(format!("-i={suffix}").into());
-                    continue;
-                }
+    let mut cmd = uu_app();
+    cmd.build();
+    gnu_in_place_args(&cmd, args.into_iter().map(Into::into))
+}
+
+/// Rewrite GNU's `-iSUFFIX`, which clap cannot parse, as `--in-place=SUFFIX`,
+/// splitting it from flags clustered before it: `-ni.bak` becomes
+/// `-n --in-place=.bak`. The values of other options are left as they are.
+fn gnu_in_place_args(cmd: &Command, args: impl IntoIterator<Item = OsString>) -> Vec<OsString> {
+    let mut args = args.into_iter();
+    // The program name.
+    let mut out: Vec<OsString> = args.next().into_iter().collect();
+    while let Some(arg) = args.next() {
+        // Pass non-UTF-8 arguments to clap unchanged.
+        let arg = match arg.into_string() {
+            Ok(arg) => arg,
+            Err(arg) => {
+                out.push(arg);
+                continue;
             }
+        };
+        if arg == "--" {
+            out.push(arg.into());
+            break;
         }
-        normalized.push(arg);
+        match option_kind(cmd, &arg) {
+            OptionKind::InPlace(pos) => {
+                // `pos` is where the `i` is, an ASCII byte, so the split always holds.
+                let (flags, rest) = arg.split_at_checked(pos).unwrap_or((arg.as_str(), ""));
+                if flags.len() > 1 {
+                    out.push(flags.into());
+                }
+                let suffix = rest.strip_prefix('i').unwrap_or(rest);
+                out.push(format!("--in-place={suffix}").into());
+            }
+            OptionKind::ValueFollows => {
+                out.push(arg.into());
+                // Keep the value as is, even if it looks like `-iSUFFIX`.
+                out.extend(args.next());
+            }
+            OptionKind::Other => out.push(arg.into()),
+        }
     }
-    normalized
+    out.extend(args);
+    out
+}
+
+enum OptionKind {
+    /// A cluster like `-ni.bak`, with the position of its `i`.
+    InPlace(usize),
+    /// An option whose value is the next argument, like `-f FILE`.
+    ValueFollows,
+    Other,
+}
+
+fn option_kind(cmd: &Command, arg: &str) -> OptionKind {
+    if let Some(name) = arg.strip_prefix("--") {
+        return match long_option(cmd, name) {
+            Some(opt) if opt.get_action().takes_values() && !opt.is_require_equals_set() => {
+                OptionKind::ValueFollows
+            }
+            _ => OptionKind::Other,
+        };
+    }
+    let Some(cluster) = arg.strip_prefix('-') else {
+        return OptionKind::Other;
+    };
+    for (pos, c) in cluster.char_indices() {
+        // Leave unknown options for clap to report.
+        let Some(opt) = cmd.get_arguments().find(|a| {
+            a.get_short() == Some(c) || a.get_all_short_aliases().is_some_and(|s| s.contains(&c))
+        }) else {
+            return OptionKind::Other;
+        };
+        let attached = pos + c.len_utf8() < cluster.len();
+        if opt.get_id() == "in-place" {
+            return if attached {
+                OptionKind::InPlace(pos + 1)
+            } else {
+                OptionKind::Other
+            };
+        }
+        if opt.get_action().takes_values() {
+            // The rest of the cluster, or else the next argument, is the value.
+            return if attached {
+                OptionKind::Other
+            } else {
+                OptionKind::ValueFollows
+            };
+        }
+    }
+    OptionKind::Other
+}
+
+/// Find a long option by its name or, as `infer_long_args` allows, a unique
+/// prefix of it. `None` if `name` includes a value.
+fn long_option<'a>(cmd: &'a Command, name: &str) -> Option<&'a Arg> {
+    if name.contains('=') {
+        return None;
+    }
+    let names = |a: &'a Arg| {
+        a.get_long()
+            .into_iter()
+            .chain(a.get_all_aliases().into_iter().flatten())
+    };
+    if let Some(opt) = cmd.get_arguments().find(|a| names(a).any(|n| n == name)) {
+        return Some(opt);
+    }
+    let mut found = cmd
+        .get_arguments()
+        .filter(|a| names(a).any(|n| n.starts_with(name)));
+    let opt = found.next()?;
+    found.next().is_none().then_some(opt)
+}
+
+/// `-l N` as GNU sed reads it, with `atoi`: the digits after any blanks and a sign, and
+/// nothing else, so `3x` is 3 and `abc` is 0. A length that is not positive, or too
+/// large for a line, means no wrapping, as 0 does. Cash refused anything but a `u32`.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "clap's value parser takes a Result; GNU refuses no value"
+)]
+fn gnu_line_length(value: &str) -> Result<u32, std::convert::Infallible> {
+    let value = value.trim_start();
+    let (negative, unsigned) = match value.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, value.strip_prefix('+').unwrap_or(value)),
+    };
+    let digits = unsigned
+        .find(|c: char| !c.is_ascii_digit())
+        .map_or(unsigned, |end| unsigned.get(..end).unwrap_or_default());
+    Ok(match digits.parse::<u32>() {
+        Ok(length) if !negative => length,
+        _ => 0,
+    })
 }
 
 #[uucore::main]
@@ -120,7 +235,9 @@ pub fn uu_app() -> Command {
                 .short_alias('r')
                 .help("Use extended regular expressions.")
                 .action(clap::ArgAction::SetTrue),
+            // As in GNU sed, a value may begin with `-` (uutils sed 75fbaca1).
             arg!(-e --expression <SCRIPT> "Add script to executed commands.")
+                .allow_hyphen_values(true)
                 .action(clap::ArgAction::Append),
             // Access with .get_many::<PathBuf>("file")
             Arg::new("script-file")
@@ -128,6 +245,7 @@ pub fn uu_app() -> Command {
                 .long("script-file")
                 .help("Specify script file.")
                 .value_parser(clap::value_parser!(PathBuf))
+                .allow_hyphen_values(true)
                 .action(clap::ArgAction::Append),
             Arg::new("follow-symlinks")
                 .long("follow-symlinks")
@@ -143,7 +261,8 @@ pub fn uu_app() -> Command {
                 .default_missing_value(""),
             // Access with .get_one::<u32>("line-length")
             arg!(-l --length <NUM> "Specify the 'l' command line-wrap length.")
-                .value_parser(clap::value_parser!(u32)),
+                .allow_hyphen_values(true)
+                .value_parser(gnu_line_length),
             arg!(-n --quiet "Suppress automatic printing of pattern space.").aliases(["silent"]),
             arg!(--posix "Disable non-POSIX extensions."),
             arg!(-s --separate "Consider files as separate rather than as a long stream."),
@@ -312,6 +431,7 @@ fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
         stdin_done: false,
         input_crlf: false,
         stop_processing: false,
+        quit_silently: false,
         saved_regex: None,
         input_action: None,
         hold: ByteSpace {
@@ -522,6 +642,25 @@ mod tests {
     }
 
     #[test]
+    fn length_is_read_as_gnu_reads_it() {
+        // GNU sed's `atoi`: leading digits only; not positive, none or too large is 0.
+        for (value, length) in [
+            ("120", 120),
+            ("3x", 3),
+            (" 7", 7),
+            ("+5", 5),
+            ("abc", 0),
+            ("-5", 0),
+            ("", 0),
+            ("99999999999", 0),
+        ] {
+            assert_eq!(gnu_line_length(value), Ok(length), "-l {value:?}");
+        }
+        let ctx = build_context(&test_matches(&["-l", "-5"])).unwrap();
+        assert_eq!(ctx.length, 0);
+    }
+
+    #[test]
     fn c_locale_selects_byte_mode() {
         assert_eq!(character_mode_for_locale("C"), CharacterMode::Byte);
     }
@@ -558,6 +697,78 @@ mod tests {
         );
     }
 
+    // In-place argument rewriting
+    fn in_place_args(args: &[&str]) -> Vec<String> {
+        let mut cmd = uu_app();
+        cmd.build();
+        gnu_in_place_args(&cmd, ["sed"].iter().chain(args).map(OsString::from))
+            .into_iter()
+            .skip(1)
+            .map(|arg| arg.into_string().unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn test_in_place_args_rewrite_attached_suffix() {
+        let cases: &[(&[&str], &[&str])] = &[
+            (&["-i.bak"], &["--in-place=.bak"]),
+            // Everything after the `i` is the suffix, as in GNU sed.
+            (&["-iE"], &["--in-place=E"]),
+            (&["-i=.bak"], &["--in-place==.bak"]),
+            // Flags clustered before `-i` are kept.
+            (&["-ni.bak"], &["-n", "--in-place=.bak"]),
+            (&["-Esi.bak"], &["-Es", "--in-place=.bak"]),
+            (&["-ri.bak"], &["-r", "--in-place=.bak"]),
+            (
+                &["-i.bak", "--", "-i.keep"],
+                &["--in-place=.bak", "--", "-i.keep"],
+            ),
+            // Only the next argument is another option's value.
+            (&["-e", "p", "-i.bak"], &["-e", "p", "--in-place=.bak"]),
+            (
+                &["--expression=p", "-i.bak"],
+                &["--expression=p", "--in-place=.bak"],
+            ),
+            (&["--quiet", "-i.bak"], &["--quiet", "--in-place=.bak"]),
+            (
+                &["--in-place", "-i.bak"],
+                &["--in-place", "--in-place=.bak"],
+            ),
+            // A `--` that is an option's value does not end the options.
+            (&["-e", "--", "-i.bak"], &["-e", "--", "--in-place=.bak"]),
+        ];
+        for (args, expected) in cases {
+            assert_eq!(in_place_args(args), *expected, "args: {args:?}");
+        }
+    }
+
+    #[test]
+    fn test_in_place_args_leave_other_arguments_alone() {
+        let cases: &[&[&str]] = &[
+            &["-i", "s/a/b/", "file"],
+            &["-Ei", "s/a/b/", "file"],
+            &["-En", "s/a/b/", "file"],
+            &["--in-place=.bak", "s/a/b/", "file"],
+            &["--in=.bak", "s/a/b/", "file"],
+            // Values attached to other options.
+            &["-fi.sed", "file"],
+            &["-nfi.sed", "file"],
+            &["-ei", "file"],
+            // Values that follow other options.
+            &["-f", "-ifoo.sed", "file"],
+            &["-nf", "-ifoo.sed", "file"],
+            &["-l", "-i5"],
+            &["--expression", "-i.bak"],
+            &["--expr", "-i.bak"],
+            // Unknown options are left for clap to report.
+            &["-xi.bak"],
+            &["--", "-i.bak"],
+        ];
+        for args in cases {
+            assert_eq!(in_place_args(args), *args, "args: {args:?}");
+        }
+    }
+
     #[test]
     fn test_in_place_cli_parsing() {
         let parse = |args: Vec<&str>| uu_app().try_get_matches_from(normalize_sed_args(args));
@@ -572,10 +783,12 @@ mod tests {
             Some("s/a/b/")
         );
 
+        // Everything after the `i` is the suffix, as in GNU sed: `-i=.bak` backs `f` up
+        // as `f=.bak`.
         let m = parse(vec!["sed", "-i=.bak", "s/a/b/", "file"]).unwrap();
         assert_eq!(
             m.get_one::<String>("in-place").map(|s| s.as_str()),
-            Some(".bak")
+            Some("=.bak")
         );
         assert_eq!(
             m.get_one::<String>("script").map(|s| s.as_str()),

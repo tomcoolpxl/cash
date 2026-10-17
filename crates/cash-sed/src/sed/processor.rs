@@ -10,7 +10,7 @@
 
 use crate::sed::command::{
     Address, AppendElement, CharacterMode, Command, CommandData, InputAction, LineFile, LineInput,
-    ProcessingContext, Transliteration,
+    NextLine, ProcessingContext, Transliteration,
 };
 use crate::sed::error_handling::{runtime_err, runtime_error, strerror};
 use crate::sed::fast_io::{
@@ -216,8 +216,19 @@ fn applies(
         if let Some(latched) = latched {
             Ok(latched)
         } else if let Some(addr1) = &command.addr1 {
-            // See if latch must start.
-            if match_address(addr1, reader, pattern, context)? {
+            // See if latch must start. A numeric first address may already be
+            // behind the line the command is first evaluated on (inside a block, or
+            // after `d`, `n`, `N`, `c` or a branch skipped it): the range then starts
+            // here, once, unless a numeric second address is behind it too, as in GNU
+            // sed (uutils sed 443b085f). It never started.
+            let starts = match addr1 {
+                Address::Line(n) if linenum > *n => {
+                    !command.range_started && !matches!(addr2, Address::Line(m) if *m < linenum)
+                }
+                _ => match_address(addr1, reader, pattern, context)?,
+            };
+            if starts {
+                command.range_started = true;
                 match addr2 {
                     Address::Line(n) if linenum >= *n => {
                         context.last_address = true;
@@ -771,11 +782,10 @@ fn list(
     max_width: usize,
     context: &ProcessingContext,
 ) -> UResult<()> {
-    // Special case for an empty pattern space
+    // Special case for an empty pattern space: `$` and a newline, even for a line that
+    // had none, as in GNU sed (uutils sed 479c4bed).
     if line.is_empty() {
-        if line.is_newline_terminated() {
-            output.write_bytes_with(b"$\n", line.has_crlf_lines())?;
-        }
+        output.write_bytes_with(b"$\n", line.has_crlf_lines())?;
         return Ok(());
     }
 
@@ -869,19 +879,21 @@ fn process_file(
         // Set the script command from which to start.
         let mut current: Option<Rc<RefCell<Command>>> =
             if let Some(action) = context.input_action.take() {
-                // Continue processing the `N` command. What the cycle queued (`a`, `r`,
-                // `R`) goes out now that `N` has its line, as in GNU sed; it went out
-                // before `N` looked, so at the end of the input it came before the
-                // pattern space `N` prints there.
-                flush_appends(output, context)?;
-                let mut combined_lines = action.prepend;
-                combined_lines.push(context.delimiter());
-                combined_lines.extend_from_slice(pattern.as_bytes());
+                // Continue processing the `n` or `N` command, after the line it read.
+                if let NextLine::Append { prepend, crlf } = action.next_line {
+                    // What the cycle queued (`a`, `r`, `R`) goes out now that `N` has its
+                    // line, as in GNU sed; it went out before `N` looked, so at the end of
+                    // the input it came before the pattern space `N` prints there.
+                    flush_appends(output, context)?;
+                    let mut combined_lines = prepend;
+                    combined_lines.push(context.delimiter());
+                    combined_lines.extend_from_slice(pattern.as_bytes());
 
-                // The newline that joins a CRLF line is written as CRLF again (D49).
-                let crlf = action.crlf || pattern.has_crlf_lines();
-                pattern.set_to_bytes(combined_lines, pattern.is_newline_terminated());
-                pattern.set_crlf_lines(crlf);
+                    // The newline that joins a CRLF line is written as CRLF again (D49).
+                    let crlf = crlf || pattern.has_crlf_lines();
+                    pattern.set_to_bytes(combined_lines, pattern.is_newline_terminated());
+                    pattern.set_crlf_lines(crlf);
+                }
                 action.next_command
             } else {
                 // Start from the script top.
@@ -1024,18 +1036,17 @@ fn process_file(
                         write_chunk(output, context, &pattern)?;
                     }
                     flush_appends(output, context)?;
-                    if let Some(next_line) = reader
-                        .get_line()
-                        .map_err(|e| read_error(&context.input_name, &e))?
-                    {
-                        pattern = next_line;
-                        follow_input_crlf(&mut pattern, context);
-                        context.line_number += 1;
-                    } else {
-                        context.stop_processing = true;
-                        pattern.clear();
-                        break 'lines;
-                    }
+                    // The next line is read as the cycle's are, so that it comes from the
+                    // next input file once this one ends, resets the `t` flag, and ends a
+                    // file's cycle under `-s` and `-i`, as in GNU sed (uutils sed
+                    // 3676eac3). It was read from this file alone, and its end stopped
+                    // the run: `sed 'n;s/^/X/' - file` printed stdin's line and nothing
+                    // more.
+                    context.input_action = Some(InputAction {
+                        next_command: command.next.clone(),
+                        next_line: NextLine::Replace,
+                    });
+                    continue 'lines;
                 }
                 'N' => {
                     // Append to pattern `\n` and the next line
@@ -1044,8 +1055,10 @@ fn process_file(
                     // to perform when the next line is read.
                     context.input_action = Some(InputAction {
                         next_command: command.next.clone(),
-                        prepend: pattern.as_bytes().to_vec(),
-                        crlf: pattern.has_crlf_lines(),
+                        next_line: NextLine::Append {
+                            prepend: pattern.as_bytes().to_vec(),
+                            crlf: pattern.has_crlf_lines(),
+                        },
                     });
                     continue 'lines;
                 }
@@ -1074,7 +1087,11 @@ fn process_file(
                         i32::try_from(*extract_variant!(command, Number)).unwrap_or(i32::MAX),
                     );
                     context.stop_processing = true;
+                    // Neither a missing final newline nor the text `a`, `r` and `R`
+                    // queued is written, as in GNU sed (uutils sed 7db579b0, d43d4dea).
+                    context.quit_silently = true;
                     context.quiet = true;
+                    context.append_elements.clear();
                     break;
                 }
                 'r' => {
@@ -1218,19 +1235,22 @@ fn process_file(
         flush_appends(output, context)?;
 
         if context.stop_processing {
-            output.flush_pending_newline()?;
+            if !context.quit_silently {
+                output.flush_pending_newline()?;
+            }
             break;
         }
     }
 
-    // Handle any N command remains.
+    // Handle any N command remains; an `n` has printed its pattern space already.
     if context.separate
         && let Some(action) = context.input_action.take()
+        && let NextLine::Append { prepend, crlf } = action.next_line
     {
         if !context.quiet {
-            let mut pending = action.prepend;
+            let mut pending = prepend;
             pending.push(b'\n');
-            output.write_bytes_with(&pending, action.crlf)?;
+            output.write_bytes_with(&pending, crlf)?;
         }
         flush_appends(output, context)?;
         if context.unbuffered {
@@ -1246,13 +1266,10 @@ fn reset_latched_address_ranges(range_commands: &mut [Rc<RefCell<Command>>]) {
     for cmd_rc in range_commands.iter() {
         let mut cmd = cmd_rc.borrow_mut();
 
-        cmd.start_line =
-            // Check for address-spec line 0 pre-latch extension.
-            if let Some(addr1) = &cmd.addr1 && matches!(addr1, Address::Line(0)) {
-                Some(0)
-            } else {
-                None
-            };
+        // Check for address-spec line 0 pre-latch extension.
+        let pre_latched = matches!(cmd.addr1, Some(Address::Line(0)));
+        cmd.start_line = if pre_latched { Some(0) } else { None };
+        cmd.range_started = pre_latched;
     }
 }
 
@@ -1422,12 +1439,13 @@ pub fn process_all_files(
     // lines, not on the last file with lines alone.
     if !context.separate
         && let Some(action) = context.input_action.take()
+        && let NextLine::Append { prepend, crlf } = action.next_line
     {
         let output = &mut in_place.output;
         if !context.quiet {
-            let mut pending = action.prepend;
+            let mut pending = prepend;
             pending.push(b'\n');
-            output.write_bytes_with(&pending, action.crlf)?;
+            output.write_bytes_with(&pending, crlf)?;
         }
         flush_appends(output, context)?;
         output.flush()?;

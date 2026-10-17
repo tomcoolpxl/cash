@@ -128,3 +128,30 @@ All gate requirements have passed:
 6. **Differential tests:** 30 classic and esoteric sed tests run and pass against GNU sed in WSL (`tests/sed-differential.sh`). All 360 unit tests and 271 integration tests pass (`cargo test -p cash-sed`).
 7. **Shell integration:** Registered `sed` in `crates/cash-shell/src/bundled.rs`, updated `crates/cash/src/doctor.rs` to mark `sed` as carried, and verified all 30 `resolution-honesty` tests pass.
 8. **Windows-only (2026-09-28):** Removed upstream's Unix code paths — the mmap and `copy_file_range` zero-copy I/O in `fast_io.rs`, the `/bin/sh` fallback for `e`, Unix permission copying for `-i`, and their tests — when cash became Windows-only (spec D43).
+
+## Upstream since the revision taken (reviewed 2026-10-17, to `b002a1e8`)
+
+uutils sed's 35 commits after `c46dd6da` were looked through by their tests: the 53 tests
+they add were run against cash-sed, each failing case was run through GNU sed 4.9 as well,
+and GNU decided. 18 passed as they were, cash having fixed the same things its own way (its
+`R`, `-i` per file, the `~` and `,` addresses, the compile errors). Ported:
+
+- a range whose numeric first address is already behind the line it is first tried on
+  (inside a block, after `d` or `n`) starts there, once (`443b085f`): `3,6{ 1,4p }` printed
+  nothing;
+- `n` reads its line as the cycle does (`3676eac3`), so from the next file once one ends,
+  resetting the `t` flag, and ending a file's cycle under `-s` and `-i`: `sed 'n;s/^/X/' -
+  file` printed stdin's line and stopped;
+- `Q` writes neither a missing final newline nor the text `a`, `r` and `R` queued
+  (`7db579b0`, `d43d4dea`); `l` shows an empty line without a newline as `$`
+  (`479c4bed`); `r` ends a line without a newline whatever its file turns out to be
+  (`8a7fc1be`);
+- the `-i` rewriter (`e40667ff`, `75fbaca1`): `-ni.bak` is split, the value of `-f`, `-e`
+  or `-l` is never taken for `-i` and may begin with `-`, and `-i=.bak` means the suffix
+  `=.bak`, as in GNU sed;
+- and, met on the way, `-l` read as GNU's `atoi` reads it.
+
+The tests expect upstream's error format (`<script argument 1>:1:3: error:`); cash-sed's
+are GNU's (`-e expression #1, char 2:`), so those expectations are in GNU's words. Not
+taken: the rich diagnostics drawn under the error at a terminal (`a05d7434`, a new
+dependency and not GNU's), and the Unix-only `e` test, whose cases were checked by hand.

@@ -1741,3 +1741,12 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   gets no answer, the right prompt on exit, double-width characters at the margin, a
   resize's row). What was not taken, and why, is in the crate's README; 0.52.1 changes
   only Android's history locking, and `upstreams.toml` says reviewed to it.
+
+- **uutils sed's fixes since the revision taken** (found 2026-10-16 by `cargo xtask
+  upstreams`, done 2026-10-17): its 53 new tests run against cash-sed, GNU sed 4.9
+  deciding each failure. Fixed: a range whose numeric start is already behind it
+  (`3,6{ 1,4p }` printed nothing), `n` at the end of a file (`sed 'n;s/^/X/' - file`
+  stopped after stdin's line), `Q`'s missing newline and queued text, `l` of an empty
+  line, `r` after a line without a newline, `-ni.bak`, `-f -ifoo.sed`, `-i=.bak`, and
+  `-l` read as GNU reads it. uutils diffutils' commits change only CI. What was not
+  taken is in `research/uutils-sed-evaluation.md`.

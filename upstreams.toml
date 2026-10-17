@@ -49,6 +49,8 @@ name = "diffutils"
 version = "0.6.0"
 repository = "https://github.com/uutils/diffutils"
 revision = "7aa5409c2ed723c7b9768ef4cd10f4176cf78f45"
+# 2026-10-17: the commits since change only CI and a benchmark dependency.
+reviewed = "8af2bedef1f82771d8479b0d021e29b6bb321262"
 
 [[upstream]]
 crate = "crates/cash-sed"
@@ -56,6 +58,9 @@ name = "sed"
 version = "0.2.0"
 repository = "https://github.com/uutils/sed"
 revision = "c46dd6dab61a6a571bf08cb6b333e4fe1f3636c3"
+# 2026-10-17: its fixes ported by their tests, against GNU sed; what was not taken is in
+# research/uutils-sed-evaluation.md.
+reviewed = "b002a1e894da02434406e2ebeceb66c442e4c755"
 
 [[upstream]]
 crate = "crates/cash-awk"
