@@ -33,11 +33,7 @@ upstream's.
 1. **Options**: done (2026-10-17, DONE.md).
 2. **Inputs**: done (2026-10-17, DONE.md).
 3. **Walks**: done (2026-10-17, DONE.md).
-4. **Then, the parts called most** (the user, 2026-10-17, "after you finish the whole
-   exercise"): a deep look at the components every builtin and command goes through
-   many times (option parsing, printing and output, expansion, lookups and the like)
-   for inefficient or unoptimized code: measure first (xperf, hyperfine, counts per
-   call), then fix what costs.
+4. **The parts called most**: done (2026-10-17, DONE.md; `research/hot-paths.md`).
 
 ## Left over from finished phases
 
@@ -149,6 +145,19 @@ What the phases now in DONE.md left open, each where its phase says more.
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
   real; until then the page says so.
+- **`printf` takes 1.4 times Bash's time** (2026-10-17, `research/hot-paths.md`): 6.3 µs
+  a call where `true` takes 2.2; its arguments change from call to call, so clap's
+  parse cannot be remembered as `read`'s and `declare`'s are, and uucore parses the
+  format on every call. A hand-made parse of its one option (`-v`) would take clap's
+  part, with clap's errors kept in Bash's words.
+- **The parse caches are 64-entry LRUs behind a global lock** (2026-10-17): words,
+  tokens, patterns and `eval`'s programs (the `cached` crate); each hit copies its key and
+  its value, and past 64 distinct words in a loop a word costs 1.8 µs against 1.3. An
+  `eval` in a loop copies its whole program on each hit. A thread's own map, larger, as
+  arithmetic's `parse_shared` has, would take neither the lock nor the key's copy.
+- **`cd` takes 62 µs** (2026-10-17): `std::fs::metadata` opens a handle to tell a folder,
+  where `GetFileAttributesExW` would not, and the path is rendered twice. Bash's `cd`
+  under MSYS takes 1.1 ms, so it is not behind, but a `cd` in a loop pays it.
 
 ---
 

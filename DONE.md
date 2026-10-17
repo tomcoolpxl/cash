@@ -1605,3 +1605,20 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   - 7z x -o makes its folder when nothing is extracted, as 7-Zip does (the old find
     had hidden it from the oracle);
   - ls -R joins names once (`ls -R foo/`), and ls --tree says a folder it cannot open.
+
+- **Shared parts for the builtins, 4: the parts called most** (the user, 2026-10-17;
+  done the same day, `research/hot-paths.md`). 30 loops timed with hyperfine against
+  Git Bash's bash; most of the language was already ahead (arithmetic, function calls,
+  `[[ ]]`, starting programs). What was behind, and now (seconds, before / after / bash):
+  - a glob of System32's DLLs, 200 times: 2.20 / 0.92 / 1.08 (the pattern made once per
+    component, each name read once, one sort);
+  - `type -P cmd`, 2,000 times: 6.17 / 1.33 / 3.23 (one directory query per PATH folder
+    where each name it could have was looked for);
+  - `while read -r l` over 100,000 lines: 3.23 / 1.27 / 1.70 (a block of a disk file and
+    the rest given back, as Bash's `lseek`, and the parse of a line seen kept);
+  - `local x=1` in a function, 50,000 times: 1.21 / 0.30 / 0.46, `local -i x=1` 1.29 /
+    0.31 (clap's parse, which sets a default for each of declare's two dozen options,
+    kept for words seen before: `builtins::parse_remembered`);
+  - `[ "$i" = 5 ]`, 100,000 times: 0.80 / 0.57 / 0.61 (`test` takes its words without
+    clap).
+  printf, the parse caches and `cd` are in TODO.md.
