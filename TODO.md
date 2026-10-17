@@ -27,19 +27,47 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ## Picked by the user (the current phase, 2026-10-17)
 
-The user's picks after 1.22.0 (decisions.md, "The phase after 1.22.0"), in this
-order. The phase before, released as 1.22.0, is in DONE.md.
+The user's picks after 1.23.0 (decisions.md, "The phase after 1.23.0"), in this
+order. The phases before, released as 1.22.0 and 1.23.0, are in DONE.md.
 
-1. **`timeout 2 cash -c 'sleep 5; echo done'` prints `done`**: settled, not cash's
-   (2026-10-17, DONE.md).
-2. **`pbcopy` and `pbpaste` on a locked workstation**: done (2026-10-17, DONE.md).
-3. **`ls -l` moves the access time of a file it reads for `#!`**: done (2026-10-17,
-   DONE.md).
-4. **`stat`'s blocks are the size's, not the allocation's**: done (2026-10-17, DONE.md).
-5. **A script's shebang interpreter is looked up twice**: done (2026-10-17, DONE.md).
-6. **The PATH search that checks each extension is slow**: done (2026-10-17, DONE.md).
-
-All six are done (the first settled as not cash's); the phase ends with release 1.23.0.
+1. **A TERM trap never runs on cash's own `kill -TERM`** (2026-10-17, found with
+   `timeout`): `kill -TERM` sends Ctrl-Break to the job's group (D21), and cash's console
+   handler takes Ctrl-C only, so a cash script with `trap … TERM` ends at once with 143,
+   its trap not run, its foreground child ended with it. Bash runs the trap once the
+   foreground command ends and goes on; without a trap it ends with 143; an interactive
+   bash ignores TERM. cash could keep a Ctrl-Break as a pending TERM where a trap is set
+   (or always, ending with 143 at the next safe point), as it keeps a Ctrl-C (D13).
+   Seen: `cash -c "trap 'echo t' TERM; sleep 3; echo after" & sleep 1; kill -TERM $!`
+   ends 143 with nothing printed; bash prints `t` and `after`.
+2. **An archiver killed at once hung past 15 s in CI** (2026-10-17, run 39043122930,
+   slow lane 4/4): `background_builtins::an_archiver_stopped_in_its_walk_writes_no_archive`
+   runs `zip`, `rar` and `7z` on 3000 files as `tool & kill %1; wait %1` and was ended at
+   15 s once, then passed in 1.3 s. The whole archive takes about a second, so it
+   waited, not worked: plausibly a `kill` that lands before the builtin reads its stop,
+   with `wait` left waiting. Which of the three it was is not known; the test should name
+   the tool it is on, and a loop of the three under load should catch it. On run
+   39066508176 (2026-10-17) it and two other tests that `kill` background jobs
+   (`busy_background_jobs_leave_the_foreground_free`, 40 busy loops, and
+   `a_compressor_kill_stops_on_standard_input_leaves_a_broken_archive`) timed out at
+   15 s on all four tries, side by side, on a runner whose tool install had failed; the
+   next run, with the same code, passed all three. A starved runner, then, or the same
+   wait, which load brings out.
+3. **The completion menu scans PATH on each keystroke**: the completion menu runs the PATH scan (or carapace) again on every keystroke while
+   it is open: each folder is asked for the names beginning with the prefix since
+   2026-10-17, 17.7 ms for `compgen -c no` where listing each whole took 24. The rest
+   is a directory query for each of the 80 folders on PATH, at Windows' cost of one,
+   and the runnable check of each match; the background `PathIndex` keeps folded
+   names only, and would need the names as spelled and each one's runnable answer.
+4. **`which <builtin>` walks all of PATH**: `which <builtin>` and `type -a` scan all of PATH on every call: `type -a` must; for
+   a bundled tool `which` looks along all of PATH for a `cash --link-tools` link to
+   this cash, comparing each match with it (looked into 2026-10-17; `which` is rarely
+   in a loop).
+5. **Each `.ps1` run scans PATH for pwsh**: each `.ps1` run scans PATH for pwsh (looked into 2026-10-17): one walk for `pwsh`,
+   then `powershell`, next to PowerShell's own start of a few hundred milliseconds.
+6. **`HISTCONTROL=erasedups` scans the whole history**: `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command
+   (looked into 2026-10-17): 1 to 2 ms after Enter, which the starter `.bashrc` turns
+   on; an index from command line to entries would make it a lookup, at the cost of
+   keeping that index right through loading, `history -d` and trimming to `HISTSIZE`.
 
 ## Left over from finished phases
 
@@ -62,28 +90,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
-- **A TERM trap never runs on cash's own `kill -TERM`** (2026-10-17, found with
-  `timeout`): `kill -TERM` sends Ctrl-Break to the job's group (D21), and cash's console
-  handler takes Ctrl-C only, so a cash script with `trap … TERM` ends at once with 143,
-  its trap not run, its foreground child ended with it. Bash runs the trap once the
-  foreground command ends and goes on; without a trap it ends with 143; an interactive
-  bash ignores TERM. cash could keep a Ctrl-Break as a pending TERM where a trap is set
-  (or always, ending with 143 at the next safe point), as it keeps a Ctrl-C (D13).
-  Seen: `cash -c "trap 'echo t' TERM; sleep 3; echo after" & sleep 1; kill -TERM $!`
-  ends 143 with nothing printed; bash prints `t` and `after`.
-- **An archiver killed at once hung past 15 s in CI** (2026-10-17, run 39043122930,
-  slow lane 4/4): `background_builtins::an_archiver_stopped_in_its_walk_writes_no_archive`
-  runs `zip`, `rar` and `7z` on 3000 files as `tool & kill %1; wait %1` and was ended at
-  15 s once, then passed in 1.3 s. The whole archive takes about a second, so it
-  waited, not worked: plausibly a `kill` that lands before the builtin reads its stop,
-  with `wait` left waiting. Which of the three it was is not known; the test should name
-  the tool it is on, and a loop of the three under load should catch it. On run
-  39066508176 (2026-10-17) it and two other tests that `kill` background jobs
-  (`busy_background_jobs_leave_the_foreground_free`, 40 busy loops, and
-  `a_compressor_kill_stops_on_standard_input_leaves_a_broken_archive`) timed out at
-  15 s on all four tries, side by side, on a runner whose tool install had failed; the
-  next run, with the same code, passed all three. A starved runner, then, or the same
-  wait, which load brings out.
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against
@@ -104,22 +110,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 - **Work done again on every call, from the 2026-10-16 survey** (after `ls` was found
   re-reading Windows Terminal's settings per listing; the session facts now have one
   place, `cash_win32::facts`). Still worked out each time:
-  - `which <builtin>` and `type -a` scan all of PATH on every call: `type -a` must; for
-    a bundled tool `which` looks along all of PATH for a `cash --link-tools` link to
-    this cash, comparing each match with it (looked into 2026-10-17; `which` is rarely
-    in a loop);
-  - the completion menu runs the PATH scan (or carapace) again on every keystroke while
-    it is open: each folder is asked for the names beginning with the prefix since
-    2026-10-17, 17.7 ms for `compgen -c no` where listing each whole took 24. The rest
-    is a directory query for each of the 80 folders on PATH, at Windows' cost of one,
-    and the runnable check of each match; the background `PathIndex` keeps folded
-    names only, and would need the names as spelled and each one's runnable answer;
-  - each `.ps1` run scans PATH for pwsh (looked into 2026-10-17): one walk for `pwsh`,
-    then `powershell`, next to PowerShell's own start of a few hundred milliseconds;
-  - `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command
-    (looked into 2026-10-17): 1 to 2 ms after Enter, which the starter `.bashrc` turns
-    on; an index from command line to entries would make it a lookup, at the cost of
-    keeping that index right through loading, `history -d` and trimming to `HISTSIZE`.
 - **A Ctrl-C or `kill` on a large `xz` waits for its blocks** (parked by the user,
   2026-10-17, decisions.md; found 2026-10-16): lzma-rust2's
   threaded encoder takes the whole input at once (13 blocks of 24 MiB from a 300 MB

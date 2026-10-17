@@ -788,6 +788,12 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   allocation, the shebang interpreter looked up twice, and the slow PATH search of
   `type -a`, `which -a` and `hash NAME`. Turned down for now: the archiver that hung
   after a quick `kill` in CI, which stays in TODO.md.
+- **The phase after 1.23.0** (the user, 2026-10-17): the TERM trap that never runs on
+  cash's own `kill -TERM`, the background jobs that hung after a quick `kill` in CI, and
+  four costs paid on each call: the completion menu's PATH scan on every keystroke,
+  `which <builtin>`'s walk of PATH, the search for pwsh on each `.ps1` run, and
+  `erasedups`' scan of the whole history. The user published 1.23.0 to Scoop and asked
+  for a benchmark against the last big one and the first one, step by step.
 
 ## 8. Archives and compression
 
