@@ -20,6 +20,8 @@ pub mod functions;
 mod globsort;
 pub mod history;
 pub mod int_utils;
+// cash: what builtins read the files they are named through.
+pub mod input;
 pub mod interfaces;
 mod interp;
 mod ioutils;

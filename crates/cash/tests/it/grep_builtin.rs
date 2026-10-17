@@ -169,3 +169,16 @@ fn posixly_correct_ends_the_options_at_the_first_operand() {
     assert_eq!(out.stdout, "X\nstatus 0\nstatus 2", "{}", out.stderr);
     assert_eq!(out.stderr, "grep: -i: No such file or directory");
 }
+
+#[test]
+fn grep_reads_the_shells_device_names() {
+    // A builtin opened its operands itself, and the names the shell serves were no files:
+    // `grep x /dev/stdin` said "No such file or directory". It now opens them as the
+    // shell's `<` does (ExecutionContext::open_input).
+    let out = run(
+        "echo x | grep x /dev/stdin; echo y | grep -c y /dev/fd/0; grep x /dev/null; \
+         echo \"null $?\"; grep x /dev/fd/7; echo \"closed $?\"",
+    );
+    assert_eq!(out.stdout, "x\n1\nnull 1\nclosed 2", "{}", out.stderr);
+    assert_eq!(out.stderr, "grep: /dev/fd/7: No such file or directory");
+}

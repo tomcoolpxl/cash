@@ -27,6 +27,7 @@ use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use cash_core::input::{Dash, Input, InputError};
 use cash_core::{ExecutionResult, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long};
 use clap::Parser;
@@ -1159,6 +1160,9 @@ struct Walker<'a, W: Write, E: Write> {
     stdin: Option<Box<dyn Read>>,
     /// Whether to stop: a Ctrl-C, or `kill` of a background job.
     stop: cash_core::StopToken,
+    /// Opens a device named on the command line as the shell would (`/dev/stdin`,
+    /// `/dev/null`, `/dev/fd/3`): `ExecutionContext::open_input`.
+    open: &'a dyn Fn(&str) -> Result<Input, InputError>,
     trouble: bool,
     success: bool,
 }
@@ -1312,6 +1316,13 @@ impl<W: Write, E: Write> Walker<'_, W, E> {
             return self.search(label, reader, show_name, None);
         }
         let shown = cash_win32::path::render(Path::new(name));
+        // A device's name is no file: the shell's `/dev/stdin`, `/dev/null` and the rest.
+        if cash_win32::devices::dev_name(Path::new(name)).is_some() {
+            return match (self.open)(name) {
+                Ok(input) => self.search(shown, input, show_name, None),
+                Err(error) => self.complain(&shown, &error.reason()),
+            };
+        }
         let metadata = match std::fs::metadata(actual) {
             Ok(metadata) => metadata,
             Err(error) => {
@@ -1656,6 +1667,7 @@ fn search_inputs<SE: cash_core::ShellExtensions>(
         operands: opts.files.len(),
         stdin: Some(Box::new(context.stdin())),
         stop: context.stop_token(),
+        open: &|name| context.open_input(name, Dash::Stdin),
         trouble: false,
         success: false,
     };
