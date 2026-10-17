@@ -12,6 +12,8 @@
 # Regenerate the golden file on Windows, with Scoop's WinRAR and a cash without the
 # builtins, such as 1.10.0, in Brussels' zone:
 #   cash rar_modify.sh > rar_modify.out
+# 1.10.0's stat showed times in UTC whatever TZ said; the two `time 2025-…` lines are
+# Brussels' (11:00 for 10:00Z), as stat has shown them since 1.22.0.
 
 exec </dev/null
 export TZ=Europe/Brussels

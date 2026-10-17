@@ -537,13 +537,13 @@ rc=0
 Processing archive r.rar
 Done
 rc=0
-587 bytes, 1 record, time 2025-03-01 10:00:00
+587 bytes, 1 record, time 2025-03-01 11:00:00
 -- ch -tl -cl
 
 Processing archive r.rar
 Done
 rc=0
-238 bytes, 0 record, time 2025-03-01 10:00:00
+238 bytes, 0 record, time 2025-03-01 11:00:00
 -- a -rr1 n.txt
 
 Evaluation copy. Please register.
