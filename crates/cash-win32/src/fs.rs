@@ -124,6 +124,110 @@ pub struct ListingFacts {
     pub links: u32,
     /// Whether it starts with `#!`, when that was asked.
     pub starts_with_shebang: Option<bool>,
+    /// Its index, change time and allocation, asked of the same handle.
+    pub facts: FileFacts,
+}
+
+/// What `ls` shows of a file beyond [`std::fs::Metadata`]: `-i`'s inode, `-c`'s change time
+/// and `-s`'s blocks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FileFacts {
+    /// Its file index on its volume: the inode number `ls -i` and `stat` show.
+    pub index: u64,
+    /// When its contents, name or attributes last changed: NTFS's `ChangeTime`, which
+    /// Cygwin gives as `st_ctime`, as a `FILETIME` (100 ns since 1601); 0 where the
+    /// volume keeps none.
+    pub change_time: u64,
+    /// The bytes the volume has given it.
+    pub allocation: u64,
+}
+
+/// A file's [`FileFacts`], `None` when it cannot be opened.
+///
+/// Asked by name where Windows can (`GetFileInformationByName`), else of a handle opened
+/// only to read its attributes, which follows a link only when `follow` says so.
+#[must_use]
+pub fn file_facts(path: &Path, follow: bool) -> Option<FileFacts> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES,
+        FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    };
+
+    // Not for a reparse point, which the by-name answer leaves out.
+    if let Some(info) = stat_by_name(path) {
+        return Some(FileFacts {
+            index: u64::from_ne_bytes(info.file_id.to_ne_bytes()),
+            change_time: u64::try_from(info.change_time).unwrap_or(0),
+            allocation: u64::try_from(info.allocation_size).unwrap_or(0),
+        });
+    }
+    let flags = if follow {
+        FILE_FLAG_BACKUP_SEMANTICS
+    } else {
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT
+    };
+    let file = std::fs::OpenOptions::new()
+        .access_mode(FILE_READ_ATTRIBUTES)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .custom_flags(flags)
+        .open(path)
+        .ok()?;
+    let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+    // SAFETY: zeroed struct is valid for BY_HANDLE_FILE_INFORMATION.
+    let mut by_handle: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    // SAFETY: `handle` is open for FILE_READ_ATTRIBUTES; `by_handle` is an out-pointer.
+    let index = if unsafe { GetFileInformationByHandle(handle, &raw mut by_handle) } != 0 {
+        (u64::from(by_handle.nFileIndexHigh) << 32) | u64::from(by_handle.nFileIndexLow)
+    } else {
+        0
+    };
+    Some(facts_of_handle(handle, index))
+}
+
+/// The change time and allocation of an open `handle`, with its already known `index`.
+fn facts_of_handle(handle: windows_sys::Win32::Foundation::HANDLE, index: u64) -> FileFacts {
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_BASIC_INFO, FILE_STANDARD_INFO, FileBasicInfo, FileStandardInfo,
+        GetFileInformationByHandleEx,
+    };
+    // SAFETY: zeroed structs are valid for these plain records.
+    let mut basic: FILE_BASIC_INFO = unsafe { std::mem::zeroed() };
+    // SAFETY: as above.
+    let mut standard: FILE_STANDARD_INFO = unsafe { std::mem::zeroed() };
+    // SAFETY: `handle` is open for FILE_READ_ATTRIBUTES; each record's size is given.
+    let change_time = if unsafe {
+        GetFileInformationByHandleEx(
+            handle,
+            FileBasicInfo,
+            (&raw mut basic).cast(),
+            u32::try_from(size_of::<FILE_BASIC_INFO>()).unwrap_or(0),
+        )
+    } != 0
+    {
+        u64::try_from(basic.ChangeTime).unwrap_or(0)
+    } else {
+        0
+    };
+    // SAFETY: as above.
+    let allocation = if unsafe {
+        GetFileInformationByHandleEx(
+            handle,
+            FileStandardInfo,
+            (&raw mut standard).cast(),
+            u32::try_from(size_of::<FILE_STANDARD_INFO>()).unwrap_or(0),
+        )
+    } != 0
+    {
+        u64::try_from(standard.AllocationSize).unwrap_or(0)
+    } else {
+        0
+    };
+    FileFacts {
+        index,
+        change_time,
+        allocation,
+    }
 }
 
 /// A file's security, hard links and, when `read_start`, whether it starts with `#!`.
@@ -185,11 +289,15 @@ pub fn listing_facts(path: &Path, read_start: bool) -> Option<ListingFacts> {
     // SAFETY: zeroed struct is valid for BY_HANDLE_FILE_INFORMATION.
     let mut by_handle: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
     // SAFETY: `handle` is open for FILE_READ_ATTRIBUTES; `by_handle` is an out-pointer.
-    let links = if unsafe { GetFileInformationByHandle(handle, &raw mut by_handle) } != 0 {
-        by_handle.nNumberOfLinks
+    let (links, index) = if unsafe { GetFileInformationByHandle(handle, &raw mut by_handle) } != 0 {
+        (
+            by_handle.nNumberOfLinks,
+            (u64::from(by_handle.nFileIndexHigh) << 32) | u64::from(by_handle.nFileIndexLow),
+        )
     } else {
-        1
+        (1, 0)
     };
+    let facts = facts_of_handle(handle, index);
 
     let starts_with_shebang = read_start.then(|| {
         let mut magic = [0u8; 2];
@@ -199,6 +307,7 @@ pub fn listing_facts(path: &Path, read_start: bool) -> Option<ListingFacts> {
         security,
         links,
         starts_with_shebang,
+        facts,
     })
 }
 

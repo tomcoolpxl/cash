@@ -32,9 +32,9 @@ The user's picks of 2026-10-17 (decisions.md, "ls takes GNU's remaining options"
 
 1. **Two costs paid on every call**: done (2026-10-17, DONE.md).
 2. **GNU ls options cash's ls has not** (2026-10-17): named as not supported: `-Q`,
-   `-n`, `-s`, `-i`, `-c`, `-u`, `--time`, `-H`, `--quoting-style`, `-b`, `-q`, `-N`,
-   `-k`, `--si`, `--block-size`, `-T`, `--zero`, `--hyperlink`, `-Z`, `--author`, `-D`.
-   The common ones are done (DONE.md). All four groups are wanted: times and sizes,
+   `-n`, `-i`, `-H`, `--quoting-style`, `-b`, `-q`, `-N`, `-T`, `--zero`, `--hyperlink`,
+   `-Z`, `--author`, `-D`. The common ones are done (DONE.md), and the times and sizes
+   (`-c`, `-u`, `--time`, `-s`, `-k`, `--si`, `--block-size`, 2026-10-17). Still wanted:
    name quoting, the script helpers, and the poor fits for Windows.
 3. **`tail -f file | head -1` runs until the file grows** (2026-10-17): uutils checks on
    Linux alone, between polls, whether its standard output still has a reader
@@ -71,6 +71,16 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **`ls -l` moves the access time of a file it reads for `#!`** (2026-10-17, found with
+  `ls -u`): to decide `x`, cash reads the first two bytes of a file of two bytes or more
+  without a program extension, and that read is an access; `ls -lu` then shows its own
+  read. Git Bash's ls does the same (Cygwin reads the start of a file for its execute
+  bit); GNU on Linux never reads a file. Asking the handle not to update the access
+  time (`SetFileTime` with all ones) would keep it, where the handle may write
+  attributes.
+- **`stat`'s blocks are the size's, not the allocation's** (2026-10-17, found with `ls
+  -s`): `%b` is the size in 512-byte blocks, where Git Bash's stat gives the allocation
+  in its 1024-byte units (`%B` 1024): a 5000-byte file is 10 here and 8 there.
 - **The PATH search that checks each extension is slow** (2026-10-17, found with the
   missing-command lookup): `find_executables_in_path` (`pathsearch::search_for_executable`)
   tries every `PATHEXT` extension in every folder, a file check each, about 38 ms on this

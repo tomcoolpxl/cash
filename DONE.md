@@ -1799,3 +1799,20 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
     program given arguments at the prompt saves the same.
   - **coolfetch asks for everything on each run**: looked into, about 30 ms over an empty
     command, once for each new window from the starter `.bashrc`; the user: fine as it is.
+
+- **GNU ls's times and sizes** (the user's pick of 2026-10-17, the first group of the
+  options cash's ls refused): checked against Git Bash's ls (coreutils 8.32) on NTFS and
+  GNU coreutils 9.10 in WSL.
+  - `-c`, `-u` and `--time=WORD` choose the time `-l` shows and `-t` sorts by, and
+    without `-l` sort by it: `-c` is NTFS's change time (contents, name or attributes),
+    which Git Bash shows; `--time` takes GNU 9's words, `mtime` among them.
+  - `-s` shows each entry's blocks, the volume's allocation in whole KiB as Git Bash
+    counts it, in every layout; `-k`, `--si` and `--block-size` (a number, a unit, both,
+    `human-readable`, `si`) and `LS_BLOCK_SIZE`, `BLOCK_SIZE`, `BLOCKSIZE` and
+    `POSIXLY_CORRECT` scale sizes and blocks as GNU's `human_options` does, with GNU's
+    errors.
+  - The totals count allocated blocks, where they counted sizes: a 5000-byte file is 8,
+    not 5; `-h` rounds up as GNU does, so 2,000,000 bytes read `2.0M`, not `1.9M`.
+  - `stat`'s Change is the change time too, where it was the modification time.
+  - The facts come from the open `ls -l` already makes of each file, and otherwise by
+    name (`GetFileInformationByName`, Windows 11 24H2) or an attributes-only open.

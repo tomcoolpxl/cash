@@ -967,3 +967,155 @@ fn help_ls_gives_ls_help_options() {
     let out = cash("help ls | grep -c -- '--time-style=STYLE\\|-L, --dereference'");
     assert_eq!(out.stdout, "2", "{}", out.stderr);
 }
+
+/// Four files: modified in 2020, read in 2021, made now; `plain`, one byte, then made
+/// read-only, which only its change time shows.
+fn sizes_and_times_fixture(name: &str) -> Scratch {
+    let scratch = Scratch::new(name);
+    std::fs::write(scratch.join("plain"), "x").unwrap();
+    std::fs::write(scratch.join("big"), vec![0u8; 5000]).unwrap();
+    std::fs::write(scratch.join("mega"), vec![0u8; 1_000_000]).unwrap();
+    std::fs::write(scratch.join("m2"), vec![0u8; 2_000_000]).unwrap();
+    let modified = std::time::UNIX_EPOCH + std::time::Duration::from_mins(26_500_000);
+    let accessed = std::time::UNIX_EPOCH + std::time::Duration::from_hours(450_000);
+    for name in ["plain", "big", "mega", "m2"] {
+        let file = std::fs::File::options()
+            .write(true)
+            .open(scratch.join(name))
+            .unwrap();
+        file.set_times(
+            std::fs::FileTimes::new()
+                .set_modified(modified)
+                .set_accessed(accessed),
+        )
+        .unwrap();
+    }
+    let mut readonly = std::fs::metadata(scratch.join("plain"))
+        .unwrap()
+        .permissions();
+    readonly.set_readonly(true);
+    std::fs::set_permissions(scratch.join("plain"), readonly).unwrap();
+    scratch
+}
+
+/// Makes the fixture's `plain` writable again, so that the scratch folder can go.
+fn writable_again(scratch: &Scratch) {
+    let mut writable = std::fs::metadata(scratch.join("plain"))
+        .unwrap()
+        .permissions();
+    #[expect(
+        clippy::permissions_set_readonly_false,
+        reason = "the scratch folder is removed after the test, its files with it"
+    )]
+    writable.set_readonly(false);
+    std::fs::set_permissions(scratch.join("plain"), writable).unwrap();
+}
+
+/// `-s`, `-k`, `--block-size`, `--si` and `-h` as GNU ls has them, with the blocks the
+/// volume gives a file (NTFS's 4 KiB clusters, counted in whole KiB as Git Bash shows
+/// them) and the totals counted the same way: checked against Git Bash's ls (coreutils
+/// 8.32) and GNU coreutils 9.10. `-h` rounds up, as GNU does: 2,000,000 bytes read 1.9M.
+#[test]
+fn ls_sizes_and_blocks_as_gnu_ls_has_them() {
+    let scratch = sizes_and_times_fixture("ls-sizes");
+    let out = ls_in(
+        scratch.path(),
+        "ls -s plain big mega; ls -sk big; ls -s --block-size=1 plain big mega; \
+         ls -s --block-size=K plain big mega; ls -s --block-size=KB plain big mega; \
+         ls -sh plain big mega; ls -s --si big mega; ls -sm plain big; \
+         ls -lh big mega m2 | awk '{print $5}'; ls -l --si mega m2 | awk '{print $5}'; \
+         ls -l --block-size=K plain big | awk '{print $5}'; ls -l | head -1; ls -s | head -1",
+    );
+    assert_eq!(
+        out.stdout,
+        [
+            "  8 big",
+            "980 mega",
+            "  1 plain",
+            "8 big",
+            "   8192 big",
+            "1003520 mega",
+            "   1024 plain",
+            "  8K big",
+            "980K mega",
+            "  1K plain",
+            "   9kB big",
+            "1004kB mega",
+            "   2kB plain",
+            "8.0K big",
+            "980K mega",
+            "1.0K plain",
+            "8.2k big",
+            "1.1M mega",
+            "8 big, 1 plain",
+            "4.9K",
+            "2.0M",
+            "977K",
+            "2.0M",
+            "1.0M",
+            "5K",
+            "1K",
+            "total 2945",
+            "total 2945",
+        ]
+        .join("\n"),
+        "{}",
+        out.stderr
+    );
+    for (spec, message) in [
+        ("bogus", "ls: invalid --block-size argument 'bogus'"),
+        ("1Q", "ls: invalid suffix in --block-size argument '1Q'"),
+    ] {
+        let out = ls_in(scratch.path(), &format!("ls --block-size={spec}"));
+        assert_eq!((out.code, out.stderr.as_str()), (2, message));
+    }
+    writable_again(&scratch);
+}
+
+/// `-c` (NTFS's change time, as Git Bash shows it), `-u` and `--time`: the time `-l`
+/// shows and `-t` sorts by, and without `-l` the order, as GNU ls has them.
+#[test]
+fn ls_times_as_gnu_ls_has_them() {
+    let scratch = sizes_and_times_fixture("ls-times-kinds");
+    let out = ls_in(
+        scratch.path(),
+        "ls -l --time-style=+%Y plain | awk '{print $6}'; \
+         ls -lu --time-style=+%Y plain | awk '{print $6}'; \
+         ls -l --time=birth --time-style=+%Y plain | awk '{print $6}'; \
+         ls -lc --time-style=+%Y plain | awk '{print $6}'; \
+         ls -1 -c; ls -lc | awk 'NR > 1 {print $9}'",
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(
+        lines.get(..2),
+        Some(&["2020", "2021"][..]),
+        "{}",
+        out.stdout
+    );
+    // Birth and the change are now, whatever year that is.
+    assert!(
+        lines.get(2).is_some_and(|year| *year > "2025"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(lines.get(2), lines.get(3), "{}", out.stdout);
+    // Without -l, -c sorts by the change time, the read-only one last changed first;
+    // with -l it sorts by name.
+    assert_eq!(lines.get(4), Some(&"plain"), "{}", out.stdout);
+    assert_eq!(
+        lines.get(8..),
+        Some(&["big", "m2", "mega", "plain"][..]),
+        "{}",
+        out.stdout
+    );
+    let out = ls_in(scratch.path(), "ls --time=bogus");
+    assert_eq!(out.code, 1);
+    assert_eq!(
+        out.stderr,
+        "ls: invalid argument 'bogus' for '--time'\n\
+         Valid arguments are:\n  - 'atime', 'access', 'use'\n  - 'ctime', 'status'\n  \
+         - 'mtime', 'modification'\n  - 'birth', 'creation'\n\
+         Try 'ls --help' for more information."
+    );
+    writable_again(&scratch);
+}

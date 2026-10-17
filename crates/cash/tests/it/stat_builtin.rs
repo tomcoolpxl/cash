@@ -176,3 +176,33 @@ fn a_folder_has_an_inode_and_ef_compares_files() {
     ));
     assert_eq!(out, "inode\ndevice\nlinked\nsame-dir\ndifferent");
 }
+
+/// Change is NTFS's change time, of the contents, the name or the attributes, as Git Bash's
+/// stat shows it: a file modified in 2020 and made read-only now changed now. It was the
+/// modification time.
+#[test]
+fn stat_change_is_the_files_change_time() {
+    let scratch = Scratch::new("stat-change");
+    let file = scratch.join("changed.txt");
+    std::fs::write(&file, "x").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_mins(26_500_000))
+        .unwrap();
+    let mut permissions = std::fs::metadata(&file).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&file, permissions.clone()).unwrap();
+    let posix = file.to_string_lossy().replace('\\', "/");
+    let out = cash(&format!("stat -c '%Y %Z' '{posix}'"));
+    #[expect(
+        clippy::permissions_set_readonly_false,
+        reason = "the scratch folder is removed after the test, its files with it"
+    )]
+    permissions.set_readonly(false);
+    std::fs::set_permissions(&file, permissions).unwrap();
+    let (modified, changed) = out.split_once(' ').unwrap();
+    assert_eq!(modified, "1590000000", "{out}");
+    assert!(changed.parse::<u64>().unwrap() > 1_700_000_000, "{out}");
+}

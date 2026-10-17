@@ -341,7 +341,13 @@ impl FileStatInfo {
             (a, m, b)
         };
 
-        let ctime = mtime; // Windows does not have a separate inode change time
+        // NTFS keeps a change time of its own, of the contents, the name or the attributes,
+        // which Git Bash's stat shows as Change, as `ls -c` does; the modification time
+        // where it cannot be read. It was always the modification time.
+        let ctime = cash_win32::fs::file_facts(path, !meta.is_symlink())
+            .map(|facts| facts.change_time)
+            .filter(|&time| time != 0)
+            .map_or(mtime, filetime_to_unix);
 
         Self {
             name,

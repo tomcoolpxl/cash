@@ -37,6 +37,10 @@ List information about the FILEs (the current directory by default).
                                both hidden and system, as Explorer hides them
   -A, --almost-all           like -a, but do not list implied . and ..
   -B, --ignore-backups       do not list implied entries ending with ~
+  -c                         with -lt: sort by, and show, the change time (when
+                               the file's contents, name or attributes last
+                               changed, NTFS's ChangeTime); with -l: show it and
+                               sort by name; otherwise: sort by it, newest first
   -C                         list entries by columns
   -d, --directory            list directories themselves, not their contents
   -F, --classify             append indicator (one of */@) to entries
@@ -46,10 +50,17 @@ List information about the FILEs (the current directory by default).
       --full-time            like -l --time-style=full-iso
   -g                         like -l, but do not list the owner
   -G, --no-group             in a long listing, do not print the group
-  -h, --human-readable       with -l, print sizes like 1K 234M 2G
+  -h, --human-readable       with -l and -s, print sizes like 1K 234M 2G
+      --si                   likewise, but use powers of 1000 not 1024
+      --block-size=SIZE      with -l, scale sizes by SIZE when printing them, and
+                               -s's blocks: a number, a unit (K, M, G, T, P, E;
+                               KB for 1000, KiB for 1024, shown after each size
+                               when there is no number) or both; human-readable,
+                               si; LS_BLOCK_SIZE or BLOCK_SIZE give it otherwise
       --hide=PATTERN         do not list implied entries matching shell PATTERN
                                (overridden by -a or -A)
   -I, --ignore=PATTERN       do not list implied entries matching shell PATTERN
+  -k, --kibibytes            -s's blocks and the totals in 1024 bytes
       --indicator-style=WORD  append an indicator with style WORD to names:
                                none (the default), slash (-p),
                                file-type (--file-type), classify (-F)
@@ -61,8 +72,14 @@ List information about the FILEs (the current directory by default).
                              append / to directories
   -r, --reverse              reverse order while sorting
   -R, --recursive            list subdirectories recursively
+  -s, --size                 print the space each file takes, in blocks
   -S                         sort by file size, largest first
-  -t                         sort by time, newest first
+  -t                         sort by time, newest first; see --time
+      --time=WORD            the time -l shows and -t sorts by: atime, access,
+                               use (-u); ctime, status (-c); mtime, modification
+                               (the default); birth, creation; without -l, any
+                               but mtime sorts by itself
+  -u                         like -c, with the time it was last read
   -U                         do not sort; list entries in directory order
   -v                         natural sort of (version) numbers within text
   -w, --width=COLS           set the output width to COLS; 0 means no limit
@@ -260,6 +277,22 @@ pub(crate) struct LsCommand {
     #[arg(skip)]
     tty: bool,
 
+    /// `-c`, `-u`, `--time`: which of a file's times `-l` shows and `-t` sorts by.
+    #[arg(skip)]
+    time_kind: TimeKind,
+
+    /// `-s`: each entry's blocks before it.
+    #[arg(skip)]
+    show_blocks: bool,
+
+    /// `-k`: blocks of 1024 bytes, whatever `BLOCK_SIZE` says.
+    #[arg(skip)]
+    kibibytes: bool,
+
+    /// `-h`, `--si` or `--block-size`, the last given: how sizes and blocks are shown.
+    #[arg(skip)]
+    scale: Option<Scale>,
+
     /// The words as given, read in `execute`, where `POSIXLY_CORRECT` can be seen.
     #[arg(skip)]
     raw: Vec<String>,
@@ -449,6 +482,10 @@ impl LsCommand {
             dereference: false,
             looped: std::sync::atomic::AtomicBool::new(false),
             tty: false,
+            time_kind: TimeKind::Modification,
+            show_blocks: false,
+            kibibytes: false,
+            scale: None,
             raw: Vec::new(),
             early: None,
         }
@@ -504,7 +541,12 @@ impl LsCommand {
                 "B" => command.ignore_backups = true,
                 "L" => command.dereference = true,
                 "d" => command.directory = true,
-                "h" => command.human_readable = true,
+                "h" | "si" | "block-size" | "k" | "s" | "c" | "u" | "time" => {
+                    if let Err(early) = command.size_or_time_option(id, value) {
+                        command.early = Some(early);
+                        return command;
+                    }
+                }
                 "r" => command.reverse = true,
                 "R" => command.recursive = true,
                 "t" => command.sort_by_time = true,
@@ -609,6 +651,39 @@ impl LsCommand {
         Ok(())
     }
 
+    /// `-h`, `--si`, `--block-size`, `-k` and `-s`: how sizes and blocks are shown; `-c`,
+    /// `-u` and `--time`: which time is.
+    fn size_or_time_option(&mut self, id: &str, value: Option<String>) -> Result<(), Early> {
+        match id {
+            "h" => {
+                self.human_readable = true;
+                self.scale = Some(Scale::Human { base: 1024 });
+            }
+            "si" => self.scale = Some(Scale::Human { base: 1000 }),
+            "block-size" => {
+                self.scale =
+                    Some(parse_block_size(&value.unwrap_or_default()).map_err(Early::Said)?);
+            }
+            "k" => self.kibibytes = true,
+            "s" => self.show_blocks = true,
+            "c" => self.time_kind = TimeKind::Change,
+            "u" => self.time_kind = TimeKind::Access,
+            "time" => {
+                let word = value.unwrap_or_default();
+                self.time_kind = TimeKind::named(&word).ok_or_else(|| {
+                    Early::Argmatch(format!(
+                        "invalid argument '{word}' for '--time'\n\
+                         Valid arguments are:\n  - 'atime', 'access', 'use'\n  \
+                         - 'ctime', 'status'\n  - 'mtime', 'modification'\n  \
+                         - 'birth', 'creation'"
+                    ))
+                })?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// `-p`, `--file-type`, `--indicator-style` and `-F`: the marks after names.
     fn indicator_option(&mut self, id: &str, value: Option<String>) -> Result<(), Early> {
         match id {
@@ -667,7 +742,11 @@ struct ItemInfo {
     owner: String,
     group: String,
     size: u64,
-    mtime: SystemTime,
+    /// The time `-l` shows and `-t` sorts by: its modification time unless `-c`, `-u` or
+    /// `--time` chose another.
+    time: SystemTime,
+    /// The bytes the volume gives it, when `-s`, a total or `-c` asked for its facts.
+    allocation: Option<u64>,
     /// Windows' attribute bits: read-only, hidden, system, archive.
     attributes: u32,
     symlink_target: Option<String>,
@@ -688,6 +767,86 @@ impl ItemInfo {
             self.kind == EntryKind::File && cash_win32::unix::is_executable(&self.path)
         })
     }
+}
+
+/// Which of a file's times `-l` shows and `-t` sorts by.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum TimeKind {
+    #[default]
+    Modification,
+    /// `-u`: when it was last read.
+    Access,
+    /// `-c`: when its contents, name or attributes last changed (NTFS's `ChangeTime`,
+    /// Cygwin's `st_ctime`).
+    Change,
+    /// When it was made.
+    Birth,
+}
+
+impl TimeKind {
+    /// The kind a word of `--time` names, as GNU ls reads them.
+    fn named(word: &str) -> Option<Self> {
+        Some(match word {
+            "atime" | "access" | "use" => Self::Access,
+            "ctime" | "status" => Self::Change,
+            "mtime" | "modification" => Self::Modification,
+            "birth" | "creation" => Self::Birth,
+            _ => return None,
+        })
+    }
+
+    /// This kind of time from what the directory listing brought; the change time, which
+    /// it does not bring, is the modification time until the file's facts are read.
+    fn of(self, metadata: &Metadata) -> SystemTime {
+        match self {
+            Self::Access => metadata.accessed(),
+            Self::Birth => metadata.created(),
+            Self::Modification | Self::Change => metadata.modified(),
+        }
+        .unwrap_or(SystemTime::UNIX_EPOCH)
+    }
+}
+
+/// What an entry is read for: the long format's columns, the time to keep, and the facts
+/// (`cash_win32::fs::FileFacts`) that `-s`, the totals and `-c` need.
+#[derive(Clone, Copy)]
+struct Want {
+    long: bool,
+    time: TimeKind,
+    facts: bool,
+}
+
+/// How sizes and blocks are shown, GNU's `human_options`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Scale {
+    /// In units of `unit` bytes, rounded up, with `suffix` after each number when the size
+    /// was named by its unit alone (`K`, `kB`, `MiB`).
+    Units { unit: u64, suffix: String },
+    /// In as few digits as say it, one decimal under 10, rounded up, in powers of `base`
+    /// (`-h`, `--si`).
+    Human { base: u64 },
+}
+
+impl Scale {
+    const fn units(unit: u64) -> Self {
+        Self::Units {
+            unit,
+            suffix: String::new(),
+        }
+    }
+
+    fn format(&self, bytes: u64) -> String {
+        match self {
+            Self::Units { unit, suffix } => std::format!("{}{suffix}", bytes.div_ceil(*unit)),
+            Self::Human { base } => human_size(bytes, *base),
+        }
+    }
+}
+
+/// The scales of a listing: of the long format's sizes, and of `-s`'s blocks and totals.
+struct Sizes {
+    file: Scale,
+    blocks: Scale,
 }
 
 /// How to order entries.
@@ -714,6 +873,8 @@ struct Look {
     dates: DateFormats,
     /// The width a line may take, none for no limit.
     width: Option<usize>,
+    /// How sizes and blocks are shown.
+    sizes: Sizes,
 }
 
 /// How `-l` shows a time (`--time-style`): a strftime format for a file changed within
@@ -961,7 +1122,7 @@ impl LsCommand {
 
             if self.shown_as_entry(&path) {
                 let followed = self.followed(&path, None);
-                if let Some(item) = inspect_path(&path, path_str, self.long, followed) {
+                if let Some(item) = inspect_path(&path, path_str, self.want(), followed) {
                     file_items.push(item);
                 }
             } else {
@@ -1146,6 +1307,70 @@ impl LsCommand {
             zone: Zone::of_shell(context.shell),
             dates,
             width: self.line_width(context, is_tty),
+            sizes: self.sizes(context),
+        })
+    }
+
+    /// The scales of sizes and blocks, as GNU ls finds them: `-h`, `--si` or
+    /// `--block-size` for both; else `LS_BLOCK_SIZE`, `BLOCK_SIZE` or `BLOCKSIZE` for the
+    /// blocks (512 under `POSIXLY_CORRECT`, else 1024), the first two for the sizes too,
+    /// and `-k` for 1024-byte blocks.
+    fn sizes<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+    ) -> Sizes {
+        if let Some(scale) = &self.scale {
+            return Sizes {
+                file: scale.clone(),
+                blocks: scale.clone(),
+            };
+        }
+        let env = |name: &str| context.shell.env_str(name).map(|value| value.to_string());
+        let ls_block_size = env("LS_BLOCK_SIZE");
+        let block_size = env("BLOCK_SIZE");
+        let spec = ls_block_size
+            .clone()
+            .or_else(|| block_size.clone())
+            .or_else(|| env("BLOCKSIZE"));
+        // A value GNU's human_options refuses leaves the default, as it does.
+        let mut blocks = spec
+            .as_deref()
+            .and_then(|spec| parse_block_size(spec).ok())
+            .unwrap_or_else(|| {
+                Scale::units(if env("POSIXLY_CORRECT").is_some() {
+                    512
+                } else {
+                    1024
+                })
+            });
+        let file = if ls_block_size.is_some() || block_size.is_some() {
+            blocks.clone()
+        } else {
+            Scale::units(1)
+        };
+        if self.kibibytes {
+            blocks = Scale::units(1024);
+        }
+        Sizes { file, blocks }
+    }
+
+    /// What entries are read for.
+    fn want(&self) -> Want {
+        Want {
+            long: self.long,
+            time: self.time_kind,
+            facts: self.long || self.show_blocks || self.time_kind == TimeKind::Change,
+        }
+    }
+
+    /// The width of `-s`'s blocks among `items`, for padding; `None` without `-s`.
+    fn blocks_width(&self, items: &[ItemInfo], look: &Look) -> Option<usize> {
+        self.show_blocks.then(|| {
+            items
+                .iter()
+                .map(|item| look.sizes.blocks.format(block_bytes(item)).len())
+                .max()
+                .unwrap_or(1)
         })
     }
 
@@ -1223,6 +1448,9 @@ impl LsCommand {
             SortKey::Extension
         } else if self.sort_by_version {
             SortKey::Version
+        } else if !self.long && self.time_kind != TimeKind::Modification {
+            // `-c`, `-u` or another `--time` without `-l` sorts by that time, as in GNU ls.
+            SortKey::Time
         } else {
             SortKey::Name
         })
@@ -1233,7 +1461,7 @@ impl LsCommand {
         if key != SortKey::None {
             items.sort_by(|a, b| {
                 let cmp = match key {
-                    SortKey::Time => b.mtime.cmp(&a.mtime),
+                    SortKey::Time => b.time.cmp(&a.time),
                     SortKey::Size => b.size.cmp(&a.size),
                     SortKey::Extension => extension_of(&a.name)
                         .to_lowercase()
@@ -1268,13 +1496,13 @@ impl LsCommand {
         // Include . and .. if -a is set, unless a pattern of -I leaves them out.
         if self.all && dots {
             if !self.ignored(".")
-                && let Some(dot) = inspect_dot(dir_path, ".", self.long)
+                && let Some(dot) = inspect_dot(dir_path, ".", self.want())
             {
                 items.push(dot);
             }
             let parent = dir_path.parent().unwrap_or(dir_path);
             if !self.ignored("..")
-                && let Some(dotdot) = inspect_dot(parent, "..", self.long)
+                && let Some(dotdot) = inspect_dot(parent, "..", self.want())
             {
                 items.push(dotdot);
             }
@@ -1302,7 +1530,7 @@ impl LsCommand {
 
             let entry_path = entry.path();
             let known = self.followed(&entry_path, known);
-            if let Some(item) = inspect_path(&entry_path, &file_name, self.long, known) {
+            if let Some(item) = inspect_path(&entry_path, &file_name, self.want(), known) {
                 items.push(item);
             }
         }
@@ -1330,10 +1558,11 @@ impl LsCommand {
         is_tty: bool,
         level: usize,
     ) -> Result<bool, std::io::Error> {
-        // In long format, print total blocks at top of directory listing.
-        if self.long {
-            let total_kb: u64 = items.iter().map(|item| item.size.div_ceil(1024)).sum();
-            writeln!(out, "total {total_kb}")?;
+        // The blocks the directory's entries take, in the long format and with -s, as GNU
+        // ls counts them: their allocations, where it counted their sizes.
+        if self.long || self.show_blocks {
+            let total: u64 = items.iter().map(block_bytes).sum();
+            writeln!(out, "total {}", look.sizes.blocks.format(total))?;
         }
 
         self.render_items(out, items, look, is_tty)?;
@@ -1405,7 +1634,7 @@ impl LsCommand {
         look: &Look,
     ) -> Result<Vec<(String, std::io::Error, bool)>, std::io::Error> {
         let mut rows: Vec<(String, ItemInfo)> = Vec::new();
-        if let Some(root) = inspect_path(dir_path, dir_str, self.long, None) {
+        if let Some(root) = inspect_path(dir_path, dir_str, self.want(), None) {
             rows.push((String::new(), root));
         }
         let mut unopened = Vec::new();
@@ -1418,8 +1647,21 @@ impl LsCommand {
                 .unzip();
             self.render_long(out, &items, look, Some(&prefixes))?;
         } else {
+            let items: Vec<&ItemInfo> = rows.iter().map(|(_, item)| item).collect();
+            let width = self.show_blocks.then(|| {
+                items
+                    .iter()
+                    .map(|item| look.sizes.blocks.format(block_bytes(item)).len())
+                    .max()
+                    .unwrap_or(1)
+            });
             for (prefix, item) in &rows {
-                writeln!(out, "{prefix}{}", self.format_name(item, look))?;
+                writeln!(
+                    out,
+                    "{}{prefix}{}",
+                    fields(item, look, width),
+                    self.format_name(item, look)
+                )?;
             }
         }
         Ok(unopened)
@@ -1513,17 +1755,16 @@ impl LsCommand {
         let size_text = |item: &ItemInfo| {
             if let Some((major, minor)) = item.device {
                 std::format!("{major}, {minor}")
-            } else if self.human_readable {
-                format_human_size(item.size)
             } else {
-                item.size.to_string()
+                look.sizes.file.format(item.size)
             }
         };
         let max_size_len = items.iter().map(|i| size_text(i).len()).max().unwrap_or(1);
+        let blocks_width = self.blocks_width(items, look);
 
         for (index, item) in items.iter().enumerate() {
             let size_str = size_text(item);
-            let date_str = format_date(item.mtime, look);
+            let date_str = format_date(item.time, look);
             let display_name = self.format_name(item, look);
             let prefix = prefixes
                 .and_then(|prefixes| prefixes.get(index))
@@ -1549,13 +1790,17 @@ impl LsCommand {
                     paint(owner_colour(&item.owner, me), &owner),
                     paint(owner_colour(&item.group, me), &group),
                     paint(size_colour(item.size), &size),
-                    paint(date_colour(item.mtime), &date_str),
+                    paint(date_colour(item.time), &date_str),
                 )
             } else {
                 (owner, group, size, date_str)
             };
             // -g leaves the owner out, -o and -G the group.
-            let mut line = std::format!("{permissions} {:>max_links_len$} ", links[index]);
+            let mut line = std::format!(
+                "{}{permissions} {:>max_links_len$} ",
+                fields(item, look, blocks_width),
+                links[index]
+            );
             if !self.no_owner {
                 line.push_str(&owner);
                 line.push(' ');
@@ -1576,9 +1821,10 @@ impl LsCommand {
         items: &[ItemInfo],
         look: &Look,
     ) -> Result<(), std::io::Error> {
+        let width = self.blocks_width(items, look);
         for item in items {
             let display_name = self.format_name(item, look);
-            writeln!(out, "{display_name}")?;
+            writeln!(out, "{}{display_name}", fields(item, look, width))?;
         }
         Ok(())
     }
@@ -1596,12 +1842,14 @@ impl LsCommand {
     ) -> Result<(), std::io::Error> {
         // Columns are measured in the cells a name takes on screen, not its bytes: an
         // icon, an accented letter or a CJK name is one or two cells whatever its length.
+        let blocks_width = self.blocks_width(items, look);
         let names: Vec<(usize, String)> = items
             .iter()
             .map(|i| {
+                let fields = fields(i, look, blocks_width);
                 (
-                    self.format_name_plain(i, look).width(),
-                    self.format_name(i, look),
+                    fields.len() + self.format_name_plain(i, look).width(),
+                    fields + &self.format_name(i, look),
                 )
             })
             .collect();
@@ -1657,8 +1905,11 @@ impl LsCommand {
     ) -> Result<(), std::io::Error> {
         let mut text = String::new();
         let mut position = 0;
+        // -m pads no blocks.
+        let blocks_width = self.show_blocks.then_some(0);
         for (index, item) in items.iter().enumerate() {
-            let length = self.format_name_plain(item, look).width();
+            let fields = fields(item, look, blocks_width);
+            let length = fields.len() + self.format_name_plain(item, look).width();
             if index > 0 {
                 text.push(',');
                 if look.width.is_none_or(|width| position + length + 2 < width) {
@@ -1669,6 +1920,7 @@ impl LsCommand {
                     position = 0;
                 }
             }
+            text.push_str(&fields);
             text.push_str(&self.format_name(item, look));
             position += length;
         }
@@ -2053,9 +2305,8 @@ fn attribute_letters(item: &ItemInfo) -> String {
     .collect()
 }
 
-fn inspect_dot(dir_path: &Path, name: &str, long: bool) -> Option<ItemInfo> {
+fn inspect_dot(dir_path: &Path, name: &str, want: Want) -> Option<ItemInfo> {
     let metadata = std::fs::metadata(dir_path).ok()?;
-    let mtime = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
 
     let mut item = ItemInfo {
         name: name.to_string(),
@@ -2066,7 +2317,8 @@ fn inspect_dot(dir_path: &Path, name: &str, long: bool) -> Option<ItemInfo> {
         owner: String::new(),
         group: String::new(),
         size: metadata.len(),
-        mtime,
+        time: want.time.of(&metadata),
+        allocation: None,
         attributes: attributes_of(&metadata),
         symlink_target: None,
         target: None,
@@ -2074,12 +2326,56 @@ fn inspect_dot(dir_path: &Path, name: &str, long: bool) -> Option<ItemInfo> {
         device: None,
         target_mark: None,
     };
-    if long {
+    if want.long {
         // A folder's link count is 1, as Git Bash shows it (`file_link_count`).
         item.links = 1;
         fill_long(&mut item, &metadata);
     }
+    if want.facts {
+        take_facts(&mut item, cash_win32::fs::file_facts(dir_path, true), want);
+    }
     Some(item)
+}
+
+/// What [`cash_win32::fs::FileFacts`] add to an entry: its allocation, and the change time
+/// when that is the time kept.
+fn take_facts(item: &mut ItemInfo, facts: Option<cash_win32::fs::FileFacts>, want: Want) {
+    let Some(facts) = facts else {
+        return;
+    };
+    item.allocation = Some(facts.allocation);
+    if want.time == TimeKind::Change && facts.change_time != 0 {
+        item.time = filetime_to_system(facts.change_time);
+    }
+}
+
+/// What comes before an entry's name: its blocks under `-s`, padded to `width`, as GNU
+/// ls writes them (`-m` pads nothing).
+fn fields(item: &ItemInfo, look: &Look, width: Option<usize>) -> String {
+    width.map_or_else(String::new, |width| {
+        std::format!("{:>width$} ", look.sizes.blocks.format(block_bytes(item)))
+    })
+}
+
+/// A `FILETIME`, 100 ns since 1601, as a [`SystemTime`].
+fn filetime_to_system(filetime: u64) -> SystemTime {
+    // 100-ns intervals between 1601-01-01 and 1970-01-01.
+    const UNIX_EPOCH_FILETIME: u64 = 116_444_736_000_000_000;
+    SystemTime::UNIX_EPOCH
+        + std::time::Duration::from_nanos(
+            filetime
+                .saturating_sub(UNIX_EPOCH_FILETIME)
+                .saturating_mul(100),
+        )
+}
+
+/// The bytes `-s` and the totals count for an entry: its allocation, else its size, in
+/// whole KiB, as Cygwin gives `st_blocks` and so Git Bash's `ls -s` shows them.
+fn block_bytes(item: &ItemInfo) -> u64 {
+    item.allocation
+        .unwrap_or(item.size)
+        .div_ceil(1024)
+        .saturating_mul(1024)
 }
 
 /// The entry for a `/dev` name (D7), as Git Bash 5.3 lists it: a device as a character
@@ -2101,7 +2397,8 @@ fn dev_entry<SE: cash_core::ShellExtensions>(
         owner: cash_win32::fs::current_user(),
         group: cash_win32::fs::current_user(),
         size: 0,
-        mtime: SystemTime::now(),
+        time: SystemTime::now(),
+        allocation: Some(0),
         attributes: 0,
         symlink_target: None,
         target: None,
@@ -2129,7 +2426,7 @@ fn dev_entry<SE: cash_core::ShellExtensions>(
 fn inspect_path(
     path: &Path,
     display_name: &str,
-    long: bool,
+    want: Want,
     known: Option<Metadata>,
 ) -> Option<ItemInfo> {
     let symlink_metadata = match known {
@@ -2167,9 +2464,8 @@ fn inspect_path(
         owner: String::new(),
         group: String::new(),
         size: symlink_metadata.len(),
-        mtime: symlink_metadata
-            .modified()
-            .unwrap_or(SystemTime::UNIX_EPOCH),
+        time: want.time.of(&symlink_metadata),
+        allocation: None,
         attributes: attributes_of(&symlink_metadata),
         symlink_target,
         target,
@@ -2177,7 +2473,8 @@ fn inspect_path(
         device: None,
         target_mark: None,
     };
-    if long {
+    let mut facts_taken = false;
+    if want.long {
         // One open of the file for its security, links and first bytes (a link keeps
         // the separate asks, which read the link itself where they should).
         let facts = (kind != EntryKind::Symlink).then(|| {
@@ -2198,11 +2495,21 @@ fn inspect_path(
                     || facts.starts_with_shebang == Some(true);
                 let _ = item.executable.set(executable);
             }
+            take_facts(&mut item, Some(facts.facts), want);
+            facts_taken = true;
             fill_long_from(&mut item, &symlink_metadata, facts.security);
         } else {
             item.links = cash_win32::fs::file_link_count(path, &symlink_metadata);
             fill_long(&mut item, &symlink_metadata);
         }
+    }
+    if want.facts && !facts_taken {
+        // A link's own facts, unless -L went through it.
+        take_facts(
+            &mut item,
+            cash_win32::fs::file_facts(path, !is_symlink),
+            want,
+        );
     }
     Some(item)
 }
@@ -2248,45 +2555,139 @@ fn format_permissions(item: &ItemInfo, metadata: &Metadata, writable: Option<boo
     mode_string(kind.type_bits() | bits)
 }
 
-fn format_human_size(bytes: u64) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = 1024 * KB;
-    const GB: u64 = 1024 * MB;
-    const TB: u64 = 1024 * GB;
-
-    if bytes < KB {
+/// `bytes` in as few digits as say it, as GNU's `human_readable` writes them for `-h`
+/// (`base` 1024) and `--si` (1000): one decimal under 10, and rounded up, so a size never
+/// reads smaller than it is. Rounded to the nearest, 2,000,000 bytes read `1.9M`.
+fn human_size(bytes: u64, base: u64) -> String {
+    const LETTERS: [char; 8] = ['K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
+    if bytes < base {
         return bytes.to_string();
     }
-
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "byte counts this large do not lose visible precision in 2-4 digits"
-    )]
-    if bytes < MB {
-        let val = bytes as f64 / KB as f64;
-        if val < 10.0 {
-            format!("{val:.1}K")
-        } else {
-            format!("{:.0}K", val.round())
-        }
-    } else if bytes < GB {
-        let val = bytes as f64 / MB as f64;
-        if val < 10.0 {
-            format!("{val:.1}M")
-        } else {
-            format!("{:.0}M", val.round())
-        }
-    } else if bytes < TB {
-        let val = bytes as f64 / GB as f64;
-        if val < 10.0 {
-            format!("{val:.1}G")
-        } else {
-            format!("{:.0}G", val.round())
-        }
-    } else {
-        let val = bytes as f64 / TB as f64;
-        format!("{val:.1}T")
+    let mut power = 1;
+    let mut divisor = u128::from(base);
+    while u128::from(bytes) / divisor >= u128::from(base) && power < LETTERS.len() {
+        power += 1;
+        divisor *= u128::from(base);
     }
+    loop {
+        let letter = if base == 1000 && power == 1 {
+            'k'
+        } else {
+            LETTERS.get(power - 1).copied().unwrap_or('Y')
+        };
+        let tenths = (u128::from(bytes) * 10).div_ceil(divisor);
+        if tenths < 100 {
+            return std::format!("{}.{}{letter}", tenths / 10, tenths % 10);
+        }
+        let whole = u128::from(bytes).div_ceil(divisor);
+        if whole < u128::from(base) || power == LETTERS.len() {
+            return std::format!("{whole}{letter}");
+        }
+        power += 1;
+        divisor *= u128::from(base);
+    }
+}
+
+/// `--block-size`'s value (and `BLOCK_SIZE`'s), as GNU's `human_options` reads it: a leading
+/// `'` (grouping, nothing in the C locale), `human-readable`, `si`, or a number (decimal,
+/// `0x` hex, `0` octal) and a unit `K` to `Y`, of 1024, or with `B` (or `D`) of 1000, or
+/// `iB` of 1024. A unit with no number is shown after each size. The error is GNU's words.
+fn parse_block_size(spec: &str) -> Result<Scale, String> {
+    let invalid = || std::format!("invalid --block-size argument '{spec}'");
+    let invalid_suffix = || std::format!("invalid suffix in --block-size argument '{spec}'");
+    let too_large = || std::format!("--block-size argument '{spec}' too large");
+    let text = spec.strip_prefix('\'').unwrap_or(spec);
+    match text {
+        "human-readable" => return Ok(Scale::Human { base: 1024 }),
+        "si" => return Ok(Scale::Human { base: 1000 }),
+        _ => {}
+    }
+    if text.trim_start().starts_with('-') {
+        return Err(invalid());
+    }
+    let (radix, start) = if text.len() > 2
+        && (text.starts_with("0x") || text.starts_with("0X"))
+        && text.as_bytes().get(2).is_some_and(u8::is_ascii_hexdigit)
+    {
+        (16, 2)
+    } else if text.len() > 1 && text.starts_with('0') {
+        (8, 1)
+    } else {
+        (10, 0)
+    };
+    let after_prefix = text.get(start..).unwrap_or_default();
+    let digits_len = after_prefix
+        .find(|c: char| !c.is_digit(radix))
+        .unwrap_or(after_prefix.len());
+    let digits = after_prefix.get(..digits_len).unwrap_or_default();
+    let rest = after_prefix.get(digits_len..).unwrap_or_default();
+    let number = if digits.is_empty() {
+        // `0x` with nothing after, or the leading `0` of an octal number alone.
+        (start > 0).then_some(0)
+    } else {
+        Some(u64::from_str_radix(digits, radix).map_err(|_| too_large())?)
+    };
+
+    let (multiplier, suffix) = if rest.is_empty() {
+        (1_u64, String::new())
+    } else {
+        let mut chars = rest.chars();
+        let letter = chars.next().unwrap_or_default();
+        let power: u32 = match letter.to_ascii_uppercase() {
+            'K' => 1,
+            'M' => 2,
+            'G' => 3,
+            'T' => 4,
+            'P' => 5,
+            'E' => 6,
+            'Z' => 7,
+            'Y' => 8,
+            _ if number.is_none() => return Err(invalid()),
+            _ => return Err(invalid_suffix()),
+        };
+        let tail = chars.as_str();
+        let (base, b) = match tail {
+            "" => (1024_u64, false),
+            "B" => (1000, true),
+            "D" => (1000, false),
+            "iB" => (1024, true),
+            _ => return Err(invalid_suffix()),
+        };
+        let multiplier = base.checked_pow(power).ok_or_else(too_large)?;
+        // GNU shows the unit as `human_readable` writes one: K for 1024, k for 1000, and
+        // B, after an i for 1024, when the unit had one.
+        let base_1024 = !b || tail == "iB";
+        let shown = if base_1024 || power > 1 {
+            letter.to_ascii_uppercase()
+        } else {
+            'k'
+        };
+        let mut suffix = shown.to_string();
+        if b {
+            if base_1024 {
+                suffix.push('i');
+            }
+            suffix.push('B');
+        }
+        (multiplier, suffix)
+    };
+    let unit = match number {
+        Some(number) => number.checked_mul(multiplier).ok_or_else(too_large)?,
+        None if !rest.is_empty() => multiplier,
+        None => return Err(invalid()),
+    };
+    if unit == 0 {
+        return Err(invalid());
+    }
+    Ok(Scale::Units {
+        unit,
+        // A number given with the unit shows none.
+        suffix: if number.is_some() {
+            String::new()
+        } else {
+            suffix
+        },
+    })
 }
 
 /// `-l`'s time of a file, in the zone and the style `look` has: the recent format within
@@ -2420,5 +2821,71 @@ mod tests {
         let colors = lscolors::LsColors::from_string(&default_ls_colors());
         assert!(colors.style_for_str("backup.zip").is_some());
         assert!(colors.style_for_str("notes.txt").is_none());
+    }
+    #[test]
+    fn block_sizes_are_read_as_gnu_ls_reads_them() {
+        // GNU coreutils 9.10's answers.
+        let units = |unit: u64, suffix: &str| {
+            Ok(Scale::Units {
+                unit,
+                suffix: suffix.to_owned(),
+            })
+        };
+        for (spec, scale) in [
+            ("1", units(1, "")),
+            ("K", units(1024, "K")),
+            ("k", units(1024, "K")),
+            ("1K", units(1024, "")),
+            ("KB", units(1000, "kB")),
+            ("kB", units(1000, "kB")),
+            ("MB", units(1_000_000, "MB")),
+            ("KiB", units(1024, "KiB")),
+            ("MiB", units(1_048_576, "MiB")),
+            ("M", units(1_048_576, "M")),
+            ("1000", units(1000, "")),
+            ("'1", units(1, "")),
+            ("0x10", units(16, "")),
+            ("010", units(8, "")),
+            ("human-readable", Ok(Scale::Human { base: 1024 })),
+            ("si", Ok(Scale::Human { base: 1000 })),
+        ] {
+            assert_eq!(parse_block_size(spec), scale, "--block-size={spec}");
+        }
+        for (spec, message) in [
+            ("nonsense", "invalid --block-size argument 'nonsense'"),
+            ("0", "invalid --block-size argument '0'"),
+            ("-1", "invalid --block-size argument '-1'"),
+            ("", "invalid --block-size argument ''"),
+            ("1Q", "invalid suffix in --block-size argument '1Q'"),
+            ("1Kx", "invalid suffix in --block-size argument '1Kx'"),
+            ("Z", "--block-size argument 'Z' too large"),
+        ] {
+            assert_eq!(
+                parse_block_size(spec),
+                Err(message.to_owned()),
+                "--block-size={spec}"
+            );
+        }
+    }
+
+    #[test]
+    fn human_sizes_round_up_as_gnu_ls_does() {
+        for (bytes, base, shown) in [
+            (1, 1024, "1"),
+            (1023, 1024, "1023"),
+            (1024, 1024, "1.0K"),
+            (1500, 1024, "1.5K"),
+            (5000, 1024, "4.9K"),
+            (10_239, 1024, "10K"),
+            (1_000_000, 1024, "977K"),
+            (1_003_520, 1024, "980K"),
+            (1_048_576, 1024, "1.0M"),
+            (2_000_000, 1024, "2.0M"),
+            (999, 1000, "999"),
+            (4096, 1000, "4.1k"),
+            (2_002_944, 1000, "2.1M"),
+        ] {
+            assert_eq!(human_size(bytes, base), shown, "{bytes} in {base}s");
+        }
     }
 }
