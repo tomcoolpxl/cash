@@ -83,9 +83,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   `-n`, `-s`, `-i`, `-c`, `-u`, `--time`, `-H`, `--quoting-style`, `-b`, `-q`, `-N`,
   `-k`, `--si`, `--block-size`, `-T`, `--zero`, `--hyperlink`, `-Z`, `--author`, `-D`.
   The common ones are done (DONE.md).
-- **ls's words for a bad `--color` or `--classify`** (2026-10-17): `Valid arguments
-  are: 'always', 'auto', 'never'`, status 2, where GNU's ls lists them three to a line
-  (`'always', 'yes', 'force'` and so on), status 1, as cash's `--format` now does.
 - **Work done again on every call, from the 2026-10-16 survey** (after `ls` was found
   re-reading Windows Terminal's settings per listing; the session facts now have one
   place, `cash_win32::facts`). Still worked out each time:

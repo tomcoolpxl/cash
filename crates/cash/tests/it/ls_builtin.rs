@@ -315,7 +315,7 @@ fn ls_icons_show_when_asked_and_stay_out_of_pipes() {
     assert_eq!(out.stdout, "b.txt");
 
     let out = cash("ls --icons=maybe");
-    assert_eq!(out.code, 2);
+    assert_eq!(out.code, 1);
     assert!(
         out.stderr
             .contains("invalid argument 'maybe' for '--icons'"),
@@ -444,7 +444,7 @@ fn ls_sorts_by_extension_version_none_and_groups_directories() {
     assert_eq!(out.code, 0, "{}", out.stderr);
 
     let out = cash("ls --sort=bogus");
-    assert_eq!(out.code, 2);
+    assert_eq!(out.code, 1);
     assert!(
         out.stderr.contains("invalid argument 'bogus' for '--sort'"),
         "{}",
@@ -903,6 +903,29 @@ fn ls_refuses_a_bad_value_as_gnu_ls_does() {
     );
     let out = ls_in(scratch.path(), "ls --indicator-style=bogus");
     assert_eq!(out.code, 1, "{}", out.stderr);
+    // `--color` and `--classify` list the words that mean the same on a line, as GNU's
+    // argmatch does, and end with 1: they said one line of three words and ended with 2.
+    for option in ["color", "classify"] {
+        let out = ls_in(scratch.path(), &format!("ls --{option}=bogus"));
+        assert_eq!(out.code, 1, "{option}");
+        assert_eq!(
+            out.stderr,
+            format!(
+                "ls: invalid argument 'bogus' for '--{option}'\n\
+                 Valid arguments are:\n  - 'always', 'yes', 'force'\n  - 'never', 'no', 'none'\n  \
+                 - 'auto', 'tty', 'if-tty'\n\
+                 Try 'ls --help' for more information."
+            )
+        );
+    }
+    let out = ls_in(scratch.path(), "ls --sort=bogus");
+    assert_eq!(out.code, 1);
+    assert!(
+        out.stderr
+            .contains("Valid arguments are:\n  - 'none'\n  - 'name'\n  - 'time'\n"),
+        "{}",
+        out.stderr
+    );
     let out = ls_in(scratch.path(), "ls -w abc");
     assert_eq!(out.code, 2);
     assert_eq!(out.stderr, "ls: invalid line width: 'abc'");

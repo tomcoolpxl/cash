@@ -641,12 +641,7 @@ impl LsCommand {
                     self.indicator = Indicator::Classify;
                     self.classify_auto = true;
                 }
-                Some(other) => {
-                    return Err(Early::Usage(format!(
-                        "invalid argument '{other}' for '--classify'\n\
-                             Valid arguments are: 'always', 'auto', 'never'"
-                    )));
-                }
+                Some(other) => return Err(Early::Argmatch(when_refused(other, "classify"))),
             },
             _ => {}
         }
@@ -770,16 +765,43 @@ fn date_formats(style: Option<&str>) -> Result<DateFormats, Invalid> {
             old: "%Y-%m-%d ".to_owned(),
         }),
         "locale" => Ok(DateFormats::default()),
-        _ => Err(Invalid(format!(
-            "invalid argument '{style}' for 'time style'\n\
+        _ => Err(Invalid::status(
+            2,
+            format!(
+                "invalid argument '{style}' for 'time style'\n\
              Valid arguments are:\n  - [posix-]full-iso\n  - [posix-]long-iso\n  \
              - [posix-]iso\n  - [posix-]locale\n  - +FORMAT (e.g., +%H:%M) for a 'date'-style format"
-        ))),
+            ),
+        )),
     }
 }
 
-/// A command line `ls` refuses, with its message.
-struct Invalid(String);
+/// A command line `ls` refuses, with its message and the status it ends with.
+struct Invalid {
+    message: String,
+    status: u8,
+}
+
+impl Invalid {
+    /// A value GNU's `argmatch` refuses: its list of the values, and the status 1.
+    const fn argmatch(message: String) -> Self {
+        Self { message, status: 1 }
+    }
+
+    const fn status(status: u8, message: String) -> Self {
+        Self { message, status }
+    }
+}
+
+/// GNU's words for a `WHEN` it does not know (`--color`, `--classify`, `--hyperlink`),
+/// each value with the ones that mean the same on a line.
+fn when_refused(value: &str, option: &str) -> String {
+    std::format!(
+        "invalid argument '{value}' for '--{option}'\n\
+         Valid arguments are:\n  - 'always', 'yes', 'force'\n  - 'never', 'no', 'none'\n  \
+         - 'auto', 'tty', 'if-tty'"
+    )
+}
 
 fn when(value: Option<&str>, option: &str, is_tty: bool) -> Result<bool, Invalid> {
     match value {
@@ -787,10 +809,7 @@ fn when(value: Option<&str>, option: &str, is_tty: bool) -> Result<bool, Invalid
         Some("always" | "yes" | "force") => Ok(true),
         Some("never" | "no" | "none") => Ok(false),
         Some("auto" | "tty" | "if-tty") => Ok(is_tty),
-        Some(other) => Err(Invalid(std::format!(
-            "invalid argument '{other}' for '--{option}'\n\
-             Valid arguments are: 'always', 'auto', 'never'"
-        ))),
+        Some(other) => Err(Invalid::argmatch(when_refused(other, option))),
     }
 }
 
@@ -883,14 +902,14 @@ impl LsCommand {
         let is_tty = self.tty;
         let look = match self.look(&context, is_tty) {
             Ok(look) => look,
-            Err(Invalid(message)) => {
+            Err(Invalid { message, status }) => {
                 writeln!(context.stderr(), "{}: {message}", context.command_name)?;
                 writeln!(
                     context.stderr(),
                     "Try '{} --help' for more information.",
                     context.command_name
                 )?;
-                return Ok(ExecutionResult::new(2));
+                return Ok(ExecutionResult::new(status));
             }
         };
 
@@ -1088,10 +1107,13 @@ impl LsCommand {
             None | Some("auto") => asked && terminal_font_is_nerd(context),
             Some("fancy") => asked,
             Some(other) => {
-                return Err(Invalid(std::format!(
-                    "invalid argument '{other}' for '--icons-theme'\n\
+                return Err(Invalid::status(
+                    2,
+                    std::format!(
+                        "invalid argument '{other}' for '--icons-theme'\n\
                      Valid arguments are: 'auto', 'fancy'"
-                )));
+                    ),
+                ));
             }
         };
         self.sort_key()?;
@@ -1184,9 +1206,10 @@ impl LsCommand {
                 "time" => Ok(SortKey::Time),
                 "version" => Ok(SortKey::Version),
                 "extension" => Ok(SortKey::Extension),
-                other => Err(Invalid(std::format!(
+                other => Err(Invalid::argmatch(std::format!(
                     "invalid argument '{other}' for '--sort'\n\
-                     Valid arguments are: 'name', 'none', 'size', 'time', 'version', 'extension'"
+                     Valid arguments are:\n  - 'none'\n  - 'name'\n  - 'time'\n  - 'size'\n  \
+                     - 'extension'\n  - 'version'"
                 ))),
             };
         }

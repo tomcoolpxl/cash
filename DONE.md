@@ -1687,3 +1687,9 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   `read` on a closed standard input says `0: read error: Bad file descriptor`, and
   `mapfile` reads nothing from it and succeeds, as Bash's do; "invalid file descriptor"
   is kept for a descriptor `-u` names. Checked against Git Bash's bash.
+
+- **ls's words for a bad `--color`, `--classify` or `--sort`** (found and done
+  2026-10-17): one line of words and status 2, where GNU's ls lists the values a line
+  for each group that means the same (`'always', 'yes', 'force'` and so on), with a
+  `Try` line and status 1, as cash's `--format` already did. `--icons`, cash's own,
+  says it as GNU's `--hyperlink` does. Checked against Git Bash's ls.
