@@ -502,7 +502,13 @@ struct InputReader {
     pending: VecDeque<char>,
     /// Whether control bytes should have terminal meanings instead of being data.
     input_is_terminal: bool,
+    /// Whether the input is a file on a disk, read a block at a time, what was read ahead
+    /// of the line given back when the read ends (`Drop`).
+    reads_ahead: bool,
 }
+
+/// How much of a file on a disk `read` takes at a time, as Bash's does.
+const READ_AHEAD: usize = 4096;
 
 /// Events that can occur when reading input.
 enum InputEvent {
@@ -543,12 +549,20 @@ enum EditingKey {
 impl InputReader {
     /// Creates a new input reader, which waits for input until `deadline` if there is one.
     fn new(input: cash_core::openfiles::OpenFile, deadline: Option<Instant>) -> Self {
-        let input_is_terminal = input.is_terminal();
+        // A file on a disk is read a block at a time and what was read past the line given
+        // back, as Bash's `read` does with `lseek`: a byte at a time it cost a system call a
+        // byte, `while read` over a file twice Bash's time. A pipe or a console is still
+        // read a byte at a time, which is all `read` may take of what others read next. A
+        // file on a disk is no console, which is then not asked.
+        let reads_ahead = input.is_disk_file();
+        let input_is_terminal = !reads_ahead && input.is_terminal();
+        let capacity = if reads_ahead { READ_AHEAD } else { 1 };
         Self {
-            input: std::io::BufReader::with_capacity(1, PolledInput { input, deadline }),
+            input: std::io::BufReader::with_capacity(capacity, PolledInput { input, deadline }),
             console: None,
             pending: VecDeque::new(),
             input_is_terminal,
+            reads_ahead,
         }
     }
 
@@ -687,12 +701,25 @@ impl InputReader {
     }
 }
 
-/// Reads the input file one byte at a time, enforcing the deadline on every byte.
+impl Drop for InputReader {
+    /// Gives back what was read ahead of the line in a file on a disk, the bytes of a
+    /// broken sequence still owed among them, so that whatever reads next goes on from
+    /// the end of the line: `{ read -r a; cat; } < file`.
+    fn drop(&mut self) {
+        let ahead = self.input.buffer().len() + self.pending.len();
+        if self.reads_ahead && ahead > 0 {
+            let _ = self.input.get_ref().input.move_back(ahead);
+        }
+    }
+}
+
+/// Reads the input file, enforcing the deadline on every read.
 ///
-/// Wrapped in a 1-byte `BufReader`, which gives us both the pushback a byte that turns
-/// out not to belong to the current UTF-8 sequence needs, and the guarantee that `read`
-/// never consumes more of the descriptor than it asked for -- whatever runs next may
-/// want the rest.
+/// Wrapped in a `BufReader`, which gives us the pushback a byte that turns out not to
+/// belong to the current UTF-8 sequence needs. Of a pipe or a console it holds one byte,
+/// the guarantee that `read` never consumes more of the descriptor than it asked for --
+/// whatever runs next may want the rest; of a file on a disk a block, given back
+/// ([`InputReader`]'s `Drop`).
 struct PolledInput {
     /// The input source.
     input: cash_core::openfiles::OpenFile,

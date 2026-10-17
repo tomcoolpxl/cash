@@ -1463,3 +1463,32 @@ fn detach_starts_background_process() {
     assert_eq!(out.code, 0);
     assert!(out.stdout.contains("[detached] pid"));
 }
+
+/// `read` takes a block of a file at a time and gives back what it read past its line,
+/// as Bash's does: whatever reads the file next goes on from the end of the line, after
+/// `-n` from the end of what it took, and after a line longer than the block too. A byte
+/// at a time it cost a system call a byte, `while read` over a file twice Bash's time.
+#[test]
+fn read_takes_only_its_line_of_a_file() {
+    let scratch = Scratch::new("read-ahead");
+    std::fs::write(scratch.join("f"), "one\ntwo\nthree\nfour\n").unwrap();
+    let long = "x".repeat(10_000);
+    std::fs::write(scratch.join("long"), format!("{long}\nend\n")).unwrap();
+    let out = output_of(
+        cash_command()
+            .args([
+                "-c",
+                "{ read -r a; read -r -n 2 b; cat; } < f; echo \"a=$a b=$b\"; \
+                 exec 3< f; read -r -u 3 x; read -r -u 3 y; head -n 1 <&3; exec 3<&-; \
+                 echo \"x=$x y=$y\"; \
+                 while read -r l; do echo \"[$l]\"; read -r skipped; done < f; \
+                 { read -r big; cat; } < long; echo ${#big}",
+            ])
+            .current_dir(scratch.path()),
+    );
+    assert_eq!(
+        out.stdout,
+        "o\nthree\nfour\na=one b=tw\nthree\nx=one y=two\n[one]\n[three]\nend\n10000"
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+}

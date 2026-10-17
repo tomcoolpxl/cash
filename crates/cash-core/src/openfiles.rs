@@ -158,20 +158,54 @@ pub enum FileKind {
 }
 
 impl OpenFile {
-    /// What the file is open on (D7).
-    pub fn kind(&self) -> FileKind {
-        use cash_win32::fs::HandleKind;
+    /// The handle Windows knows the file by, and whether it is open for reading and for
+    /// writing; none for a socket or a stream of cash's own.
+    fn handle(&self) -> Option<(std::os::windows::io::BorrowedHandle<'_>, bool, bool)> {
         use std::os::windows::io::AsHandle;
 
-        let (handle, reads, writes) = match self {
+        Some(match self {
             Self::Stdin(stdin) => (stdin.as_handle(), true, false),
             Self::Stdout(stdout) => (stdout.as_handle(), false, true),
             Self::Stderr(stderr) => (stderr.as_handle(), false, true),
             Self::File(file) => (file.as_handle(), true, true),
             Self::PipeReader(reader) => (reader.as_handle(), true, false),
             Self::PipeWriter(writer) => (writer.as_handle(), false, true),
-            Self::Socket(_) => return FileKind::Socket,
-            Self::Stream(_) => return FileKind::Other,
+            Self::Socket(_) | Self::Stream(_) => return None,
+        })
+    }
+
+    /// Whether the file is on a disk, where a reader may read ahead and then give back
+    /// what it did not use ([`Self::move_back`]), as Bash's `read` does in a regular file.
+    pub fn is_disk_file(&self) -> bool {
+        self.handle().is_some_and(|(handle, ..)| {
+            cash_win32::fs::handle_kind(handle) == cash_win32::fs::HandleKind::Disk
+        })
+    }
+
+    /// Moves the position of a file on a disk back by `count` bytes: what a reader read
+    /// ahead of what it used, given back to whatever reads the file next.
+    ///
+    /// # Errors
+    ///
+    /// When the file is not on a disk, or Windows refuses the move.
+    pub fn move_back(&self, count: usize) -> std::io::Result<()> {
+        let (handle, ..) = self
+            .handle()
+            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::Unsupported))?;
+        let by = i64::try_from(count)
+            .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+        cash_win32::fs::move_position(handle, -by)
+    }
+
+    /// What the file is open on (D7).
+    pub fn kind(&self) -> FileKind {
+        use cash_win32::fs::HandleKind;
+
+        let Some((handle, reads, writes)) = self.handle() else {
+            return match self {
+                Self::Socket(_) => FileKind::Socket,
+                _ => FileKind::Other,
+            };
         };
         match cash_win32::fs::handle_kind(handle) {
             HandleKind::Pipe => FileKind::Pipe { reads, writes },
