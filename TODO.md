@@ -4,17 +4,19 @@ Everything found while working on cash that is not done yet, in one list, and th
 for working through it. What is done, phases and findings, is in DONE.md.
 
 ## How this is worked
-
 - **One session, one item at a time, in the order below.** No further worktrees and no
   spawned sessions: what is found on the way is added to the phase it belongs to, or to
   the end, not started beside it.
+- **The user picks the items** (2026-10-17): before items are started, they go to the
+  user as a pick list, each with what it fixes, the danger of leaving it and the size of
+  the work. The phase is what the user picked.
 - **Per item:** reproduce it (the code has moved since the item was written down),
   compare with Git Bash 5.3, fix it with a test that fails without the fix, and commit.
   A done item moves to DONE.md in the same commit, as it was written down.
 - **Per phase:** `cargo fmt --all`, `cargo clippy --workspace --all-targets`, the full
   nextest run (`--profile full --retries 0`, both lanes); then `main` is brought up to the branch and pushed,
   the phase is released once CI is green, and a short report is written. The next phase
-  starts without waiting. The work stops only for a decision marked **yours** below, or
+  starts once the user has picked its items. The work stops only for a decision marked **yours** below, or
   for a release whose CI fails.
 - **Releases:** each phase ends with a release of its own. A tag is made only after CI
   has passed on the commit (RELEASING.md); the releases so far are in DONE.md.
@@ -23,21 +25,40 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Shared parts for the builtins (the current phase, 2026-10-16)
+## Picked by the user (the current phase, 2026-10-17)
 
-The user's choice (decisions.md, "Builtins share their option parsing, input opening and
-folder walks"; `research/central-components-design.md` has the surveys and the design).
-One tool at a time, each against its tests and Git Bash; its messages stay its
-upstream's.
+The user's picks of 2026-10-17 (decisions.md, "ls takes GNU's remaining options" and
+"`tail -f` ends when the reader of its output is gone"), in this order.
 
-1. **Options**: done (2026-10-17, DONE.md).
-2. **Inputs**: done (2026-10-17, DONE.md).
-3. **Walks**: done (2026-10-17, DONE.md).
-4. **The parts called most**: done (2026-10-17, DONE.md; `research/hot-paths.md`).
+1. **Two costs paid on every call** (from the 2026-10-16 survey, below):
+   - a name not found is not remembered, so each miss probes PATH twice: only for a
+     missing command given arguments (looked into 2026-10-17), as the globbing decision
+     (D81) looks the name up as the second word is expanded, and the dispatch looks
+     again; carrying "missing" from the one to the other would save the second;
+   - coolfetch asks sysinfo for everything on each run, nothing kept between runs.
+2. **GNU ls options cash's ls has not** (2026-10-17): named as not supported: `-Q`,
+   `-n`, `-s`, `-i`, `-c`, `-u`, `--time`, `-H`, `--quoting-style`, `-b`, `-q`, `-N`,
+   `-k`, `--si`, `--block-size`, `-T`, `--zero`, `--hyperlink`, `-Z`, `--author`, `-D`.
+   The common ones are done (DONE.md). All four groups are wanted: times and sizes,
+   name quoting, the script helpers, and the poor fits for Windows.
+3. **`tail -f file | head -1` runs until the file grows** (2026-10-17): uutils checks on
+   Linux alone, between polls, whether its standard output still has a reader
+   (`ensure_stdout_not_broken`); on Windows tail learns it only when it next writes, and
+   cash's relay ends it then. `cash -c 'tail -f g | head -1; echo done'` prints `a` and
+   `done`, then waits for tail before it exits; Git Bash's tail waits too, before `done`;
+   GNU's tail on Linux ends at once. The relay could ask its pipe's reader between polls.
+   Looked into 2026-10-17: not with a write of no bytes, which a byte-mode pipe may hand
+   its reader as a read of none, an end to most readers; `NtQueryInformationFile`'s
+   `FilePipeLocalInformation` gives `NamedPipeState` (4, closing, once the other end has
+   gone) if the handle has `FILE_READ_ATTRIBUTES`, untried on the handles cash makes.
+   The relay keeps the real handle; tail would ask between polls
+   (`cash_win32::stdio`, as GNU's `check_output_alive`) and end with 141. Only tail: a
+   general watcher would end `cp a b | true` before it copies.
 
 ## Left over from finished phases
 
-What the phases now in DONE.md left open, each where its phase says more.
+What the phases now in DONE.md left open, each where its phase says more. Not now
+(the user, 2026-10-17): each needs unusual input to matter.
 
 - **7z: a tar name with a lone surrogate** (2026-10-12): a UTF-8-encoded surrogate with
   no partner (`ED A0 80`) stays a lone UTF-16 unit in 7-Zip's listing and extracted
@@ -55,24 +76,8 @@ What the phases now in DONE.md left open, each where its phase says more.
 
 ## Found along the way
 
-- **The installer's links test kept an old version once** (2026-10-17, `ci full` before
-  1.20.0): `installer::links_make_the_tools_first_on_path_and_an_upgrade_refreshes_and_sweeps`
-  failed its first try with "kept 9.9.9: its cash.exe is running" where it expects
-  "removed 9.9.9", and passed the second: the run of the step before, not yet gone
-  when the upgrade looked, most likely. The test could wait for that process to end.
-- **A cash-sed test timed out once in CI** (2026-10-17, run 39024431762, slow lane
-  1/4): `test_sed::ranges_ended_by_a_line_number_match_gnu_sed` took over 45 s on its
-  first try and passed on the second. Look at what it runs before raising a limit.
-- **The ConPTY tests that run PowerShell time out in CI now and then**: PowerShell
-  started by the test prints nothing in 30 s (`conpty_interactive_tests.rs:220`).
-  Run 37953062174 (2026-10-09, slow lane 1/4, both tries):
-  `conpty_a_program_that_ran_leaves_a_healthy_prompt_where_it_was`, on a runner whose
-  setup also logged a "bash startup failure". Run 37963172593 (the same day, slow lane
-  4/4, both tries): `..._leaves_a_scroll_region_...`, `..._dies_in_full_screen_...` and
-  `..._had_vt_input_on_does_not_eat_keys_typed_ahead` (line 402). Runs between passed;
-  the commits touched only rar. Look at PowerShell's start on the runner (a first-run
-  cache?) before raising the wait.
-- **A benchmark of 1.10.0's compressors** (the user asked, 2026-10-07; best of two runs,
+- **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
+  the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against
   Scoop's programs and WSL2's). Ahead: gzip (0.09 s against 0.4–0.5 s, 0.3 s against
   2 s), bzip2 (0.16 s against 1 s, 0.5 s against 3.3 s), zip and gzip decompressing.
@@ -87,10 +92,7 @@ What the phases now in DONE.md left open, each where its phase says more.
   **xz is 20% slower on one block** (6.5 s against 5.4 s; lzma-rust2's encoder) and
   decodes at two thirds of XZ Utils' speed; zip on one large member has no parallelism
   to use (2.2 s against 1.9 s).
-- **GNU ls options cash's ls has not** (2026-10-17): named as not supported: `-Q`,
-  `-n`, `-s`, `-i`, `-c`, `-u`, `--time`, `-H`, `--quoting-style`, `-b`, `-q`, `-N`,
-  `-k`, `--si`, `--block-size`, `-T`, `--zero`, `--hyperlink`, `-Z`, `--author`, `-D`.
-  The common ones are done (DONE.md).
+
 - **Work done again on every call, from the 2026-10-16 survey** (after `ls` was found
   re-reading Windows Terminal's settings per listing; the session facts now have one
   place, `cash_win32::facts`). Still worked out each time:
@@ -104,10 +106,6 @@ What the phases now in DONE.md left open, each where its phase says more.
     is a directory query for each of the 80 folders on PATH, at Windows' cost of one,
     and the runnable check of each match; the background `PathIndex` keeps folded
     names only, and would need the names as spelled and each one's runnable answer;
-  - a name not found is not remembered, so each miss probes PATH twice: only for a
-    missing command given arguments (looked into 2026-10-17), as the globbing decision
-    (D81) looks the name up as the second word is expanded, and the dispatch looks
-    again; carrying "missing" from the one to the other would save the second;
   - a script's shebang interpreter is looked up twice, past the hash table (looked into
     2026-10-17): `execute_via_external` reads the script's head and resolves the
     interpreter to answer a script whose interpreter is `true` or `false` at once, and
@@ -118,9 +116,9 @@ What the phases now in DONE.md left open, each where its phase says more.
   - `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command
     (looked into 2026-10-17): 1 to 2 ms after Enter, which the starter `.bashrc` turns
     on; an index from command line to entries would make it a lookup, at the cost of
-    keeping that index right through loading, `history -d` and trimming to `HISTSIZE`;
-  - coolfetch asks sysinfo for everything on each run, nothing kept between runs.
-- **A Ctrl-C or `kill` on a large `xz` waits for its blocks** (2026-10-16): lzma-rust2's
+    keeping that index right through loading, `history -d` and trimming to `HISTSIZE`.
+- **A Ctrl-C or `kill` on a large `xz` waits for its blocks** (parked by the user,
+  2026-10-17, decisions.md; found 2026-10-16): lzma-rust2's
   threaded encoder takes the whole input at once (13 blocks of 24 MiB from a 300 MB
   file, on 16 threads) and writes the first block only when it is done, about 12 s
   later; a block cannot be stopped half way, so the stop is acted on at that first
@@ -132,20 +130,9 @@ What the phases now in DONE.md left open, each where its phase says more.
   waits out every block in flight. Writing the block in pieces and asking
   `shutdown_flag` between them would end it within a piece; that means taking
   lzma-rust2 (20.5k lines) in as cash's own, as crossterm was (`[patch.crates-io]`).
-- **`tail -f file | head -1` runs until the file grows** (2026-10-17): uutils checks on
-  Linux alone, between polls, whether its standard output still has a reader
-  (`ensure_stdout_not_broken`); on Windows tail learns it only when it next writes, and
-  cash's relay ends it then. `cash -c 'tail -f g | head -1; echo done'` prints `a` and
-  `done`, then waits for tail before it exits; Git Bash's tail waits too, before `done`;
-  GNU's tail on Linux ends at once. The relay could ask its pipe's reader between polls.
-  Looked into 2026-10-17: not with a write of no bytes, which a byte-mode pipe may hand
-  its reader as a read of none, an end to most readers; `NtQueryInformationFile`'s
-  `FilePipeLocalInformation` gives `NamedPipeState` (4, closing, once the other end has
-  gone) if the handle has `FILE_READ_ATTRIBUTES`, untried on the handles cash makes.
-  The relay keeps the real handle; tail would ask between polls
-  (`cash_win32::stdio`, as GNU's `check_output_alive`) and end with 141. Only tail: a
-  general watcher would end `cp a b | true` before it copies.
-- **zstd compresses at ruzstd's fast level only** (phase 28, 2026-10-07): every level
+
+- **zstd compresses at ruzstd's fast level only** (parked by the user, 2026-10-17;
+  phase 28, 2026-10-07): every level
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
   real; until then the page says so.

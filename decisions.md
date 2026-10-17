@@ -642,7 +642,7 @@ terminfo, since ConPTY speaks VT.
 
 posixutils-rs' bc; a GNU extension fails with its name, so a GNU script fails with a
 reason. After an error `bc` exits 1 where GNU's exits 0, so `set -e` catches it. Turned
-down: GNU bc's extensions; `dc`.
+down: GNU bc's extensions, but for comparisons as expressions (below, 2026-10-17); `dc`.
 
 ### D57 — `ping` takes Linux's flags and shadows `ping.exe`
 
@@ -757,6 +757,21 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
     its tests and Git Bash.
   - Turned down: a walker of cash's own; patching the archivers' own walks; keeping
     clap's messages.
+- **bc takes a comparison as an expression** (the user, 2026-10-17): `echo "1.5 > 1.2" |
+  bc` prints 1, as in GNU bc and posixutils-rs 0.9.1, the one GNU extension in D56's
+  POSIX bc. Turned down: refusing it with its name, as the other extensions are.
+- **awk follows gawk as far as generic awk needs** (the user, 2026-10-17: "no need to go
+  too deep in replicating gawk as long as generic awk works"): an upstream fix or a gawk
+  difference is taken where ordinary programs meet it. Turned down: gawk's corners, such
+  as bytes as characters in the C locale and RS matches of the empty string.
+- **ls takes GNU's remaining options** (the user, 2026-10-17): the times and sizes
+  (`-c`, `-u`, `--time`, `-s`, `-k`, `--si`, `--block-size`), name quoting (`-Q`,
+  `--quoting-style`, `-b`, `-q`, `-N`), the script helpers (`--zero`, `-i`, `-H`, `-T`,
+  `--hyperlink`) and the poor fits for Windows (`-n`, `-Z`, `--author`, `-D`), so copied
+  scripts run. Turned down: leaving any group refused.
+- **`tail -f` ends when the reader of its output is gone** (the user, 2026-10-17): tried
+  with the pipe's state between polls, as GNU tail does on Linux. Turned down: leaving
+  it as Git Bash's tail has it, waiting for the file's next line.
 
 ## 8. Archives and compression
 
@@ -807,6 +822,10 @@ has a Rust API.
   `-DF`, `-sp`, `-AC`/`-AS` and the logs; unzip skips tokenized, PKWARE DCL, Terse, LZ77
   and WavPack members. Each can be added when someone needs it.
 - **zstd compresses on every core by default** (the user, 2026-10-07).
+- **7z's speed and xz's instant stop are parked** (the user, 2026-10-17): both need
+  lzma-rust2 taken in as cash's own (a match-finder thread as 7-Zip's, a stop between
+  pieces of a block), and neither is worth that now: 7z is half 7-Zip's speed at the same
+  size, and a stopped `xz` of a large file ends within about 12 s, losing nothing.
 
 ## 9. sudo and elevation
 
@@ -909,3 +928,7 @@ that changes overnight surprises script authors; a paid certificate or SignPath.
 - **Timing-sensitive tests run on an idle machine, and failures under load are never
   fixed** (the user, 2026-10-02): such a test is run again with the CPU free and judged
   from that; no timeout is lengthened and no test rewritten for load.
+  Exception (the user, 2026-10-17): uutils' sed tests get a 30 s period in every profile,
+  where one CI run's starved runner killed one at 45 s. They only start processes and
+  cannot hang, so the longer allowance hides nothing, and a test that finishes takes the
+  same time.

@@ -90,6 +90,15 @@ threads-required = "num-test-threads"
 filter = 'package(cash-archive) and (binary(rar) or test(/^rar::/))'
 slow-timeout = { period = "60s", terminate-after = 3 }
 
+# uutils' sed tests start a sed for each case, up to a dozen and more in one test: well
+# under a second on an idle machine. On run 39024431762 (2026-10-17, slow lane 1/4) half a
+# dozen of them passed 15 s in the same minute on a starved runner, and
+# `ranges_ended_by_a_line_number_match_gnu_sed` 45 s, though none waits on input. The
+# period changes nothing for a test that finishes; one that is starved gets 90 s.
+[[profile.default.overrides]]
+filter = 'binary_id(cash-sed::tests)'
+slow-timeout = { period = "30s", terminate-after = 3 }
+
 # `sudo` elevating in this terminal: each waits for someone to approve UAC's prompt, up to
 # three minutes (APPROVAL in sudo_in_terminal.rs). Ignored, run by hand.
 [[profile.default.overrides]]

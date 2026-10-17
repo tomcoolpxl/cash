@@ -85,9 +85,29 @@ fn start_reedline_cash() -> ConPtySession {
 /// - `mouse` takes the mouse as crossterm's mouse capture does, turning quick edit off;
 /// - `early` turns VT input on and waits while keys are typed ahead;
 /// - `input` prints the console's input mode, and anything else its state.
-const CONSOLE_STATE_PS1: &str = r#"param([string]$What)
-Add-Type -TypeDefinition @'
-using System;
+const CONSOLE_STATE_PS1: &str = r#"param([string]$What, [string]$Helper)
+Add-Type -Path $Helper
+$e = [char]27
+switch ($What) {
+    'break' { [ConsoleState]::Break(); [Console]::Out.WriteLine('BROKE_IT') }
+    'alt' {
+        [Console]::Out.Write("$e[?1049h$e[2J$e[5;10HFULL_SCREEN_TEXT$e[20;1H")
+        [Console]::Out.WriteLine('LEFT_IN_FULL_SCREEN')
+    }
+    'region' { [Console]::Out.Write("$e[3;8r"); [Console]::Out.WriteLine('REGION_SET') }
+    'mouse' { [ConsoleState]::TakeMouse(); [Console]::Out.WriteLine('TOOK_THE_MOUSE') }
+    'early' {
+        [ConsoleState]::VtInput()
+        [Console]::Out.WriteLine('TYPE_NOW')
+        Start-Sleep -Milliseconds 2500
+    }
+    'input' { [Console]::Out.WriteLine('INPUT_MODE=' + [ConsoleState]::Input()) }
+    default { [Console]::Out.WriteLine('STATE ' + [ConsoleState]::Report()) }
+}
+"#;
+
+/// The C# helper of [`CONSOLE_STATE_PS1`], compiled once by [`console_state_helper`].
+const CONSOLE_STATE_CS: &str = r#"using System;
 using System.Runtime.InteropServices;
 public static class ConsoleState {
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
@@ -119,25 +139,69 @@ public static class ConsoleState {
             + " no_auto_return=" + ((o & 0x8u) != 0) + " cp=" + GetConsoleCP() + "/" + GetConsoleOutputCP();
     }
 }
-'@
-$e = [char]27
-switch ($What) {
-    'break' { [ConsoleState]::Break(); [Console]::Out.WriteLine('BROKE_IT') }
-    'alt' {
-        [Console]::Out.Write("$e[?1049h$e[2J$e[5;10HFULL_SCREEN_TEXT$e[20;1H")
-        [Console]::Out.WriteLine('LEFT_IN_FULL_SCREEN')
-    }
-    'region' { [Console]::Out.Write("$e[3;8r"); [Console]::Out.WriteLine('REGION_SET') }
-    'mouse' { [ConsoleState]::TakeMouse(); [Console]::Out.WriteLine('TOOK_THE_MOUSE') }
-    'early' {
-        [ConsoleState]::VtInput()
-        [Console]::Out.WriteLine('TYPE_NOW')
-        Start-Sleep -Milliseconds 2500
-    }
-    'input' { [Console]::Out.WriteLine('INPUT_MODE=' + [ConsoleState]::Input()) }
-    default { [Console]::Out.WriteLine('STATE ' + [ConsoleState]::Report()) }
-}
 "#;
+
+/// The compiled [`CONSOLE_STATE_CS`] for `pwsh`, made once and kept in the temporary
+/// folder under a name its source and PowerShell decide, for every test process to load.
+///
+/// The script compiled it with `Add-Type` on each start: half a second to a second here,
+/// and on a fresh CI runner, with Roslyn cold and the new files scanned, more than the 30 s
+/// the tests wait for the script's marker (runs 37953062174 and 37963172593, 2026-10-09).
+/// Compiled here, before the ConPTY starts, that first start has a budget of its own, and
+/// says how long it took.
+fn console_state_helper(pwsh: &Path) -> PathBuf {
+    // FNV-1a, stable from one build to the next.
+    let key = CONSOLE_STATE_CS
+        .bytes()
+        .chain(pwsh.to_string_lossy().bytes())
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+        });
+    let temp = std::env::temp_dir();
+    let dll = temp.join(format!("cash-console-state-{key:016x}.dll"));
+    if dll.is_file() {
+        return dll;
+    }
+    let pid = std::process::id();
+    let source = temp.join(format!("cash-console-state-{key:016x}-{pid}.cs"));
+    let partial = temp.join(format!("cash-console-state-{key:016x}-{pid}.dll"));
+    std::fs::write(&source, CONSOLE_STATE_CS).unwrap();
+    let started = std::time::Instant::now();
+    let mut compile = std::process::Command::new(pwsh)
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
+        .arg(format!(
+            "Add-Type -Path '{}' -OutputAssembly '{}'",
+            source.display(),
+            partial.display()
+        ))
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .expect("start PowerShell to compile the console helper");
+    let status = loop {
+        if let Some(status) = compile.try_wait().unwrap() {
+            break status;
+        }
+        if started.elapsed() > Duration::from_secs(180) {
+            let _ = compile.kill();
+            panic!("PowerShell did not compile the console helper in 180 s");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let _ = std::fs::remove_file(&source);
+    assert!(
+        status.success(),
+        "PowerShell could not compile the console helper"
+    );
+    eprintln!(
+        "compiled the console helper in {:.1} s",
+        started.elapsed().as_secs_f64()
+    );
+    // Another test process may have put it there first; either one will do.
+    if std::fs::rename(&partial, &dll).is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    dll
+}
 
 /// A reedline cash on a ConPTY that runs [`CONSOLE_STATE_PS1`], with the environment
 /// PowerShell needs to start at all.
@@ -145,6 +209,7 @@ struct ConsoleStateSession {
     session: ConPtySession,
     dir: PathBuf,
     pwsh: PathBuf,
+    helper: PathBuf,
 }
 
 impl ConsoleStateSession {
@@ -163,6 +228,7 @@ impl ConsoleStateSession {
             .unwrap_or_else(|| {
                 PathBuf::from(&system_root).join(r"System32\WindowsPowerShell\v1.0\powershell.exe")
             });
+        let helper = console_state_helper(&pwsh);
 
         let temp = std::env::temp_dir();
         let temp = temp.to_string_lossy();
@@ -197,15 +263,21 @@ impl ConsoleStateSession {
         session
             .expect("PROMPT$", Duration::from_secs(10))
             .expect("prompt displayed");
-        Self { session, dir, pwsh }
+        Self {
+            session,
+            dir,
+            pwsh,
+            helper,
+        }
     }
 
     /// Types the command line that runs the script's action `what`.
     fn run(&mut self, what: &str) {
         let line = format!(
-            "'{}' -NoProfile -ExecutionPolicy Bypass -File '{}' {what}\r",
+            "'{}' -NoProfile -ExecutionPolicy Bypass -File '{}' {what} '{}'\r",
             self.pwsh.display(),
-            self.dir.join("console-state.ps1").display()
+            self.dir.join("console-state.ps1").display(),
+            self.helper.display()
         );
         self.session.send(&line).unwrap();
     }

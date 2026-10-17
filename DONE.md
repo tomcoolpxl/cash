@@ -1768,3 +1768,20 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   bc is otherwise POSIX bc, with upstream's GNU bc 1.07.1 fixture. The other commits
   build on Windows or word a write to a full device. With this, every upstream in
   `upstreams.toml` is reviewed to its newest.
+
+- **Three tests that failed once in CI** (the user picked all three, 2026-10-17):
+  - **The installer's links test kept an old version once** (`ci full` before 1.20.0):
+    the upgrade's sweep opens the old cash.exe for writing to tell whether it runs, and
+    right after the step before had run that freshly copied exe, something still held
+    it (Defender's scan of a new executable, or the image's teardown). The test waits,
+    up to 20 s, until it can open it as the sweep does. A real upgrade sweeps such a
+    folder the next time.
+  - **A cash-sed test timed out once in CI** (run 39024431762): it starts 14 small
+    seds and cannot hang; half a dozen other sed tests passed 15 s in the same minute
+    on a starved runner. uutils' sed tests get a 30 s period, an exception the user
+    made to the rule on load (decisions.md); a test that finishes takes the same time.
+  - **The ConPTY tests that run PowerShell timed out now and then**: the script compiled
+    its C# console helper with `Add-Type` on every start, 0.4 to 1 s here and, with
+    Roslyn cold on a fresh runner, plausibly past the 30 s the tests wait. The helper is
+    compiled once, before the ConPTY starts, into a DLL in the temporary folder named
+    by its source and PowerShell, with its time printed; the script loads it.

@@ -268,6 +268,7 @@ fn links_make_the_tools_first_on_path_and_an_upgrade_refreshes_and_sweeps() {
     // The upgrade: a new version folder, finished without `--links`. The manifest says
     // the links are wanted, so they are refreshed to the new exe; the old folder, whose
     // exe nothing runs, is swept.
+    wait_until_free(&old);
     let new = install.version("9.9.10");
     let out = install.finish(&new, &[]);
     let stdout = text(&out.stdout);
@@ -321,6 +322,20 @@ fn links_make_the_tools_first_on_path_and_an_upgrade_refreshes_and_sweeps() {
         note.fix.as_deref(),
         Some("windows opened from now on start 9.9.10")
     );
+}
+
+/// Waits until `exe` can be opened for writing, as the installer's sweep opens it to tell
+/// whether it runs. Right after a freshly copied exe has run, something can still hold it
+/// for a moment (Defender's scan of a new executable, or the image's teardown), and the
+/// sweep then kept the folder: "kept 9.9.9: its cash.exe is running" on a first try,
+/// `ci full` before 1.20.0. A real upgrade sweeps such a folder on the next one.
+fn wait_until_free(exe: &Path) {
+    let start = std::time::Instant::now();
+    while std::fs::OpenOptions::new().write(true).open(exe).is_err()
+        && start.elapsed() < std::time::Duration::from_secs(20)
+    {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
 }
 
 /// Kill a process and everything it started: `sleep` is a bundled tool, so the shell
