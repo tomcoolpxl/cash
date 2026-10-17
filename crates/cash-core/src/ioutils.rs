@@ -2,38 +2,38 @@
 
 use crate::openfiles;
 
-/// Error type for `FailingReaderWriter`.
+/// Error type for `FailingReaderWriter`: Bash's words for a closed descriptor, `echo
+/// hi >&-` saying `echo: write error: Bad file descriptor`.
 #[derive(Clone, Debug, thiserror::Error)]
 enum ReaderWriterError {
     /// I/O read error.
-    #[error("I/O read error: {0}")]
-    Read(&'static str),
-    /// I/O write error.
-    #[error("I/O write error: {0}")]
-    Write(&'static str),
-    /// I/O flush error.
-    #[error("I/O flush error: {0}")]
-    Flush(&'static str),
+    #[error("read error: Bad file descriptor")]
+    Read,
+    /// I/O write error, a flush's too.
+    #[error("write error: Bad file descriptor")]
+    Write,
+}
+
+/// Whether `error` is a [`FailingReaderWriter`]'s: its words are said as they are, not as
+/// an `i/o error`.
+pub(crate) fn is_closed_descriptor(error: &std::io::Error) -> bool {
+    error
+        .get_ref()
+        .is_some_and(|inner| inner.is::<ReaderWriterError>())
 }
 
 /// An implementation of `std::io::Read` and `std::io::Write` that always fails.
 ///
 /// Also implements `openfiles::Stream` for use with `openfiles::OpenFile`. Useful
 /// for providing a valid stream that gracefully fails all operations in cases where
-/// no real I/O is possible.
+/// no real I/O is possible: a closed descriptor.
 #[derive(Clone)]
-pub(crate) struct FailingReaderWriter {
-    message: &'static str,
-}
+pub(crate) struct FailingReaderWriter;
 
 impl FailingReaderWriter {
-    /// Creates a new `FailingReaderWriter` with the given error message.
-    ///
-    /// # Arguments
-    ///
-    /// * `message` - The error message to use for all operations.
-    pub const fn new(message: &'static str) -> Self {
-        Self { message }
+    /// Creates a new `FailingReaderWriter`.
+    pub const fn new() -> Self {
+        Self
     }
 }
 
@@ -45,21 +45,17 @@ impl openfiles::Stream for FailingReaderWriter {
 
 impl std::io::Read for FailingReaderWriter {
     fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
-        Err(std::io::Error::other(ReaderWriterError::Read(self.message)))
+        Err(std::io::Error::other(ReaderWriterError::Read))
     }
 }
 
 impl std::io::Write for FailingReaderWriter {
     fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
-        Err(std::io::Error::other(ReaderWriterError::Write(
-            self.message,
-        )))
+        Err(std::io::Error::other(ReaderWriterError::Write))
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        Err(std::io::Error::other(ReaderWriterError::Flush(
-            self.message,
-        )))
+        Err(std::io::Error::other(ReaderWriterError::Write))
     }
 }
 

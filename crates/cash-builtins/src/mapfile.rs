@@ -74,9 +74,12 @@ impl builtins::Command for MapFileCommand {
             }
         }
 
-        let input_file = context
-            .try_fd(self.fd)
-            .ok_or_else(|| ErrorKind::InvalidFileDescriptor(self.fd))?;
+        // A descriptor other than standard input must be open. Standard input closed
+        // (`<&-`) is read, as Bash reads it: nothing comes, and the array is left empty.
+        let input_file = context.try_fd(self.fd);
+        if input_file.is_none() && self.fd != cash_core::openfiles::OpenFiles::STDIN_FD {
+            return Err(ErrorKind::InvalidFileDescriptor(self.fd).into());
+        }
 
         if self.origin.is_none() {
             context.shell.env_mut().update_or_add(
@@ -88,7 +91,9 @@ impl builtins::Command for MapFileCommand {
             )?;
         }
 
-        if let Some(interrupted) = self.read_entries(input_file, context).await? {
+        if let Some(input_file) = input_file
+            && let Some(interrupted) = self.read_entries(input_file, context).await?
+        {
             return Ok(interrupted);
         }
 

@@ -183,9 +183,15 @@ impl ReadCommand {
         // the script, or the line typed at the prompt.
         let mut progress = Progress::new();
         let read_result = loop {
-            let input_stream = context
-                .try_fd(fd_num)
-                .ok_or_else(|| ErrorKind::InvalidFileDescriptor(fd_num))?;
+            // A descriptor `-u` names must be open; standard input closed (`<&-`) is read,
+            // as Bash reads it, and fails as a read.
+            let input_stream = context.try_fd(fd_num).ok_or_else(|| {
+                if self.fd_num_to_read.is_some() {
+                    ErrorKind::InvalidFileDescriptor(fd_num)
+                } else {
+                    ErrorKind::ClosedDescriptorRead(fd_num)
+                }
+            })?;
             let attempt = self.read_line(
                 input_stream,
                 context.error_stream(),

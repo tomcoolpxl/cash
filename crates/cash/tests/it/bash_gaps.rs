@@ -951,6 +951,38 @@ fn exit_and_return_in_err_and_debug_traps_take_effect() {
 }
 
 #[test]
+fn a_closed_descriptor_is_said_and_read_as_bash_does() {
+    // `echo hi >&-` said "echo: i/o error: I/O write error: standard output not
+    // available"; `read` and `mapfile` on a closed standard input said "invalid file
+    // descriptor", which Bash says only of a descriptor `-u` names.
+    let result = cash_command()
+        .args([
+            "--noprofile",
+            "--norc",
+            "-c",
+            r#"echo hi >&-; echo "echo $?"; printf x >&-; echo "printf $?"; read x <&-; echo "read $?"; a=(old); mapfile a <&-; echo "mapfile $? ${#a[@]}"; read -u 5 x; echo "read -u $?""#,
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&result.stdout).replace("\r\n", "\n");
+    let stderr = String::from_utf8_lossy(&result.stderr).replace("\r\n", "\n");
+    assert_eq!(stdout, "echo 1\nprintf 1\nread 1\nmapfile 0 0\nread -u 1\n");
+    let said: Vec<&str> = stderr
+        .lines()
+        .map(|line| line.split_once(": line 1: ").map_or(line, |(_, said)| said))
+        .collect();
+    assert_eq!(
+        said,
+        [
+            "echo: write error: Bad file descriptor",
+            "printf: write error: Bad file descriptor",
+            "read: 0: read error: Bad file descriptor",
+            "read: 5: invalid file descriptor: Bad file descriptor",
+        ]
+    );
+}
+
+#[test]
 fn debug_trap_runs_before_assignments_and_outside_redirections() {
     // As in Bash 5.2: before every simple command, an assignment alone too, and before
     // the command's words are expanded and its redirections made, so what the trap writes

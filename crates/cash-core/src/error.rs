@@ -189,8 +189,9 @@ pub enum ErrorKind {
     #[error("invalid regex: {0}; expression: '{1}'")]
     InvalidRegexError(fancy_regex::Error, String),
 
-    /// An I/O error occurred.
-    #[error("i/o error: {0}")]
+    /// An I/O error occurred. A closed descriptor's says Bash's words alone (`write
+    /// error: Bad file descriptor`).
+    #[error("{}", io_error_text(.0))]
     IoError(#[from] std::io::Error),
 
     /// Invalid substitution syntax.
@@ -256,6 +257,11 @@ pub enum ErrorKind {
     /// A descriptor `read -u` or `mapfile -u` was given that is not open.
     #[error("{0}: invalid file descriptor: Bad file descriptor")]
     InvalidFileDescriptor(ShellFd),
+
+    /// Standard input closed (`<&-`) when `read` read it: Bash asks only of a descriptor
+    /// `-u` names whether it is open, and reads standard input, which fails.
+    #[error("{0}: read error: Bad file descriptor")]
+    ClosedDescriptorRead(ShellFd),
 
     /// A file or folder a builtin could not use, as Bash's `file_error` names it:
     /// `/no/such: No such file or directory`.
@@ -644,6 +650,16 @@ impl Error {
 }
 
 /// An I/O error worded as the C library's `strerror` words it, which is what Bash and the
+/// How an I/O error is said: `i/o error:` and the error, but a closed descriptor's
+/// (`ioutils::FailingReaderWriter`) as Bash says it, `write error: Bad file descriptor`.
+fn io_error_text(error: &std::io::Error) -> String {
+    if crate::ioutils::is_closed_descriptor(error) {
+        error.to_string()
+    } else {
+        format!("i/o error: {error}")
+    }
+}
+
 /// GNU tools print: `Directory not empty`, not Windows's "The directory is not empty.
 /// (os error 145)".
 pub fn os_error_text(error: &std::io::Error) -> String {

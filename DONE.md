@@ -1680,3 +1680,10 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   expanded and its redirections made, so `echo hi > f` had the trap write into `f`. It
   runs before every simple command now, before expansion and redirections, as Bash runs
   it; checked against Git Bash's bash, `exit` and `return` in it included.
+
+- **A closed descriptor said too much** (found 2026-10-16, done 2026-10-17): `echo hi
+  >&-` said `echo: i/o error: I/O write error: standard output not available`, and
+  printf an `I/O flush error`; they say Bash's `write error: Bad file descriptor` now.
+  `read` on a closed standard input says `0: read error: Bad file descriptor`, and
+  `mapfile` reads nothing from it and succeeds, as Bash's do; "invalid file descriptor"
+  is kept for a descriptor `-u` names. Checked against Git Bash's bash.

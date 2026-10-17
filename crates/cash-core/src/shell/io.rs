@@ -8,17 +8,19 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
     /// Returns a value that can be used to write to the shell's currently configured
     /// standard output stream using `write!` et al.
     pub fn stdout(&self) -> impl std::io::Write + 'static {
-        self.open_files.try_stdout().cloned().unwrap_or_else(|| {
-            ioutils::FailingReaderWriter::new("standard output not available").into()
-        })
+        self.open_files
+            .try_stdout()
+            .cloned()
+            .unwrap_or_else(|| ioutils::FailingReaderWriter::new().into())
     }
 
     /// Returns a value that can be used to write to the shell's currently configured
     /// standard error stream using `write!` et al.; it says whether it is a terminal.
     pub fn stderr(&self) -> openfiles::OpenFile {
-        self.open_files.try_stderr().cloned().unwrap_or_else(|| {
-            ioutils::FailingReaderWriter::new("standard error not available").into()
-        })
+        self.open_files
+            .try_stderr()
+            .cloned()
+            .unwrap_or_else(|| ioutils::FailingReaderWriter::new().into())
     }
 
     /// Whether what is written to `stream` may be coloured: only a terminal, and only

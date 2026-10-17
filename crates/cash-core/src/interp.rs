@@ -152,9 +152,7 @@ impl ExecutionParameters {
     ) -> impl std::io::Read + 'static {
         let file = self
             .resolve_fd(shell, openfiles::OpenFiles::STDIN_FD)
-            .unwrap_or_else(|| {
-                ioutils::FailingReaderWriter::new("standard input not available").into()
-            });
+            .unwrap_or_else(|| ioutils::FailingReaderWriter::new().into());
         // A builtin reading it ends at the next block once it is to stop: a Ctrl-C, or
         // `kill` of its background job.
         crate::output::AfterOutput::new(file, self.output.clone()).stopping(self.stop_token())
@@ -191,9 +189,7 @@ impl ExecutionParameters {
                     Stdout::Direct(file)
                 }
             },
-            None => Stdout::Direct(
-                ioutils::FailingReaderWriter::new("standard output not available").into(),
-            ),
+            None => Stdout::Direct(ioutils::FailingReaderWriter::new().into()),
         }
     }
 
@@ -205,9 +201,7 @@ impl ExecutionParameters {
     ) -> crate::output::AfterOutput {
         let file = self
             .resolve_fd(shell, openfiles::OpenFiles::STDERR_FD)
-            .unwrap_or_else(|| {
-                ioutils::FailingReaderWriter::new("standard error not available").into()
-            });
+            .unwrap_or_else(|| ioutils::FailingReaderWriter::new().into());
         crate::output::AfterOutput::new(file, self.output.clone())
     }
 
@@ -270,9 +264,8 @@ impl ExecutionParameters {
     ///
     /// * `shell` - The shell context.
     pub fn stderr(&self, shell: &Shell<impl extensions::ShellExtensions>) -> OpenFile {
-        self.try_stderr(shell).unwrap_or_else(|| {
-            ioutils::FailingReaderWriter::new("standard error not available").into()
-        })
+        self.try_stderr(shell)
+            .unwrap_or_else(|| ioutils::FailingReaderWriter::new().into())
     }
 
     /// Tries to retrieve the standard error file. Returns `None` if not set.
