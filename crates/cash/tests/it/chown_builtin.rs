@@ -82,3 +82,20 @@ fn reference_takes_the_files_alone_and_must_exist() {
         "chown: failed to get attributes of 'nosuch': No such file or directory"
     );
 }
+
+#[test]
+fn chmod_r_passes_a_link_by_and_names_what_it_changes_as_typed() {
+    // chmod -R went into no link before either, but by a walk of its own; on the shared
+    // walker its names come from the operand as typed, with no doubled `/` after `d/`, and
+    // -v names them so too, where it printed the absolute path.
+    let scratch = Scratch::new("chmod-walk");
+    let d = scratch.path().join("d");
+    std::fs::create_dir_all(&d).unwrap();
+    std::fs::write(d.join("f"), "x").unwrap();
+    cash_win32::junction::point(&d.join("up"), scratch.path()).unwrap();
+    let out = run_in(
+        scratch.path(),
+        "chmod -Rv u+w d/ | sed \"s/ retained.*//\" | sort",
+    );
+    assert_eq!(out.stdout, "mode of 'd/'\nmode of 'd/f'", "{}", out.stderr);
+}

@@ -27,6 +27,8 @@ use std::io::Write;
 use std::path::Path;
 
 use cash_core::{ExecutionResult, builtins};
+
+use crate::walk::{Kind, Links, Order, Walk, WalkError, WalkOptions};
 use clap::Parser;
 
 /// Change what a file permits, as far as Windows can express it.
@@ -109,42 +111,43 @@ impl builtins::Command for ChmodCommand {
         let mut failed = false;
         for file in files {
             let path = context.shell.absolute_path(Path::new(file));
-            let mut targets = vec![path.clone()];
-            if self.recursive {
-                collect(&path, &mut targets);
-            }
-
-            for target in targets {
-                if let Err(e) = apply(&target, &request) {
-                    if !self.silent {
-                        // As GNU chmod words it, naming the operand as it was written and
-                        // what is under it from there.
-                        let shown = match target.strip_prefix(&path) {
-                            Ok(rest) if rest.as_os_str().is_empty() => file.clone(),
-                            Ok(rest) => format!("{file}/{}", cash_win32::path::render(rest)),
-                            Err(_) => cash_win32::path::render(&target),
-                        };
-                        let what = if e.kind() == std::io::ErrorKind::NotFound {
-                            "cannot access"
-                        } else {
-                            "changing permissions of"
-                        };
-                        let e = cash_core::error::os_error_text(&e);
-                        writeln!(
-                            context.stderr(),
-                            "{}: {what} '{shown}': {e}",
-                            context.command_name
-                        )?;
+            // GNU's chmod goes through no link as it walks (-P), and changes a link it is
+            // named through, without walking the folder it names.
+            let options = WalkOptions {
+                links: Links::Never,
+                order: Order::Listing,
+                max_depth: if self.recursive { usize::MAX } else { 0 },
+                ..WalkOptions::default()
+            };
+            for next in Walk::new(file, &path, &options, context.stop_token()) {
+                let entry = match next {
+                    Ok(entry) => entry,
+                    Err(WalkError::Stopped) => break,
+                    // A name not there, or a folder that cannot be listed, in GNU's words:
+                    // cash passed the second over in silence, status 0.
+                    Err(WalkError::Io { shown, error }) => {
+                        if !self.silent {
+                            let what = if error.kind() == std::io::ErrorKind::NotFound {
+                                "cannot access"
+                            } else {
+                                "cannot read directory"
+                            };
+                            let e = cash_core::error::os_error_text(&error);
+                            writeln!(
+                                context.stderr(),
+                                "{}: {what} '{shown}': {e}",
+                                context.command_name
+                            )?;
+                        }
+                        failed = true;
+                        continue;
                     }
-                    failed = true;
-                } else if self.verbose {
-                    writeln!(
-                        context.stdout(),
-                        "mode of '{}' retained as {}",
-                        cash_win32::path::render(&target),
-                        describe(&target)
-                    )?;
+                    Err(WalkError::Loop { .. } | WalkError::Dangling(_)) => continue,
+                };
+                if entry.kind == Kind::Link && entry.depth > 0 {
+                    continue;
                 }
+                failed |= !self.change(&context, &entry, &request)?;
             }
         }
 
@@ -152,6 +155,44 @@ impl builtins::Command for ChmodCommand {
             return Ok(ExecutionResult::general_error());
         }
         Ok(ExecutionResult::success())
+    }
+}
+
+impl ChmodCommand {
+    /// Changes one entry of the walk, saying what went wrong as GNU's chmod does, naming
+    /// the operand as it was written and what is under it from there; whether it changed.
+    fn change<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        entry: &crate::walk::Entry,
+        request: &Request,
+    ) -> Result<bool, cash_core::Error> {
+        if let Err(e) = apply(&entry.path, request) {
+            if !self.silent {
+                let what = if e.kind() == std::io::ErrorKind::NotFound {
+                    "cannot access"
+                } else {
+                    "changing permissions of"
+                };
+                let e = cash_core::error::os_error_text(&e);
+                writeln!(
+                    context.stderr(),
+                    "{}: {what} '{}': {e}",
+                    context.command_name,
+                    entry.shown
+                )?;
+            }
+            return Ok(false);
+        }
+        if self.verbose {
+            writeln!(
+                context.stdout(),
+                "mode of '{}' retained as {}",
+                entry.shown,
+                describe(&entry.path)
+            )?;
+        }
+        Ok(true)
     }
 }
 
@@ -259,27 +300,5 @@ fn describe(path: &Path) -> &'static str {
         Ok(meta) if meta.permissions().readonly() => "read-only",
         Ok(_) => "writable",
         Err(_) => "unknown",
-    }
-}
-
-/// Gather a directory's contents for `-R`. A symbolic link or junction met on the way is
-/// neither entered nor changed, as GNU `chmod -R` leaves them: one to a folder above went
-/// round until Windows refused the path (BI-13).
-fn collect(root: &Path, into: &mut Vec<std::path::PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(root) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let Ok(kind) = entry.file_type() else {
-            continue;
-        };
-        if kind.is_symlink() {
-            continue;
-        }
-        let path = entry.path();
-        if kind.is_dir() {
-            collect(&path, into);
-        }
-        into.push(path);
     }
 }

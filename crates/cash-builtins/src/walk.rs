@@ -32,7 +32,6 @@ pub(crate) enum Links {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Order {
     /// As Windows lists them.
-    #[expect(dead_code, reason = "chmod -R walks in this order, next")]
     Listing,
     /// By name, unit for unit: GNU's tools in the C locale (`find`, `grep`, `tree`).
     Ordinal,
@@ -90,6 +89,8 @@ pub(crate) struct Entry {
     pub(crate) shown: String,
     /// Where it is, losslessly.
     pub(crate) path: PathBuf,
+    /// How deep: 0 for the root.
+    pub(crate) depth: usize,
     pub(crate) kind: Kind,
     /// walkdir's entry; none for a dangling link ([`WalkError::Dangling`]).
     listed: Option<walkdir::DirEntry>,
@@ -190,6 +191,7 @@ impl Walk {
         Entry {
             shown: self.shown(entry.path()),
             path: entry.path().to_path_buf(),
+            depth: entry.depth(),
             kind,
             listed: Some(entry),
         }
@@ -216,6 +218,7 @@ impl Walk {
             return WalkError::Dangling(Entry {
                 shown,
                 path: path.to_path_buf(),
+                depth: error.depth(),
                 kind: Kind::Link,
                 listed: None,
             });
