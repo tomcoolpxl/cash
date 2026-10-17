@@ -348,7 +348,8 @@ fn run_to_code<SE: cash_core::ShellExtensions>(
     if parsed.headers {
         console.so(help::BANNER);
     }
-    let options = match cmdline::parse_command(&parsed) {
+    let resolve = |name: &str| context.shell.absolute_path(Path::new(name));
+    let options = match cmdline::parse_command(&parsed, &resolve) {
         Ok(options) => options,
         Err(error) => return command_line_error(console, &error),
     };

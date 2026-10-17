@@ -2,6 +2,8 @@
 //! two passes of `ArchiveCommandLine.cpp`: the switches first, before the banner, then
 //! the command, the archive's name and the names of items.
 
+use std::path::PathBuf;
+
 use super::censor::{Censor, MarkMode, PathMode, Recursion};
 
 /// Where one of 7-Zip's three streams goes (`-bso`, `-bse`, `-bsp`: 0, 1 or 2).
@@ -495,7 +497,12 @@ fn stoi(s: &str) -> Option<u32> {
 /// `CArcCmdLineParser::Parse2`: the command, the archive's name, the items, and the
 /// switches that need the command to mean something.
 #[expect(clippy::too_many_lines, reason = "7-Zip's Parse2, switch by switch")]
-pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
+/// `resolve` gives a list file's path as the shell reads a path: under the shell's
+/// folder, where the process's is another (D10).
+pub(super) fn parse_command(
+    parsed: &Parsed,
+    resolve: &dyn Fn(&str) -> PathBuf,
+) -> Result<Options, CmdLineError> {
     let words = parsed.words.clone();
     let Some(first) = words.first() else {
         return Err(CmdLineError::new("The command must be specified"));
@@ -563,7 +570,7 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
     let includes = parsed.get(Key::Include).strings.clone();
     let there_are_includes = parsed.there(Key::Include);
     if there_are_includes {
-        add_switch_wildcards(&mut censor, &includes, names)?;
+        add_switch_wildcards(&mut censor, &includes, names, resolve)?;
     }
     if parsed.there(Key::Exclude) {
         let excludes = parsed.get(Key::Exclude).strings.clone();
@@ -574,6 +581,7 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
                 include: false,
                 ..names
             },
+            resolve,
         )?;
     }
 
@@ -613,7 +621,7 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
         if at < stop
             && let Some(list) = word.strip_prefix('@')
         {
-            let list_names = read_list_file(list)?;
+            let list_names = read_list_file(list, &resolve(list))?;
             if rename {
                 if list_names.len() % 2 != 0 {
                     return Err(CmdLineError::with(
@@ -672,7 +680,7 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
         };
         if parsed.there(Key::ArInclude) {
             let list = parsed.get(Key::ArInclude).strings.clone();
-            add_switch_wildcards(&mut archive_censor, &list, arc_names)?;
+            add_switch_wildcards(&mut archive_censor, &list, arc_names, resolve)?;
         }
         if parsed.there(Key::ArExclude) {
             let list = parsed.get(Key::ArExclude).strings.clone();
@@ -683,6 +691,7 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
                     include: false,
                     ..arc_names
                 },
+                resolve,
             )?;
         }
         if let Some(name) = &archive_name {
@@ -1003,6 +1012,7 @@ fn add_switch_wildcards(
     censor: &mut Censor,
     strings: &[String],
     names: NameOption,
+    resolve: &dyn Fn(&str) -> PathBuf,
 ) -> Result<(), CmdLineError> {
     for name in strings {
         let chars: Vec<char> = name.chars().collect();
@@ -1090,7 +1100,7 @@ fn add_switch_wildcards(
                 option.mark,
             ),
             '@' => {
-                for item in read_list_file(&tail)? {
+                for item in read_list_file(&tail, &resolve(&tail))? {
                     censor.add_pre_item(
                         option.include,
                         &item,
@@ -1106,21 +1116,22 @@ fn add_switch_wildcards(
     Ok(())
 }
 
-/// A list file's names, one to a line, UTF-8 unless `-scs` said otherwise.
-fn read_list_file(path: &str) -> Result<Vec<String>, CmdLineError> {
+/// A list file's names, one to a line, UTF-8 unless `-scs` said otherwise: `name` as it
+/// was given, for a message, read at `path`.
+fn read_list_file(name: &str, path: &std::path::Path) -> Result<Vec<String>, CmdLineError> {
     let bytes = std::fs::read(path).map_err(|e| {
         CmdLineError::with(
             &format!(
                 "The file operation error for listfile\n{}",
                 super::text::system_message(&e)
             ),
-            path,
+            name,
         )
     })?;
     let text = String::from_utf8(bytes).map_err(|_| {
         CmdLineError::with(
             "Incorrect item in listfile.\nCheck charset encoding and -scs switch.",
-            path,
+            name,
         )
     })?;
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
@@ -1165,14 +1176,18 @@ mod tests {
     #[test]
     fn the_command_and_the_archive() {
         let parsed = parse_switches(&args(&["X", "a.7z", "-y"])).unwrap();
-        let options = parse_command(&parsed).unwrap();
+        let options = parse_command(&parsed, &|name: &str| PathBuf::from(name)).unwrap();
         assert_eq!(options.command, Command::ExtractFull);
         assert_eq!(options.overwrite, Overwrite::All);
         let parsed = parse_switches(&args(&["l"])).unwrap();
-        let error = parse_command(&parsed).err().unwrap();
+        let error = parse_command(&parsed, &|name: &str| PathBuf::from(name))
+            .err()
+            .unwrap();
         assert_eq!(error.message, "Cannot find archive name");
         let parsed = parse_switches(&args(&["q", "a.7z"])).unwrap();
-        let error = parse_command(&parsed).err().unwrap();
+        let error = parse_command(&parsed, &|name: &str| PathBuf::from(name))
+            .err()
+            .unwrap();
         assert_eq!(error.message, "Unsupported command:");
     }
 }
