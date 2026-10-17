@@ -670,6 +670,12 @@ fn load<W: Write>(
 ) -> std::io::Result<Loaded> {
     let not_regular =
         |d: &mut Diagnostics<W>| d.warn(&format!("Skipping {name}, not a regular file."));
+    // A device's name (`/dev/stdin`, `/dev/null`) is no regular file to convert in place,
+    // where the shell's folder holds no file of that name either.
+    if cash_win32::devices::dev_name(Path::new(name)).is_some() {
+        not_regular(diagnostics)?;
+        return Ok(Loaded::Skipped);
+    }
     match fs::symlink_metadata(path) {
         Err(e) => {
             diagnostics.warn(&format!("{name}: {}", describe(&e)))?;

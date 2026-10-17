@@ -9,6 +9,7 @@
 
 use std::io::{BufRead, Write};
 
+use cash_core::input::{Dash, InputError};
 use cash_core::{ExecutionResult, builtins};
 use cash_win32::eventlog;
 use clap::Parser;
@@ -228,15 +229,16 @@ impl builtins::Command for LoggerCommand {
         let lines: Vec<String> = if !self.message.is_empty() {
             vec![self.message.join(" ")]
         } else if let Some(file) = &self.file {
-            let path = context.shell.absolute_path(std::path::Path::new(file));
-            match std::fs::read(&path) {
-                Ok(bytes) => String::from_utf8_lossy(&bytes)
+            // Opened as the shell's `<` opens it, with util-linux's words.
+            match context.open_input(file, Dash::File) {
+                Ok(input) => String::from_utf8_lossy(&input.read_all()?)
                     .lines()
                     .map(str::to_owned)
                     .collect(),
-                Err(e) => {
-                    let e = cash_core::error::os_error_text(&e);
-                    writeln!(context.stderr(), "{name}: cannot open {file}: {e}")?;
+                // util-linux opens a folder and reads nothing from it: nothing is logged.
+                Err(InputError::IsADirectory(_)) => Vec::new(),
+                Err(error) => {
+                    writeln!(context.stderr(), "{name}: file {file}: {}", error.reason())?;
                     return Ok(ExecutionResult::general_error());
                 }
             }

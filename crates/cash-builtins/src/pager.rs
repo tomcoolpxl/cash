@@ -24,6 +24,7 @@
 
 use std::io::{IsTerminal, Read, Write};
 
+use cash_core::input::Dash;
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
 
@@ -222,19 +223,21 @@ impl LessCommand {
         };
         for source in sources {
             let reader: Box<dyn Read> = match source {
-                None | Some("-") => Box::new(context.stdin()),
-                Some(file) => {
-                    let path = context.shell.absolute_path(std::path::Path::new(file));
-                    match std::fs::File::open(path) {
-                        Ok(opened) => Box::new(opened),
-                        Err(e) => {
-                            let e = cash_core::error::os_error_text(&e);
-                            writeln!(context.stderr(), "{}: {file}: {e}", context.command_name)?;
-                            failed = true;
-                            continue;
-                        }
+                None => Box::new(context.stdin()),
+                // Opened as the shell's `<` opens it, `-` standard input.
+                Some(file) => match context.open_input(file, Dash::Stdin) {
+                    Ok(input) => Box::new(input),
+                    Err(error) => {
+                        writeln!(
+                            context.stderr(),
+                            "{}: {file}: {}",
+                            context.command_name,
+                            error.reason()
+                        )?;
+                        failed = true;
+                        continue;
                     }
-                }
+                },
             };
             let mut reader = std::io::BufReader::new(reader);
             loop {
@@ -281,19 +284,13 @@ impl LessCommand {
     }
 }
 
-/// Read one input, honouring `-` as standard input the way every pager does.
+/// Read one input, opened as the shell's `<` opens it, `-` standard input as every
+/// pager has it.
 fn read_file<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     file: &str,
 ) -> Result<String, std::io::Error> {
-    if file == "-" {
-        let mut raw = Vec::new();
-        context.stdin().read_to_end(&mut raw)?;
-        return Ok(String::from_utf8_lossy(&raw).into_owned());
-    }
-
-    let path = context.shell.absolute_path(std::path::Path::new(file));
-    let raw = std::fs::read(path)?;
+    let raw = context.open_input(file, Dash::Stdin)?.read_all()?;
     Ok(String::from_utf8_lossy(&raw).into_owned())
 }
 
