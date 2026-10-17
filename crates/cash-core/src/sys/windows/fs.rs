@@ -51,10 +51,21 @@ fn is_executable_by_content(path: &Path) -> bool {
 /// without changing the process's. An extension is appended in lower case, so a match
 /// is spelled as Windows programs are, `tool.exe`.
 pub fn resolve_executable(path: PathBuf, extensions: &[String]) -> Option<PathBuf> {
-    if is_executable_file(&path, extensions) {
+    resolve_executable_among(path, extensions, |_| true)
+}
+
+/// [`resolve_executable`], looking only at the names `present` lets through: those a look
+/// at the folder found (`pathsearch::resolve_command`).
+pub(crate) fn resolve_executable_among(
+    path: PathBuf,
+    extensions: &[String],
+    present: impl Fn(&std::ffi::OsStr) -> bool,
+) -> Option<PathBuf> {
+    let own = path.file_name().is_some_and(&present);
+    if own && is_executable_file(&path, extensions) {
         return Some(path);
     }
-    if path.extension().is_some() && is_executable_by_content(&path) {
+    if own && path.extension().is_some() && is_executable_by_content(&path) {
         return Some(path);
     }
     // Try appending each PATHEXT extension.
@@ -62,11 +73,11 @@ pub fn resolve_executable(path: PathBuf, extensions: &[String]) -> Option<PathBu
         let mut name = path.as_os_str().to_owned();
         name.push(ext.to_ascii_lowercase());
         let candidate = PathBuf::from(name);
-        if candidate.is_file() {
+        if candidate.file_name().is_some_and(&present) && candidate.is_file() {
             return Some(candidate);
         }
     }
-    is_executable_by_content(&path).then_some(path)
+    (own && is_executable_by_content(&path)).then_some(path)
 }
 
 impl crate::sys::fs::PathExt for Path {

@@ -552,6 +552,111 @@ pub fn handle_kind(handle: std::os::windows::io::BorrowedHandle<'_>) -> HandleKi
     }
 }
 
+/// Moves the position of the file `handle` is open on by `by` bytes from where it is:
+/// what a reader read ahead and did not use, given back to whatever reads next.
+///
+/// # Errors
+///
+/// When Windows refuses: the handle is not open on a file on a disk, or the position
+/// would go before the file's start.
+pub fn move_position(
+    handle: std::os::windows::io::BorrowedHandle<'_>,
+    by: i64,
+) -> std::io::Result<()> {
+    use windows_sys::Win32::Storage::FileSystem::{FILE_CURRENT, SetFilePointerEx};
+
+    // SAFETY: the handle is borrowed open, and the new position need not be written back.
+    let moved = unsafe {
+        SetFilePointerEx(
+            handle.as_raw_handle(),
+            by,
+            std::ptr::null_mut(),
+            FILE_CURRENT,
+        )
+    };
+    if moved == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// The entries of the folder `dir` whose names begin with `prefix`, each with whether it
+/// is a folder.
+///
+/// One call, where a look for each name it might be is a call each; none for a folder
+/// that is not there. The folder compares the names as it compares them, and Windows
+/// matches a name's 8.3 alias too, giving back the long name.
+///
+/// # Errors
+///
+/// When the folder cannot be read for any other reason.
+pub fn names_beginning(
+    dir: &Path,
+    prefix: &std::ffi::OsStr,
+) -> std::io::Result<Vec<(std::ffi::OsString, bool)>> {
+    use std::os::windows::ffi::OsStringExt as _;
+    use windows_sys::Win32::Foundation::{
+        ERROR_FILE_NOT_FOUND, ERROR_NO_MORE_FILES, ERROR_PATH_NOT_FOUND, INVALID_HANDLE_VALUE,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_ATTRIBUTE_DIRECTORY, FIND_FIRST_EX_LARGE_FETCH, FindClose, FindExInfoBasic,
+        FindExSearchNameMatch, FindFirstFileExW, FindNextFileW, WIN32_FIND_DATAW,
+    };
+
+    let mut pattern = dir.as_os_str().to_owned();
+    pattern.push("\\");
+    pattern.push(prefix);
+    pattern.push("*");
+    let pattern = crate::wide::to_wide_nul(&pattern);
+    // SAFETY: zeroed is a valid WIN32_FIND_DATAW, filled in by the calls below.
+    let mut data: WIN32_FIND_DATAW = unsafe { std::mem::zeroed() };
+    // SAFETY: the pattern is null-terminated, `data` is a valid out-pointer, and the
+    // filter pointer may be null for a name match.
+    let find = unsafe {
+        FindFirstFileExW(
+            pattern.as_ptr(),
+            FindExInfoBasic,
+            (&raw mut data).cast(),
+            FindExSearchNameMatch,
+            std::ptr::null(),
+            FIND_FIRST_EX_LARGE_FETCH,
+        )
+    };
+    if find == INVALID_HANDLE_VALUE {
+        let error = std::io::Error::last_os_error();
+        return match error
+            .raw_os_error()
+            .and_then(|code| u32::try_from(code).ok())
+        {
+            Some(ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND) => Ok(Vec::new()),
+            _ => Err(error),
+        };
+    }
+    let mut found = Vec::new();
+    loop {
+        let length = data
+            .cFileName
+            .iter()
+            .position(|&unit| unit == 0)
+            .unwrap_or(data.cFileName.len());
+        let name = std::ffi::OsString::from_wide(data.cFileName.get(..length).unwrap_or_default());
+        found.push((name, data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY != 0));
+        // SAFETY: `find` is the open search handle, `data` a valid out-pointer.
+        if unsafe { FindNextFileW(find, &raw mut data) } == 0 {
+            let error = std::io::Error::last_os_error();
+            // SAFETY: `find` is open, and closed once.
+            unsafe { FindClose(find) };
+            return match error
+                .raw_os_error()
+                .and_then(|code| u32::try_from(code).ok())
+            {
+                Some(ERROR_NO_MORE_FILES) => Ok(found),
+                _ => Err(error),
+            };
+        }
+    }
+}
+
 /// A Windows program by its full path in System32 (`quser.exe`), for cash to start.
 ///
 /// By a bare name, Windows looks first in the folder of the exe that asks, and in a

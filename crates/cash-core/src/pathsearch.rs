@@ -185,15 +185,32 @@ where
     let mut first_non_executable = None;
 
     for dir in paths {
-        let path = dir.as_ref().join(filename.as_ref());
+        let dir = dir.as_ref();
+        // The command's names that are in the folder, from one look at it: a look for each
+        // name it could have, two for the name and one for every PATHEXT extension, cost
+        // about fifteen calls a folder, `type -P cmd` 3 ms over a long PATH. What is found
+        // is still checked as before, so a folder that tells case apart answers as it did.
+        let listed = listed_names(dir, filename.as_ref());
+        if listed.as_ref().is_some_and(Vec::is_empty) {
+            continue;
+        }
+        let present = |name: &std::ffi::OsStr| {
+            listed.as_ref().is_none_or(|listed| {
+                listed.contains(&cash_win32::fold::name_key(&name.to_string_lossy()))
+            })
+        };
+        let path = dir.join(filename.as_ref());
 
         // Remember the first non-directory entry seen, in case no executable turns up.
-        if first_non_executable.is_none() && path.metadata().is_ok_and(|m| !m.is_dir()) {
+        if first_non_executable.is_none()
+            && path.file_name().is_some_and(present)
+            && path.metadata().is_ok_and(|m| !m.is_dir())
+        {
             first_non_executable = Some(path.clone());
         }
 
         // Resolve, then reject directories; see `ExecutablePathSearch::next`.
-        if let Some(resolved) = sys::fs::resolve_executable(path, extensions)
+        if let Some(resolved) = sys::fs::resolve_executable_among(path, extensions, present)
             && !resolved.is_dir()
         {
             return Some(resolved);
@@ -201,6 +218,29 @@ where
     }
 
     first_non_executable
+}
+
+/// The names in the folder `dir` that begin with `name`, folded, from one look at it; none
+/// where that look cannot stand for a look for each name `name` could have. Windows reads
+/// some names otherwise: a wildcard, a folder part, a stream, an 8.3 alias's `~`, a
+/// trailing dot or space; an empty folder is the working one; a folder that cannot be
+/// read is looked in as before.
+fn listed_names(dir: &Path, name: &Path) -> Option<Vec<String>> {
+    let text = name.to_str()?;
+    if dir.as_os_str().is_empty()
+        || text.is_empty()
+        || text.contains(['*', '?', '/', '\\', ':', '~', '<', '>', '"'])
+        || text.ends_with(['.', ' '])
+    {
+        return None;
+    }
+    let names = cash_win32::fs::names_beginning(dir, name.as_os_str()).ok()?;
+    Some(
+        names
+            .iter()
+            .map(|(found, _)| cash_win32::fold::name_key(&found.to_string_lossy()))
+            .collect(),
+    )
 }
 
 pub(crate) fn search_for_executable_with_prefix<P, PI>(
