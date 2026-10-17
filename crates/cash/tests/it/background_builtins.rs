@@ -273,20 +273,25 @@ fn an_archiver_stopped_in_a_large_file_ends_at_once_and_leaves_no_archive() {
         ("7z a -bso0 -bsp0 s.7z big", "Break signaled"),
         ("7z h -bso0 -bsp0 big > /dev/null", "Break signaled"),
     ];
-    let script = stop_all_at_once(&tools) + "; ls -A | grep -v '^big$' | grep -v '^err'";
-    let out = run_in(dir.path(), &script);
-    assert_eq!(out.stdout, "143\n143\n143\n143\n143", "{}", out.stderr);
-    for (n, (tool, words)) in tools.iter().enumerate() {
-        let said = std::fs::read_to_string(dir.path().join(format!("err{n}"))).unwrap();
+    let ended = stop_all_at_once(dir.path(), &tools).unwrap();
+    for ((tool, words), (status, said)) in tools.iter().zip(&ended) {
+        assert_eq!(status, "143", "{tool}: {said}");
         assert!(said.contains(words), "{tool}: {said}");
     }
+    assert_eq!(left_behind(dir.path(), &["big"]), Vec::<String>::new());
 }
 
-/// The script that starts each of `tools` in the background at once, its standard error
-/// to `errN`, stops them all a second later, and says how each ended: one run for all,
-/// as a run for each took longer than a test may in the CI's slow lane.
-fn stop_all_at_once(tools: &[(&str, &str)]) -> String {
+/// Starts each of `tools` in `dir` in the background at once, its standard error to
+/// `errN`, stops them all a second later, and gives how each ended (its status, and what
+/// it said), each status written to `ended` as it comes. One run for all: a run for each
+/// took longer than a test may in the CI's slow lane. A run still going twelve seconds on
+/// is ended, and `Err` says which tools had not stopped and what each had said.
+fn stop_all_at_once(
+    dir: &std::path::Path,
+    tools: &[(&str, &str)],
+) -> Result<Vec<(String, String)>, String> {
     use std::fmt::Write as _;
+    use std::time::{Duration, Instant};
     let mut script = String::new();
     for (n, (tool, _)) in tools.iter().enumerate() {
         let _ = write!(script, "{tool} 2> err{n} & ");
@@ -296,9 +301,62 @@ fn stop_all_at_once(tools: &[(&str, &str)]) -> String {
         let _ = write!(script, " %{n}");
     }
     for n in 1..=tools.len() {
-        let _ = write!(script, r#"; wait %{n}; echo "$?""#);
+        let _ = write!(script, r#"; wait %{n}; echo "{n} $?" >> ended"#);
     }
-    script
+    let mut child = cash_command()
+        .args(["-c", &script])
+        .current_dir(dir)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let deadline = Instant::now() + Duration::from_secs(12);
+    let finished = loop {
+        if child.try_wait().map_err(|e| e.to_string())?.is_some() {
+            break true;
+        }
+        if Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            break false;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let ended = std::fs::read_to_string(dir.join("ended")).unwrap_or_default();
+    let said: Vec<String> = (0..tools.len())
+        .map(|n| std::fs::read_to_string(dir.join(format!("err{n}"))).unwrap_or_default())
+        .collect();
+    if !finished {
+        return Err(format!(
+            "still running twelve seconds on; ended: {ended:?}; said: {said:?}"
+        ));
+    }
+    let mut statuses = vec![String::new(); tools.len()];
+    for line in ended.lines() {
+        if let Some((n, status)) = line.split_once(' ')
+            && let Some(slot) = n
+                .parse::<usize>()
+                .ok()
+                .and_then(|n| statuses.get_mut(n.wrapping_sub(1)))
+        {
+            status.clone_into(slot);
+        }
+    }
+    Ok(statuses.into_iter().zip(said).collect())
+}
+
+/// The names in `dir` other than `kept`, `errN` and `ended`: what a stopped tool left.
+fn left_behind(dir: &std::path::Path, kept: &[&str]) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| {
+            !kept.contains(&name.as_str()) && !name.starts_with("err") && name != "ended"
+        })
+        .collect()
 }
 
 #[test]
@@ -384,10 +442,9 @@ fn an_archiver_stopped_in_a_large_member_ends_at_once() {
         ("unzip -tq big.zip", ""),
         ("7z t -bso0 -bsp0 big.zip", "Break signaled"),
     ];
-    let out = run_in(dir.path(), &stop_all_at_once(&tools));
-    assert_eq!(out.stdout, "143\n143\n143\n143\n143", "{}", out.stderr);
-    for (n, (tool, words)) in tools.iter().enumerate() {
-        let said = std::fs::read_to_string(dir.path().join(format!("err{n}"))).unwrap();
+    let ended = stop_all_at_once(dir.path(), &tools).unwrap();
+    for ((tool, words), (status, said)) in tools.iter().zip(&ended) {
+        assert_eq!(status, "143", "{tool}: {said}");
         assert!(said.contains(words), "{tool}: {said}");
     }
 }
