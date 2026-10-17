@@ -30,11 +30,8 @@ for working through it. What is done, phases and findings, is in DONE.md.
 The user's picks after 1.22.0 (decisions.md, "The phase after 1.22.0"), in this
 order. The phase before, released as 1.22.0, is in DONE.md.
 
-1. **`timeout 2 cash -c 'sleep 5; echo done'` prints `done`** (2026-10-17, seen in Claude's
-   shell): Git Bash's `timeout` ended the `sleep`, and cash went on to `echo`, where
-   `timeout 2 bash -c …` prints nothing; no trap on TERM or INT ran in cash. What Git
-   Bash's `timeout` sends a native program, and whether this shell's inherited "ignore
-   Ctrl-C" is the cause, is not known yet; to be tried in the user's Terminal.
+1. **`timeout 2 cash -c 'sleep 5; echo done'` prints `done`**: settled, not cash's
+   (2026-10-17, DONE.md).
 2. **`pbcopy` and `pbpaste` on a locked workstation say "the clipboard is in use by another
    program"** (2026-10-17, the full lane's clipboard test while the screen was locked):
    Windows refuses `OpenClipboard` with ACCESS_DENIED while the session is locked, the
@@ -85,6 +82,15 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **A TERM trap never runs on cash's own `kill -TERM`** (2026-10-17, found with
+  `timeout`): `kill -TERM` sends Ctrl-Break to the job's group (D21), and cash's console
+  handler takes Ctrl-C only, so a cash script with `trap … TERM` ends at once with 143,
+  its trap not run, its foreground child ended with it. Bash runs the trap once the
+  foreground command ends and goes on; without a trap it ends with 143; an interactive
+  bash ignores TERM. cash could keep a Ctrl-Break as a pending TERM where a trap is set
+  (or always, ending with 143 at the next safe point), as it keeps a Ctrl-C (D13).
+  Seen: `cash -c "trap 'echo t' TERM; sleep 3; echo after" & sleep 1; kill -TERM $!`
+  ends 143 with nothing printed; bash prints `t` and `after`.
 - **An archiver killed at once hung past 15 s in CI** (2026-10-17, run 39043122930,
   slow lane 4/4): `background_builtins::an_archiver_stopped_in_its_walk_writes_no_archive`
   runs `zip`, `rar` and `7z` on 3000 files as `tool & kill %1; wait %1` and was ended at

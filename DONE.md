@@ -1902,3 +1902,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   of two million appends, added with posixutils-rs awk's fixes, ran 10 to 12 s in a
   debug build, near the 15 s the quick lane gives a test, on this machine, faster than
   CI's. Half a million each still tells linear from copying: 3 s in all.
+- **`timeout 2 cash -c 'sleep 5; echo done'` printed `done`** (the user's pick after
+  1.22.0): settled, not cash's. Git Bash's `timeout` is an MSYS program, and a native
+  program it runs is not reached by its signals as an MSYS one is: with TERM, cash's
+  `sleep` (a child of cash) ended with 143 and cash went on, as `cmd /c "ping …& echo
+  done"` goes on; with INT nothing is reached at all (`sleep=0`). Run from a file, from
+  a pipe, by 1.18.0 and by 1.22.0, the same. In cash, `timeout` is cash's own and ends
+  the command (`timeout 2 cash -c …` gives 124 and no `done`). What it showed on the way,
+  that a TERM trap never runs on cash's own `kill -TERM`, is in TODO.md.
