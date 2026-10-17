@@ -280,9 +280,8 @@ fn a_folder_that_cannot_be_listed_is_said_as_rar_says_it() {
         )
     });
     assert_eq!(out.stdout, "rc=6\nd\nd/a.txt\nd/shut");
-    let whole = std::fs::canonicalize(&shut).expect("the folder");
-    let whole = whole.display().to_string();
-    let whole = whole.strip_prefix(r"\\?\").unwrap_or(&whole);
+    // As the shell's folder spells it: on CI, %TEMP% is the short name `RUNNER~1`.
+    let whole = shut.display().to_string();
     assert_eq!(
         out.stderr,
         format!("\nCannot read contents of {whole}\nAccess is denied.")
