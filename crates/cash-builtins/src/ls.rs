@@ -649,7 +649,10 @@ impl LsCommand {
                 if i > 0 || !file_items.is_empty() {
                     writeln!(out)?;
                 }
-                self.render_tree(&mut out, dir_path, dir_str, &look)?;
+                match self.tree_operand(&context, &mut out, dir_path, dir_str, &look)? {
+                    Some(unreadable) => had_minor_error |= unreadable,
+                    None => had_error = true,
+                }
                 continue;
             }
 
@@ -704,6 +707,32 @@ impl LsCommand {
                 Ok(None)
             }
         }
+    }
+}
+
+impl LsCommand {
+    /// `--tree` of a directory named on the command line, answered as
+    /// [`Self::list_operand`] answers. Each folder it could not open is said in GNU ls's
+    /// words, as `-R` says it: they were passed over in silence.
+    fn tree_operand<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        out: &mut impl Write,
+        dir_path: &Path,
+        dir_str: &str,
+        look: &Look,
+    ) -> Result<Option<bool>, std::io::Error> {
+        let mut answer = Some(false);
+        for (shown, error, operand) in self.render_tree(out, dir_path, dir_str, look)? {
+            writeln!(
+                context.stderr(),
+                "{}: cannot open directory '{shown}': {}",
+                context.command_name,
+                cash_core::error::os_error_text(&error)
+            )?;
+            answer = if operand { None } else { answer.map(|_| true) };
+        }
+        Ok(answer)
     }
 }
 
@@ -903,7 +932,8 @@ impl LsCommand {
                     break;
                 }
                 if item.kind == EntryKind::Dir && item.name != "." && item.name != ".." {
-                    let sub_str = format!("{dir_str}/{}", item.name);
+                    // Joined once: `ls -R foo/` printed `foo//bar:`.
+                    let sub_str = crate::walk::join_shown(dir_str, &item.name);
                     match self.read_entries(&item.path, true) {
                         Ok(sub_items) => {
                             writeln!(out)?;
@@ -936,19 +966,22 @@ impl LsCommand {
     }
 
     /// `--tree`: the directory, then everything below it with the branches drawn, as
-    /// deep as `--depth` allows. Links to directories are shown, not followed.
+    /// deep as `--depth` allows. Links to directories are shown, not followed. What it
+    /// gives back is each folder it could not open, by name, and whether that was the
+    /// operand, for the caller to say.
     fn render_tree(
         &self,
         out: &mut impl Write,
         dir_path: &Path,
         dir_str: &str,
         look: &Look,
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<Vec<(String, std::io::Error, bool)>, std::io::Error> {
         let mut rows: Vec<(String, ItemInfo)> = Vec::new();
         if let Some(root) = inspect_path(dir_path, dir_str, self.long, None) {
             rows.push((String::new(), root));
         }
-        self.tree_rows(dir_path, "", 1, &mut rows);
+        let mut unopened = Vec::new();
+        self.tree_rows(dir_path, dir_str, "", 1, &mut rows, &mut unopened);
 
         if self.long {
             let (items, prefixes): (Vec<ItemInfo>, Vec<String>) = rows
@@ -961,18 +994,26 @@ impl LsCommand {
                 writeln!(out, "{prefix}{}", self.format_name(item, look))?;
             }
         }
-        Ok(())
+        Ok(unopened)
     }
 
+    /// The rows below the folder `dir`, shown as `shown`; a folder that cannot be opened
+    /// goes into `unopened`.
     fn tree_rows(
         &self,
         dir: &Path,
+        shown: &str,
         prefix: &str,
         level: usize,
         rows: &mut Vec<(String, ItemInfo)>,
+        unopened: &mut Vec<(String, std::io::Error, bool)>,
     ) {
-        let Ok(items) = self.read_entries(dir, false) else {
-            return;
+        let items = match self.read_entries(dir, false) {
+            Ok(items) => items,
+            Err(error) => {
+                unopened.push((shown.to_owned(), error, level == 1));
+                return;
+            }
         };
         let count = items.len();
         for (index, item) in items.into_iter().enumerate() {
@@ -981,10 +1022,11 @@ impl LsCommand {
             let descend =
                 item.kind == EntryKind::Dir && self.depth.is_none_or(|depth| level < depth);
             let path = item.path.clone();
+            let name = crate::walk::join_shown(shown, &item.name);
             rows.push((std::format!("{prefix}{branch}"), item));
             if descend {
                 let below = std::format!("{prefix}{}", if last { "    " } else { "│   " });
-                self.tree_rows(&path, &below, level + 1, rows);
+                self.tree_rows(&path, &name, &below, level + 1, rows, unopened);
             }
         }
     }

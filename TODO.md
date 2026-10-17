@@ -32,14 +32,7 @@ upstream's.
 
 1. **Options**: done (2026-10-17, DONE.md).
 2. **Inputs**: done (2026-10-17, DONE.md).
-3. **Walks** (walkdir with a cash layer):
-   - grep -r/-R (link loops);
-   - find (its loop code goes, its message stays), and `-H` becomes real;
-   - tree (a OneDrive folder is a folder);
-   - gzip -r and zstd -r (links as upstream);
-   - chmod -R (an unreadable folder is reported);
-   - where -r (each folder listed once) and fileuse;
-   - then tar, zip, rar and 7z.
+3. **Walks**: done (2026-10-17, DONE.md).
 4. **Then, the parts called most** (the user, 2026-10-17, "after you finish the whole
    exercise"): a deep look at the components every builtin and command goes through
    many times (option parsing, printing and output, expansion, lookups and the like)

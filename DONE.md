@@ -1583,3 +1583,25 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   - tar reads cash's spellings (`/c/x`) for names, `-C`, `-T` and `-X`, and devices for
     its lists and archive; 7z reads its list files from the shell's folder;
   - `< dir`, `> dir` and `source dir` say "Is a directory".
+
+- **Shared parts for the builtins, 3: walks** (done 2026-10-17): `cash_builtins::walk`,
+  on walkdir. Names shown as typed and joined once; one answer to what a link is (a
+  symlink or junction; a cloud placeholder is the file or folder it holds); the stop
+  token asked for each entry; every error handed to the tool, a folder that could not
+  be listed apart from a name that is not there. Links below a root are followed by the
+  layer, a loop found by the identity of the folders above: walkdir's own following
+  opened each folder to read, and lost one that could not be read.
+  - grep -r/-R, find (`-H` real, its loop message kept, a name it cannot read quoted),
+    tree (a cloud folder is a folder, a linked root listed), gzip -r and zstd -r (links
+    as upstream), chmod -R (a folder it cannot list is said), where (where.exe's order,
+    through junctions, each folder listed once, one walk for every pattern), lsof +D
+    and fuser;
+  - tar, zip, rar and 7z: through links where upstream goes, each file stored once at a
+    junction back to a folder above (upstream goes round until the path is too long,
+    or, GNU tar, until its stack overflows); tar's and rar's words for a folder that
+    cannot be listed; rar's archive masks in Rar.exe's order; 7z takes only symlinks
+    and junctions as links; a stop in a walk fails the run, never an archive that looks
+    whole;
+  - 7z x -o makes its folder when nothing is extracted, as 7-Zip does (the old find
+    had hidden it from the oracle);
+  - ls -R joins names once (`ls -R foo/`), and ls --tree says a folder it cannot open.

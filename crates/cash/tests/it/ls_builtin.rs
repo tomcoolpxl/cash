@@ -677,3 +677,53 @@ fn ls_r_reports_a_directory_it_cannot_open() {
     );
     assert_eq!(out.code, 1);
 }
+
+/// `ls -R foo/` joins the names below once, as GNU `ls` does: it printed `foo//bar:`.
+#[test]
+fn ls_r_joins_names_below_a_trailing_slash_once() {
+    let scratch = Scratch::new("ls-r-slash");
+    std::fs::create_dir_all(scratch.join("foo").join("bar")).unwrap();
+    std::fs::write(scratch.join("foo").join("bar").join("f"), "").unwrap();
+    let out = output_of(
+        cash_command()
+            .args(["-c", "ls -R foo/"])
+            .current_dir(scratch.path()),
+    );
+    assert_eq!(out.stdout, "foo/:\nbar\n\nfoo/bar:\nf");
+    assert_eq!(out.code, 0, "{}", out.stderr);
+}
+
+/// `ls --tree` says a folder below it that it cannot open, as `-R` says it, status 1: it
+/// drew the folder with nothing under it, said nothing and exited 0.
+#[test]
+fn ls_tree_reports_a_directory_it_cannot_open() {
+    let scratch = Scratch::new("ls-tree-shut");
+    for dir in ["open", "shut"] {
+        std::fs::create_dir(scratch.join(dir)).unwrap();
+        std::fs::write(scratch.join(dir).join("f"), "").unwrap();
+    }
+    let user = std::env::var("USERNAME").unwrap();
+    let icacls = |args: &[&str]| {
+        let status = Command::new("icacls")
+            .arg(scratch.join("shut"))
+            .args(args)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success(), "icacls {args:?}");
+    };
+    icacls(&["/deny", &format!("{user}:(RX)")]);
+    let out = output_of(
+        cash_command()
+            .args(["-c", "ls --tree ."])
+            .current_dir(scratch.path()),
+    );
+    icacls(&["/remove:d", &user]);
+
+    assert_eq!(out.stdout, ".\n├── open\n│   └── f\n└── shut");
+    assert_eq!(
+        out.stderr,
+        "ls: cannot open directory './shut': Permission denied"
+    );
+    assert_eq!(out.code, 1);
+}

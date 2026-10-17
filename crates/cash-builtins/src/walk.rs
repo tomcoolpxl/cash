@@ -455,7 +455,7 @@ pub(crate) fn kind(file_type: std::fs::FileType) -> Kind {
 
 /// `below` under `root` as a name is shown: `root/below`, `root` alone, or `below` alone
 /// for the empty root; a root that ends with a separator gets no second one.
-fn join_shown(root: &str, below: &str) -> String {
+pub(crate) fn join_shown(root: &str, below: &str) -> String {
     if below.is_empty() {
         root.to_owned()
     } else if root.is_empty() {
