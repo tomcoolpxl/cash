@@ -1562,7 +1562,7 @@ impl builtins::Command for GrepCommand {
             "fgrep" => Some(Syntax::Fixed),
             _ => None,
         };
-        let opts = match settle(&self.args, preset) {
+        let opts = match crate::options::read_options(&context, || settle(&self.args, preset)) {
             Ok(opts) => opts,
             Err(Early::Usage(message)) if message.is_empty() => {
                 writeln!(context.stderr(), "{USAGE}\n{HINT}")?;

@@ -1349,7 +1349,7 @@ fn run<SE: cash_core::ShellExtensions>(
         .filter(|(_, var)| var.is_exported())
         .map(|(_, var)| var.value().to_cow_str(context.shell).into_owned())
         .and_then(|gzip| level_from_environment(&gzip));
-    let options = match parse(preset, env_level, args) {
+    let options = match crate::options::read_options(context, || parse(preset, env_level, args)) {
         Parsed::Run(options) => options,
         Parsed::Help => {
             context.stdout().write_all(help(invoked).as_bytes())?;

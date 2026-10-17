@@ -93,7 +93,12 @@ pub fn run_ping(args: Vec<OsString>) -> i32 {
         .skip(1)
         .map(|a| a.to_string_lossy().into_owned())
         .collect();
-    match parse(&args).and_then(|options| resolve(&options).map(|target| (options, target))) {
+    // ping runs in a process of its own, whose environment holds what the shell exported.
+    // process state: POSIXLY_CORRECT is in this process's environment when exported
+    let posixly_correct = std::env::var_os("POSIXLY_CORRECT").is_some();
+    match cash_getopt::posixly_correct(posixly_correct, || parse(&args))
+        .and_then(|options| resolve(&options).map(|target| (options, target)))
+    {
         Ok((options, target)) => ping(&options, &target),
         Err(Stop(message, status)) => {
             if !message.is_empty() {

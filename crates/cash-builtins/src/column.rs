@@ -1199,27 +1199,28 @@ impl builtins::Command for ColumnCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let mut options = match Options::parse(&self.args) {
-            Ok(options) => options,
-            Err(Early::Help) => {
-                write!(context.stdout(), "{USAGE}")?;
-                return Ok(ExecutionResult::success());
-            }
-            Err(Early::Version) => {
-                writeln!(
-                    context.stdout(),
-                    "column (cash): util-linux 2.42.3's options"
-                )?;
-                return Ok(ExecutionResult::success());
-            }
-            Err(Early::Error { message, hint }) => {
-                writeln!(context.stderr(), "column: {message}")?;
-                if hint {
-                    writeln!(context.stderr(), "{HINT}")?;
+        let mut options =
+            match crate::options::read_options(&context, || Options::parse(&self.args)) {
+                Ok(options) => options,
+                Err(Early::Help) => {
+                    write!(context.stdout(), "{USAGE}")?;
+                    return Ok(ExecutionResult::success());
                 }
-                return Ok(ExecutionResult::general_error());
-            }
-        };
+                Err(Early::Version) => {
+                    writeln!(
+                        context.stdout(),
+                        "column (cash): util-linux 2.42.3's options"
+                    )?;
+                    return Ok(ExecutionResult::success());
+                }
+                Err(Early::Error { message, hint }) => {
+                    writeln!(context.stderr(), "column: {message}")?;
+                    if hint {
+                        writeln!(context.stderr(), "{HINT}")?;
+                    }
+                    return Ok(ExecutionResult::general_error());
+                }
+            };
 
         if let Err(message) = options.check() {
             writeln!(context.stderr(), "column: {message}")?;

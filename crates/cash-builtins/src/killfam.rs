@@ -229,7 +229,7 @@ impl builtins::Command for PkillCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let options = match parse_pkill(&self.args) {
+        let options = match crate::options::read_options(&context, || parse_pkill(&self.args)) {
             Ok(options) => options,
             Err(PkillStop::Help) => {
                 writeln!(context.stdout(), "{PKILL_HELP}")?;
@@ -511,7 +511,9 @@ impl builtins::Command for PidofCommand {
         let mut separator = " ".to_owned();
         let mut omit: Vec<u32> = Vec::new();
         let mut names: Vec<String> = Vec::new();
-        for item in Getopt::new(PIDOF_SHORTS, PIDOF_LONGS).read(&self.args) {
+        let getopt =
+            crate::options::read_options(&context, || Getopt::new(PIDOF_SHORTS, PIDOF_LONGS));
+        for item in getopt.read(&self.args) {
             let (id, value) = match item {
                 Err(problem) => {
                     writeln!(context.stderr(), "pidof: {problem}\n{PIDOF_HELP}")?;
@@ -705,7 +707,7 @@ impl builtins::Command for KillallCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let options = match parse_killall(&self.args) {
+        let options = match crate::options::read_options(&context, || parse_killall(&self.args)) {
             Ok(options) => options,
             // `help killall` shows this, so the usage goes to standard output, status 0,
             // where psmisc's is an error.

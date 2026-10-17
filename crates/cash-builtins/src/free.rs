@@ -480,7 +480,7 @@ impl builtins::Command for FreeCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let options = match parse(&self.args) {
+        let options = match crate::options::read_options(&context, || parse(&self.args)) {
             Ok(Parsed::Run(options)) => options,
             Ok(Parsed::Help) => {
                 write!(context.stdout(), "{USAGE}")?;

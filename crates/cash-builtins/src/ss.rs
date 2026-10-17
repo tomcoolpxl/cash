@@ -709,7 +709,7 @@ impl builtins::Command for SsCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        match parse(&self.args, &context)? {
+        match crate::options::read_options(&context, || parse(&self.args, &context))? {
             Parsed::Run(options) => run(&options, &context),
             Parsed::Exit(result) => Ok(result),
         }

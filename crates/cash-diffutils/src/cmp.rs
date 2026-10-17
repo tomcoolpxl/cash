@@ -440,7 +440,9 @@ pub fn cmp(params: &Params) -> Result<Cmp, String> {
 //     and 2 means trouble.
 /// Runs cmp with `args`, the tool's name first; returns its exit status.
 pub fn main(args: &[OsString]) -> i32 {
-    let params = match parse_params(args) {
+    // A process of its own: an exported `POSIXLY_CORRECT` is in its environment.
+    let posixly_correct = std::env::var_os("POSIXLY_CORRECT").is_some();
+    let params = match cash_getopt::posixly_correct(posixly_correct, || parse_params(args)) {
         Ok(Request::Compare(params)) => params,
         Ok(Request::Help) => {
             print!("{HELP}");

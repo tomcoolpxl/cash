@@ -341,13 +341,16 @@ impl builtins::Command for UuidgenCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let made = parse(&self.args).and_then(|parsed| match parsed {
-            Parsed::Help => Ok(None),
-            Parsed::Version => Ok(Some(vec![
-                "uuidgen (cash): util-linux 2.42.3's options".to_owned(),
-            ])),
-            Parsed::Run(request) => generate(&request).map(Some),
-        });
+        let made =
+            crate::options::read_options(&context, || parse(&self.args)).and_then(|parsed| {
+                match parsed {
+                    Parsed::Help => Ok(None),
+                    Parsed::Version => Ok(Some(vec![
+                        "uuidgen (cash): util-linux 2.42.3's options".to_owned(),
+                    ])),
+                    Parsed::Run(request) => generate(&request).map(Some),
+                }
+            });
         match made {
             Ok(None) => {
                 write!(

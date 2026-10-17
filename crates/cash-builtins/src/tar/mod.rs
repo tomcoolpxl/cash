@@ -672,7 +672,9 @@ fn run<SE: cash_core::ShellExtensions>(
         .get("TAR_OPTIONS")
         .filter(|(_, var)| var.is_exported())
         .map(|(_, var)| var.value().to_cow_str(context.shell).into_owned());
-    let mut options = match options::parse(environment.as_deref(), args) {
+    let mut options = match crate::options::read_options(context, || {
+        options::parse(environment.as_deref(), args)
+    }) {
         Ok(options) => options,
         Err(Stop::Say(text)) => {
             context.stdout().write_all(text.as_bytes())?;

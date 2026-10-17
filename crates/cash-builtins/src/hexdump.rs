@@ -1265,25 +1265,26 @@ impl builtins::Command for HexdumpCommand {
     ) -> Result<ExecutionResult, Self::Error> {
         let read_file =
             |name: &str| std::fs::read(context.shell.absolute_path(std::path::Path::new(name)));
-        let mut request = match parse(&self.args, &read_file) {
-            Ok(request) => request,
-            Err(Early::Help) => {
-                write!(context.stdout(), "{USAGE}")?;
-                return Ok(ExecutionResult::success());
-            }
-            Err(Early::Version) => {
-                writeln!(context.stdout(), "{VERSION}")?;
-                return Ok(ExecutionResult::success());
-            }
-            Err(Early::Option(message)) => {
-                writeln!(context.stderr(), "hexdump: {message}\n{HINT}")?;
-                return Ok(ExecutionResult::general_error());
-            }
-            Err(Early::Failed(Failure(message))) => {
-                writeln!(context.stderr(), "hexdump: {message}")?;
-                return Ok(ExecutionResult::general_error());
-            }
-        };
+        let mut request =
+            match crate::options::read_options(&context, || parse(&self.args, &read_file)) {
+                Ok(request) => request,
+                Err(Early::Help) => {
+                    write!(context.stdout(), "{USAGE}")?;
+                    return Ok(ExecutionResult::success());
+                }
+                Err(Early::Version) => {
+                    writeln!(context.stdout(), "{VERSION}")?;
+                    return Ok(ExecutionResult::success());
+                }
+                Err(Early::Option(message)) => {
+                    writeln!(context.stderr(), "hexdump: {message}\n{HINT}")?;
+                    return Ok(ExecutionResult::general_error());
+                }
+                Err(Early::Failed(Failure(message))) => {
+                    writeln!(context.stderr(), "hexdump: {message}")?;
+                    return Ok(ExecutionResult::general_error());
+                }
+            };
         if request.formats.is_empty() {
             for fmt in DEFAULT_FORMAT {
                 if let Err(Failure(message)) = add_format(&mut request, fmt.as_bytes()) {

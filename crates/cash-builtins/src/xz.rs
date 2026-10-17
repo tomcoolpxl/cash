@@ -1697,7 +1697,8 @@ fn run<SE: cash_core::ShellExtensions>(
         exported(context, "XZ_DEFAULTS"),
         exported(context, "XZ_OPT"),
     ];
-    let options = match parse(invoked, &environment, args) {
+    let options = match crate::options::read_options(context, || parse(invoked, &environment, args))
+    {
         Parsed::Run(options) => options,
         Parsed::Exit(out, err, status) => {
             context.stdout().write_all(out.as_bytes())?;

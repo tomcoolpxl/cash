@@ -271,7 +271,7 @@ impl builtins::Command for PgrepCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let options = match parse(&self.args) {
+        let options = match crate::options::read_options(&context, || parse(&self.args)) {
             Ok(options) => options,
             Err(Stop::Help) => {
                 writeln!(context.stdout(), "{HELP}")?;

@@ -1454,7 +1454,7 @@ impl builtins::Command for IconvCommand {
     ) -> Result<ExecutionResult, Self::Error> {
         let mut stdout = context.stdout();
         let mut stderr = context.stderr();
-        let options = match parse(&self.args) {
+        let options = match crate::options::read_options(&context, || parse(&self.args)) {
             Parsed::Run(options) => options,
             Parsed::Help => {
                 stdout.write_all(HELP.as_bytes())?;

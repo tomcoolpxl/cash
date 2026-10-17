@@ -154,3 +154,18 @@ fn a_substitution_file_and_a_windows_path_are_searched() {
     let out = run_in(dir.path(), "cd src && grep -rn other");
     assert_eq!(out.stdout, "deep/b.rs:1:fn other() {}");
 }
+
+#[test]
+fn posixly_correct_ends_the_options_at_the_first_operand() {
+    // glibc's getopt_long: under POSIXLY_CORRECT a word after the first operand is an
+    // operand, so `-i` there is a file. Every builtin reading options through cash-getopt
+    // takes the shell's variable.
+    let scratch = Scratch::new("grep-posixly-correct");
+    std::fs::write(scratch.path().join("f"), "X\n").unwrap();
+    let out = run_in(
+        scratch.path(),
+        "grep x f -i; echo \"status $?\"; POSIXLY_CORRECT=1 grep x f -i; echo \"status $?\"",
+    );
+    assert_eq!(out.stdout, "X\nstatus 0\nstatus 2", "{}", out.stderr);
+    assert_eq!(out.stderr, "grep: -i: No such file or directory");
+}

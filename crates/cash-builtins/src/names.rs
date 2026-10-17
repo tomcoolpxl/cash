@@ -245,7 +245,7 @@ fn run<SE: cash_core::ShellExtensions>(
     tool: &str,
     args: &[String],
 ) -> Result<ExecutionResult, cash_core::Error> {
-    let request = match parse(tool, args) {
+    let request = match crate::options::read_options(context, || parse(tool, args)) {
         Ok(request) => request,
         Err(Early::Help) => {
             let help = if tool == "basename" {
