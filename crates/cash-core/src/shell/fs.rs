@@ -29,31 +29,31 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             self.absolute_path(accepted.as_path())
         };
 
-        match std::fs::metadata(&abs_path) {
-            Ok(m) => {
-                if !m.is_dir() {
-                    return Err(error::ErrorKind::NotADirectory(abs_path).into());
-                }
-            }
-            Err(e) => {
-                return Err(e.into());
-            }
+        // A folder told without opening it; a link or a junction, or a name the cheap
+        // call cannot answer for, through `metadata`, which follows the link and says why
+        // a name is not there.
+        let is_folder = match cash_win32::fs::is_folder_unopened(&abs_path) {
+            Some(is_folder) => is_folder,
+            None => std::fs::metadata(&abs_path)?.is_dir(),
+        };
+        if !is_folder {
+            return Err(error::ErrorKind::NotADirectory(abs_path).into());
         }
 
         // Normalize the path (but don't canonicalize it).
         let cleaned_path = abs_path.normalize();
-
-        // cash (D3/D10): store the canonical spelling in the shell's own cwd state, not
-        // just in `$PWD`. Anything reading `working_dir()` — the `pwd` builtin, relative
-        // path resolution, the prompt — then renders correctly without each one having
-        // to remember to convert.
-        let cleaned_path = std::path::PathBuf::from(cash_win32::path::render(&cleaned_path));
 
         // cash (D3): render the one canonical spelling — drive letter, forward slashes.
         // `pwd` prints `C:/src/infra`, never `C:\src\infra`, because rendered paths
         // usually become arguments to native executables where the wrong spelling is
         // fatal rather than cosmetic: `terraform -chdir="$(pwd)/modules"` must work.
         let pwd = cash_win32::path::render(&cleaned_path);
+
+        // cash (D3/D10): store the canonical spelling in the shell's own cwd state, not
+        // just in `$PWD`. Anything reading `working_dir()` — the `pwd` builtin, relative
+        // path resolution, the prompt — then renders correctly without each one having
+        // to remember to convert. Rendered once: the spelling is the same.
+        let cleaned_path = std::path::PathBuf::from(&pwd);
 
         self.env.update_or_add(
             "PWD",

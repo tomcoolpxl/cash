@@ -1706,3 +1706,9 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   100,000 calls took 1.030 s, now 0.719 s, against 0.698 s for Git Bash's bash. A bad
   `-v` name says `` `1x': not a valid identifier ``, status 2, as Bash's does, where it
   said "failed to parse parameter", status 1.
+
+- **`cd` took 62 µs** (found 2026-10-17 in the hot-paths survey, done the same day): it
+  tells a folder with `GetFileAttributesW`, without the handle `std::fs::metadata` opens
+  (a link or a junction still goes through `metadata`), and renders its path once:
+  55.6 µs a call, against 233 µs in Git Bash. The rest is Windows': one attribute query
+  costs 43 to 48 µs on this machine outside cash too, and `cd` must ask once.

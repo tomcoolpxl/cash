@@ -89,6 +89,9 @@ program cache: those showed no cost worth taking.
   behind a global lock, and each hit copies its key and its result: past 64 distinct
   words in a loop a word costs 1.8 µs against 1.3, and an `eval` in a loop copies its
   whole program. A thread's own map, larger, would take neither the lock nor the copies.
-- `cd` takes 62 µs, against 2 to 4 for most builtins: `std::fs::metadata` opens a handle
-  to tell a folder (`GetFileAttributesExW` would not), and the path is rendered twice.
-  Bash's `cd` under MSYS takes 1.1 ms, so it is not behind.
+- `cd` took 62 µs, against 2 to 4 for most builtins. It tells a folder with
+  `GetFileAttributesW` now, without the handle `std::fs::metadata` opened, and renders
+  its path once (2026-10-17): 40,000 calls took 2.349 s, now 2.224 s (55.6 µs a call),
+  against 9.3 s for Git Bash's bash. The rest is Windows': one attribute query costs
+  43 to 48 µs on this machine outside cash too (PowerShell's `File.GetAttributes`), as
+  `[ -d . ]` does in cash, and `cd` must ask once to know the folder is there.

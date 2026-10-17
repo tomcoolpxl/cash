@@ -55,6 +55,9 @@ What the phases now in DONE.md left open, each where its phase says more.
 
 ## Found along the way
 
+- **A cash-sed test timed out once in CI** (2026-10-17, run 39024431762, slow lane
+  1/4): `test_sed::ranges_ended_by_a_line_number_match_gnu_sed` took over 45 s on its
+  first try and passed on the second. Look at what it runs before raising a limit.
 - **The ConPTY tests that run PowerShell time out in CI now and then**: PowerShell
   started by the test prints nothing in 30 s (`conpty_interactive_tests.rs:220`).
   Run 37953062174 (2026-10-09, slow lane 1/4, both tries):
@@ -140,9 +143,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   its value, and past 64 distinct words in a loop a word costs 1.8 µs against 1.3. An
   `eval` in a loop copies its whole program on each hit. A thread's own map, larger, as
   arithmetic's `parse_shared` has, would take neither the lock nor the key's copy.
-- **`cd` takes 62 µs** (2026-10-17): `std::fs::metadata` opens a handle to tell a folder,
-  where `GetFileAttributesExW` would not, and the path is rendered twice. Bash's `cd`
-  under MSYS takes 1.1 ms, so it is not behind, but a `cd` in a loop pays it.
 
 ---
 
