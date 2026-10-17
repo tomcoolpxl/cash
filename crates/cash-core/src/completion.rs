@@ -1824,16 +1824,20 @@ async fn get_file_completions(
 fn get_external_command_completions(
     shell: &Shell<impl extensions::ShellExtensions>,
     prefix: &str,
-) -> impl Iterator<Item = String> {
+) -> Vec<String> {
+    let case_insensitive = shell.options().case_insensitive_pathname_expansion;
+    // From the background listing of PATH once it is ready: the menu asks on every
+    // keystroke, and asking each PATH folder took 17.7 ms over 80.
+    if let Some(names) = shell.executables_with_prefix_if_known(prefix, case_insensitive) {
+        return names;
+    }
     shell
-        .find_executables_in_path_with_prefix(
-            prefix,
-            shell.options().case_insensitive_pathname_expansion,
-        )
+        .find_executables_in_path_with_prefix(prefix, case_insensitive)
         .filter_map(|path| {
             path.file_name()
                 .map(|name| name.to_string_lossy().into_owned())
         })
+        .collect()
 }
 
 /// Attempts to complete a variable name from the given token.

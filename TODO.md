@@ -37,12 +37,7 @@ order. The phases before, released as 1.22.0 and 1.23.0, are in DONE.md.
    fixed (the user, 2026-10-18; decisions.md, DONE.md).
 4. **An archiver killed at once hung past 15 s in CI**: settled, load on CI's runners
    (2026-10-18, DONE.md).
-5. **The completion menu scans PATH on each keystroke**: the completion menu runs the PATH scan (or carapace) again on every keystroke while
-   it is open: each folder is asked for the names beginning with the prefix since
-   2026-10-17, 17.7 ms for `compgen -c no` where listing each whole took 24. The rest
-   is a directory query for each of the 80 folders on PATH, at Windows' cost of one,
-   and the runnable check of each match; the background `PathIndex` keeps folded
-   names only, and would need the names as spelled and each one's runnable answer.
+5. **The completion menu scans PATH on each keystroke**: done (2026-10-18, DONE.md).
 6. **`which <builtin>` walks all of PATH**: done (2026-10-18, DONE.md).
 7. **Each `.ps1` run scans PATH for pwsh**: done (2026-10-18, DONE.md).
 8. **`HISTCONTROL=erasedups` scans the whole history**: done (2026-10-18, DONE.md).
@@ -68,6 +63,11 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **Command completion offers DLLs** (2026-10-18, found with the completion menu's
+  index): `compgen -c no` lists `noise.dll` from System32, as 1.23.0's scan did too: a
+  file without a `PATHEXT` extension counts as runnable by its contents, and a DLL is a
+  PE image (D46). Running `noise.dll` fails; the content check could take a PE image only
+  when it is an executable, not a DLL (the `IMAGE_FILE_DLL` flag in its file header).
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against
@@ -85,9 +85,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   decodes at two thirds of XZ Utils' speed; zip on one large member has no parallelism
   to use (2.2 s against 1.9 s).
 
-- **Work done again on every call, from the 2026-10-16 survey** (after `ls` was found
-  re-reading Windows Terminal's settings per listing; the session facts now have one
-  place, `cash_win32::facts`). Still worked out each time:
 - **A Ctrl-C or `kill` on a large `xz` waits for its blocks** (parked by the user,
   2026-10-17, decisions.md; found 2026-10-16): lzma-rust2's
   threaded encoder takes the whole input at once (13 blocks of 24 MiB from a 300 MB

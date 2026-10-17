@@ -2003,3 +2003,12 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   adding, trimming to `HISTSIZE`, `history -d`, editing and clearing, finds them now, and
   the entries' order is a vector shared until changed, from which one is dropped by a
   move: 98 µs after a command whose line was there, nothing when it was not.
+- **The completion menu scanned PATH on each keystroke** (the user's pick after 1.23.0,
+  from the 2026-10-16 survey): while the menu is open, each keystroke asked every PATH
+  folder for the names beginning with the prefix, 17.7 ms for `compgen -c no`. The
+  background index of PATH (`PathIndex`) keeps each folder's names as spelled too, sorted
+  by their folded form, and the menu takes the prefix's range from it, a name running by
+  a `PATHEXT` extension, a file of the name with one beside it, or its contents, read
+  once and remembered until the folder changes; until the index is ready, the scan
+  answers as before. `compgen -c no` takes 1.9 ms (debug build), and gives the same
+  names as 1.23.0 for `no`, `a`, `g` and `s` (17, 355, 180, 765).

@@ -224,6 +224,20 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         )
     }
 
+    /// The executables on the shell's current PATH whose names begin with `prefix`, as
+    /// each directory spells them, answered from the background listing of the PATH
+    /// directories; `None` while that listing is not ready. For the completion menu,
+    /// which asks on every keystroke; see [`crate::pathindex`].
+    pub fn executables_with_prefix_if_known(
+        &self,
+        prefix: &str,
+        case_insensitive: bool,
+    ) -> Option<Vec<String>> {
+        let (dirs, _) = self.executable_search_dirs();
+        self.path_index
+            .executables_with_prefix(&dirs, prefix, &self.pathext(), case_insensitive)
+    }
+
     /// Whether `name` is an executable on the shell's current PATH, answered from a
     /// background listing of the PATH directories; `None` while that listing is not ready.
     ///

@@ -68,6 +68,9 @@ struct Listing {
     modified: Option<SystemTime>,
     /// The directory's non-directory entries, folded for comparison.
     names: HashSet<String>,
+    /// The same entries, folded and as the directory spells them, in the folded names'
+    /// order: what a prefix's completions are taken from.
+    spelled: Vec<(String, String)>,
     /// Entries matched by their bare name, whose contents or mode had to be checked.
     checked: HashMap<String, bool>,
 }
@@ -151,6 +154,55 @@ impl PathIndex {
         self.contains_executable(dirs, name, extensions)
     }
 
+    /// The executables on `dirs` whose names begin with `prefix`, as each directory
+    /// spells them, directory by directory, as `pathsearch`'s prefix search finds them;
+    /// `None` while the listing for these directories is not ready.
+    ///
+    /// For the completion menu, which asks on every keystroke while it is open: it asked
+    /// each directory for the names, 17.7 ms over 80. A name runs by a `PATHEXT`
+    /// extension, a file of the name with one beside it, or its contents, which are read
+    /// once and remembered until the directory is listed again.
+    pub fn executables_with_prefix(
+        &self,
+        dirs: &[PathBuf],
+        prefix: &str,
+        extensions: &[String],
+        case_insensitive: bool,
+    ) -> Option<Vec<String>> {
+        let key = Key {
+            dirs: dirs.to_vec(),
+            extensions: extensions.iter().map(|ext| fold(ext)).collect(),
+        };
+        let found = {
+            let mut inner = self.lock();
+            self.start_refresh_if_due(&mut inner, &key);
+            if inner.key.as_ref() != Some(&key) {
+                return None;
+            }
+            let found = names_beginning(&inner, &key, prefix, case_insensitive);
+            drop(inner);
+            found
+        };
+
+        // The files that their contents decide, read without the lock and remembered.
+        let mut names = Vec::with_capacity(found.len());
+        for entry in found {
+            match entry {
+                Found::Runs(name) => names.push(name),
+                Found::Unknown(dir, folded, spelled) => {
+                    let runs = runs_by_bare_name(&dir.join(&spelled), extensions);
+                    if let Some(listing) = self.lock().dirs.get_mut(&dir) {
+                        listing.checked.insert(folded, runs);
+                    }
+                    if runs {
+                        names.push(spelled);
+                    }
+                }
+            }
+        }
+        Some(names)
+    }
+
     fn lock(&self) -> MutexGuard<'_, Inner> {
         // A panic while holding the lock leaves only a stale listing behind.
         self.inner
@@ -213,24 +265,71 @@ impl PathIndex {
 
 impl Listing {
     fn read(dir: &Path, modified: Option<SystemTime>) -> Self {
-        let names = std::fs::read_dir(dir)
+        let mut spelled: Vec<(String, String)> = std::fs::read_dir(dir)
             .map(|entries| {
                 entries
                     .flatten()
                     // A directory is never a command, even one named like a program.
                     .filter(|entry| entry.file_type().is_ok_and(|t| !t.is_dir()))
                     .filter_map(|entry| entry.file_name().into_string().ok())
-                    .map(|name| fold(&name))
+                    .map(|name| (fold(&name), name))
                     .collect()
             })
             .unwrap_or_default();
+        spelled.sort_unstable();
+        let names = spelled.iter().map(|(folded, _)| folded.clone()).collect();
 
         Self {
             modified,
             names,
+            spelled,
             checked: HashMap::new(),
         }
     }
+}
+
+/// A name a prefix's completions found: one that runs, or one whose contents decide,
+/// with its directory, folded and as spelled.
+enum Found {
+    Runs(String),
+    Unknown(PathBuf, String, String),
+}
+
+/// The names of `key`'s directories that begin with `prefix`, directory by directory,
+/// from their listings in `inner`: folded for the comparison, and as spelled too unless
+/// `case_insensitive`.
+fn names_beginning(inner: &Inner, key: &Key, prefix: &str, case_insensitive: bool) -> Vec<Found> {
+    let folded_prefix = fold(prefix);
+    let mut found = Vec::new();
+    for dir in &key.dirs {
+        let Some(listing) = inner.dirs.get(dir) else {
+            continue;
+        };
+        let first = listing
+            .spelled
+            .partition_point(|(folded, _)| folded.as_str() < folded_prefix.as_str());
+        for (folded, spelled) in listing.spelled.iter().skip(first) {
+            if !folded.starts_with(&folded_prefix) {
+                break;
+            }
+            if !case_insensitive && !spelled.starts_with(prefix) {
+                continue;
+            }
+            let runs = has_listed_extension(folded, &key.extensions)
+                || key
+                    .extensions
+                    .iter()
+                    .any(|ext| listing.names.contains(&format!("{folded}{ext}")));
+            match (runs, listing.checked.get(folded)) {
+                (true, _) | (false, Some(true)) => found.push(Found::Runs(spelled.clone())),
+                (false, Some(false)) => {}
+                (false, None) => {
+                    found.push(Found::Unknown(dir.clone(), folded.clone(), spelled.clone()));
+                }
+            }
+        }
+    }
+    found
 }
 
 /// Folds a file name for comparison: Windows file names are case-insensitive, by its own
@@ -277,6 +376,47 @@ mod tests {
     /// A name Windows runs by its bare name: `tool.exe`.
     fn program_file(name: &str) -> String {
         format!("{name}.exe")
+    }
+
+    #[test]
+    fn a_prefixs_executables_are_the_scans_from_the_listing() {
+        // The completion menu's names come from the listing once it is ready, the same
+        // names the scan of each folder finds, as each folder spells them.
+        let dir = tempfile::tempdir().unwrap();
+        write_program(&dir.path().join("Tool.exe"));
+        std::fs::write(dir.path().join("tool-script"), "#!/bin/sh\n").unwrap();
+        std::fs::write(dir.path().join("tool-notes"), "plain text").unwrap();
+        std::fs::create_dir(dir.path().join("tool-dir.exe")).unwrap();
+        write_program(&dir.path().join("other.exe"));
+        let dirs = vec![dir.path().to_path_buf()];
+        let extensions = cash_win32::resolve::pathext_of(None);
+        let index = PathIndex::default();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let listed = loop {
+            if let Some(names) = index.executables_with_prefix(&dirs, "too", &extensions, true) {
+                break names;
+            }
+            assert!(Instant::now() < deadline, "the index never became ready");
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        let mut scanned: Vec<String> = crate::pathsearch::search_for_executable_with_prefix(
+            dirs.iter(),
+            "too",
+            true,
+            extensions.clone(),
+        )
+        .filter_map(|path| Some(path.file_name()?.to_string_lossy().into_owned()))
+        .collect();
+        scanned.sort();
+        let mut sorted = listed;
+        sorted.sort();
+        assert_eq!(sorted, ["Tool.exe", "tool-script"]);
+        assert_eq!(sorted, scanned);
+        // Telling case apart, `tool` leaves `Tool.exe` out.
+        assert_eq!(
+            index.executables_with_prefix(&dirs, "tool", &extensions, false),
+            Some(vec!["tool-script".to_owned()])
+        );
     }
 
     #[test]
