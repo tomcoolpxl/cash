@@ -16,7 +16,11 @@ fn head_leaves_a_file_under_its_input_just_after_what_it_printed() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("small"), "one\ntwo\nthree\nfour\n").unwrap();
     // 108894 bytes: more than head reads in one go, so `-n -1` and `-c -3` seek.
-    let big: String = (1..=20_000).map(|n| format!("{n}\n")).collect();
+    let big = (1..=20_000)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
     std::fs::write(dir.path().join("big"), big).unwrap();
     for (script, want) in [
         ("{ head -n1; cat; } < small", "one\ntwo\nthree\nfour"),
