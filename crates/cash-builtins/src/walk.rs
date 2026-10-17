@@ -613,4 +613,66 @@ mod tests {
         );
         std::fs::remove_dir(root.join("a").join("j")).unwrap();
     }
+
+    #[test]
+    fn a_dangling_link_and_a_name_no_string_holds_are_walked() {
+        use std::os::windows::ffi::OsStringExt;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("top");
+        let gone = dir.path().join("gone");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&gone).unwrap();
+        cash_win32::junction::point(&root.join("j"), &gone).unwrap();
+        std::fs::remove_dir(&gone).unwrap();
+        // A lone surrogate: Windows holds it, a Rust string cannot, the walk's path does.
+        let lone = std::ffi::OsString::from_wide(&[0xD800, u16::from(b'x')]);
+        std::fs::write(root.join(&lone), "x").unwrap();
+        let never = WalkOptions {
+            min_depth: 1,
+            ..WalkOptions::default()
+        };
+        let all = WalkOptions {
+            links: Links::All,
+            ..never
+        };
+        assert!(walked(&root, "t", &never).contains(&"t/j Link".to_owned()));
+        assert!(walked(&root, "t", &all).contains(&"t/j dangling".to_owned()));
+        let reached = Walk::new("t", &root, &never, StopToken::never())
+            .filter_map(Result::ok)
+            .any(|entry| entry.path.file_name() == Some(lone.as_os_str()));
+        assert!(reached);
+        std::fs::remove_dir(root.join("j")).unwrap();
+    }
+
+    #[test]
+    fn each_order_sorts_as_it_says() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for name in ["b", "_c", "A"] {
+            std::fs::write(root.join(name), "x").unwrap();
+        }
+        std::fs::create_dir(root.join("D")).unwrap();
+        let order = |order| {
+            let options = WalkOptions {
+                order,
+                min_depth: 1,
+                ..WalkOptions::default()
+            };
+            walked(root, "", &options)
+        };
+        // As NTFS keeps them: by name folded to capitals, `_` after the letters.
+        assert_eq!(
+            order(Order::Listing),
+            ["A File", "b File", "D Folder", "_c File"]
+        );
+        // Unit by unit: capitals, then `_`, then small letters.
+        assert_eq!(
+            order(Order::Ordinal),
+            ["A File", "D Folder", "_c File", "b File"]
+        );
+        assert_eq!(
+            order(Order::FilesFirst),
+            ["A File", "b File", "_c File", "D Folder"]
+        );
+    }
 }
