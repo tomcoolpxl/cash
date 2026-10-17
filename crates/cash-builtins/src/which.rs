@@ -129,18 +129,12 @@ fn linked_path<SE: cash_core::ShellExtensions>(
         return None;
     }
     let exe = std::env::current_exe().ok()?;
-    let options = lookup::Options {
-        force_path_search: true,
-        suppress_func_lookup: true,
-        all_locations: true,
-        path_dirs: None,
-    };
-    lookup::resolve(shell, name, &options)
-        .into_iter()
-        .find_map(|how| match how {
-            Resolved::File { path, .. } if cash_win32::fs::same_file(&path, &exe) => Some(path),
-            _ => None,
-        })
+    // The first match that is this cash ends the search: every match of PATH was gathered
+    // before any was compared. Each folder is looked at once (`pathsearch`), so without a
+    // link the whole of PATH costs a look each.
+    shell
+        .find_executables_in_path(name)
+        .find(|path| cash_win32::fs::same_file(path, &exe))
 }
 
 /// Report what the shell would run for a name.
