@@ -6605,21 +6605,24 @@ fn awk_nested_lvalues_parse_quickly() {
 
 // `s = s t` appends to s in place, so building a string piece by piece is
 // linear: it copied the whole of s two or three times per append, and two
-// million appends never finished.  The result is the same as concatenating:
-// a number on the left is converted with CONVFMT, a numeric string from
-// input stops being numeric, and anything that may change s while the
-// right-hand side is evaluated keeps the ordinary evaluation order.
+// million appends never finished.  Half a million is a second here in a
+// debug build, and copying, 10^11 bytes, would run past the test's time; two
+// million took 10 s, near what the quick lane allows.  The result is the
+// same as concatenating: a number on the left is converted with CONVFMT, a
+// numeric string from input stops being numeric, and anything that may
+// change s while the right-hand side is evaluated keeps the ordinary
+// evaluation order.
 #[test]
 fn awk_append_to_a_variable_is_linear() {
     let cases = [
         (
-            "BEGIN { for (i = 0; i < 2000000; i++) s = s \"x\"; print length(s) }",
-            "2000000\n",
+            "BEGIN { for (i = 0; i < 500000; i++) s = s \"x\"; print length(s) }",
+            "500000\n",
         ),
         (
-            "function f(  l, i) { for (i = 0; i < 2000000; i++) l = l \"ab\"; return length(l) }
+            "function f(  l, i) { for (i = 0; i < 500000; i++) l = l \"ab\"; return length(l) }
              BEGIN { print f() }",
-            "4000000\n",
+            "1000000\n",
         ),
         (
             "BEGIN { s = 0.1; CONVFMT = \"%.2f\"; s = s \"|\" 1 + 1 \"|\" 2; print s }",
