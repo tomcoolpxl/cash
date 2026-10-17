@@ -30,18 +30,7 @@ folder walks"; `research/central-components-design.md` has the surveys and the d
 One tool at a time, each against its tests and Git Bash; its messages stay its
 upstream's.
 
-1. **Options** (cash-getopt):
-   - a repeated option overrides in every clap builtin (`ls -F -F`,
-     `alias ls='ls --color=auto'` then `ls --color=never`);
-   - basename stops at the first operand (`basename foo-bar -bar` is `foo`);
-   - cash-getopt gets `POSIXLY_CORRECT`, a claim hook and the shared usage-error line;
-   - mkfifo (`--mode MODE`, clusters), rev, locale (`--`), stdbuf and nice move onto it;
-   - pkill, killall and pidof move onto it with the claim hook (`--help`, `-V`), then
-     tput and ping;
-   - flock, watch and nc act on help and version in order;
-   - xargs (`-x`, `-a`, `-d`, `-E`, `-L`, `-p`), ls (`--al`), stat (`missing operand`)
-     and pgrep move off clap;
-   - find loses clap's `-h`/`--help`, and watch no longer loses a leading `--`.
+1. **Options**: done (2026-10-17, DONE.md).
 2. **Inputs** (`ExecutionContext::open_input`):
    - grep (`/dev/stdin`);
    - rev, column (a folder is "Is a directory"), hexdump, iconv, xxd and logger;

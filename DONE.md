@@ -1547,3 +1547,24 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   on any failed read, saying nothing and ending with the stop's status: the file is kept
   and no archive is left. Their standard input fails the same way, and xz's writes too,
   since its threads read ahead.
+
+- **Shared parts for the builtins, 1: options** (the user's choice of 2026-10-16, done
+  2026-10-17; `research/central-components-design.md`, decisions.md):
+  - a repeated option overrides in every clap builtin (`builtins::parse_args`), so
+    `alias ls='ls --color=auto'` then `ls --color=never` works;
+  - cash-getopt gained a claim hook for `-10` and `-KILL`, the `POSIXLY_CORRECT` scope
+    (`cash_getopt::posixly_correct`, honoured by every tool on it), and
+    `Exclusive`/`long_name` for util-linux's exclusive options; cash-builtins gained
+    `options` (the order and GNU's usage-error line);
+  - moved onto it, each against Git Bash, WSL's procps, psmisc, util-linux, ncurses or
+    iputils: basename (stops at the first operand), dirname, mkfifo, rev (`-V`), locale
+    (`--`), stdbuf, nice, pkill (`-p`, `-O`, `--help`, `-V`), pidof (long options,
+    `-S`), killall (one-dash long names, `-V`), tput (`-V` in order), ping (iputils'
+    exact table);
+  - flock, watch and nc act on help and version where they stand; watch keeps a leading
+    `--`;
+  - off clap: xargs (GNU findutils 4.10's options, `-L -d -E -a -i -l -x -p -o`,
+    `--process-slot-var`, `--show-limits`), ls (GNU coreutils 9's whole table, its own
+    options beside it, `--classify[=WHEN]`, `-f`, `--version`), stat (`-t`,
+    `--cached`, and `-f`, which had done nothing, now reports the volume), pgrep
+    (procps' table); find answers `-help` and `-version` and takes a leading `--`.
