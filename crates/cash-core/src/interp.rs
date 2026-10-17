@@ -971,6 +971,24 @@ async fn spawn_pipeline_processes(
     Ok(spawn_results)
 }
 
+/// Whether `pipeline` leaves `PIPESTATUS` as the commands it ran set it, as in Bash: a
+/// compound command that is the whole pipeline and runs in this shell
+/// (`if true; then false | true; fi` leaves `1 0`), or a function's definition. A
+/// subshell, `[[ ]]` and `(( ))` set it as a simple command does.
+const fn keeps_pipeline_statuses(pipeline: &ast::Pipeline) -> bool {
+    match pipeline.seq.as_slice() {
+        [ast::Command::Function(_)] => true,
+        [ast::Command::Compound(compound, _)] => !matches!(
+            compound,
+            ast::CompoundCommand::Subshell(_)
+                | ast::CompoundCommand::Arithmetic(_)
+                | ast::CompoundCommand::ExtendedTest(_)
+                | ast::CompoundCommand::Coprocess(_)
+        ),
+        _ => false,
+    }
+}
+
 async fn wait_for_pipeline_processes_and_update_status(
     pipeline: &ast::Pipeline,
     mut process_spawn_results: VecDeque<ExecutionSpawnResult>,
@@ -981,8 +999,12 @@ async fn wait_for_pipeline_processes_and_update_status(
     let mut stopped_children = vec![];
     let mut last_failure_exit_code: Option<ExecutionExitCode> = None;
 
-    // Clear our the pipeline status so we can start filling it out.
-    shell.last_pipeline_statuses_mut().clear();
+    // Clear our the pipeline status so we can start filling it out, unless the pipeline
+    // leaves it to the commands it ran.
+    let keeps_statuses = keeps_pipeline_statuses(pipeline);
+    if !keeps_statuses {
+        shell.last_pipeline_statuses_mut().clear();
+    }
 
     // The processes of its own the shell reaps here: after them, an interactive shell
     // reports the background jobs that finished meanwhile, and a CHLD trap runs once for
@@ -1018,9 +1040,11 @@ async fn wait_for_pipeline_processes_and_update_status(
                 }
                 result = current_result;
                 shell.set_last_exit_status(result.exit_code.into());
-                shell
-                    .last_pipeline_statuses_mut()
-                    .push(result.exit_code.into());
+                if !keeps_statuses {
+                    shell
+                        .last_pipeline_statuses_mut()
+                        .push(result.exit_code.into());
+                }
 
                 // Track the last failure for pipefail option
                 if !result.is_success() {
@@ -1030,9 +1054,11 @@ async fn wait_for_pipeline_processes_and_update_status(
             ExecutionWaitResult::Stopped(child) => {
                 result = ExecutionResult::stopped();
                 shell.set_last_exit_status(result.exit_code.into());
-                shell
-                    .last_pipeline_statuses_mut()
-                    .push(result.exit_code.into());
+                if !keeps_statuses {
+                    shell
+                        .last_pipeline_statuses_mut()
+                        .push(result.exit_code.into());
+                }
 
                 // It becomes a job's process, whose pid `jobs -l` shows: held open, like
                 // a background job's, so the pid stays its own after it ends.

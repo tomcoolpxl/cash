@@ -2056,3 +2056,52 @@ b `echo "x y"` \`'; printf '<%s>\n' "${p@P}""#;
         )
     );
 }
+
+#[test]
+fn pipestatus_is_left_to_the_commands_a_compound_command_ran() {
+    // A compound command that is the whole pipeline leaves PIPESTATUS as the commands
+    // inside set it, and so does a function's definition; a subshell, `[[ ]]`, `(( ))`
+    // and a function's call set it as a simple command does. Expected output is Git Bash
+    // 5.3.15's.
+    let script = r#"if true; then false | true; fi; echo "if: ${PIPESTATUS[*]}"
+if false; then :; else false | true; fi; echo "else: ${PIPESTATUS[*]}"
+{ false | true; } > /dev/null; echo "group: ${PIPESTATUS[*]}"
+! { false | true; }; echo "negated group: ${PIPESTATUS[*]}"
+( false | true ); echo "subshell: ${PIPESTATUS[*]}"
+while false | true; do break; done; echo "while: ${PIPESTATUS[*]}"
+for x in 1; do false | true; done; echo "for: ${PIPESTATUS[*]}"
+false | true; for x in; do :; done; echo "empty for: ${PIPESTATUS[*]}"
+for ((i=0;i<1;i++)); do false | true; done; echo "arith for: ${PIPESTATUS[*]}"
+false | true; case y in x) :;; esac; echo "case: ${PIPESTATUS[*]}"
+f() { false | true; }; f; echo "function: ${PIPESTATUS[*]}"
+false | true; g() { :; }; echo "define: ${PIPESTATUS[*]}"
+false | true; if false; then :; fi; echo "if false: ${PIPESTATUS[*]}"
+if true; then false | true; fi | cat; echo "piped if: ${PIPESTATUS[*]}"
+false | true; [[ 1 ]]; echo "[[: ${PIPESTATUS[*]}"
+false | true; (( 1 )); echo "((: ${PIPESTATUS[*]}""#;
+    assert_eq!(
+        output(script),
+        (
+            0,
+            [
+                "if: 1 0",
+                "else: 1 0",
+                "group: 1 0",
+                "negated group: 1 0",
+                "subshell: 0",
+                "while: 0",
+                "for: 1 0",
+                "empty for: 1 0",
+                "arith for: 1 0",
+                "case: 1 0",
+                "function: 0",
+                "define: 1 0",
+                "if false: 1",
+                "piped if: 0 0",
+                "[[: 0",
+                "((: 0",
+            ]
+            .join("\n")
+        )
+    );
+}
