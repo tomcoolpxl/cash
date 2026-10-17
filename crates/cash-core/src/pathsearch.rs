@@ -51,9 +51,33 @@ pub(crate) struct ExecutablePathPrefixSearch<PI> {
     paths: VecDeque<PI>,
     queued_items: VecDeque<PathBuf>,
     filename_prefix: String,
+    /// The prefix as typed, which each folder is asked for.
+    typed_prefix: String,
     case_insensitive: bool,
     /// The shell's `PATHEXT`.
     extensions: Vec<String>,
+}
+
+/// The entries of `dir` that may begin with `prefix`, each with whether it is a folder.
+///
+/// The folder is asked for them (`FindFirstFileExW` with `prefix*`), where it was listed
+/// whole: a completion menu asked this of every `PATH` folder on each keystroke, 25 ms
+/// with System32 among them. Windows matches an 8.3 alias too, so the caller still
+/// compares the long names; a prefix with a character the pattern would read as a
+/// wildcard lists the folder whole, as before.
+fn entries_beginning(dir: &Path, prefix: &str) -> Vec<(std::ffi::OsString, bool)> {
+    if !prefix.contains(['*', '?', '<', '>', '"']) {
+        return cash_win32::fs::names_beginning(dir, prefix.as_ref()).unwrap_or_default();
+    }
+    dir.read_dir()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| {
+            let is_dir = entry.file_type().is_ok_and(|kind| kind.is_dir());
+            (entry.file_name(), is_dir)
+        })
+        .collect()
 }
 
 impl<PI> Iterator for ExecutablePathPrefixSearch<PI>
@@ -71,28 +95,22 @@ where
         while let Some(path) = self.paths.pop_front() {
             let path = PathBuf::from(path.as_ref());
 
-            if let Ok(readdir) = path.read_dir() {
-                for entry in readdir.flatten() {
-                    if let Ok(mut filename) = entry.file_name().into_string() {
-                        if self.case_insensitive {
-                            filename = cash_win32::fold::name_key(&filename);
-                        }
-
-                        if !filename.starts_with(&self.filename_prefix) {
-                            continue;
-                        }
+            for (name, is_dir) in entries_beginning(&path, &self.typed_prefix) {
+                if let Some(filename) = name.to_str() {
+                    let compared = if self.case_insensitive {
+                        cash_win32::fold::name_key(filename)
+                    } else {
+                        filename.to_owned()
+                    };
+                    if !compared.starts_with(&self.filename_prefix) {
+                        continue;
                     }
+                }
 
-                    let entry_path = entry.path();
-                    if let Ok(file_type) = entry.file_type() {
-                        if file_type.is_file() && entry_path.executable(&self.extensions) {
-                            self.queued_items.push_back(entry_path);
-                            continue;
-                        }
-                        if file_type.is_symlink() && entry_path.executable(&self.extensions) {
-                            self.queued_items.push_back(entry_path);
-                        }
-                    }
+                // A folder is never a command; a file, or a link to one, is when it runs.
+                let entry_path = path.join(&name);
+                if !is_dir && entry_path.executable(&self.extensions) {
+                    self.queued_items.push_back(entry_path);
                 }
             }
             if let Some(item) = self.queued_items.pop_front() {
@@ -263,6 +281,7 @@ where
         paths: paths.collect(),
         queued_items: VecDeque::new(),
         filename_prefix: stored_prefix,
+        typed_prefix: filename_prefix.to_owned(),
         case_insensitive,
         extensions,
     }
@@ -274,6 +293,38 @@ mod tests {
     use anyhow::Result;
 
     use super::*;
+
+    /// Each folder is asked for the names beginning with the prefix: programs that begin
+    /// with it are found, in either case when asked to ignore case, and a folder or a
+    /// file that is no program is not; a prefix with a wildcard in it lists the folder whole
+    /// and finds nothing, as no name holds one.
+    #[test]
+    fn a_prefix_finds_the_programs_that_begin_with_it() -> Result<()> {
+        let scratch = tempfile::tempdir()?;
+        for name in ["abc.exe", "ABD.cmd", "abe.txt", "xyz.exe"] {
+            std::fs::write(scratch.path().join(name), "")?;
+        }
+        std::fs::create_dir(scratch.path().join("abf.exe"))?;
+        let pathext = cash_win32::resolve::pathext_of(None);
+        let names = |prefix: &str, case_insensitive: bool| {
+            let mut names: Vec<String> = search_for_executable_with_prefix(
+                std::iter::once(scratch.path()),
+                prefix,
+                case_insensitive,
+                pathext.clone(),
+            )
+            .filter_map(|path| Some(path.file_name()?.to_string_lossy().into_owned()))
+            .collect();
+            names.sort();
+            names
+        };
+        assert_eq!(names("ab", true), ["ABD.cmd", "abc.exe"]);
+        assert_eq!(names("ab", false), ["abc.exe"]);
+        // No file can have one: the folder is listed whole, and nothing begins with it.
+        assert_eq!(names("a*", true), Vec::<String>::new());
+        assert_eq!(names("", true), ["ABD.cmd", "abc.exe", "xyz.exe"]);
+        Ok(())
+    }
 
     /// A directory whose name matches must not be mistaken for a command; an executable
     /// later in the search order takes its place.

@@ -1726,3 +1726,9 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   each `( )` and `$( )`. Subshells share it now, and the one that changes it (`enable`)
   copies it then: a `( : )` took 20.1 µs, now 15.7, and a `$(true)` 4.4 µs less of its
   74. `enable -n` in a subshell stays in it, as in Bash; a test says so.
+
+- **Command completion listed each PATH folder whole** (from the 2026-10-16 survey, done
+  2026-10-17): each folder is asked for the names beginning with the prefix
+  (`FindFirstFileExW`), the long names still compared, and a prefix with a wildcard
+  character lists it whole as before: `compgen -c no` took 24 ms, now 17.7, the same
+  names for every prefix tried, the empty one's 7,963 among them.

@@ -94,10 +94,20 @@ What the phases now in DONE.md left open, each where its phase says more.
 - **Work done again on every call, from the 2026-10-16 survey** (after `ls` was found
   re-reading Windows Terminal's settings per listing; the session facts now have one
   place, `cash_win32::facts`). Still worked out each time:
-  - `which <builtin>` and `type -a` scan all of PATH on every call;
+  - `which <builtin>` and `type -a` scan all of PATH on every call: `type -a` must; for
+    a bundled tool `which` looks along all of PATH for a `cash --link-tools` link to
+    this cash, comparing each match with it (looked into 2026-10-17; `which` is rarely
+    in a loop);
   - the completion menu runs the PATH scan (or carapace) again on every keystroke while
-    it is open;
-  - a name not found is not remembered, so each miss probes PATH twice;
+    it is open: each folder is asked for the names beginning with the prefix since
+    2026-10-17, 17.7 ms for `compgen -c no` where listing each whole took 24. The rest
+    is a directory query for each of the 80 folders on PATH, at Windows' cost of one,
+    and the runnable check of each match; the background `PathIndex` keeps folded
+    names only, and would need the names as spelled and each one's runnable answer;
+  - a name not found is not remembered, so each miss probes PATH twice: only for a
+    missing command given arguments (looked into 2026-10-17), as the globbing decision
+    (D81) looks the name up as the second word is expanded, and the dispatch looks
+    again; carrying "missing" from the one to the other would save the second;
   - a script's shebang interpreter is looked up twice, past the hash table;
   - each `.ps1` run scans PATH for pwsh;
   - `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command;
