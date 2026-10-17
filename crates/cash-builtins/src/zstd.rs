@@ -32,6 +32,7 @@ use std::path::{Path, PathBuf};
 use cash_archive::codec::xz::{self, Format};
 use cash_archive::codec::zstd::{FrameError, decompress_frame};
 use cash_archive::codec::{self, Codec, Lookahead};
+use cash_core::input::{Dash, InputError};
 use cash_core::openfiles::OpenFiles;
 use cash_core::{ExecutionResult, builtins};
 use cash_win32::unix::Replacement;
@@ -1176,35 +1177,36 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         }
         if is_device(name) {
             return match fs::File::open(name) {
-                Ok(file) => Ok(Some((Box::new(file), None))),
+                Ok(file) => Ok(Some((
+                    Box::new(self.context.stop_token().reader(file)),
+                    None,
+                ))),
                 Err(e) => {
                     self.say(1, &format!("zstd: {name}: {} \n", strerror(&e)))?;
                     Ok(None)
                 }
             };
         }
-        let metadata = if name.is_empty() {
-            Err(io::Error::from(io::ErrorKind::NotFound))
-        } else {
-            fs::metadata(self.path(name))
+        let not_there = |name: &str| {
+            format!("zstd: can't stat {name} : No such file or directory -- ignored \n")
         };
-        let metadata = match metadata {
-            Ok(metadata) => metadata,
-            Err(e) => {
-                self.say(
-                    1,
-                    &format!("zstd: can't stat {name} : {} -- ignored \n", strerror(&e)),
-                )?;
-                return Ok(None);
+        if name.is_empty() {
+            self.say(1, &not_there(name))?;
+            return Ok(None);
+        }
+        // Opened as the shell's `<` opens it, once; what it is comes from the open handle.
+        // zstd looks before it opens: a name not there is its "can't stat".
+        match self.context.open_input(name, Dash::File) {
+            Ok(opened) => {
+                let metadata = opened.metadata().cloned();
+                Ok(Some((Box::new(opened), metadata)))
             }
-        };
-        match fs::File::open(self.path(name)) {
-            Ok(file) => Ok(Some((
-                Box::new(self.context.stop_token().reader(file)),
-                Some(metadata),
-            ))),
-            Err(e) => {
-                self.say(1, &format!("zstd: {name}: {} \n", strerror(&e)))?;
+            Err(InputError::NotFound) => {
+                self.say(1, &not_there(name))?;
+                Ok(None)
+            }
+            Err(error) => {
+                self.say(1, &format!("zstd: {name}: {} \n", error.reason()))?;
                 Ok(None)
             }
         }

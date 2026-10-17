@@ -37,6 +37,7 @@ use std::time::Instant;
 use cash_archive::codec::xz::{
     self, Broken, Check, FileInfo, Format, InfoProblem, Settings, check_name,
 };
+use cash_core::input::{Dash, InputError};
 use cash_core::openfiles::OpenFiles;
 use cash_core::{ExecutionResult, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long, Short};
@@ -873,7 +874,17 @@ impl From<io::Error> for Stop {
 /// Where one file's data comes from.
 enum Source {
     Stdin,
-    File(PathBuf, fs::Metadata),
+    File(Box<Named>),
+}
+
+/// A named file or device, opened through `open_input`.
+struct Named {
+    /// Where it is; empty for a device.
+    path: PathBuf,
+    /// What the open handle says of it.
+    metadata: Option<fs::Metadata>,
+    /// The input, until it is read.
+    opened: Option<cash_core::input::Input>,
 }
 
 /// One run of the command over its files.
@@ -967,34 +978,39 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         let follow = self.options.stdout || self.options.force || self.options.keep;
         let path = self.path(name);
         // Looked at only when a link would be refused: a substitution file's pipe takes
-        // one opening, and its data needs that one.
+        // two openings, and its data needs the one `open_input` makes.
         if !follow && fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_symlink()) {
             self.warn(&format!("{name}: Is a symbolic link, skipping"))?;
             return Ok(None);
         }
-        let metadata = if name.is_empty() {
-            Err(io::Error::from(io::ErrorKind::NotFound))
-        } else {
-            fs::metadata(&path)
-        };
-        let metadata = match metadata {
-            Ok(metadata) => metadata,
-            Err(e) => {
-                self.error(&format!("{name}: {}", strerror(&e)))?;
+        if name.is_empty() {
+            self.error(&format!("{name}: No such file or directory"))?;
+            return Ok(None);
+        }
+        // Opened as the shell's `<` opens it, once: what it is comes from the open handle.
+        let opened = match self.context.open_input(name, Dash::File) {
+            Ok(opened) => opened,
+            Err(InputError::IsADirectory(_)) => {
+                self.warn(&format!("{name}: Is a directory, skipping"))?;
+                return Ok(None);
+            }
+            Err(error) => {
+                self.error(&format!("{name}: {}", error.reason()))?;
                 return Ok(None);
             }
         };
-        if metadata.is_dir() {
-            self.warn(&format!("{name}: Is a directory, skipping"))?;
-            return Ok(None);
-        }
+        let metadata = opened.metadata().cloned();
         let regular_only = !self.options.stdout || self.options.mode == Mode::List;
-        if regular_only && !metadata.is_file() {
+        let regular = metadata.as_ref().filter(|metadata| metadata.is_file());
+        if regular_only && regular.is_none() {
             self.warn(&format!("{name}: Not a regular file, skipping"))?;
             return Ok(None);
         }
-        if regular_only && !self.options.force && !self.options.keep {
-            let links = cash_win32::fs::file_link_count(&path, &metadata);
+        if let Some(metadata) = regular.filter(|_| regular_only)
+            && !self.options.force
+            && !self.options.keep
+        {
+            let links = cash_win32::fs::file_link_count(&path, metadata);
             if links > 1 {
                 self.warn(&format!(
                     "{name}: Input file has more than one hard link, skipping"
@@ -1002,7 +1018,11 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 return Ok(None);
             }
         }
-        Ok(Some(Source::File(path, metadata)))
+        Ok(Some(Source::File(Box::new(Named {
+            path,
+            metadata,
+            opened: Some(opened),
+        }))))
     }
 
     /// xz's `suffix_get_dest_name`: the output's name, or `None` when the file is
@@ -1190,7 +1210,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 );
             }
         }
-        let source = if is_stdin {
+        let mut source = if is_stdin {
             Source::Stdin
         } else {
             match self.open_source(name)? {
@@ -1198,20 +1218,26 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 None => return Ok(()),
             }
         };
-        let (mut input, times, read_only): (Box<dyn Read>, _, _) = match &source {
+        let (mut input, times, read_only): (Box<dyn Read>, _, _) = match &mut source {
             Source::Stdin => (
                 Box::new(self.context.stop_token().reader(self.context.stdin())),
                 None,
                 false,
             ),
-            Source::File(path, metadata) => match fs::File::open(path) {
-                Ok(file) => (
-                    Box::new(self.context.stop_token().reader(file)),
-                    Some(times_of(metadata)),
-                    metadata.permissions().readonly(),
-                ),
-                Err(e) => return self.error(&format!("{name}: {}", strerror(&e))),
-            },
+            // No second open: the input is open already, through the stop token.
+            Source::File(named) => {
+                let Some(opened) = named.opened.take() else {
+                    return Ok(());
+                };
+                (
+                    Box::new(opened),
+                    named.metadata.as_ref().map(times_of),
+                    named
+                        .metadata
+                        .as_ref()
+                        .is_some_and(|metadata| metadata.permissions().readonly()),
+                )
+            }
         };
 
         // Decompressing or testing: the first bytes tell the format.
@@ -1302,8 +1328,13 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 .threads
                 .map_or(1, cash_archive::codec::parallel::threads);
             let threaded = match &source {
-                Source::File(path, _) if format == Format::Xz && !self.options.single_stream => {
-                    fs::File::open(path).ok().and_then(|mut file| {
+                // Only a regular file, which the threads seek in, is opened again for them.
+                Source::File(named)
+                    if named.metadata.as_ref().is_some_and(fs::Metadata::is_file)
+                        && format == Format::Xz
+                        && !self.options.single_stream =>
+                {
+                    fs::File::open(&named.path).ok().and_then(|mut file| {
                         xz::decompress_file_mt(&mut file, &mut written, threads)
                     })
                 }
@@ -1330,9 +1361,11 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                     return self.error(&format!("{out_name}: {}", strerror(&e)));
                 }
                 self.report(shown, compressed, uncompressed, start)?;
-                if let Source::File(path, _) = &source {
+                if let Source::File(named) = &source
+                    && named.metadata.is_some()
+                {
                     if !self.options.keep {
-                        if let Err(e) = cash_win32::unix::remove_even_read_only(path) {
+                        if let Err(e) = cash_win32::unix::remove_even_read_only(&named.path) {
                             self.error(&format!("{name}: Cannot remove: {}", strerror(&e)))?;
                         }
                     }
@@ -1351,10 +1384,10 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         if name == "-" {
             return self.error("--list does not support reading from standard input");
         }
-        let Some(Source::File(path, _)) = self.open_source(name)? else {
+        let Some(Source::File(named)) = self.open_source(name)? else {
             return Ok(());
         };
-        let info = fs::File::open(&path)
+        let info = fs::File::open(&named.path)
             .map_err(InfoProblem::Read)
             .and_then(|file| xz::file_info(&mut BufReader::new(file)));
         let info = match info {
