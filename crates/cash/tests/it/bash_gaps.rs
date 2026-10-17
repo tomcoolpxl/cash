@@ -951,6 +951,22 @@ fn exit_and_return_in_err_and_debug_traps_take_effect() {
 }
 
 #[test]
+fn debug_trap_runs_before_assignments_and_outside_redirections() {
+    // As in Bash 5.2: before every simple command, an assignment alone too, and before
+    // the command's words are expanded and its redirections made, so what the trap writes
+    // is not the command's. cash ran it only before a command with a name, after the
+    // expansion, with the command's `> file` already its output.
+    let (code, stdout) = output(
+        r#"trap 'echo "trap: $BASH_COMMAND"' DEBUG; x=1; y=$(echo hi) z=2; echo "x=$x y=$y" > /dev/null; trap - DEBUG"#,
+    );
+    assert_eq!(code, 0);
+    assert_eq!(
+        stdout,
+        "trap: x=1\ntrap: y=$(echo hi) z=2\ntrap: echo \"x=$x y=$y\" > /dev/null\ntrap: trap - DEBUG"
+    );
+}
+
+#[test]
 fn err_trap_scoping_follows_bash_function_rules() {
     // Without errtrace a function does not see the caller's ERR trap, but a trap the
     // function sets itself fires there and survives the return.

@@ -115,7 +115,12 @@ What the phases now in DONE.md left open, each where its phase says more.
   later; a block cannot be stopped half way, so the stop is acted on at that first
   write (`StopToken::writer`). Nothing is lost: the archive is abandoned and the file
   kept. Acting at once would need the coding on a thread of its own, left to wind down
-  writing nowhere, or a stop inside lzma-rust2's block loop.
+  writing nowhere, or a stop inside lzma-rust2's block loop. Looked into 2026-10-17:
+  in lzma-rust2 0.22.0 each worker (`xz/writer_mt.rs`, `worker_thread_logic`) codes a
+  whole block in one `write_all`, and `WorkPool::shutdown` joins the workers, so a drop
+  waits out every block in flight. Writing the block in pieces and asking
+  `shutdown_flag` between them would end it within a piece; that means taking
+  lzma-rust2 (20.5k lines) in as cash's own, as crossterm was (`[patch.crates-io]`).
 - **The tools taken from uutils give cash's version as uutils'** (2026-10-17): `sort
   --version` says `sort (uutils coreutils) 1.19.0`, a uutils release there never was
   (`uucore::crate_version!` reads the crate it is built in), where the bundled ones say
@@ -127,9 +132,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   cash's relay ends it then. `cash -c 'tail -f g | head -1; echo done'` prints `a` and
   `done`, then waits for tail before it exits; Git Bash's tail waits too, before `done`;
   GNU's tail on Linux ends at once. The relay could ask its pipe's reader between polls.
-- **The DEBUG trap misses a command that only assigns** (2026-10-16): `trap '...' DEBUG;
-  x=1` runs the trap before `x=1` in Bash, not in cash, which fires it only for a
-  command with a name (`commands::on_preexecute`).
 - **A write to a closed standard output says too much** (2026-10-16): `echo hi >&-`
   says `echo: i/o error: I/O write error: standard output not available`, where Bash
   says `echo: write error: Bad file descriptor`; both exit 1.

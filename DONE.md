@@ -1674,3 +1674,9 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   working memory for a 16777216-byte dictionary, above the configured limit of
   268435456 bytes". RAR 5's compression takes many times its dictionary, and the writer
   ran on the library's default budget of 256 MiB; it gets half the machine's memory now.
+
+- **The DEBUG trap missed a command that only assigns** (found 2026-10-16, done
+  2026-10-17): cash fired it only before a command with a name, and after its words were
+  expanded and its redirections made, so `echo hi > f` had the trap write into `f`. It
+  runs before every simple command now, before expansion and redirections, as Bash runs
+  it; checked against Git Bash's bash, `exit` and `return` in it included.

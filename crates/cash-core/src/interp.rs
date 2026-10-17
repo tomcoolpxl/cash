@@ -1934,6 +1934,29 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         // variable reads it when read; the text is made once per command (`printed`).
         context.shell.set_current_command(self.printed());
 
+        // The DEBUG trap runs here, before the command's words are expanded and its
+        // redirections made, as Bash runs it before each simple command: an assignment
+        // alone (`x=1`) too, which never reached a command to run, and what the trap
+        // writes goes where the shell's output goes, not into the command's `> file`. A
+        // trap that exits or returns replaces the command.
+        if context
+            .shell
+            .traps()
+            .handles(crate::traps::TrapSignal::Debug)
+        {
+            let result = context
+                .shell
+                .invoke_trap_handler(crate::traps::TrapSignal::Debug, &params)
+                .await?;
+            if matches!(
+                result.next_control_flow,
+                crate::ExecutionControlFlow::ExitShell
+                    | crate::ExecutionControlFlow::ReturnFromFunctionOrScript
+            ) {
+                return Ok(result.into());
+            }
+        }
+
         let prefix_iter = self.prefix.as_ref().map(|s| s.0.iter()).unwrap_or_default();
         let suffix_iter = self.suffix.as_ref().map(|s| s.0.iter()).unwrap_or_default();
         let cmd_name_items = self
@@ -2233,13 +2256,7 @@ async fn execute_command<T: Into<String>>(
     // Arrange to pop off that ephemeral environment scope.
     cmd.post_execute = Some(|shell| shell.env_mut().pop_scope(EnvironmentScope::Command));
 
-    // Run through any pre-execution hooks as best effort; a DEBUG trap that exits or
-    // returns replaces the command.
-    if let Ok(Some(result)) = commands::on_preexecute(&mut cmd).await {
-        return Ok(result.into());
-    }
-
-    // Execute
+    // Execute (the DEBUG trap ran before the words were expanded).
     // TODO(jobs): do we need to move self back to foreground on error here?
     cmd.execute().await
 }

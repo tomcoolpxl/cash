@@ -14,7 +14,7 @@ use sys::commands::{CommandExt, CommandFdInjectionExt, CommandFgControlExt};
 
 use crate::{
     ErrorKind, ExecutionControlFlow, ExecutionExitCode, ExecutionParameters, ExecutionResult,
-    Shell, ShellFd, builtins, commands, error, escape,
+    Shell, ShellFd, builtins, error, escape,
     extensions::{self, ShellExtensions},
     functions,
     interp::{self, Execute, ProcessGroupPolicy},
@@ -990,31 +990,6 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     cmd.inject_fds(other_files)?;
 
     Ok(cmd)
-}
-
-/// Runs pre-execution hooks. Returns a result when the DEBUG trap ran `exit` or
-/// `return`; the command must then not run, and that result replaces it.
-pub(crate) async fn on_preexecute(
-    cmd: &mut commands::SimpleCommand<'_, impl extensions::ShellExtensions>,
-) -> Result<Option<ExecutionResult>, error::Error> {
-    // Fire the DEBUG trap if one is registered.
-    if cmd.shell.traps().handles(traps::TrapSignal::Debug) {
-        let result = cmd
-            .shell
-            .invoke_trap_handler(traps::TrapSignal::Debug, &cmd.params)
-            .await?;
-        if matches!(
-            result.next_control_flow,
-            ExecutionControlFlow::ExitShell | ExecutionControlFlow::ReturnFromFunctionOrScript
-        ) {
-            if let Some(post_execute) = cmd.post_execute.take() {
-                let _ = post_execute(&mut cmd.shell);
-            }
-            return Ok(Some(result));
-        }
-    }
-
-    Ok(None)
 }
 
 /// Represents a simple command to be executed.
