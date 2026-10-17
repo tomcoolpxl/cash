@@ -9,6 +9,7 @@ use cash_archive::rar::{self, ArchiveReadOptions, ArchiveReader, ErrorKind};
 
 use super::item::{self, Facts, Item};
 use super::{Rar, Stop, code};
+use crate::walk as tree;
 
 /// An archive found: as shown, and where it is.
 #[derive(Clone, Debug)]
@@ -44,6 +45,10 @@ pub(super) fn find<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, name: &str
     found
 }
 
+/// The archives `mask` matches in `folder`, and below it with `recurse`, as Rar.exe 7.23
+/// takes them: in the order the folder lists them, going into each folder where it is
+/// met, and through junctions; one back to a folder above is passed by, so each archive
+/// is taken once.
 fn collect<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     folder: &str,
@@ -52,31 +57,19 @@ fn collect<SE: cash_core::ShellExtensions>(
     found: &mut Vec<Found>,
 ) {
     let base = rar.path(if folder.is_empty() { "." } else { folder });
-    let Ok(entries) = std::fs::read_dir(&base) else {
-        return;
+    let options = tree::WalkOptions {
+        links: tree::Links::All,
+        order: tree::Order::Listing,
+        min_depth: 1,
+        max_depth: if recurse { usize::MAX } else { 1 },
+        ..tree::WalkOptions::default()
     };
-    let mut names: Vec<(String, bool)> = entries
-        .filter_map(Result::ok)
-        .map(|entry| {
-            let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
-            (entry.file_name().to_string_lossy().into_owned(), is_dir)
-        })
-        .collect();
-    names.sort_by_key(|(name, _)| name.to_lowercase());
-    for (name, is_dir) in &names {
-        if !is_dir && mask_matches(mask, name) {
-            let display = format!("{folder}{name}");
+    for entry in tree::Walk::new(folder, &base, &options, rar.context.stop_token()).flatten() {
+        if entry.kind != tree::Kind::Folder && mask_matches(mask, &entry.name().to_string_lossy()) {
             found.push(Found {
-                path: base.join(name),
-                display,
+                path: entry.path,
+                display: entry.shown,
             });
-        }
-    }
-    if recurse {
-        for (name, is_dir) in &names {
-            if *is_dir {
-                collect(rar, &format!("{folder}{name}/"), mask, recurse, found);
-            }
         }
     }
 }

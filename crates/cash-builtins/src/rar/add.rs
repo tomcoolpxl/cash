@@ -2345,7 +2345,7 @@ fn stored_link(
 
 /// The folders `-dr` sends to the Recycle Bin whole, as rar does: those at the top of
 /// what was archived whose every file and folder was archived.
-fn whole_folders(archived: &[&Source]) -> Vec<PathBuf> {
+fn whole_folders(archived: &[&Source], stop: &cash_core::StopToken) -> Vec<PathBuf> {
     let paths: std::collections::HashSet<&Path> = archived
         .iter()
         .map(|source| source.path.as_path())
@@ -2362,21 +2362,26 @@ fn whole_folders(archived: &[&Source]) -> Vec<PathBuf> {
                 .parent()
                 .is_some_and(|parent| folders.contains(parent))
         })
-        .filter(|folder| all_archived(folder, &paths))
+        .filter(|folder| all_archived(folder, &paths, stop))
         .map(|folder| folder.to_path_buf())
         .collect()
 }
 
-/// Whether everything below a folder was archived.
-fn all_archived(folder: &Path, paths: &std::collections::HashSet<&Path>) -> bool {
-    let Ok(entries) = std::fs::read_dir(folder) else {
-        return false;
+/// Whether everything below a folder was archived: not when anything below could not be
+/// looked at, or the walk was stopped.
+fn all_archived(
+    folder: &Path,
+    paths: &std::collections::HashSet<&Path>,
+    stop: &cash_core::StopToken,
+) -> bool {
+    let options = tree::WalkOptions {
+        links: tree::Links::Roots,
+        order: tree::Order::Listing,
+        min_depth: 1,
+        ..tree::WalkOptions::default()
     };
-    entries.flatten().all(|entry| {
-        let path = entry.path();
-        paths.contains(path.as_path())
-            && (!entry.file_type().is_ok_and(|kind| kind.is_dir()) || all_archived(&path, paths))
-    })
+    tree::Walk::new("", folder, &options, stop.clone())
+        .all(|next| next.is_ok_and(|entry| paths.contains(entry.path.as_path())))
 }
 
 /// A folder to the Recycle Bin once its files have gone: as `rd`, an empty one only.
@@ -2601,7 +2606,7 @@ fn delete_sources<SE: cash_core::ShellExtensions>(
     let mut order: Vec<&Source> = archived.to_vec();
     order.sort_by_key(|source| std::cmp::Reverse(source.walk));
     let whole = if rar.switches.recycle && delete == Delete::All {
-        whole_folders(archived)
+        whole_folders(archived, &rar.context.stop_token())
     } else {
         Vec::new()
     };

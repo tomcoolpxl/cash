@@ -306,3 +306,28 @@ fn while_unreadable<T>(folder: &std::path::Path, body: impl FnOnce() -> T) -> T 
     icacls(&["/remove:d", &user]);
     result
 }
+
+/// The archives a mask names with `-r` are taken in the order their folders list them,
+/// each folder gone into where it is met and through a junction, as Rar.exe 7.23 takes
+/// them; cash took a folder's own first, by lowercase name, and no junction.
+#[test]
+fn a_masks_archives_are_taken_in_listing_order_through_junctions() {
+    let scratch = Scratch::new("rar-mask-order");
+    let w = scratch.path().join("w");
+    for folder in ["b_sub", "A", "_u"] {
+        std::fs::create_dir_all(w.join(folder)).expect("a folder");
+    }
+    std::fs::create_dir_all(scratch.path().join("other")).expect("a folder");
+    cash_win32::junction::point(&w.join("j"), &scratch.path().join("other")).expect("a junction");
+    let out = run_in(
+        scratch.path(),
+        "printf x > f.txt; rar a -idq one.rar f.txt; \
+         for n in w/_x w/a w/B w/z w/b_sub/m w/A/k w/_u/u other/o; do cp one.rar $n.rar; done; \
+         cd w && rar lt -r '*.rar' | tr '\\\\' / | sed -n 's|^Archive: ||p'",
+    );
+    assert_eq!(
+        out.stdout, "A/k.rar\na.rar\nB.rar\nb_sub/m.rar\nj/o.rar\nz.rar\n_u/u.rar\n_x.rar",
+        "{}",
+        out.stderr
+    );
+}
