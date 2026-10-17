@@ -1974,3 +1974,12 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   not run; Ctrl-C and `kill -TERM $$` run them. A channel of cash's own to carry
   signals between cash processes was turned down; spec.md §4 #31, `help differences`
   and `help trap` say so.
+- **Background jobs killed at once hung past 15 s in CI** (found 2026-10-17, runs
+  39043122930 and 39066508176; the user's pick after 1.23.0): settled as load. Here,
+  `tool & kill %1; wait %1` for `zip`, `rar` and `7z` on 3,000 files ran 30 times under
+  16 busy loops without a hang, and the three tests 15 times under nextest's stress
+  mode beside 8 busy loops, all passing (some past 5 s, none near 15). As the user
+  decided on 2026-10-02, such a failure is not chased and no timeout is lengthened;
+  the one remedy taken is the rule's own: the test that starts 40 busy loops, which the
+  two others had timed out beside, runs alone now (`threads-required`), as the test that
+  spins two threads per processor does.

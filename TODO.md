@@ -35,19 +35,8 @@ order. The phases before, released as 1.22.0 and 1.23.0, are in DONE.md.
 2. **`ls -l`'s file facts from the folder listing**: done (2026-10-18, DONE.md).
 3. **A TERM trap never runs on cash's own `kill -TERM`**: settled as a limitation, not
    fixed (the user, 2026-10-18; decisions.md, DONE.md).
-4. **An archiver killed at once hung past 15 s in CI** (2026-10-17, run 39043122930,
-   slow lane 4/4): `background_builtins::an_archiver_stopped_in_its_walk_writes_no_archive`
-   runs `zip`, `rar` and `7z` on 3000 files as `tool & kill %1; wait %1` and was ended at
-   15 s once, then passed in 1.3 s. The whole archive takes about a second, so it
-   waited, not worked: plausibly a `kill` that lands before the builtin reads its stop,
-   with `wait` left waiting. Which of the three it was is not known; the test should name
-   the tool it is on, and a loop of the three under load should catch it. On run
-   39066508176 (2026-10-17) it and two other tests that `kill` background jobs
-   (`busy_background_jobs_leave_the_foreground_free`, 40 busy loops, and
-   `a_compressor_kill_stops_on_standard_input_leaves_a_broken_archive`) timed out at
-   15 s on all four tries, side by side, on a runner whose tool install had failed; the
-   next run, with the same code, passed all three. A starved runner, then, or the same
-   wait, which load brings out.
+4. **An archiver killed at once hung past 15 s in CI**: settled, load on CI's runners
+   (2026-10-18, DONE.md).
 5. **The completion menu scans PATH on each keystroke**: the completion menu runs the PATH scan (or carapace) again on every keystroke while
    it is open: each folder is asked for the names beginning with the prefix since
    2026-10-17, 17.7 ms for `compgen -c no` where listing each whole took 24. The rest

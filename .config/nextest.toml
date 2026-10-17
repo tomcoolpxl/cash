@@ -84,6 +84,13 @@ threads-required = "num-test-threads"
 filter = 'package(cash-win32) and test(=sysinfo::tests::more_busy_threads_than_processors_make_a_queue)'
 threads-required = "num-test-threads"
 
+# Starts 40 busy loops, more than any runner has cores, to show the foreground stays free.
+# It runs alone, rather than starve the tests beside it: on run 39066508176 two others
+# that `kill` background jobs ran next to it and timed out with it, on all four tries.
+[[profile.default.overrides]]
+filter = 'binary(it) and test(=background_builtins::busy_background_jobs_leave_the_foreground_free)'
+threads-required = "num-test-threads"
+
 # rars' tests, taken in with it (cash-archive's `rar`): its key derivations and its
 # writers of many volumes run unoptimized here, 15 to 60 s for the heaviest.
 [[profile.default.overrides]]
