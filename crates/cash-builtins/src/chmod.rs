@@ -125,14 +125,23 @@ impl builtins::Command for ChmodCommand {
                     Err(WalkError::Stopped) => break,
                     // A name not there, or a folder that cannot be listed, in GNU's words:
                     // cash passed the second over in silence, status 0.
-                    Err(WalkError::Io { shown, error }) => {
+                    Err(
+                        ref failed_on @ (WalkError::Io {
+                            ref shown,
+                            ref error,
+                        }
+                        | WalkError::Unlisted {
+                            ref shown,
+                            ref error,
+                        }),
+                    ) => {
                         if !self.silent {
-                            let what = if error.kind() == std::io::ErrorKind::NotFound {
-                                "cannot access"
-                            } else {
+                            let what = if matches!(failed_on, WalkError::Unlisted { .. }) {
                                 "cannot read directory"
+                            } else {
+                                "cannot access"
                             };
-                            let e = cash_core::error::os_error_text(&error);
+                            let e = cash_core::error::os_error_text(error);
                             writeln!(
                                 context.stderr(),
                                 "{}: {what} '{shown}': {e}",

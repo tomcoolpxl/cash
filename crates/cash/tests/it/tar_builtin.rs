@@ -290,3 +290,70 @@ fn tar_reads_cashs_path_spellings_and_device_names() {
     );
     assert_eq!(out.stdout, "member.txt\nmember.txt", "{}", out.stderr);
 }
+
+/// The walk: `-h` goes through a junction, and says a junction back to a folder above and
+/// stores each file once, where GNU's tar recurses until its stack overflows;
+/// `--no-recursion` stores the folder alone; `--remove-files` removes a folder after what
+/// is in it, as GNU's tar 1.35 does in WSL.
+#[test]
+fn the_walk_goes_through_links_with_h_and_removes_folders_last() {
+    let scratch = Scratch::new("tar-walk");
+    let d = scratch.path().join("d");
+    std::fs::create_dir_all(d.join("sub")).expect("folders");
+    std::fs::create_dir_all(scratch.path().join("other")).expect("a folder");
+    std::fs::write(d.join("a.txt"), "a").expect("a file");
+    std::fs::write(d.join("sub").join("b.txt"), "b").expect("a file");
+    std::fs::write(scratch.path().join("other").join("o.txt"), "o").expect("a file");
+    cash_win32::junction::point(&d.join("out"), &scratch.path().join("other")).expect("a junction");
+    cash_win32::junction::point(&d.join("sub").join("up"), &d).expect("a junction");
+    let out = run_in(
+        scratch.path(),
+        "tar -chf h.tar d; echo \"rc=$?\"; tar -tf h.tar | sort; \
+         tar -cf n.tar --no-recursion d; tar -tf n.tar; \
+         mkdir -p r/s; printf x > r/s/f; tar -cvf r.tar --remove-files r; echo \"rc=$?\"; \
+         test -e r || echo gone",
+    );
+    assert_eq!(
+        out.stdout,
+        "rc=2\nd/\nd/a.txt\nd/out/\nd/out/o.txt\nd/sub/\nd/sub/b.txt\nd/\n\
+         r/\nr/s/\nr/s/f\nrc=0\ngone"
+    );
+    assert_eq!(
+        out.stderr,
+        "tar: d/sub/up: File system loop detected; not dumped\n\
+         tar: Exiting with failure status due to previous errors"
+    );
+}
+
+/// A folder that cannot be listed is stored, then said, "Cannot open", with status 2, as
+/// GNU's tar 1.35 says it in WSL; the walk goes on to the next.
+#[test]
+fn a_folder_that_cannot_be_listed_is_said_after_its_member() {
+    let scratch = Scratch::new("tar-shut");
+    for dir in ["shut", "zopen"] {
+        std::fs::create_dir_all(scratch.join("l").join(dir)).expect("a folder");
+        std::fs::write(scratch.join("l").join(dir).join("f"), "x").expect("a file");
+    }
+    let user = std::env::var("USERNAME").expect("a user name");
+    let icacls = |args: &[&str]| {
+        let status = std::process::Command::new("icacls")
+            .arg(scratch.join("l").join("shut"))
+            .args(args)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .expect("icacls runs");
+        assert!(status.success(), "icacls {args:?}");
+    };
+    icacls(&["/deny", &format!("{user}:(RX)")]);
+    let out = run_in(
+        scratch.path(),
+        "tar --sort=name -cf l.tar l; echo \"rc=$?\"; tar -tf l.tar",
+    );
+    icacls(&["/remove:d", &user]);
+    assert_eq!(out.stdout, "rc=2\nl/\nl/shut/\nl/zopen/\nl/zopen/f");
+    assert_eq!(
+        out.stderr,
+        "tar: l/shut: Cannot open: Permission denied\n\
+         tar: Exiting with failure status due to previous errors"
+    );
+}

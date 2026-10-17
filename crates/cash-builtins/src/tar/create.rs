@@ -18,6 +18,7 @@ use super::options::{Name, Sort, TRY, TagWhat};
 use super::transform::Target;
 use super::{Fatal, Tar};
 use crate::compress::{is_terminal, strerror};
+use crate::walk as walker;
 
 /// What `--owner`, `--group`, `--mode` and `--mtime` set, read once.
 #[derive(Clone, Debug, Default)]
@@ -415,11 +416,10 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         }
     }
 
-    /// One file or folder, and what is in a folder: GNU tar's `dump_file`.
-    #[expect(
-        clippy::too_many_lines,
-        reason = "GNU tar's dump_file0, one pass kept together"
-    )]
+    /// One name given and, unless `--no-recursion`, what is below it, on the shared walker:
+    /// GNU tar's `dump_file`. Through links with `-h`, where a link back to a folder above
+    /// is said and not gone round: GNU's tar recurses until its stack overflows. With
+    /// `--remove-files` a folder is removed once the walk has left it.
     fn dump(
         &mut self,
         output: &mut Output,
@@ -427,16 +427,120 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         name: &str,
         path: &Path,
     ) -> Result<(), Fatal> {
+        let options = walker::WalkOptions {
+            links: if self.options.dereference {
+                walker::Links::All
+            } else {
+                walker::Links::Never
+            },
+            order: if self.options.sort == Sort::Name {
+                walker::Order::Ordinal
+            } else {
+                walker::Order::Listing
+            },
+            max_depth: if self.options.recursion {
+                usize::MAX
+            } else {
+                0
+            },
+            ..walker::WalkOptions::default()
+        };
+        let mut tree = walker::Walk::new(name, path, &options, self.context.stop_token());
+        // The folders to remove, deepest last, each once the walk is out of it.
+        let mut leaving: Vec<(usize, String, PathBuf)> = Vec::new();
+        while let Some(next) = tree.next() {
+            let entry = match next {
+                // A dangling link with -h: what it names is not there, said as such.
+                Ok(entry) | Err(walker::WalkError::Dangling(entry)) => entry,
+                // Stopped: what is left is not removed, for its contents were not stored.
+                Err(walker::WalkError::Stopped) => return Ok(()),
+                Err(walker::WalkError::Loop { shown, .. }) => {
+                    let shown = self.quote_colon(shown.replace('\\', "/").as_bytes());
+                    self.error(&format!("{shown}: File system loop detected; not dumped"))?;
+                    continue;
+                }
+                Err(walker::WalkError::Unlisted { shown, error }) => {
+                    let shown = self.quote_colon(shown.replace('\\', "/").as_bytes());
+                    self.error(&format!("{shown}: Cannot open: {}", strerror(&error)))?;
+                    continue;
+                }
+                Err(walker::WalkError::Io { shown, error }) => {
+                    let shown = self.quote_colon(shown.replace('\\', "/").as_bytes());
+                    self.error(&format!("{shown}: Cannot stat: {}", strerror(&error)))?;
+                    continue;
+                }
+            };
+            self.remove_left(&mut leaving, entry.depth)?;
+            let next = self.dump_entry(output, walk, &entry.shown, &entry.path)?;
+            if entry.kind == walker::Kind::Folder {
+                if next.skip {
+                    tree.skip_folder();
+                }
+                if let Some(tag) = next.tag {
+                    let slash = if entry.shown.ends_with(['/', '\\']) {
+                        ""
+                    } else {
+                        "/"
+                    };
+                    let name = format!("{}{slash}{tag}", entry.shown);
+                    self.dump(output, walk, &name, &entry.path.join(&tag))?;
+                }
+            }
+            if next.remove {
+                leaving.push((entry.depth, entry.shown.replace('\\', "/"), entry.path));
+            }
+        }
+        self.remove_left(&mut leaving, 0)
+    }
+
+    /// `--remove-files`: the folders the walk is out of, once it is at `depth`, deepest
+    /// first.
+    fn remove_left(
+        &mut self,
+        leaving: &mut Vec<(usize, String, PathBuf)>,
+        depth: usize,
+    ) -> Result<(), Fatal> {
+        while leaving.last().is_some_and(|(at, ..)| *at >= depth) {
+            let Some((_, as_given, path)) = leaving.pop() else {
+                break;
+            };
+            if let Err(e) = fs::remove_dir(&path) {
+                let shown = self.quote_colon(as_given.as_bytes());
+                self.error(&format!("{shown}: Cannot remove: {}", strerror(&e)))?;
+            }
+        }
+        Ok(())
+    }
+
+    /// One file or folder: GNU tar's `dump_file0`, without the folder's contents, which
+    /// [`Self::dump`] walks; what it does with them.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "GNU tar's dump_file0, one pass kept together"
+    )]
+    fn dump_entry(
+        &mut self,
+        output: &mut Output,
+        walk: &mut Walk<'_>,
+        name: &str,
+        path: &Path,
+    ) -> Result<Next, Fatal> {
+        let left_out = Next {
+            skip: true,
+            tag: None,
+            remove: false,
+        };
         let as_given = name.replace('\\', "/");
         if self.excluded(as_given.as_bytes(), &walk.patterns) {
-            return Ok(());
+            return Ok(left_out);
         }
         let follow = self.options.dereference;
         let view = match unix::unix_view(path, follow) {
             Ok(view) => view,
             Err(e) => {
                 let shown = self.quote_colon(as_given.as_bytes());
-                return self.error(&format!("{shown}: Cannot stat: {}", strerror(&e)));
+                self.error(&format!("{shown}: Cannot stat: {}", strerror(&e)))?;
+                return Ok(left_out);
             }
         };
         if output
@@ -445,7 +549,8 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             .is_some_and(|(a, b)| a == (b.volume, b.index))
         {
             let shown = self.quote_colon(as_given.as_bytes());
-            return self.say(&format!("{shown}: file is the archive; not dumped"));
+            self.say(&format!("{shown}: file is the archive; not dumped"))?;
+            return Ok(left_out);
         }
         let transformed = self.transforms.apply(&as_given, Target::Regular);
         let mut stored = self.safer_name(transformed.as_bytes(), false)?;
@@ -463,7 +568,8 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             None
         };
         if let Some((tag_name, TagWhat::All)) = &tag {
-            return self.tag_warning(&as_given, tag_name, "directory not dumped");
+            self.tag_warning(&as_given, tag_name, "directory not dumped")?;
+            return Ok(left_out);
         }
         let mtime = Timestamp::from_system_time(view.times.modified);
         let mut skip = false;
@@ -511,7 +617,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                     let key = (identity.volume, identity.index);
                     if let Some(first) = walk.links.get(&key) {
                         member.kind = Some(Kind::HardLink);
-                        member.link = first.clone();
+                        member.link.clone_from(first);
                         member.size = 0;
                     } else {
                         walk.links.insert(key, stored.clone());
@@ -559,7 +665,8 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                 let mut file = match fs::File::open(path) {
                     Ok(file) => file,
                     Err(e) => {
-                        return self.error(&format!("{shown}: Cannot open: {}", strerror(&e)));
+                        self.error(&format!("{shown}: Cannot open: {}", strerror(&e)))?;
+                        return Ok(left_out);
                     }
                 };
                 match output.writer.write_member(&member, Some(&mut file)) {
@@ -571,61 +678,41 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                             ))?;
                         }
                     }
-                    Err(e) => return self.write_failed(e, &shown),
+                    Err(e) => {
+                        self.write_failed(e, &shown)?;
+                        return Ok(left_out);
+                    }
                 }
             } else if let Err(e) = output.writer.write_member(&member, None) {
-                return self.write_failed(e, &shown);
+                self.write_failed(e, &shown)?;
+                return Ok(left_out);
             }
         }
-        if let (Some((tag_name, what)), true) = (&tag, kind == Kind::Dir && self.options.recursion)
-        {
-            self.tag_warning(&as_given, tag_name, "contents not dumped")?;
-            if *what == TagWhat::Contents {
-                let slash = if as_given.ends_with('/') { "" } else { "/" };
-                let dir = format!("{as_given}{slash}");
-                self.dump(
-                    output,
-                    walk,
-                    &format!("{dir}{tag_name}"),
-                    &path.join(tag_name),
-                )?;
+        let remove = self.options.remove_files && !skip;
+        if kind == Kind::Dir {
+            if let (Some((tag_name, what)), true) = (tag, self.options.recursion) {
+                self.tag_warning(&as_given, &tag_name, "contents not dumped")?;
+                return Ok(Next {
+                    skip: true,
+                    tag: (what == TagWhat::Contents).then_some(tag_name),
+                    remove,
+                });
             }
-        } else if kind == Kind::Dir && self.options.recursion {
-            let entries = match fs::read_dir(path) {
-                Ok(entries) => entries,
-                Err(e) => {
-                    let shown = self.quote_colon(as_given.as_bytes());
-                    return self.error(&format!("{shown}: Cannot open: {}", strerror(&e)));
-                }
-            };
-            let mut children: Vec<String> = entries
-                .filter_map(Result::ok)
-                .map(|e| e.file_name().to_string_lossy().into_owned())
-                .collect();
-            if self.options.sort == Sort::Name {
-                children.sort();
-            }
-            for child in children {
-                let child_name = if as_given.ends_with('/') {
-                    format!("{as_given}{child}")
-                } else {
-                    format!("{as_given}/{child}")
-                };
-                self.dump(output, walk, &child_name, &path.join(&child))?;
-            }
+            return Ok(Next {
+                skip: false,
+                tag: None,
+                remove,
+            });
         }
-        if self.options.remove_files && !skip {
-            let removed = if kind == Kind::Dir {
-                fs::remove_dir(path)
-            } else {
-                unix::remove_even_read_only(path)
-            };
-            if let Err(e) = removed {
-                let shown = self.quote_colon(as_given.as_bytes());
-                self.error(&format!("{shown}: Cannot remove: {}", strerror(&e)))?;
-            }
+        if remove && let Err(e) = unix::remove_even_read_only(path) {
+            let shown = self.quote_colon(as_given.as_bytes());
+            self.error(&format!("{shown}: Cannot remove: {}", strerror(&e)))?;
         }
-        Ok(())
+        Ok(Next {
+            skip: false,
+            tag: None,
+            remove: false,
+        })
     }
 
     /// The tag that keeps a folder's contents out, the last given first, as GNU's
@@ -753,6 +840,17 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         }
         Ok((reader.end_block().unwrap_or(0), map))
     }
+}
+
+/// What [`Tar::dump`] does after one entry with what is below it.
+struct Next {
+    /// A folder's contents are left out: it was excluded, not dumped, or has an exclusion
+    /// tag.
+    skip: bool,
+    /// The exclusion tag to store in their place.
+    tag: Option<String>,
+    /// The folder is removed once the walk has left it (`--remove-files`).
+    remove: bool,
 }
 
 /// What the walk carries from member to member.

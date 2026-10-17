@@ -1278,7 +1278,7 @@ impl<W: Write, E: Write> Walker<'_, W, E> {
                     self.complain(&entry.shown, "No such file or directory")?;
                     continue;
                 }
-                Err(WalkError::Io { shown, error }) => {
+                Err(WalkError::Io { shown, error } | WalkError::Unlisted { shown, error }) => {
                     let reason = cash_core::error::os_error_text(&error);
                     self.complain(&shown, &reason)?;
                     continue;

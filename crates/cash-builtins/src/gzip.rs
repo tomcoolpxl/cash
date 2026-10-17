@@ -821,7 +821,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 Err(WalkError::Dangling(entry)) => {
                     self.error(&format!("{}: No such file or directory", entry.shown))?;
                 }
-                Err(WalkError::Io { shown, error }) => {
+                Err(WalkError::Io { shown, error } | WalkError::Unlisted { shown, error }) => {
                     self.error(&format!("{shown}: {}", strerror(&error)))?;
                 }
             }

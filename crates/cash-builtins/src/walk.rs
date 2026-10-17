@@ -119,7 +119,12 @@ pub(crate) enum WalkError {
     /// A link the walk follows whose target is not there: GNU's `grep -R` says so, its
     /// `find -L` lists the link as it is.
     Dangling(Entry),
-    /// A folder that could not be listed, or an entry that could not be looked at.
+    /// A folder that could not be listed: handed out first, then this.
+    Unlisted {
+        shown: String,
+        error: std::io::Error,
+    },
+    /// An entry that could not be looked at: a root that is not there.
     Io {
         shown: String,
         error: std::io::Error,
@@ -220,9 +225,15 @@ impl Walk {
                 listed: None,
             });
         }
-        WalkError::Io {
-            shown,
-            error: into_io(error),
+        // walkdir words both alike; what failed on a folder is its listing.
+        let listing = error
+            .path()
+            .is_some_and(|path| std::fs::metadata(path).is_ok_and(|m| m.is_dir()));
+        let error = into_io(error);
+        if listing {
+            WalkError::Unlisted { shown, error }
+        } else {
+            WalkError::Io { shown, error }
         }
     }
 }
@@ -305,6 +316,7 @@ mod tests {
                 Ok(entry) => format!("{} {:?}", entry.shown, entry.kind),
                 Err(WalkError::Loop { shown, ancestor }) => format!("{shown} loops to {ancestor}"),
                 Err(WalkError::Dangling(entry)) => format!("{} dangling", entry.shown),
+                Err(WalkError::Unlisted { shown, error }) => format!("{shown} unlisted {error}"),
                 Err(WalkError::Io { shown, error }) => format!("{shown} {error}"),
                 Err(WalkError::Stopped) => "stopped".to_owned(),
             })

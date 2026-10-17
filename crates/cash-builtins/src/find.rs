@@ -289,10 +289,14 @@ impl builtins::Command for FindCommand {
                         failed = true;
                         continue;
                     }
-                    Err(walker::WalkError::Io { shown, error }) => {
+                    Err(
+                        walker::WalkError::Io { shown, error }
+                        | walker::WalkError::Unlisted { shown, error },
+                    ) => {
+                        // Quoted, as GNU's find quotes a name it could not read.
                         writeln!(
                             context.stderr(),
-                            "{}: {}: {}",
+                            "{}: '{}': {}",
                             context.command_name,
                             render(Path::new(&shown)),
                             cash_core::error::os_error_text(&error)

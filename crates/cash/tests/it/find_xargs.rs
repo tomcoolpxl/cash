@@ -719,3 +719,12 @@ fn find_h_follows_the_starting_points_links_only() {
         .run("find -P start | wc -l; find -H start -name f; find -H start -name back -type l");
     assert_eq!(out.stdout, "1\nstart/inner/f\nstart/back", "{}", out.stderr);
 }
+
+/// A starting point that is not there is named in quotes, as GNU's find names it.
+#[test]
+fn a_name_find_cannot_read_is_quoted() {
+    let scratch = Scratch::new("find-quoted");
+    let out = run_in(scratch.path(), r#"find nosuch; echo "rc=$?""#);
+    assert_eq!(out.stdout, "rc=1");
+    assert_eq!(out.stderr, "find: 'nosuch': No such file or directory");
+}
