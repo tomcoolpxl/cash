@@ -30,6 +30,7 @@ use std::path::PathBuf;
 
 use cash_archive::codec::bzip2::{Broken, Ending, decompress_streams};
 use cash_archive::codec::{self, Codec};
+use cash_core::input::{Dash, Rewinder};
 use cash_core::openfiles::{OpenFile, OpenFiles};
 use cash_core::{ExecutionResult, builtins};
 use cash_win32::unix::Replacement;
@@ -389,16 +390,20 @@ fn into_file(output: Output<'_>) -> Option<Replacement> {
     }
 }
 
-/// `input` from its first byte again, as bzip2's `rewind` has it: a file is opened
-/// again, standard input read from its start when it is a file. A pipe cannot go back,
-/// and what libbzip2 had read of it is lost, as it is in bzip2.
+/// `input` from its first byte again, as bzip2's `rewind` has it: a named file through
+/// a duplicate of its open handle, which a process substitution's pipe allows where a
+/// third open did not; standard input from its start when it is a file. A pipe cannot go
+/// back, and what libbzip2 had read of it is lost, as it is in bzip2.
 fn rewound<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     input: BufReader<Box<dyn Read>>,
-    path: Option<&PathBuf>,
+    rewinder: Option<Rewinder>,
 ) -> io::Result<Box<dyn Read>> {
-    if let Some(path) = path {
-        return Ok(Box::new(fs::File::open(path)?));
+    if let Some(rewinder) = rewinder {
+        return Ok(match rewinder.from_start() {
+            Ok(file) => Box::new(file),
+            Err(_) => input.into_inner(),
+        });
     }
     if let Some(OpenFile::File(file)) = context.try_fd(OpenFiles::STDIN_FD) {
         (&*file).seek(io::SeekFrom::Start(0))?;
@@ -478,13 +483,16 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         self.context.shell.absolute_path(name)
     }
 
-    /// What `name` is, as bzip2 finds out whether it can open it; the empty name is no
-    /// file.
-    fn metadata(&self, name: &str) -> io::Result<fs::Metadata> {
+    /// What `name` is, as bzip2 finds out whether it can open it: nothing to say of a
+    /// device's name (`/dev/stdin`), which the shell opens; the empty name is no file.
+    fn metadata(&self, name: &str) -> io::Result<Option<fs::Metadata>> {
         if name.is_empty() {
             return Err(io::Error::from(io::ErrorKind::NotFound));
         }
-        fs::metadata(self.path(name))
+        if cash_win32::devices::dev_name(std::path::Path::new(name)).is_some() {
+            return Ok(None);
+        }
+        fs::metadata(self.path(name)).map(Some)
     }
 
     /// `-v`'s start of the line about the file being worked on, padded.
@@ -707,10 +715,13 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
     }
 
     /// The input and the output file of a named file; `None` when it was refused, said.
-    fn open_pair(&mut self) -> Result<Option<(fs::File, Option<Replacement>)>, Stop> {
+    fn open_pair(
+        &mut self,
+    ) -> Result<Option<(cash_core::input::Input, Option<Replacement>)>, Stop> {
         let p = self.invoked;
         let (in_name, out_name) = (self.in_name.clone(), self.out_name.clone());
-        let opened = fs::File::open(self.path(&in_name));
+        // Opened as the shell's `<` opens it, read through the stop token.
+        let opened = self.context.open_input(&in_name, Dash::File);
         let output = if self.options.mode == Mode::Files {
             match self.create_output() {
                 Ok(output) => Some(output),
@@ -739,7 +750,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                     };
                 self.refuse(&format!(
                     "{p}: Can't open input file {in_name}:{space}{}.\n",
-                    strerror(&e)
+                    e.reason()
                 ))?;
                 Ok(None)
             }
@@ -754,7 +765,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         let mut metadata = None;
         if mode != Mode::Stdin {
             match self.metadata(&in_name) {
-                Ok(meta) => metadata = Some(meta),
+                Ok(meta) => metadata = meta,
                 Err(e) => {
                     return self.refuse(&format!(
                         "{p}: Can't open input file {in_name}: {}.\n",
@@ -809,7 +820,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 return self.refuse_terminal("write compressed data to");
             }
             Mode::ToStdout | Mode::Files => match self.open_pair()? {
-                Some((file, output)) => (Box::new(self.context.stop_token().reader(file)), output),
+                Some((opened, output)) => (Box::new(opened), output),
                 None => return Ok(()),
             },
         };
@@ -868,10 +879,10 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         let mut metadata = None;
         if mode != Mode::Stdin {
             match self.metadata(&in_name) {
-                Ok(meta) if meta.is_dir() => {
+                Ok(Some(meta)) if meta.is_dir() => {
                     return self.refuse(&format!("{p}: Input file {in_name} is a directory.\n"));
                 }
-                Ok(meta) => metadata = Some(meta),
+                Ok(meta) => metadata = meta,
                 Err(e) => {
                     return self.refuse(&format!(
                         "{p}: Can't open input file {in_name}: {}.\n",
@@ -902,7 +913,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             .as_ref()
             .is_some_and(|m| m.permissions().readonly());
 
-        let path = (mode != Mode::Stdin).then(|| self.path(&in_name));
+        let mut rewinder = None;
         let (input, file_output): (Box<dyn Read>, Option<Replacement>) = if mode == Mode::Stdin {
             if is_terminal(self.context, OpenFiles::STDIN_FD) {
                 return self.refuse_terminal("read compressed data from");
@@ -913,7 +924,10 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             )
         } else {
             match self.open_pair()? {
-                Some((file, output)) => (Box::new(self.context.stop_token().reader(file)), output),
+                Some((opened, output)) => {
+                    rewinder = opened.rewinder();
+                    (Box::new(opened), output)
+                }
                 None => return Ok(()),
             }
         };
@@ -931,7 +945,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         let ending = match decompress_streams(&mut input, &mut output) {
             // `-f` copies what is not bzip2's as it is, all of it from the start.
             Ok(Ending::NoStream { .. }) if self.options.force => {
-                match rewound(self.context, input, path.as_ref())
+                match rewound(self.context, input, rewinder)
                     .and_then(|mut rest| io::copy(&mut rest, &mut output))
                 {
                     Ok(_) => Ok(Ending::Whole),
@@ -1004,7 +1018,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         let in_name = self.in_name.clone();
         if mode != Mode::Stdin {
             match self.metadata(&in_name) {
-                Ok(meta) if meta.is_dir() => {
+                Ok(Some(meta)) if meta.is_dir() => {
                     return self.refuse(&format!("{p}: Input file {in_name} is a directory.\n"));
                 }
                 Ok(_) => {}
@@ -1022,12 +1036,13 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             }
             Box::new(self.context.stop_token().reader(self.context.stdin()))
         } else {
-            match fs::File::open(self.path(&in_name)) {
-                Ok(file) => Box::new(self.context.stop_token().reader(file)),
+            // Opened as the shell's `<` opens it, read through the stop token.
+            match self.context.open_input(&in_name, Dash::File) {
+                Ok(opened) => Box::new(opened),
                 Err(e) => {
                     return self.refuse(&format!(
                         "{p}: Can't open input file {in_name}:{}.\n",
-                        strerror(&e)
+                        e.reason()
                     ));
                 }
             }

@@ -34,6 +34,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use cash_archive::codec::gzip::{
     Input, Member, Start, Trouble, deflate_parallel, header, inflate_member, read_start,
 };
+use cash_core::input::{Dash, InputError, Source};
 use cash_core::openfiles::{OpenFile, OpenFiles};
 use cash_core::{ExecutionResult, ShellFd, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long};
@@ -394,6 +395,14 @@ fn help(invoked: &str) -> String {
 
 fn version_line(invoked: &str) -> String {
     format!("{invoked} (cash): GNU gzip 1.14's options, in pure Rust")
+}
+
+/// What a name `gzip` is given turns out to be.
+enum Located {
+    /// A file or a device, open.
+    File(cash_core::input::Input),
+    /// A folder, at this absolute path: `-r` goes into it.
+    Folder(PathBuf),
 }
 
 /// Why a file was given up on, with everything already said.
@@ -799,10 +808,18 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
 
     /// Finds the file to read for `name`: when decompressing, a name without a known
     /// suffix is tried with each, as `gunzip foo` finds `foo.gz`.
-    fn locate(&self, name: &str) -> Result<(String, PathBuf, fs::Metadata), io::Error> {
-        let path = self.context.shell.absolute_path(Path::new(name));
-        match fs::metadata(&path) {
-            Ok(meta) => return Ok((name.to_owned(), path, meta)),
+    /// `name` opened as the shell's `<` opens it, or, when decompressing a name with no
+    /// known suffix that is not there, the first of `name.gz` and the other suffixes that
+    /// is: the name found and what it is. Opened once, so a process substitution's pipe,
+    /// which opens twice at most, is read from the open that told what it is.
+    fn locate(&self, name: &str) -> Result<(String, Located), io::Error> {
+        let open = |candidate: &str| match self.context.open_input(candidate, Dash::File) {
+            Ok(input) => Ok(Located::File(input)),
+            Err(InputError::IsADirectory(path)) => Ok(Located::Folder(path)),
+            Err(error) => Err(io::Error::from(error)),
+        };
+        match open(name) {
+            Ok(located) => return Ok((name.to_owned(), located)),
             Err(e)
                 if e.kind() != io::ErrorKind::NotFound
                     || !self.options.decompress
@@ -816,9 +833,8 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         let mut first_error = None;
         for suffix in suffixes {
             let candidate = format!("{name}{suffix}");
-            let path = self.context.shell.absolute_path(Path::new(&candidate));
-            match fs::metadata(&path) {
-                Ok(meta) => return Ok((candidate, path, meta)),
+            match open(&candidate) {
+                Ok(located) => return Ok((candidate, located)),
                 Err(e) => {
                     first_error.get_or_insert(e);
                 }
@@ -909,7 +925,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             return self.treat_stdin();
         }
         let options = self.options.clone();
-        let (name, path, meta) = match self.locate(name) {
+        let (name, located) = match self.locate(name) {
             Ok(found) => found,
             Err(e) => {
                 let shown = if options.decompress
@@ -924,20 +940,29 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             }
         };
         let name = name.as_str();
-        if meta.is_dir() {
-            if options.recursive {
-                return self.treat_dir(name, &path);
+        let opened = match located {
+            Located::Folder(path) => {
+                if options.recursive {
+                    return self.treat_dir(name, &path);
+                }
+                return self.warn(&format!("{name} is a directory -- ignored"));
             }
-            return self.warn(&format!("{name} is a directory -- ignored"));
-        }
+            Located::File(opened) => opened,
+        };
+        // What the open handle says; nothing of a device or a pipe, which is no regular file.
+        let meta = opened.metadata().cloned();
+        let path = match &opened.source {
+            Source::File { path, .. } => path.clone(),
+            Source::Stdin | Source::Device => PathBuf::new(),
+        };
         if !options.to_stdout {
-            if !meta.is_file() {
+            let Some(meta) = meta.as_ref().filter(|meta| meta.is_file()) else {
                 return self.warn(&format!(
                     "{name} is not a directory or a regular file - ignored"
                 ));
-            }
+            };
             if !options.force {
-                let links = cash_win32::fs::file_link_count(&path, &meta);
+                let links = cash_win32::fs::file_link_count(&path, meta);
                 if links >= 2 {
                     let others = links - 1;
                     let plural = if others == 1 { "" } else { "s" };
@@ -951,20 +976,22 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             return Ok(());
         };
 
-        let file = match fs::File::open(&path) {
-            Ok(file) => file,
-            Err(e) => return self.error(&format!("{name}: {}", strerror(&e))),
-        };
-        // A Ctrl-C, or `kill` of a background job, fails the read at the next block.
-        let mut input = Input::new(Box::new(self.context.stop_token().reader(file)));
-        let read_only = meta.permissions().readonly();
+        // No second open: the input is open already, and read through the stop token, so a
+        // Ctrl-C or `kill` of a background job fails the read at the next block.
+        let mut input = Input::new(Box::new(opened));
+        let read_only = meta
+            .as_ref()
+            .is_some_and(|meta| meta.permissions().readonly());
+        let modified = meta.as_ref().and_then(|meta| meta.modified().ok());
+        let accessed = meta.as_ref().and_then(|meta| meta.accessed().ok());
         let input_times = fs::FileTimes::new()
-            .set_modified(meta.modified().unwrap_or(UNIX_EPOCH))
-            .set_accessed(meta.accessed().unwrap_or(UNIX_EPOCH));
+            .set_modified(modified.unwrap_or(UNIX_EPOCH))
+            .set_accessed(accessed.unwrap_or(UNIX_EPOCH));
 
         if !options.decompress {
-            let stamp = meta.modified().ok().and_then(stamp_of);
-            let out_of_range = stamp.is_none() && !options.no_time;
+            let stamp = modified.and_then(stamp_of);
+            // A device or a pipe has no time to store: 0, as for standard input, unsaid.
+            let out_of_range = modified.is_some() && stamp.is_none() && !options.no_time;
             let stamp = if options.no_time {
                 0
             } else {
@@ -1059,7 +1086,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             .then(|| UNIX_EPOCH + Duration::from_secs(u64::from(stored_stamp)));
 
         if options.list {
-            let stamp = meta.modified().ok().and_then(stamp_of).unwrap_or(0);
+            let stamp = modified.and_then(stamp_of).unwrap_or(0);
             return self.list_one(&mut input, name, &oname, stamp, first);
         }
 

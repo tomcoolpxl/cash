@@ -54,6 +54,29 @@ pub struct Input {
     /// What it reads.
     pub source: Source,
     reader: StopReader<Box<dyn Read + Send>>,
+    /// A duplicate of a file's handle, for [`Input::rewinder`].
+    duplicate: Option<std::fs::File>,
+    stop: crate::StopToken,
+}
+
+/// A way back to a file's first byte without opening it again ([`Input::rewinder`]).
+#[derive(Debug)]
+pub struct Rewinder {
+    file: std::fs::File,
+    stop: crate::StopToken,
+}
+
+impl Rewinder {
+    /// The file from its first byte, read through the stop token.
+    ///
+    /// # Errors
+    ///
+    /// When it cannot go back: a pipe, which bzip2 cannot rewind either.
+    pub fn from_start(mut self) -> std::io::Result<StopReader<std::fs::File>> {
+        use std::io::Seek as _;
+        self.file.seek(std::io::SeekFrom::Start(0))?;
+        Ok(self.stop.reader(self.file))
+    }
 }
 
 impl std::fmt::Debug for Input {
@@ -76,6 +99,19 @@ impl Input {
     /// Whether it is standard input, named `-`.
     pub const fn is_stdin(&self) -> bool {
         matches!(self.source, Source::Stdin)
+    }
+
+    /// A way back to the file's first byte, when it is a file, for a tool that reads it
+    /// again from the start, as bzip2 `-f` copies what is not bzip2's: a duplicate of the
+    /// open handle, so that a process substitution's pipe, which opens twice at most, is
+    /// not opened a third time. The two share one position: the rewind happens when it
+    /// is asked for.
+    pub fn rewinder(&self) -> Option<Rewinder> {
+        let file = self.duplicate.as_ref()?.try_clone().ok()?;
+        Some(Rewinder {
+            file,
+            stop: self.stop.clone(),
+        })
     }
 
     /// Everything it holds, for the tools that read a whole file at once.
@@ -162,6 +198,8 @@ impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
         let input = |source, reader: Box<dyn Read + Send>| Input {
             source,
             reader: stop.reader(reader),
+            duplicate: None,
+            stop: stop.clone(),
         };
         if name == "-" && dash == Dash::Stdin {
             return Ok(input(Source::Stdin, Box::new(self.stdin())));
@@ -181,7 +219,11 @@ impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
                 if metadata.as_ref().is_some_and(std::fs::Metadata::is_dir) {
                     return Err(InputError::IsADirectory(path));
                 }
-                Ok(input(Source::File { path, metadata }, Box::new(file)))
+                let duplicate = file.try_clone().ok();
+                Ok(Input {
+                    duplicate,
+                    ..input(Source::File { path, metadata }, Box::new(file))
+                })
             }
             // Windows refuses a folder opened as a file with "Access is denied": one look
             // at what the name is tells the two apart, and only when the open failed.
