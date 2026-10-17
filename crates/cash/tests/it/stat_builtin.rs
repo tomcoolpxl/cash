@@ -229,3 +229,29 @@ fn stat_shows_a_time_in_the_zone_to_the_tick() {
         "2020-05-20 18:40:00.123456700 +0000\n2020-05-21 03:40:00.123456700 +0900"
     );
 }
+
+/// A link is shown as Git Bash's stat shows it: `%N` and the report's `File:` line with
+/// ` -> ` and its target, in cash's spelling as `readlink` gives it, and its size the
+/// target's length. `%N` was the name alone, and the size 0.
+#[test]
+fn stat_shows_a_links_target() {
+    let scratch = Scratch::new("stat-link");
+    std::fs::create_dir(scratch.join("sub")).unwrap();
+    cash_win32::junction::point(&scratch.join("link"), &scratch.join("sub")).unwrap();
+    let posix = scratch.path().to_string_lossy().replace('\\', "/");
+    let out = cash(&format!(
+        "cd '{posix}' && readlink link && stat -c '%N|%s' link && stat link | head -1"
+    ));
+    let lines: Vec<&str> = out.lines().collect();
+    let target = lines.first().copied().unwrap_or_default();
+    assert_eq!(
+        lines.get(1..),
+        Some(
+            &[
+                &*format!("'link' -> '{target}'|{}", target.len()),
+                &*format!("  File: link -> {target}"),
+            ][..]
+        ),
+        "{out}"
+    );
+}

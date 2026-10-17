@@ -3372,17 +3372,23 @@ fn inspect_path(
         EntryKind::File
     };
 
+    // A link's target in cash's spelling, `C:/…` (D3), as `readlink` gives it.
     let (symlink_target, target) = if is_symlink {
         let followed = std::fs::metadata(path);
         (
             std::fs::read_link(path)
                 .ok()
-                .map(|p| p.to_string_lossy().into_owned()),
+                .map(|p| cash_win32::path::render(&p)),
             Some((followed.is_ok(), followed.is_ok_and(|m| m.is_dir()))),
         )
     } else {
         (None, None)
     };
+    // A link's size is its target's length, as `lstat` gives it on Linux and Git Bash
+    // shows it; Windows says 0.
+    let size = symlink_target
+        .as_ref()
+        .map_or_else(|| symlink_metadata.len(), |target| target.len() as u64);
 
     let mut item = ItemInfo {
         name: display_name.to_string(),
@@ -3392,7 +3398,7 @@ fn inspect_path(
         links: 0,
         owner: String::new(),
         group: String::new(),
-        size: symlink_metadata.len(),
+        size,
         time: want.time.of(&symlink_metadata),
         allocation: None,
         index: None,

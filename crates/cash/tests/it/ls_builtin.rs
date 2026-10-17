@@ -1488,3 +1488,28 @@ fn ls_dired_as_gnu_ls_has_it() {
     );
     assert_eq!(out.stderr, "ls: --dired and --zero are incompatible");
 }
+
+/// `ls -l` shows a link's target in cash's spelling, `C:/…`, as `readlink` gives it,
+/// where it showed Windows' backslashes; and its size is the target's length, as Linux's
+/// `lstat` and Git Bash's ls give it, where Windows says 0.
+#[test]
+fn ls_l_shows_a_links_target_as_readlink_does() {
+    let scratch = helpers_fixture("ls-link-target");
+    let out = ls_in(
+        scratch.path(),
+        "ls -l --time-style=+T linkdir | sed -n 's/^.* T //p'; readlink linkdir; \
+         ls -l --time-style=+T linkdir | sed 's/ T linkdir.*//; s/.* //'",
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    let target = lines.get(1).copied().unwrap_or_default();
+    assert!(
+        target.ends_with("/sub") && !target.contains('\\'),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        lines.first().copied(),
+        Some(&*format!("linkdir -> {target}"))
+    );
+    assert_eq!(lines.get(2).copied(), Some(&*target.len().to_string()));
+}

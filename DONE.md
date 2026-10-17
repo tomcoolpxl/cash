@@ -1877,6 +1877,12 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   `std::io::pipe()` answers): once the reader has gone it ends with 141, within one
   `-s` interval (1 s by default). Only tail asks: a watcher on every bundled tool would
   end `cp a b | true` before it copied.
+- **A link's target in `ls -l` had Windows' backslashes** (found 2026-10-17 with `-H`):
+  `linkdir -> C:\Users\…\sub`, where `readlink` gives `C:/Users/…/sub` and D3 allows
+  no backslash; it is in cash's spelling now, and a link's size is its target's length,
+  as `lstat` gives it on Linux and Git Bash's ls shows it, where Windows says 0. `stat`
+  shows it so too: `%N` and the report's `File:` line with ` -> ` and the target, as Git
+  Bash's stat does, where they gave the name alone.
 
 - **PIPESTATUS after a compound command** (found 2026-10-17 by the quoting comparison,
   whose `${PIPESTATUS[0]}` after an `if` read 0): a compound command that is the whole

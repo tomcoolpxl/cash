@@ -229,7 +229,7 @@ impl builtins::Command for StatCommand {
                 write!(stdout, "{formatted}")?;
             } else {
                 // Default human-readable report
-                writeln!(stdout, "  File: {}", info.name)?;
+                writeln!(stdout, "  File: {}", info.shown_name())?;
                 writeln!(
                     stdout,
                     "  Size: {:<10} Blocks: {:<10} IO Block: 4096   {}",
@@ -266,6 +266,8 @@ impl builtins::Command for StatCommand {
 
 struct FileStatInfo {
     name: String,
+    /// A link's target, in cash's spelling (`C:/…`), as `readlink` gives it.
+    link_target: Option<String>,
     size: u64,
     blocks: u64,
     raw_mode: u32,
@@ -292,6 +294,14 @@ struct FileStatInfo {
 }
 
 impl FileStatInfo {
+    /// The name the report's `File:` line shows: a link's with ` -> ` and its target.
+    fn shown_name(&self) -> String {
+        self.link_target.as_ref().map_or_else(
+            || self.name.clone(),
+            |target| format!("{} -> {target}", self.name),
+        )
+    }
+
     /// `path` as written, for the report, and as resolved, to ask the file; its times shown
     /// in `zone`.
     fn from_path_and_meta(
@@ -301,8 +311,16 @@ impl FileStatInfo {
         zone: &Zone,
     ) -> Self {
         let name = written.to_string_lossy().to_string();
-        let size = meta.len();
-        let blocks = size.div_ceil(512);
+        let blocks = meta.len().div_ceil(512);
+        let link_target = meta
+            .is_symlink()
+            .then(|| std::fs::read_link(path).ok())
+            .flatten()
+            .map(|target| cash_win32::path::render(&target));
+        // A link's size is its target's length, as Git Bash's stat shows it.
+        let size = link_target
+            .as_ref()
+            .map_or_else(|| meta.len(), |target| target.len() as u64);
 
         let (kind, file_type) = if meta.is_dir() {
             (Kind::Dir, "directory")
@@ -362,6 +380,7 @@ impl FileStatInfo {
 
         Self {
             name,
+            link_target,
             size,
             blocks,
             raw_mode,
@@ -415,6 +434,7 @@ impl FileStatInfo {
         let shown = human_time(clock, zone);
         Self {
             name: name.to_string_lossy().to_string(),
+            link_target: None,
             size: 0,
             blocks: 0,
             raw_mode,
@@ -571,7 +591,10 @@ fn format_stat(info: &FileStatInfo, spec: &str, interpret_escapes: bool) -> Stri
 fn file_field(info: &FileStatInfo, letter: char) -> Option<String> {
     Some(match letter {
         'n' => info.name.clone(),
-        'N' => format!("'{}'", info.name),
+        'N' => match &info.link_target {
+            Some(target) => format!("'{}' -> '{target}'", info.name),
+            None => format!("'{}'", info.name),
+        },
         's' => info.size.to_string(),
         'b' => info.blocks.to_string(),
         'B' => "512".to_owned(),

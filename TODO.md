@@ -65,6 +65,11 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   waited, not worked: plausibly a `kill` that lands before the builtin reads its stop,
   with `wait` left waiting. Which of the three it was is not known; the test should name
   the tool it is on, and a loop of the three under load should catch it.
+- **`timeout 2 cash -c 'sleep 5; echo done'` prints `done`** (2026-10-17, seen in Claude's
+  shell): Git Bash's `timeout` ended the `sleep`, and cash went on to `echo`, where
+  `timeout 2 bash -c …` prints nothing; no trap on TERM or INT ran in cash. What Git
+  Bash's `timeout` sends a native program, and whether this shell's inherited "ignore
+  Ctrl-C" is the cause, is not known yet; to be tried in the user's Terminal.
 - **`ls -l` moves the access time of a file it reads for `#!`** (2026-10-17, found with
   `ls -u`): to decide `x`, cash reads the first two bytes of a file of two bytes or more
   without a program extension, and that read is an access; `ls -lu` then shows its own
