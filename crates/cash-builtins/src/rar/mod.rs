@@ -777,10 +777,7 @@ fn dispatch<SE: cash_core::ShellExtensions>(
         }
         Command::Delete => return delete::run(rar, parsed),
         Command::Repair => return repair::run(rar, parsed),
-        Command::Reconstruct => {
-            reconstruct::run(rar, parsed);
-            return Ok(());
-        }
+        Command::Reconstruct => return reconstruct::run(rar, parsed),
         Command::Comment
         | Command::CommentWrite
         | Command::Rename

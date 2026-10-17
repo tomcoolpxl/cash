@@ -12,15 +12,19 @@ use cash_archive::rar::rar50::{Rev5Volume, repair_rev5_volumes_to};
 use super::cmdline::Parsed;
 use super::open::{self, Found};
 use super::repair::{done, write};
-use super::{Rar, code};
+use super::{Rar, Stop, code};
 
-pub(super) fn run<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, parsed: &Parsed) {
+pub(super) fn run<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    parsed: &Parsed,
+) -> Result<(), Stop> {
     let Some(archive) = parsed.archive.as_deref() else {
-        return;
+        return Ok(());
     };
-    for found in open::find(rar, archive) {
+    for found in open::find(rar, archive)? {
         reconstruct(rar, &found);
     }
+    Ok(())
 }
 
 /// A volume set's names: its base, a number as wide as the one named, `.rar`.

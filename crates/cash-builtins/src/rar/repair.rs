@@ -25,7 +25,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         Some(Name::Plain(last)) if last.ends_with(['/', '\\']) => last.replace('\\', "/"),
         _ => String::new(),
     };
-    for found in open::find(rar, archive) {
+    for found in open::find(rar, archive)? {
         repair(rar, &found, &folder)?;
     }
     Ok(())

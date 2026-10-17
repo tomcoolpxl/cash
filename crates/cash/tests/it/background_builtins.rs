@@ -227,3 +227,29 @@ fn a_compressor_kill_stops_on_standard_input_leaves_a_broken_archive() {
         );
     }
 }
+
+#[test]
+fn an_archiver_stopped_in_its_walk_writes_no_archive() {
+    // On the shared walker a stop ended the walk, and the archiver went on to write an
+    // archive of what it had walked, whole to look at. A stop now fails the run as each
+    // tool fails at a Ctrl-C: zip in silence, rar with "User break", 7z with "Break
+    // signaled", and none leaves an archive.
+    let dir = tempfile::tempdir().unwrap();
+    let big = dir.path().join("big");
+    std::fs::create_dir(&big).unwrap();
+    for n in 0..3000 {
+        std::fs::write(big.join(format!("f{n}")), "x").unwrap();
+    }
+    for (tool, words) in [
+        ("zip -rq z.zip big", ""),
+        ("rar a -idq r.rar big", "User break"),
+        ("7z a -bso0 -bsp0 s.7z big", "Break signaled"),
+    ] {
+        let out = run_in(
+            dir.path(),
+            &format!(r#"{tool} & kill %1; wait %1; echo "$?"; ls -A | grep -v '^big$'"#),
+        );
+        assert_eq!(out.stdout, "143", "{tool}: {}", out.stderr);
+        assert!(out.stderr.contains(words), "{tool}: {}", out.stderr);
+    }
+}

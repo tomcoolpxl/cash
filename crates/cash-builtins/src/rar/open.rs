@@ -19,13 +19,16 @@ pub(super) struct Found {
 }
 
 /// The archives a command's archive name means: the name itself, or what its wildcard
-/// matches in its folder (and below, with `-r`).
-pub(super) fn find<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, name: &str) -> Vec<Found> {
+/// matches in its folder (and below, with `-r`); a stop is rar's "User break".
+pub(super) fn find<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    name: &str,
+) -> Result<Vec<Found>, Stop> {
     let name = super::cmdline::with_default_extension(name);
     let display = name.replace('\\', "/");
     if !has_wildcard(&display) {
         let path = rar.path(&display);
-        return vec![Found { display, path }];
+        return Ok(vec![Found { display, path }]);
     }
     let (folder, mask) = match display.rfind('/') {
         Some(at) => (
@@ -41,8 +44,8 @@ pub(super) fn find<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, name: &str
         &mask,
         rar.switches.recurse == Some('r'),
         &mut found,
-    );
-    found
+    )?;
+    Ok(found)
 }
 
 /// The archives `mask` matches in `folder`, and below it with `recurse`, as Rar.exe 7.23
@@ -55,7 +58,7 @@ fn collect<SE: cash_core::ShellExtensions>(
     mask: &str,
     recurse: bool,
     found: &mut Vec<Found>,
-) {
+) -> Result<(), Stop> {
     let base = rar.path(if folder.is_empty() { "." } else { folder });
     let options = tree::WalkOptions {
         links: tree::Links::All,
@@ -64,7 +67,12 @@ fn collect<SE: cash_core::ShellExtensions>(
         max_depth: if recurse { usize::MAX } else { 1 },
         ..tree::WalkOptions::default()
     };
-    for entry in tree::Walk::new(folder, &base, &options, rar.context.stop_token()).flatten() {
+    for next in tree::Walk::new(folder, &base, &options, rar.context.stop_token()) {
+        let entry = match next {
+            Ok(entry) => entry,
+            Err(tree::WalkError::Stopped) => return Err(Stop::Break),
+            Err(_) => continue,
+        };
         if entry.kind != tree::Kind::Folder && mask_matches(mask, &entry.name().to_string_lossy()) {
             found.push(Found {
                 path: entry.path,
@@ -72,6 +80,7 @@ fn collect<SE: cash_core::ShellExtensions>(
             });
         }
     }
+    Ok(())
 }
 
 /// Whether a name has `*` or `?`.

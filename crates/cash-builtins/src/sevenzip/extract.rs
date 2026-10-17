@@ -88,6 +88,7 @@ fn scan<SE: cash_core::ShellExtensions>(
             }
         },
         &mut |stat, path| super::update::scan_progress(console, stat, path),
+        &env.context.stop_token(),
     );
     // FinishScanning.
     console.close_progress();
@@ -95,6 +96,7 @@ fn scan<SE: cash_core::ShellExtensions>(
     if let Some(error) = failed {
         return Err(Stop::System(error));
     }
+    let items = items.ok_or(Stop::Break)?;
     let stat = scan::Stat::of(&items);
     let mut found: Vec<Found> = items
         .into_iter()

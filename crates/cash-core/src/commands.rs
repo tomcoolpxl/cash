@@ -281,7 +281,9 @@ impl Display for Stopped {
 impl std::error::Error for Stopped {}
 
 impl Stopped {
-    fn error() -> std::io::Error {
+    /// The error: also what a builtin whose own loop saw the stop token ends with, so the
+    /// shell ends it in silence, with 130, as a read through a [`StopReader`] does.
+    pub fn error() -> std::io::Error {
         std::io::Error::other(Self)
     }
 }

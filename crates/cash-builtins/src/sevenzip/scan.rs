@@ -147,15 +147,18 @@ impl Found {
 ///
 /// With `symlinks` (`-snl`) a junction or a symbolic link is kept as one, its reparse
 /// data read, a folder not entered; else it is followed. `progress` hears the count so
-/// far as each folder is entered (`ScanProgress`).
+/// far as each folder is entered (`ScanProgress`). A stop ends the scan with nothing:
+/// 7-Zip's "Break signaled".
 pub(super) fn scan(
     censor: &Censor,
     symlinks: bool,
     resolve: &dyn Fn(&str) -> PathBuf,
     warn: &mut dyn FnMut(&str, &io::Error),
     progress: &mut dyn FnMut(&Stat, &str),
-) -> Vec<DirItem> {
+    stop: &cash_core::StopToken,
+) -> Option<Vec<DirItem>> {
     let mut walker = Walker {
+        stop,
         symlinks,
         case: censor.case_sensitive,
         exclude_dirs: censor.exclude_dirs,
@@ -169,10 +172,11 @@ pub(super) fn scan(
     for (prefix, node) in censor.pairs() {
         walker.enumerate(&[node], prefix, "", &[], false);
     }
-    walker.items
+    (!stop.requested()).then_some(walker.items)
 }
 
 struct Walker<'a> {
+    stop: &'a cash_core::StopToken,
     symlinks: bool,
     case: bool,
     exclude_dirs: bool,
@@ -339,6 +343,9 @@ impl Walker<'_> {
         let Some(&node) = stack.last() else {
             return;
         };
+        if self.stop.requested() {
+            return;
+        }
         (self.progress)(&self.stat, phy);
         if !enter && node.need_check_sub_dirs() {
             enter = true;

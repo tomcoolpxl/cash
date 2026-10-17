@@ -452,8 +452,11 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             let entry = match next {
                 // A dangling link with -h: what it names is not there, said as such.
                 Ok(entry) | Err(walker::WalkError::Dangling(entry)) => entry,
-                // Stopped: what is left is not removed, for its contents were not stored.
-                Err(walker::WalkError::Stopped) => return Ok(()),
+                // Stopped: the run ends as a stopped read ends it, in silence with 130,
+                // and nothing more is removed; an archive ended here would look whole.
+                Err(walker::WalkError::Stopped) => {
+                    return Err(cash_core::Stopped::error().into());
+                }
                 Err(walker::WalkError::Loop { shown, .. }) => {
                     let shown = self.quote_colon(shown.replace('\\', "/").as_bytes());
                     self.error(&format!("{shown}: File system loop detected; not dumped"))?;

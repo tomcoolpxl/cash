@@ -1972,10 +1972,15 @@ fn collect<SE: cash_core::ShellExtensions>(
         missing: Vec::new(),
         held: Vec::new(),
         unlisted: Vec::new(),
+        stopped: false,
         walk: 0,
     };
     for name in &names {
         walker.name(name);
+        // Ctrl-C: "User break", as rar ends; an archive of what was found would look whole.
+        if walker.stopped {
+            return Err(Stop::Break);
+        }
     }
     let Walker {
         found,
@@ -2016,6 +2021,8 @@ struct Walker<'r, 'a, SE: cash_core::ShellExtensions> {
     missing: Vec<(String, io::Error)>,
     held: Vec<(String, io::Error)>,
     unlisted: Vec<(PathBuf, io::Error)>,
+    /// The stop token asked, mid walk.
+    stopped: bool,
     walk: usize,
 }
 
@@ -2121,6 +2128,10 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
             }
             Err(tree::WalkError::Unlisted { path, error, .. }) => {
                 self.unlisted.push((path, error));
+                None
+            }
+            Err(tree::WalkError::Stopped) => {
+                self.stopped = true;
                 None
             }
             Err(_) => None,

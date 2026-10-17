@@ -120,7 +120,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     // The archives a wildcard matches have one summary, their errors added up.
     let mut tally = Tally::default();
     let mut worked_through = false;
-    for found in open::find(rar, archive) {
+    for found in open::find(rar, archive)? {
         ended = !found.path.is_file();
         // The last line of an archive worked through ends before the next begins.
         if worked_through {

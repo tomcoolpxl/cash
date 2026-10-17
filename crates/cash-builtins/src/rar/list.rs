@@ -26,7 +26,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let Some(archive) = parsed.archive.as_deref() else {
         return Ok(());
     };
-    for found in open::find(rar, archive) {
+    for found in open::find(rar, archive)? {
         list_set(rar, &found, verbose, form, &masks)?;
     }
     Ok(())

@@ -1035,7 +1035,7 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
             }
             let path = self.context.shell.absolute_path(&given);
             if let Ok(view) = unix::unix_view(&path, !self.options.symlinks) {
-                self.walk(&given, &path, view, &mut out);
+                self.walk(&given, &path, view, &mut out)?;
             } else {
                 if given.contains(['*', '?', '[']) {
                     continue;
@@ -1058,8 +1058,15 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
     /// through links unless `-y`, as zip goes through them. A link back to a folder above
     /// is passed by, where Info-ZIP's zip 3.0 goes round until the system refuses the path,
     /// so each file is stored once; a folder that cannot be listed is passed over in
-    /// silence, as zip passes it.
-    fn walk(&self, given: &str, path: &std::path::Path, view: UnixView, out: &mut Vec<Source>) {
+    /// silence, as zip passes it. A stop fails the run, in silence: an archive of what was
+    /// walked would look whole.
+    fn walk(
+        &self,
+        given: &str,
+        path: &std::path::Path,
+        view: UnixView,
+        out: &mut Vec<Source>,
+    ) -> io::Result<()> {
         let options = walker::WalkOptions {
             links: if self.options.symlinks {
                 walker::Links::Never
@@ -1074,7 +1081,7 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
         for next in walker::Walk::new(given, path, &options, self.context.stop_token()) {
             let entry = match next {
                 Ok(entry) => entry,
-                Err(walker::WalkError::Stopped) => return,
+                Err(walker::WalkError::Stopped) => return Err(cash_core::Stopped::error()),
                 Err(_) => continue,
             };
             let view = match root.take() {
@@ -1086,6 +1093,7 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
             };
             self.gather(&entry.shown, entry.path, view, out);
         }
+        Ok(())
     }
 
     /// One name of the walk, unless an option leaves it out.

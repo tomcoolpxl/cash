@@ -628,7 +628,9 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 warnings.scan.push((path.to_owned(), copy_error(error)));
             },
             &mut |stat, path| scan_progress(console, stat, path),
-        );
+            &env.context.stop_token(),
+        )
+        .ok_or(Stop::Break)?;
         // FinishScanning.
         console.close_progress();
         console.progress_quiet(super::percent::State::clear);
