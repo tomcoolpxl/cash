@@ -42,6 +42,8 @@ order. The phases before, released as 1.22.0 and 1.23.0, are in DONE.md.
 7. **Each `.ps1` run scans PATH for pwsh**: done (2026-10-18, DONE.md).
 8. **`HISTCONTROL=erasedups` scans the whole history**: done (2026-10-18, DONE.md).
 
+All eight are done or settled; the phase ends with release 1.24.0.
+
 ## Left over from finished phases
 
 What the phases now in DONE.md left open, each where its phase says more. Not now
