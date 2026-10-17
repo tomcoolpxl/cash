@@ -266,20 +266,39 @@ fn an_archiver_stopped_in_a_large_file_ends_at_once_and_leaves_no_archive() {
     cash_win32::pipe::make_sparse(&file).unwrap();
     file.set_len(64 << 30).unwrap();
     drop(file);
-    for (tool, words) in [
+    let tools = [
         ("tar -cf - big > /dev/null", ""),
         ("zip -q z.zip big", ""),
         ("rar a -idq r.rar big", "User break"),
         ("7z a -bso0 -bsp0 s.7z big", "Break signaled"),
         ("7z h -bso0 -bsp0 big > /dev/null", "Break signaled"),
-    ] {
-        let out = run_in(
-            dir.path(),
-            &format!(r#"{tool} & sleep 1; kill %1; wait %1; echo "$?"; ls -A | grep -v '^big$'"#),
-        );
-        assert_eq!(out.stdout, "143", "{tool}: {}", out.stderr);
-        assert!(out.stderr.contains(words), "{tool}: {}", out.stderr);
+    ];
+    let script = stop_all_at_once(&tools) + "; ls -A | grep -v '^big$' | grep -v '^err'";
+    let out = run_in(dir.path(), &script);
+    assert_eq!(out.stdout, "143\n143\n143\n143\n143", "{}", out.stderr);
+    for (n, (tool, words)) in tools.iter().enumerate() {
+        let said = std::fs::read_to_string(dir.path().join(format!("err{n}"))).unwrap();
+        assert!(said.contains(words), "{tool}: {said}");
     }
+}
+
+/// The script that starts each of `tools` in the background at once, its standard error
+/// to `errN`, stops them all a second later, and says how each ended: one run for all,
+/// as a run for each took longer than a test may in the CI's slow lane.
+fn stop_all_at_once(tools: &[(&str, &str)]) -> String {
+    use std::fmt::Write as _;
+    let mut script = String::new();
+    for (n, (tool, _)) in tools.iter().enumerate() {
+        let _ = write!(script, "{tool} 2> err{n} & ");
+    }
+    script.push_str("sleep 1; kill");
+    for n in 1..=tools.len() {
+        let _ = write!(script, " %{n}");
+    }
+    for n in 1..=tools.len() {
+        let _ = write!(script, r#"; wait %{n}; echo "$?""#);
+    }
+    script
 }
 
 #[test]
@@ -358,18 +377,17 @@ fn an_archiver_stopped_in_a_large_member_ends_at_once() {
     zip.write_all(&end).unwrap();
     drop(zip);
 
-    for (tool, words) in [
+    let tools = [
         ("tar -xOf big.tar > /dev/null", ""),
         ("7z t -bso0 -bsp0 big.tar", "Break signaled"),
         ("unzip -p big.zip > /dev/null", ""),
         ("unzip -tq big.zip", ""),
         ("7z t -bso0 -bsp0 big.zip", "Break signaled"),
-    ] {
-        let out = run_in(
-            dir.path(),
-            &format!(r#"{tool} & sleep 1; kill %1; wait %1; echo "$?""#),
-        );
-        assert_eq!(out.stdout, "143", "{tool}: {}", out.stderr);
-        assert!(out.stderr.contains(words), "{tool}: {}", out.stderr);
+    ];
+    let out = run_in(dir.path(), &stop_all_at_once(&tools));
+    assert_eq!(out.stdout, "143\n143\n143\n143\n143", "{}", out.stderr);
+    for (n, (tool, words)) in tools.iter().enumerate() {
+        let said = std::fs::read_to_string(dir.path().join(format!("err{n}"))).unwrap();
+        assert!(said.contains(words), "{tool}: {said}");
     }
 }
