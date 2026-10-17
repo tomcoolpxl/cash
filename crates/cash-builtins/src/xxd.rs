@@ -16,6 +16,7 @@
 
 use std::io::{Read, Write};
 
+use cash_core::input::{Dash, InputError};
 use cash_core::openfiles::OpenFiles;
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
@@ -1042,12 +1043,15 @@ impl builtins::Command for XxdCommand {
         if from_stdin {
             context.stdin().read_to_end(&mut input)?;
         } else if let Some(name) = &o.infile {
-            let path = context.shell.absolute_path(std::path::Path::new(name));
-            match std::fs::read(&path) {
-                Ok(bytes) => input = bytes,
+            // Opened as the shell's `<` opens it: `/dev/stdin` and the rest are its own.
+            match context.open_input(name, Dash::Stdin) {
+                Ok(opened) => input = opened.read_all()?,
+                // vim's xxd opens a folder, and fails reading it.
+                Err(InputError::IsADirectory(_)) => {
+                    return failed(&Failure::new(2, "Is a directory".to_owned()));
+                }
                 Err(error) => {
-                    let reason = cash_core::error::os_error_text(&error);
-                    return failed(&Failure::new(2, format!("{name}: {reason}")));
+                    return failed(&Failure::new(2, format!("{name}: {}", error.reason())));
                 }
             }
         }

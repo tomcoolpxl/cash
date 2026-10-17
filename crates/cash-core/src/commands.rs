@@ -286,6 +286,11 @@ impl Stopped {
     }
 }
 
+/// Whether `error` is a [`StopReader`]'s or a [`StopWriter`]'s [`Stopped`].
+pub fn is_stopped(error: &std::io::Error) -> bool {
+    error.get_ref().is_some_and(|inner| inner.is::<Stopped>())
+}
+
 impl<R: std::io::Read> std::io::Read for StopReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.stop.requested() {
@@ -1900,6 +1905,13 @@ async fn execute_builtin_command<SE: extensions::ShellExtensions>(
             // (D71). It only failed, so `while :; do echo y; done | head -1` went on for
             // ever.
             if let Some(io_err) = e.as_io_error() {
+                // A read or a write the stop token failed, passed up with `?`: the builtin
+                // ended as a program Ctrl-C or `kill` ends, in silence. The shell acts on
+                // the Ctrl-C before the next command, the INT trap and all, and a killed
+                // job's status is the signal's.
+                if is_stopped(io_err) {
+                    return Ok(ExecutionResult::new(130));
+                }
                 if io_err.kind() == std::io::ErrorKind::BrokenPipe {
                     let mut result = ExecutionResult::from(ExecutionExitCode::from(io_err));
                     if !interactive {

@@ -178,3 +178,37 @@ fn stat_reads_gnus_options_and_reports_a_file_system() {
          directory\nstat: missing operand\nTry 'stat --help' for more information.\n"
     );
 }
+
+#[test]
+fn the_whole_file_tools_read_device_names_and_word_a_folder_as_upstream() {
+    // rev, column, hexdump, xxd and iconv opened their files themselves: `/dev/stdin` was
+    // no file, and a folder read as "Permission denied". They open them as the shell's
+    // `<` does now, and word a folder as util-linux, vim's xxd and glibc's iconv do.
+    let script = r#"
+        cd "$TEMP" && mkdir -p whole-file-folder
+        echo x | rev /dev/stdin
+        printf "a b\n" | column /dev/stdin
+        echo x | xxd /dev/stdin
+        echo x | iconv -f utf-8 -t utf-8 /dev/stdin
+        rev whole-file-folder; echo "rev $?"
+        column whole-file-folder; echo "column $?"
+        hexdump whole-file-folder; echo "hexdump $?"
+        xxd whole-file-folder; echo "xxd $?"
+        rmdir whole-file-folder
+    "#;
+    let out = cash_command()
+        .args(["-c", script])
+        .output()
+        .expect("run cash");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "x\na b\n00000000: 780a                                     x.\nx\nrev 1\ncolumn 1\nhexdump 0\nxxd 2\n",
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "rev: fgetwc() failed: Is a directory\ncolumn: read failed: Is a directory\n\
+         hexdump: whole-file-folder: Is a directory\nxxd: Is a directory\n"
+    );
+}

@@ -13,6 +13,7 @@
 
 use std::io::{Read, Write};
 
+use cash_core::input::{Dash, InputError};
 use cash_core::{ExecutionResult, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use clap::Parser;
@@ -146,12 +147,20 @@ impl builtins::Command for RevCommand {
         // error about a missing file comes before any of the output.
         let mut reversed = Vec::new();
         for file in files {
-            let path = context.shell.absolute_path(std::path::Path::new(&file));
-            match std::fs::read(&path) {
-                Ok(input) => reversed.extend(reverse_all(&input, separator)),
+            // Opened as the shell's `<` opens it: `/dev/stdin` and the rest are its own.
+            match context.open_input(&file, Dash::File) {
+                Ok(input) => reversed.extend(reverse_all(&input.read_all()?, separator)),
+                // util-linux opens a folder, and fails reading it.
+                Err(InputError::IsADirectory(_)) => {
+                    writeln!(context.stderr(), "rev: fgetwc() failed: Is a directory")?;
+                    status = ExecutionResult::general_error();
+                }
                 Err(error) => {
-                    let reason = cash_core::error::os_error_text(&error);
-                    writeln!(context.stderr(), "rev: cannot open {file}: {reason}")?;
+                    writeln!(
+                        context.stderr(),
+                        "rev: cannot open {file}: {}",
+                        error.reason()
+                    )?;
                     status = ExecutionResult::general_error();
                 }
             }

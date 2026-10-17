@@ -21,6 +21,7 @@
 
 use std::io::{Read, Write};
 
+use cash_core::input::{Dash, InputError};
 use cash_core::{ExecutionResult, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long};
 use clap::Parser;
@@ -1103,12 +1104,16 @@ fn read_inputs<SE: cash_core::ShellExtensions>(
         return Ok((inputs, 0));
     }
     for file in files {
-        let path = context.shell.absolute_path(std::path::Path::new(file));
-        match std::fs::read(&path) {
-            Ok(input) => inputs.push(input),
+        // Opened as the shell's `<` opens it: `/dev/stdin` and the rest are its own.
+        match context.open_input(file, Dash::File) {
+            Ok(input) => inputs.push(input.read_all()?),
+            // util-linux opens a folder, and fails reading it.
+            Err(InputError::IsADirectory(_)) => {
+                writeln!(context.stderr(), "column: read failed: Is a directory")?;
+                failures += 1;
+            }
             Err(error) => {
-                let reason = cash_core::error::os_error_text(&error);
-                writeln!(context.stderr(), "column: {file}: {reason}")?;
+                writeln!(context.stderr(), "column: {file}: {}", error.reason())?;
                 failures += 1;
             }
         }

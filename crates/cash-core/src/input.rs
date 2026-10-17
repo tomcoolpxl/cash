@@ -138,6 +138,17 @@ impl std::fmt::Display for InputError {
 
 impl std::error::Error for InputError {}
 
+impl From<InputError> for std::io::Error {
+    fn from(error: InputError) -> Self {
+        match error {
+            InputError::NotFound => Self::from(std::io::ErrorKind::NotFound),
+            InputError::PermissionDenied => Self::from(std::io::ErrorKind::PermissionDenied),
+            InputError::IsADirectory(_) => Self::from(std::io::ErrorKind::IsADirectory),
+            InputError::Other(error) => error,
+        }
+    }
+}
+
 impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
     /// Opens `name` for reading as the shell's `<` would, `-` as `dash` says, and reads it
     /// through the builtin's stop token.

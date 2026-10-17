@@ -30,9 +30,10 @@
 //!   accepted; `-l` lists the names this builtin knows, one per line as glibc prints
 //!   them into a pipe.
 
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
 
+use cash_core::input::{Dash, InputError};
 use cash_core::{ExecutionResult, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use cash_win32::codepage;
@@ -1526,13 +1527,10 @@ impl builtins::Command for IconvCommand {
             if options.verbose && named {
                 writeln!(stderr, "{name}:")?;
             }
-            let input = if name == "-" {
-                let mut bytes = Vec::new();
-                context.stdin().read_to_end(&mut bytes)?;
-                bytes
-            } else {
-                let path = context.shell.absolute_path(Path::new(name));
-                if path.is_dir() {
+            // Opened as the shell's `<` opens it, `-` standard input.
+            let input = match context.open_input(name, Dash::Stdin) {
+                Ok(input) => input.read_all()?,
+                Err(InputError::IsADirectory(_)) => {
                     writeln!(
                         stderr,
                         "iconv: error while reading the input: Is a directory"
@@ -1540,14 +1538,14 @@ impl builtins::Command for IconvCommand {
                     status = 1;
                     break;
                 }
-                match std::fs::read(&path) {
-                    Ok(bytes) => bytes,
-                    Err(error) => {
-                        let reason = cash_core::error::os_error_text(&error);
-                        writeln!(stderr, "iconv: cannot open input file `{name}': {reason}")?;
-                        status = 1;
-                        continue;
-                    }
+                Err(error) => {
+                    writeln!(
+                        stderr,
+                        "iconv: cannot open input file `{name}': {}",
+                        error.reason()
+                    )?;
+                    status = 1;
+                    continue;
                 }
             };
             let outcome = convert(from, to, mode, &input);

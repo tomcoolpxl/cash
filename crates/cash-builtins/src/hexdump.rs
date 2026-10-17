@@ -22,6 +22,7 @@
 
 use std::io::{Read, Write};
 
+use cash_core::input::{Dash, InputError};
 use cash_core::{ExecutionResult, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use clap::Parser;
@@ -1263,8 +1264,10 @@ impl builtins::Command for HexdumpCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let read_file =
-            |name: &str| std::fs::read(context.shell.absolute_path(std::path::Path::new(name)));
+        // A `-f` file, opened as the shell's `<` opens it.
+        let read_file = |name: &str| -> std::io::Result<Vec<u8>> {
+            context.open_input(name, Dash::File)?.read_all()
+        };
         let mut request =
             match crate::options::read_options(&context, || parse(&self.args, &read_file)) {
                 Ok(request) => request,
@@ -1312,14 +1315,18 @@ impl builtins::Command for HexdumpCommand {
         } else {
             let mut opened = 0;
             for name in &request.files {
-                match read_file(name) {
-                    Ok(bytes) => {
+                match context.open_input(name, Dash::File) {
+                    Ok(input) => {
                         opened += 1;
-                        inputs.push(bytes);
+                        inputs.push(input.read_all()?);
+                    }
+                    // util-linux opens a folder and fails reading it: said, yet opened.
+                    Err(InputError::IsADirectory(_)) => {
+                        opened += 1;
+                        writeln!(context.stderr(), "hexdump: {name}: Is a directory")?;
                     }
                     Err(error) => {
-                        let reason = cash_core::error::os_error_text(&error);
-                        writeln!(context.stderr(), "hexdump: {name}: {reason}")?;
+                        writeln!(context.stderr(), "hexdump: {name}: {}", error.reason())?;
                         status = ExecutionResult::general_error();
                     }
                 }
