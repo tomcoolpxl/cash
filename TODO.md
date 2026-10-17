@@ -32,11 +32,7 @@ added after the benchmark at 1.23.0 found `ls -la` 20% slower, in this
 order. The phases before, released as 1.22.0 and 1.23.0, are in DONE.md.
 
 1. **`ls -la` 12% slower for keeping the access time**: done (2026-10-18, DONE.md).
-2. **`ls -l`'s file facts from the folder listing** (2026-10-17, the same benchmark): the
-   change time, allocation and file ID each entry needs (`-l`'s totals, `-s`, `-c`, `-i`)
-   are read with calls of their own for each file, 7% of `ls -la`. One directory query
-   (`GetFileInformationByHandleEx` with `FileIdBothDirectoryInfo`) gives them for every
-   entry; the user's pick: take them from there.
+2. **`ls -l`'s file facts from the folder listing**: done (2026-10-18, DONE.md).
 3. **A TERM trap never runs on cash's own `kill -TERM`** (2026-10-17, found with
    `timeout`): `kill -TERM` sends Ctrl-Break to the job's group (D21), and cash's console
    handler takes Ctrl-C only, so a cash script with `trap … TERM` ends at once with 143,

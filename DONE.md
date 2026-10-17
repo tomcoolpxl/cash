@@ -1957,3 +1957,13 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   one, and needs that open), so `ls` reads as Git Bash's ls does again, the access time
   moving, and `stat`, which reads one file at a time, keeps it
   (`is_executable_keeping_access_time`), as the user chose.
+- **`ls -l`'s file facts from the folder listing** (found by the same benchmark; the
+  user's pick of 2026-10-18): the change time, allocation and file ID `-l`'s totals,
+  `-s`, `-c` and `-i` need were asked of each file, two calls more in `-l`'s open of it
+  and a query or an open of its own otherwise, 7% of `ls -la`. One query of the folder
+  (`cash_win32::fs::folder_facts`, `FileIdBothDirectoryInfo`, as Cygwin reads a folder)
+  gives them for every entry now; a link `-L` goes through is still asked for what it
+  names. The numbers are Git Bash's (`ls -is` the same). With both fixes `ls -la` of 210
+  entries 50 times takes 697 ms, where 1.23.0 took 809 and the build before the
+  regression 676 (the rest is the second query of the folder and the new options'
+  bookkeeping).

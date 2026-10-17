@@ -142,6 +142,90 @@ pub struct FileFacts {
     pub allocation: u64,
 }
 
+/// The [`FileFacts`] of every entry of the folder `dir`, by name, from one query.
+///
+/// `GetFileInformationByHandleEx` with `FileIdBothDirectoryInfo`, a buffer of entries at
+/// a time, as Cygwin reads a folder for them; empty where the folder cannot be read so.
+///
+/// `ls` asked each file for them: two calls more in `-l`'s open of it, a query by name or
+/// an open of its own for `-s`, `-c` and `-i`, 7% of `ls -la`.
+#[must_use]
+pub fn folder_facts(dir: &Path) -> std::collections::HashMap<std::ffi::OsString, FileFacts> {
+    use std::os::windows::ffi::OsStringExt as _;
+    use std::os::windows::fs::OpenOptionsExt as _;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_ID_BOTH_DIR_INFO, FILE_LIST_DIRECTORY, FILE_SHARE_DELETE,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo,
+        GetFileInformationByHandleEx,
+    };
+
+    let mut found = std::collections::HashMap::new();
+    let Ok(folder) = std::fs::OpenOptions::new()
+        .access_mode(FILE_LIST_DIRECTORY)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(dir)
+    else {
+        return found;
+    };
+    let handle = folder.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+    // 64 KiB, in `u64`s so that the records Windows writes in it are aligned.
+    let mut buffer = vec![0u64; 8192];
+    let bytes = buffer.len() * size_of::<u64>();
+    let name_at = std::mem::offset_of!(FILE_ID_BOTH_DIR_INFO, FileName);
+    let mut class = FileIdBothDirectoryRestartInfo;
+    loop {
+        // SAFETY: the handle is the folder's, open to list it, and the buffer holds the
+        // length given; the call fails once no entry is left.
+        let ok = unsafe {
+            GetFileInformationByHandleEx(
+                handle,
+                class,
+                buffer.as_mut_ptr().cast(),
+                u32::try_from(bytes).unwrap_or(0),
+            )
+        };
+        if ok == 0 {
+            break;
+        }
+        class = FileIdBothDirectoryInfo;
+        // SAFETY: the buffer's bytes, which Windows filled with records.
+        let raw = unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), bytes) };
+        let mut offset = 0;
+        while let Some(head) = raw.get(offset..offset + name_at) {
+            // SAFETY: `head` holds the record's fixed part, read as it lies.
+            let record = unsafe {
+                head.as_ptr()
+                    .cast::<FILE_ID_BOTH_DIR_INFO>()
+                    .read_unaligned()
+            };
+            let name_bytes = offset + name_at..offset + name_at + record.FileNameLength as usize;
+            let Some(name) = raw.get(name_bytes) else {
+                break;
+            };
+            let units: Vec<u16> = name
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|&pair| u16::from_le_bytes(pair))
+                .collect();
+            found.insert(
+                std::ffi::OsString::from_wide(&units),
+                FileFacts {
+                    index: record.FileId.cast_unsigned(),
+                    change_time: u64::try_from(record.ChangeTime).unwrap_or(0),
+                    allocation: u64::try_from(record.AllocationSize).unwrap_or(0),
+                },
+            );
+            if record.NextEntryOffset == 0 {
+                break;
+            }
+            offset += record.NextEntryOffset as usize;
+        }
+    }
+    found
+}
+
 /// A file's [`FileFacts`], `None` when it cannot be opened.
 ///
 /// Asked by name where Windows can (`GetFileInformationByName`), else of a handle opened
@@ -237,7 +321,7 @@ fn facts_of_handle(handle: windows_sys::Win32::Foundation::HANDLE, index: u64) -
 /// Data access is asked only for `read_start`, so a program is not opened for reading,
 /// which an antivirus scans. Follows a link; `None` when the file cannot be opened.
 #[must_use]
-pub fn listing_facts(path: &Path, read_start: bool) -> Option<ListingFacts> {
+pub fn listing_facts(path: &Path, read_start: bool, with_facts: bool) -> Option<ListingFacts> {
     use std::os::windows::fs::OpenOptionsExt as _;
     use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, GetLastError};
     use windows_sys::Win32::Security::GetKernelObjectSecurity;
@@ -301,7 +385,16 @@ pub fn listing_facts(path: &Path, read_start: bool) -> Option<ListingFacts> {
     } else {
         (1, 0)
     };
-    let facts = facts_of_handle(handle, index);
+    // The change time and allocation cost two more calls, which the folder's listing
+    // spares where it gave them ([`folder_facts`]).
+    let facts = if with_facts {
+        facts_of_handle(handle, index)
+    } else {
+        FileFacts {
+            index,
+            ..FileFacts::default()
+        }
+    };
 
     let starts_with_shebang = read_start.then(|| {
         let mut magic = [0u8; 2];

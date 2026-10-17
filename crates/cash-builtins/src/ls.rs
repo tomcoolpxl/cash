@@ -1588,7 +1588,7 @@ impl LsCommand {
 
             if self.shown_as_entry(&path) {
                 let followed = self.followed_operand(&path);
-                if let Some(item) = inspect_path(&path, path_str, self.want(), followed) {
+                if let Some(item) = inspect_path(&path, path_str, self.want(), followed, None) {
                     file_items.push(item);
                 }
             } else {
@@ -2059,6 +2059,13 @@ impl LsCommand {
         }
 
         let read_dir = std::fs::read_dir(dir_path)?;
+        // The facts `-l`, `-s`, `-c` and `-i` need of each entry, from one query of the
+        // folder rather than calls of each file's own.
+        let listed = if self.want().facts {
+            cash_win32::fs::folder_facts(dir_path)
+        } else {
+            std::collections::HashMap::new()
+        };
         for entry in read_dir.flatten() {
             let file_name = entry.file_name().to_string_lossy().into_owned();
             let is_dotfile = file_name.starts_with('.');
@@ -2079,8 +2086,14 @@ impl LsCommand {
             }
 
             let entry_path = entry.path();
+            // A link -L goes through has the facts of what it names, not the listing's.
+            let through_link = self.deref == Some(Deref::Always)
+                && entry.file_type().is_ok_and(|kind| kind.is_symlink());
+            let facts = (!through_link)
+                .then(|| listed.get(&entry.file_name()).copied())
+                .flatten();
             let known = self.followed(&entry_path, known);
-            if let Some(item) = inspect_path(&entry_path, &file_name, self.want(), known) {
+            if let Some(item) = inspect_path(&entry_path, &file_name, self.want(), known, facts) {
                 items.push(item);
             }
         }
@@ -2190,7 +2203,7 @@ impl LsCommand {
         look: &Look,
     ) -> Result<Vec<(String, std::io::Error, bool)>, std::io::Error> {
         let mut rows: Vec<(String, ItemInfo)> = Vec::new();
-        if let Some(root) = inspect_path(dir_path, dir_str, self.want(), None) {
+        if let Some(root) = inspect_path(dir_path, dir_str, self.want(), None, None) {
             rows.push((String::new(), root));
         }
         let mut unopened = Vec::new();
@@ -3357,6 +3370,7 @@ fn inspect_path(
     display_name: &str,
     want: Want,
     known: Option<Metadata>,
+    listed: Option<cash_win32::fs::FileFacts>,
 ) -> Option<ItemInfo> {
     let symlink_metadata = match known {
         Some(metadata) => metadata,
@@ -3411,7 +3425,12 @@ fn inspect_path(
         device: None,
         target_mark: None,
     };
-    let mut facts_taken = false;
+    // The facts the folder's listing gave (`cash_win32::fs::folder_facts`), which spare
+    // asking the file.
+    let mut facts_taken = listed.is_some();
+    if want.facts {
+        take_facts(&mut item, listed, want);
+    }
     if want.long {
         // One open of the file for its security, links and first bytes (a link keeps
         // the separate asks, which read the link itself where they should).
@@ -3419,7 +3438,7 @@ fn inspect_path(
             let read_start = kind == EntryKind::File
                 && item.size >= 2
                 && !cash_win32::unix::has_program_extension(path);
-            cash_win32::fs::listing_facts(path, read_start)
+            cash_win32::fs::listing_facts(path, read_start, !facts_taken)
         });
         if let Some(Some(facts)) = facts {
             // A folder's link count is not counted in a listing (`--count-links` does).
@@ -3433,8 +3452,10 @@ fn inspect_path(
                     || facts.starts_with_shebang == Some(true);
                 let _ = item.executable.set(executable);
             }
-            take_facts(&mut item, Some(facts.facts), want);
-            facts_taken = true;
+            if !facts_taken {
+                take_facts(&mut item, Some(facts.facts), want);
+                facts_taken = true;
+            }
             fill_long_from(&mut item, &symlink_metadata, facts.security);
         } else {
             item.links = cash_win32::fs::file_link_count(path, &symlink_metadata);
