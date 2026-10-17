@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use cash_archive::codec::{self, Codec};
 use cash_archive::member::{Kind, Member, Timestamp};
-use cash_archive::tar::read::{Event, Reader};
+use cash_archive::tar::read::{Event, ReadError, Reader};
 use cash_archive::tar::write::{NameProblem, Options as WriteOptions, WriteError, Writer};
 use cash_archive::tar::{BLOCK, Format};
 use cash_core::openfiles::OpenFiles;
@@ -407,6 +407,8 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             WriteError::Name(NameProblem::LinkTooLong) => {
                 self.error(&format!("{shown}: link name is too long; not dumped"))
             }
+            // A stop ends the run in silence with 130, the archive left without its end.
+            WriteError::Read(e) if cash_core::is_stopped(&e) => Err(e.into()),
             WriteError::Read(e) => self.error(&format!("{shown}: Read error: {}", strerror(&e))),
             WriteError::Write(e) if e.kind() == io::ErrorKind::BrokenPipe => Err(e.into()),
             WriteError::Write(e) => {
@@ -665,8 +667,10 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             }
             let shown = self.quote_colon(&stored);
             if member.kind() == Kind::File {
+                // Read through the stop token: a Ctrl-C or `kill` in a large file
+                // fails the run at the next block.
                 let mut file = match fs::File::open(path) {
-                    Ok(file) => file,
+                    Ok(file) => self.context.stop_token().reader(file),
                     Err(e) => {
                         self.error(&format!("{shown}: Cannot open: {}", strerror(&e)))?;
                         return Ok(left_out);
@@ -807,7 +811,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         let path = self.path(archive);
         let mut map = HashMap::new();
         let file = match fs::File::open(&path) {
-            Ok(file) => file,
+            Ok(file) => self.context.stop_token().reader(file),
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok((0, map)),
             Err(e) => return Err(self.fatal(&format!("{archive}: Cannot open: {}", strerror(&e)))),
         };
@@ -835,6 +839,8 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                 }
                 Ok(Event::Skipping) => self.error("Skipping to next header")?,
                 Ok(Event::LoneZero(_) | Event::End) => break,
+                // A stop ends the run in silence with 130.
+                Err(ReadError::Io(e)) if cash_core::is_stopped(&e) => return Err(e.into()),
                 Err(_) => {
                     self.say("Unexpected EOF in archive")?;
                     return Err(self.fatal_quiet());

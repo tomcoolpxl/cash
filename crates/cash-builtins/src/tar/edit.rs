@@ -40,6 +40,10 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                     let mut data = Vec::new();
                     match reader.copy_raw_data(&mut data) {
                         Ok(()) => writer.write_raw(&data)?,
+                        // A stop ends the run in silence with 130.
+                        Err(CopyError::Read(ReadError::Io(e))) if cash_core::is_stopped(&e) => {
+                            return Err(e.into());
+                        }
                         Err(CopyError::Read(_)) => {
                             self.say("Unexpected EOF in archive")?;
                             return Err(self.fatal_quiet());
@@ -85,7 +89,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         for (name, base) in names {
             let other = super::resolve(&base, &name);
             let input = match fs::File::open(&other) {
-                Ok(file) => file,
+                Ok(file) => self.context.stop_token().reader(file),
                 Err(e) => {
                     let shown = self.quote_colon(name.as_bytes());
                     self.error(&format!("{shown}: Cannot open: {}", strerror(&e)))?;
@@ -123,7 +127,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             Box::new(self.context.stdin())
         } else {
             match fs::File::open(self.path(&archive)) {
-                Ok(file) => Box::new(file),
+                Ok(file) => Box::new(self.context.stop_token().reader(file)),
                 Err(e) => {
                     return Err(self.fatal(&format!("{archive}: Cannot open: {}", strerror(&e))));
                 }

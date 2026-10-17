@@ -686,8 +686,14 @@ fn extract_items<SE: cash_core::ShellExtensions>(
     let decoded = |index: usize| decode[index];
     // Hashing, 7-Zip tests by extracting to the hasher.
     let testing = test && hash.is_none();
+    let stop_token = env.context.stop_token();
     let result: Result<(), Stop> = opened.extract(testing, &asked, &decoded, |index, data| {
         let item = &items[index];
+        // A Ctrl-C or `kill` between items, or in an item's data (`Counted`), is a break.
+        if stop_token.requested() {
+            stop = Some(Stop::Break);
+            return Ok(false);
+        }
         let skip = !wanted[index];
         // -scrc hashes what is tested, folders too, and the files extracted.
         let hashing = !skip && (test || !item.is_dir);
@@ -764,7 +770,11 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         };
         let passed = matches!(room, Some(Ok(None)));
         let read = std::cell::Cell::new(0u64);
-        let mut counted = Counted { data, read: &read };
+        let mut counted = Counted {
+            data,
+            read: &read,
+            stop: &stop_token,
+        };
         let data: &mut dyn Data = &mut counted;
         let through_hash = hashing && hash.is_some();
         let mut written = false;
@@ -886,6 +896,11 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             }
             made
         };
+        // Stopped in its data: the rest is not read to finish it.
+        if matches!(&outcome, Err(error) if cash_core::is_stopped(error)) {
+            stop = Some(Stop::Break);
+            return Ok(false);
+        }
         let finished = data.finish();
         // What a file or the hashes took, as 7-Zip counts its streams' bytes; else the
         // size known before decoding, else the one the format reports after. A folder's
@@ -1030,10 +1045,15 @@ impl<SE: cash_core::ShellExtensions> Data for Shown<'_, '_, SE> {
 struct Counted<'a> {
     data: &'a mut dyn Data,
     read: &'a std::cell::Cell<u64>,
+    /// Asked before each read, which fails once the run is to stop.
+    stop: &'a cash_core::StopToken,
 }
 
 impl Read for Counted<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.stop.requested() {
+            return Err(cash_core::Stopped::error());
+        }
         let n = self.data.read(buf)?;
         self.read.set(self.read.get().saturating_add(n as u64));
         Ok(n)

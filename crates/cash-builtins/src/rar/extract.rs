@@ -316,6 +316,9 @@ struct Work<'r, 'a, SE: cash_core::ShellExtensions> {
     sources: std::collections::HashSet<usize>,
     /// Those unpacked, each to a temporary file removed at the end: by their name.
     temps: std::collections::HashMap<String, PathBuf>,
+    /// A Ctrl-C or `kill` stopped a file's data: the run ends with "User break" before
+    /// the next member.
+    stopped: bool,
     /// `t`: each volume's recovery record, whether it is intact, if it has one.
     recovery: Vec<Option<bool>>,
     /// The volumes whose recovery record was said, before this one.
@@ -452,6 +455,7 @@ fn set<SE: cash_core::ShellExtensions>(
     }
     let paths = volumes.iter().map(|v| v.path.clone()).collect();
     let mut work = Work {
+        stopped: false,
         rar,
         job,
         volumes,
@@ -497,14 +501,22 @@ fn set<SE: cash_core::ShellExtensions>(
     }
     // rar reads no further than the last file asked for, when one is.
     let last = wanted.iter().rposition(|&wanted| wanted);
+    let stop = rar.context.stop_token();
     for (index, entry) in entries.iter().enumerate() {
         if last.is_some_and(|last| index > last) {
+            break;
+        }
+        // A Ctrl-C or `kill` between members, or in one's data (`work.stopped`).
+        if work.stopped || stop.requested() {
             break;
         }
         work.entry(index, entry, &entries, wanted[index])?;
     }
     for temp in work.temps.values() {
         let _ = std::fs::remove_file(temp);
+    }
+    if work.stopped || stop.requested() {
+        return Err(Stop::Break);
     }
     work.finish_folders();
     work.say_damaged_services(work.volumes.len());
@@ -900,6 +912,13 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
 
     /// What the work on a file came to, said.
     fn verdict(&mut self, entry: &Entry, verdict: Verdict) {
+        // Stopped, not refused: the run ends with "User break", nothing said here.
+        if let Verdict::Write(error) = &verdict
+            && cash_core::is_stopped(error)
+        {
+            self.stopped = true;
+            return;
+        }
         match verdict {
             Verdict::Ok => {
                 self.ok();
@@ -967,6 +986,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
     )]
     fn decode(&mut self, entry: &Entry, out: &mut dyn Sink, shown: Option<&str>) -> Verdict {
         let mut hashed = Hashed {
+            stop: self.rar.context.stop_token(),
             out,
             crc: crc32fast::Hasher::new(),
             blake: entry.blake.map(|_| blake2sp::Hasher::new()),
@@ -1233,7 +1253,9 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         let good = matches!(verdict, Verdict::Ok | Verdict::Unchecked);
         if good {
             self.finish_file(entry, path);
-        } else if !self.rar.switches.keep_broken && !matches!(verdict, Verdict::Write(_)) {
+        } else if !self.rar.switches.keep_broken && !matches!(verdict, Verdict::Write(_))
+            || matches!(&verdict, Verdict::Write(error) if cash_core::is_stopped(error))
+        {
             let _ = std::fs::remove_file(path);
         }
         self.verdict(data, verdict);
@@ -1956,6 +1978,8 @@ fn path_shown<SE: cash_core::ShellExtensions>(
 
 /// Decoded bytes counted and hashed on their way to the front end's sink.
 struct Hashed<'a> {
+    /// Asked before each piece is put: a stop fails the write ([`Work::verdict`]).
+    stop: cash_core::StopToken,
     out: &'a mut dyn Sink,
     crc: crc32fast::Hasher,
     blake: Option<blake2sp::Hasher>,
@@ -1967,6 +1991,9 @@ struct Hashed<'a> {
 
 impl Sink for Hashed<'_> {
     fn put(&mut self, data: &[u8]) -> io::Result<()> {
+        if self.stop.requested() {
+            return Err(cash_core::Stopped::error());
+        }
         let data = match self.limit {
             Some(limit) => {
                 let room =

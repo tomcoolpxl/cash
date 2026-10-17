@@ -13,7 +13,7 @@ use std::time::SystemTime;
 use cash_archive::rar::{
     self, ArchiveFamily, ArchiveMemberDetail, ArchiveReadOptions, ArchiveReader, ArchiveVersion,
     AttrSource, Builder, DEFAULT_WRITER_MEMORY_LIMIT, EntrySource, FileTimes, FileTimestamp,
-    RewriteStaging, WriteOperation, WriteProgressEvent, WriterResources,
+    RewriteStaging, WriteCancellation, WriteOperation, WriteProgressEvent, WriterResources,
 };
 
 use super::cmdline::{Command, Name, Parsed};
@@ -411,29 +411,50 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         }
     }
 
-    let resources = writer_resources().with_temp_dir(work_dir(rar, &path));
-    let written = match volume_size(rar) {
-        Some(size) => write_volumes(
-            rar,
-            &display,
-            &builder.volume_size(Some(size)),
-            &path,
-            &resources,
-            &lines,
-            volume_digits(&sources, u64::try_from(size).unwrap_or(u64::MAX)),
-        ),
-        None => {
-            // A solid archive changed says its repacking between the lines.
-            let repack = old
-                .as_ref()
-                .filter(|old| old.facts.solid && !switches.no_percent)
-                .map(|_| repack_plan(&slots, &members, &sources, &actions, &notes));
-            write_single(rar, &builder, &path, &resources, &lines, &notes, repack)
-        }
-        .map(|()| vec![path.clone()]),
-    };
+    // A Ctrl-C or `kill` while the archive is written cancels the write, which the
+    // writer asks between blocks of each file: "User break", as rar ends.
+    let cancel = WriteCancellation::new();
+    let resources = writer_resources()
+        .with_temp_dir(work_dir(rar, &path))
+        .with_cancellation(cancel.clone());
+    let writing = std::sync::atomic::AtomicBool::new(true);
+    let stop = rar.context.stop_token();
+    let written = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            while writing.load(std::sync::atomic::Ordering::Relaxed) {
+                if stop.requested() {
+                    cancel.cancel();
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        });
+        let written = match volume_size(rar) {
+            Some(size) => write_volumes(
+                rar,
+                &display,
+                &builder.volume_size(Some(size)),
+                &path,
+                &resources,
+                &lines,
+                volume_digits(&sources, u64::try_from(size).unwrap_or(u64::MAX)),
+            ),
+            None => {
+                // A solid archive changed says its repacking between the lines.
+                let repack = old
+                    .as_ref()
+                    .filter(|old| old.facts.solid && !switches.no_percent)
+                    .map(|_| repack_plan(&slots, &members, &sources, &actions, &notes));
+                write_single(rar, &builder, &path, &resources, &lines, &notes, repack)
+            }
+            .map(|()| vec![path.clone()]),
+        };
+        writing.store(false, std::sync::atomic::Ordering::Relaxed);
+        written
+    });
     let written = match written {
         Ok(written) => written,
+        Err(_) if cancel.is_cancelled() => return Err(Stop::Break),
         Err(error) => {
             rar.console
                 .err(&format!("\nCannot create {display}\n{error}"));

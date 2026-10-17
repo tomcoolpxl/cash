@@ -1661,6 +1661,14 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   and `..` is still refused. §4 #13 now names the other bundled tools (`rmdir`), and
   spec §8 says why an in-process tool would have fixed it.
 
+- **The archivers finished their run before a Ctrl-C or `kill` was acted on** (found
+  2026-10-16, done 2026-10-17): tar, zip, 7z and rar read a file they archived, and
+  unzip, 7z and rar a member they extracted, to its end; tar of a 64 GiB file went on
+  writing until the disk was full. Each reads through the stop token now and fails the
+  run within a block, as it fails at a Ctrl-C: tar and zip in silence, rar "User break",
+  7z "Break signaled", with no archive left (zip's temporary file, which any early
+  return had left behind, goes with it: `cash_win32::unix::Replacement` removes it when
+  dropped). rar's writer is cancelled through its own `WriteCancellation`.
 - **`rar a` refused every file of 16 MiB or more** (found and done 2026-10-17, while
   testing the above; 1.19.0 too): "compression needs at least 456130560 bytes of
   working memory for a 16777216-byte dictionary, above the configured limit of

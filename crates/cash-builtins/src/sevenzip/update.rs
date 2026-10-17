@@ -1550,7 +1550,8 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         let heard = Box::new(move |n: u64| {
             console.progress(|s| s.completed = s.completed.saturating_add(n));
         });
-        let input = |feed| Some(Input { feed, heard });
+        let stop = self.env.context.stop_token();
+        let input = |feed| Some(Input { feed, heard, stop });
         if di.path.as_os_str().is_empty() {
             return input(Feed::Stdin(Box::new(self.env.context.stdin())));
         }
@@ -1854,8 +1855,15 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
                     let Some(file) = self.open_new(d, warnings) else {
                         continue;
                     };
-                    let mut watched = Watched { file, error: None };
+                    let mut watched = Watched {
+                        file,
+                        error: None,
+                        stopped: false,
+                    };
                     if let Err(error) = sink.add(item.entry(), &mut watched) {
+                        if watched.stopped {
+                            return Err(Stop::Break);
+                        }
                         if let Some(read_error) = watched.error {
                             common_error(console, &di.shown, &read_error, false);
                             return Err(Stop::System(read_error));
@@ -2076,6 +2084,9 @@ enum Feed {
 struct Input<'a> {
     feed: Feed,
     heard: Box<dyn Fn(u64) + 'a>,
+    /// Asked before each read: a Ctrl-C or `kill` in a large file fails it, and the run
+    /// ends as 7-Zip's does at a Ctrl-C ("Break signaled").
+    stop: cash_core::StopToken,
 }
 
 /// Data that can be read again.
@@ -2118,6 +2129,9 @@ impl Input<'_> {
 
 impl Read for Input<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.stop.requested() {
+            return Err(cash_core::Stopped::error());
+        }
         let n = match &mut self.feed {
             Feed::File(file) => file.read(buf),
             Feed::Data(data) => data.read(buf),
@@ -2128,16 +2142,22 @@ impl Read for Input<'_> {
     }
 }
 
-/// A file being read into a block, its read error kept for the message.
+/// A file being read into a block, its read error kept for the message, or that the
+/// read was stopped.
 struct Watched<'a> {
     file: Input<'a>,
     error: Option<io::Error>,
+    stopped: bool,
 }
 
 impl Read for Watched<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.file.read(buf).inspect_err(|error| {
-            self.error = Some(copy_error(error));
+            if cash_core::is_stopped(error) {
+                self.stopped = true;
+            } else {
+                self.error = Some(copy_error(error));
+            }
         })
     }
 }

@@ -70,6 +70,8 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                     self.say("Unexpected EOF in archive")?;
                     return Err(self.fatal_quiet());
                 }
+                // A stop ends the run in silence with 130.
+                Err(ReadError::Io(e)) if cash_core::is_stopped(&e) => return Err(e.into()),
                 Err(ReadError::Io(e)) => {
                     let name = self.archive_name();
                     return Err(self.fatal(&format!("{name}: Cannot read: {}", strerror(&e))));
@@ -248,6 +250,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                 self.say("Unexpected EOF in archive")?;
                 Err(self.fatal_quiet())
             }
+            CopyError::Read(ReadError::Io(e)) if cash_core::is_stopped(&e) => Err(e.into()),
             CopyError::Read(ReadError::Io(e)) => {
                 let name = self.archive_name();
                 Err(self.fatal(&format!("{name}: Cannot read: {}", strerror(&e))))

@@ -467,8 +467,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         } else if is_dir {
             Box::new(io::empty())
         } else {
+            // Read through the stop token: a Ctrl-C or `kill` in a large file ends the
+            // run as 7-Zip's does ("Break signaled").
             match File::open(&item.path) {
-                Ok(file) => Box::new(file),
+                Ok(file) => Box::new(env.context.stop_token().reader(file)),
                 Err(error) => {
                     common_error(console, &item.shown, &error, true);
                     warnings
@@ -493,7 +495,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                     Ok(0) => break,
                     Ok(n) => n,
                     Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => return Err(Stop::System(e)),
+                    Err(e) => return Err(Stop::from(e)),
                 };
                 bundle.update(&buf[..n]);
                 done = done.saturating_add(n as u64);

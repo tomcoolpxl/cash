@@ -253,3 +253,123 @@ fn an_archiver_stopped_in_its_walk_writes_no_archive() {
         assert!(out.stderr.contains(words), "{tool}: {}", out.stderr);
     }
 }
+
+#[test]
+fn an_archiver_stopped_in_a_large_file_ends_at_once_and_leaves_no_archive() {
+    // tar, zip, rar and 7z read a file they archived to its end before a `kill` or a
+    // Ctrl-C was acted on: tar of the file below wrote 55 GB of zeros, until the disk was
+    // full. They read it through the stop token now, and fail the run as each fails at a
+    // Ctrl-C. The file is 64 GiB of zeros in no disk space; tar writes to standard output,
+    // as its archive would be that large, and the rest compress the zeros to nothing.
+    let dir = tempfile::tempdir().unwrap();
+    let file = std::fs::File::create(dir.path().join("big")).unwrap();
+    cash_win32::pipe::make_sparse(&file).unwrap();
+    file.set_len(64 << 30).unwrap();
+    drop(file);
+    for (tool, words) in [
+        ("tar -cf - big > /dev/null", ""),
+        ("zip -q z.zip big", ""),
+        ("rar a -idq r.rar big", "User break"),
+        ("7z a -bso0 -bsp0 s.7z big", "Break signaled"),
+        ("7z h -bso0 -bsp0 big > /dev/null", "Break signaled"),
+    ] {
+        let out = run_in(
+            dir.path(),
+            &format!(r#"{tool} & sleep 1; kill %1; wait %1; echo "$?"; ls -A | grep -v '^big$'"#),
+        );
+        assert_eq!(out.stdout, "143", "{tool}: {}", out.stderr);
+        assert!(out.stderr.contains(words), "{tool}: {}", out.stderr);
+    }
+}
+
+#[test]
+fn an_archiver_stopped_in_a_large_member_ends_at_once() {
+    // Reading a member's data asked no stop token in unzip and 7z. The archives hold one
+    // member of zeros in no disk space: a tar of 64 GiB, its size in GNU's base-256, and
+    // a zip of 3 GiB, stored. Nothing is written: tar and unzip write to standard output,
+    // the rest test.
+    use std::io::{Seek, SeekFrom, Write};
+    let dir = tempfile::tempdir().unwrap();
+    let size: u64 = 64 << 30;
+    let mut header = [0u8; 512];
+    header[..3].copy_from_slice(b"big");
+    header[100..108].copy_from_slice(b"0000644\0");
+    header[108..116].copy_from_slice(b"0000000\0");
+    header[116..124].copy_from_slice(b"0000000\0");
+    header[124] = 0x80;
+    header[128..136].copy_from_slice(&size.to_be_bytes());
+    header[136..148].copy_from_slice(b"00000000000\0");
+    header[148..156].copy_from_slice(b"        ");
+    header[156] = b'0';
+    header[257..265].copy_from_slice(b"ustar  \0");
+    let sum: u32 = header.iter().map(|&b| u32::from(b)).sum();
+    header[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
+    let mut tar = std::fs::File::create(dir.path().join("big.tar")).unwrap();
+    cash_win32::pipe::make_sparse(&tar).unwrap();
+    // The zeros after the member's data are also the archive's end.
+    tar.set_len(512 + size + 1024).unwrap();
+    tar.write_all(&header).unwrap();
+    drop(tar);
+
+    let size: u32 = 3 << 30;
+    let mut local = 0x0403_4b50_u32.to_le_bytes().to_vec();
+    for half in [10_u16, 0, 0, 0, 0x21] {
+        local.extend_from_slice(&half.to_le_bytes());
+    }
+    for word in [0_u32, size, size] {
+        local.extend_from_slice(&word.to_le_bytes());
+    }
+    for half in [3_u16, 0] {
+        local.extend_from_slice(&half.to_le_bytes());
+    }
+    local.extend_from_slice(b"big");
+    let central_at = u32::try_from(local.len()).unwrap() + size;
+    let mut central = Vec::new();
+    central.extend_from_slice(&0x0201_4b50_u32.to_le_bytes());
+    for half in [20_u16, 10, 0, 0, 0, 0x21] {
+        central.extend_from_slice(&half.to_le_bytes());
+    }
+    for word in [0_u32, size, size] {
+        central.extend_from_slice(&word.to_le_bytes());
+    }
+    for half in [3_u16, 0, 0, 0, 0] {
+        central.extend_from_slice(&half.to_le_bytes());
+    }
+    for word in [0_u32, 0] {
+        central.extend_from_slice(&word.to_le_bytes());
+    }
+    central.extend_from_slice(b"big");
+    let mut end = Vec::new();
+    end.extend_from_slice(&0x0605_4b50_u32.to_le_bytes());
+    for half in [0_u16, 0, 1, 1] {
+        end.extend_from_slice(&half.to_le_bytes());
+    }
+    for word in [u32::try_from(central.len()).unwrap(), central_at] {
+        end.extend_from_slice(&word.to_le_bytes());
+    }
+    end.extend_from_slice(&0_u16.to_le_bytes());
+    let mut zip = std::fs::File::create(dir.path().join("big.zip")).unwrap();
+    cash_win32::pipe::make_sparse(&zip).unwrap();
+    zip.set_len(u64::from(central_at) + (central.len() + end.len()) as u64)
+        .unwrap();
+    zip.write_all(&local).unwrap();
+    zip.seek(SeekFrom::Start(u64::from(central_at))).unwrap();
+    zip.write_all(&central).unwrap();
+    zip.write_all(&end).unwrap();
+    drop(zip);
+
+    for (tool, words) in [
+        ("tar -xOf big.tar > /dev/null", ""),
+        ("7z t -bso0 -bsp0 big.tar", "Break signaled"),
+        ("unzip -p big.zip > /dev/null", ""),
+        ("unzip -tq big.zip", ""),
+        ("7z t -bso0 -bsp0 big.zip", "Break signaled"),
+    ] {
+        let out = run_in(
+            dir.path(),
+            &format!(r#"{tool} & sleep 1; kill %1; wait %1; echo "$?""#),
+        );
+        assert_eq!(out.stdout, "143", "{tool}: {}", out.stderr);
+        assert!(out.stderr.contains(words), "{tool}: {}", out.stderr);
+    }
+}

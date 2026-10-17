@@ -109,14 +109,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   the hinter, and in the menu's selection parsing, among about twenty fixes. cash had
   already fixed the `SubstringSearch` `todo!()` (`engine.rs`); the rest want comparing
   one by one.
-- **The archivers finish their run before a Ctrl-C is acted on** (2026-10-16): `tar`,
-  `zip`/`unzip`, `7z` and `rar` reading files by name do not ask their
-  `cash_core::StopToken`; their standard input does stop. Their walks of folders do
-  since 2026-10-17, and fail the run (tar and zip in silence, rar "User break", 7z "Break
-  signaled"); what is left is their member loops and reads. A second Ctrl-C no longer
-  ends the shell under two seconds. Their reads must go through `StopToken::reader`,
-  which fails, never an end that looks like the file's: an end made gzip finish half an
-  archive and remove the file.
 - **A Ctrl-C or `kill` on a large `xz` waits for its blocks** (2026-10-16): lzma-rust2's
   threaded encoder takes the whole input at once (13 blocks of 24 MiB from a 300 MB
   file, on 16 threads) and writes the first block only when it is done, about 12 s

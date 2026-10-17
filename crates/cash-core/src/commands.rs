@@ -302,6 +302,14 @@ impl<R: std::io::Read> std::io::Read for StopReader<R> {
     }
 }
 
+/// A seek goes through: an archiver reads a file again to store it when compressing
+/// it did not shrink it.
+impl<R: std::io::Seek> std::io::Seek for StopReader<R> {
+    fn seek(&mut self, position: std::io::SeekFrom) -> std::io::Result<u64> {
+        self.inner.seek(position)
+    }
+}
+
 impl<R: std::io::BufRead> std::io::BufRead for StopReader<R> {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         if self.stop.requested() {

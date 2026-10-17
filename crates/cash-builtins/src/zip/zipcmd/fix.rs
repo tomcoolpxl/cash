@@ -226,7 +226,11 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
             archive.end.comment.clone()
         } else {
             let mut bytes = Vec::new();
-            file.read_to_end(&mut bytes)?;
+            // Read through the stop token: a damaged archive may be large.
+            self.context
+                .stop_token()
+                .reader(&mut file)
+                .read_to_end(&mut bytes)?;
             self.salvage(&bytes, &mut writer)?
         };
         writer.finish(&comment)?;

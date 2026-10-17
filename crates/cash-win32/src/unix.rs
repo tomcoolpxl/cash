@@ -269,14 +269,31 @@ pub fn has_program_extension(path: &Path) -> bool {
 ///
 /// It is written under a temporary name and renamed over the target at the end, so an
 /// interrupted run leaves no half-written file and the old one stays until the new one
-/// is whole.
+/// is whole. A replacement dropped before [`Self::finish`], as an error or a stop
+/// returns past it, removes its temporary file, as [`Self::abandon`] does.
 #[derive(Debug)]
 pub struct Replacement {
     /// The name the output will have.
     path: PathBuf,
-    /// Where it is being written.
-    temporary: PathBuf,
+    /// Closed before `temporary` goes: fields drop in their order here.
     file: fs::File,
+    /// Where it is being written.
+    temporary: Temporary,
+}
+
+/// A temporary file's name, the file removed when this is dropped unless it was kept.
+#[derive(Debug)]
+struct Temporary {
+    path: PathBuf,
+    kept: bool,
+}
+
+impl Drop for Temporary {
+    fn drop(&mut self) {
+        if !self.kept {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
 }
 
 impl Replacement {
@@ -306,8 +323,11 @@ impl Replacement {
                 Ok(file) => {
                     return Ok(Self {
                         path,
-                        temporary: candidate,
                         file,
+                        temporary: Temporary {
+                            path: candidate,
+                            kept: false,
+                        },
                     });
                 }
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists && attempt < 100 => {
@@ -335,7 +355,11 @@ impl Replacement {
         read_only: bool,
         synchronous: bool,
     ) -> io::Result<()> {
-        let file = self.file;
+        let Self {
+            path,
+            file,
+            mut temporary,
+        } = self;
         let result = file
             .set_times(times)
             .and_then(|()| if synchronous { file.sync_all() } else { Ok(()) })
@@ -350,21 +374,20 @@ impl Replacement {
             });
         drop(file);
         let result = result.and_then(|()| {
-            if fs::symlink_metadata(&self.path).is_ok() {
-                remove_even_read_only(&self.path)?;
+            if fs::symlink_metadata(&path).is_ok() {
+                remove_even_read_only(&path)?;
             }
-            fs::rename(&self.temporary, &self.path)
+            fs::rename(&temporary.path, &path)
         });
-        if result.is_err() {
-            let _ = fs::remove_file(&self.temporary);
-        }
+        // Renamed, there is no temporary file left to remove; else it goes with
+        // `temporary`.
+        temporary.kept = result.is_ok();
         result
     }
 
     /// Gives the file up: nothing is left behind.
     pub fn abandon(self) {
-        drop(self.file);
-        let _ = fs::remove_file(&self.temporary);
+        drop(self);
     }
 }
 

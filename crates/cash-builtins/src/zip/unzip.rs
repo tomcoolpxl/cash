@@ -707,13 +707,16 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
                 self.say.out(line)?;
             }
             let mut crc = crc32fast::Hasher::new();
-            let mut reader = reader.take(entry.size);
+            // Read through the stop token: a Ctrl-C or `kill` in a large member ends the
+            // run at the next block, in silence with 130.
+            let mut reader = self.context.stop_token().reader(reader.take(entry.size));
             let mut buffer = vec![0_u8; 64 * 1024];
             loop {
                 let n = match reader.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(n) => n,
                     Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) if cash_core::is_stopped(&e) => return Err(e),
                     Err(_) => return Ok(Outcome::Broken),
                 };
                 let chunk = buffer.get(..n).unwrap_or_default();
@@ -767,6 +770,10 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
         let mut tested = 0;
         let mut bad_passwords = 0;
         for &index in selected {
+            // Asked between members too: folders and links read no data.
+            if self.context.stop_token().requested() {
+                return Err(cash_core::Stopped::error());
+            }
             let Some(entry) = archive.entries.get(index).cloned() else {
                 continue;
             };
@@ -997,6 +1004,10 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
         let mut bad_passwords = 0;
         let mut done = 0;
         for &index in selected {
+            // Asked between members too: folders and links read no data.
+            if self.context.stop_token().requested() {
+                return Err(cash_core::Stopped::error());
+            }
             let Some(entry) = archive.entries.get(index).cloned() else {
                 continue;
             };

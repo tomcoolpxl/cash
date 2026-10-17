@@ -1153,10 +1153,13 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
                 })
                 .collect();
             let aheads = if jobs.iter().flatten().count() > 1 {
+                // A stop leaves a file not compressed ahead; its turn to be written
+                // then reads it through the stop token, and fails the run.
+                let stop = self.context.stop_token();
                 cash_archive::codec::parallel::map_ordered(jobs, |job| {
                     Ok(job.and_then(|(path, method, level)| {
                         fs::File::open(&path)
-                            .and_then(|mut file| compress_ahead(&mut file, method, level))
+                            .and_then(|file| compress_ahead(&mut stop.reader(file), method, level))
                             .ok()
                     }))
                 })?
@@ -1352,7 +1355,9 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
                 Input::File(&mut io::Cursor::new(target.into_bytes())),
             )?
         } else if let Some(path) = &source.path {
-            match fs::File::open(path) {
+            // Read through the stop token: a Ctrl-C or `kill` in a large file fails the
+            // run at the next block, and no archive is left.
+            match fs::File::open(path).map(|file| self.context.stop_token().reader(file)) {
                 Ok(mut file) => match self.options.eol {
                     Some(to_crlf) => {
                         let mut head = Vec::new();

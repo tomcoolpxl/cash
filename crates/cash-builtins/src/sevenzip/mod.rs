@@ -109,7 +109,8 @@ enum Stop {
 
 impl From<io::Error> for Stop {
     fn from(error: io::Error) -> Self {
-        if error.kind() == io::ErrorKind::Interrupted {
+        // A read through the stop token fails with its own error at a Ctrl-C or `kill`.
+        if error.kind() == io::ErrorKind::Interrupted || cash_core::is_stopped(&error) {
             Self::Break
         } else {
             Self::System(error)
