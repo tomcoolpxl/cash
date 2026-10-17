@@ -31,12 +31,7 @@ The user's picks after 1.23.0 (decisions.md, "The phase after 1.23.0"), the firs
 added after the benchmark at 1.23.0 found `ls -la` 20% slower, in this
 order. The phases before, released as 1.22.0 and 1.23.0, are in DONE.md.
 
-1. **`ls -la` 12% slower for keeping the access time** (2026-10-17, the benchmark at
-   1.23.0, `research/benchmarks-1.23.0.md`): reading a file for `#!` through a handle
-   opened with `FILE_WRITE_ATTRIBUTES` and told to keep its access time (`SetFileTime`)
-   costs about 8 µs a file. The user's pick: find where it goes (the heavier open, or the
-   call) and keep the behaviour only if a cheaper way exists; else back to the user with
-   reverting or keeping it.
+1. **`ls -la` 12% slower for keeping the access time**: done (2026-10-18, DONE.md).
 2. **`ls -l`'s file facts from the folder listing** (2026-10-17, the same benchmark): the
    change time, allocation and file ID each entry needs (`-l`'s totals, `-s`, `-c`, `-i`)
    are read with calls of their own for each file, 7% of `ls -la`. One directory query

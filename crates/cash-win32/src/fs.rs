@@ -254,10 +254,10 @@ pub fn listing_facts(path: &Path, read_start: bool) -> Option<ListingFacts> {
             .open(path)
     };
     let attributes = READ_CONTROL | FILE_READ_ATTRIBUTES;
-    // Its first bytes are read through a handle that keeps the access time as it was,
-    // where the file's access list allows one ([`open_keeping_access_time`]).
-    let opened =
-        read_start.then(|| open_keeping_access_time(path, attributes | FILE_READ_DATA, open));
+    // Its first bytes are read as Git Bash's ls reads them, the access time moving: to
+    // keep it ([`open_keeping_access_time`]) cost 12 µs a file, 12% of `ls -la` (the
+    // user, 2026-10-18; `stat`, a file at a time, keeps it).
+    let opened = read_start.then(|| open(attributes | FILE_READ_DATA));
     let (mut file, readable) = match opened {
         Some(Ok(file)) => (file, true),
         _ => (open(attributes).ok()?, false),
@@ -317,8 +317,8 @@ pub fn listing_facts(path: &Path, read_start: bool) -> Option<ListingFacts> {
 
 /// The folder in which a handle that keeps the access time was last refused, so that
 /// the rest of its files are not asked for one: a folder's files share its access list,
-/// and in `C:/Windows/System32`, where none is lent, asking each made `ls -l` 40%
-/// slower.
+/// and in `C:/Windows/System32`, where none is lent, asking each of a listing's files
+/// made it 40% slower.
 static ACCESS_TIME_REFUSED_IN: std::sync::Mutex<Option<std::path::PathBuf>> =
     std::sync::Mutex::new(None);
 
@@ -351,9 +351,10 @@ pub(crate) fn open_keeping_access_time(
 /// Asks that reads through `file` leave the file's access time as it was.
 ///
 /// `SetFileTime` with all ones for it. cash reads a file's first two bytes to tell
-/// whether it runs (`#!`), and NTFS took that read for an access, so `ls -l` and `stat`
-/// moved it, where GNU's, which read no file, do not. The handle needs
-/// `FILE_WRITE_ATTRIBUTES`; without it nothing changes.
+/// whether it runs (`#!`), and NTFS takes that read for an access, so `stat` moved it,
+/// where GNU's, which reads no file, does not. The handle needs `FILE_WRITE_ATTRIBUTES`;
+/// without it nothing changes. Not for `ls`, whose listings read files in bulk: 12 µs a
+/// file, 12% of `ls -la`.
 fn hold_access_time(file: &std::fs::File) {
     use windows_sys::Win32::Foundation::FILETIME;
     use windows_sys::Win32::Storage::FileSystem::SetFileTime;

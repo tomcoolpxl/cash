@@ -1949,3 +1949,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   (`listed_names`, `resolve_executable_among`), and finds the same files: `type -a cmd`
   and `which -a cmd` take 8.5 ms where they took 43 over 79 folders, `hash cmd` 1.3 ms
   where it took 3.8 (debug build).
+- **`ls -la` was 12% slower for keeping the access time** (found 2026-10-17 by the
+  benchmark at 1.23.0, `research/benchmarks-1.23.0.md`; the user's pick of 2026-10-18):
+  timed with the calls cash makes, 3,000 files, best of five: an open 36.3 µs, the read
+  of two bytes 4.3 more, `FILE_WRITE_ATTRIBUTES` in the open 4.7 more, `SetFileTime` 7.1
+  more. Windows has no cheaper way to keep it (the all-ones `SetFileTime` is its only
+  one, and needs that open), so `ls` reads as Git Bash's ls does again, the access time
+  moving, and `stat`, which reads one file at a time, keeps it
+  (`is_executable_keeping_access_time`), as the user chose.

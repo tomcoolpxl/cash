@@ -243,13 +243,24 @@ pub fn mode_string(mode: u32) -> String {
     .collect()
 }
 
-/// Whether `path` is a program: by its extension (`exe`, `com`, `cmd`, `bat`, `ps1`),
-/// or a file that starts with `#!`.
+/// Whether `path` is a program: by its extension, or a file that starts with `#!`.
+///
+/// The extensions are `exe`, `com`, `cmd`, `bat` and `ps1`. Another file is read, its
+/// access time moving as Git Bash's ls moves it: `ls` and the archivers read files in
+/// bulk.
 pub fn is_executable(path: &Path) -> bool {
-    if has_program_extension(path) {
-        return true;
-    }
-    let Ok(mut file) = open_to_read_start(path) else {
+    has_program_extension(path) || starts_with_shebang(fs::File::open(path))
+}
+
+/// [`is_executable`], its read keeping the file's access time where its access list
+/// allows that, for `stat`, which reads a file at a time.
+pub fn is_executable_keeping_access_time(path: &Path) -> bool {
+    has_program_extension(path) || starts_with_shebang(open_to_read_start(path))
+}
+
+/// Whether the file `opened` starts with `#!`.
+fn starts_with_shebang(opened: io::Result<fs::File>) -> bool {
+    let Ok(mut file) = opened else {
         return false;
     };
     let mut magic = [0u8; 2];

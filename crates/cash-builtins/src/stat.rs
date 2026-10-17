@@ -347,7 +347,7 @@ impl FileStatInfo {
             kind,
             security.writable,
             meta.permissions().readonly(),
-            kind == Kind::File && cash_win32::unix::is_executable(path),
+            kind == Kind::File && cash_win32::unix::is_executable_keeping_access_time(path),
         );
         let raw_mode = kind.type_bits() | bits;
         let octal_perms = format!("{bits:o}");
