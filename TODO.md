@@ -45,10 +45,7 @@ order. The phases before, released as 1.22.0 and 1.23.0, are in DONE.md.
    names only, and would need the names as spelled and each one's runnable answer.
 6. **`which <builtin>` walks all of PATH**: done (2026-10-18, DONE.md).
 7. **Each `.ps1` run scans PATH for pwsh**: done (2026-10-18, DONE.md).
-8. **`HISTCONTROL=erasedups` scans the whole history**: `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command
-   (looked into 2026-10-17): 1 to 2 ms after Enter, which the starter `.bashrc` turns
-   on; an index from command line to entries would make it a lookup, at the cost of
-   keeping that index right through loading, `history -d` and trimming to `HISTSIZE`.
+8. **`HISTCONTROL=erasedups` scans the whole history**: done (2026-10-18, DONE.md).
 
 ## Left over from finished phases
 

@@ -1994,3 +1994,12 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   found is remembered with the `PATH` and folder it was found for, and found again only
   when either changes or it has gone (a script run with Windows PowerShell's folder alone
   on `PATH` gets that one).
+- **`HISTCONTROL=erasedups` scanned the whole history after each command** (the user's
+  pick after 1.23.0, from the 2026-10-16 survey): measured in a release build with
+  50,000 entries it was 12.9 ms after every command, not the 1–2 ms guessed, each entry
+  looked up in a persistent map, and the list of entries rebuilt whole when one went
+  (5 ms). An index from command line to entries, built the first time erasedups asks
+  (18 ms, once a session; a shell that never erases does not build it) and kept through
+  adding, trimming to `HISTSIZE`, `history -d`, editing and clearing, finds them now, and
+  the entries' order is a vector shared until changed, from which one is dropped by a
+  move: 98 µs after a command whose line was there, nothing when it was not.
