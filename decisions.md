@@ -794,6 +794,11 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   `which <builtin>`'s walk of PATH, the search for pwsh on each `.ps1` run, and
   `erasedups`' scan of the whole history. The user published 1.23.0 to Scoop and asked
   for a benchmark against the last big one and the first one, step by step.
+- **`ls -la`'s 20% at 1.23.0 is won back first** (the user, 2026-10-17, after the
+  benchmark, `research/benchmarks-1.23.0.md`): the file facts are taken from the folder
+  listing (one directory query) instead of a call for each file; and for keeping the
+  access time while reading for `#!`, a cheaper way is looked for before it is kept.
+  Turned down: leaving the 7% of the per-file facts; reverting the access time unseen.
 
 ## 8. Archives and compression
 
