@@ -522,3 +522,22 @@ fn a_bad_substitution_is_said_and_abandons_its_command() {
     assert_eq!(out.stdout, "next\naabc", "{}", out.stderr);
     assert_eq!(out.stderr, "s.sh: line 2: ${x y}: bad substitution");
 }
+
+#[test]
+fn a_folder_redirected_or_sourced_is_a_directory() {
+    // Windows refuses a folder opened as a file with "Access is denied", which cash said
+    // as "Permission denied"; Bash says "Is a directory".
+    let scratch = Scratch::new("folder-redirect");
+    std::fs::create_dir(scratch.path().join("dd")).unwrap();
+    let out = run_in(
+        scratch.path(),
+        "cat < dd; echo \"in $?\"; echo x > dd; echo \"out $?\"; source ./dd; echo \"source $?\"",
+    );
+    assert_eq!(out.stdout, "in 1\nout 1\nsource 1");
+    assert_eq!(
+        out.stderr.matches("Is a directory").count(),
+        3,
+        "{}",
+        out.stderr
+    );
+}

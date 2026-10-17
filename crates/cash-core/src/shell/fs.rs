@@ -479,11 +479,22 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             });
         }
 
+        // Windows refuses a folder opened as a file with "Access is denied"; Bash's word for
+        // it is the system's, "Is a directory", for `< dir`, `> dir` and `source dir`.
+        let folder_or = |error: std::io::Error| {
+            if error.kind() == std::io::ErrorKind::PermissionDenied && path_to_open.is_dir() {
+                std::io::Error::from(std::io::ErrorKind::IsADirectory)
+            } else {
+                error
+            }
+        };
         // A process substitution's pipe cannot be created or truncated (D17).
         if !matches!(access, crate::sys::fs::Access::Read) {
-            return Ok(cash_win32::pipe::open_output(options, &path_to_open)?.into());
+            return Ok(cash_win32::pipe::open_output(options, &path_to_open)
+                .map_err(folder_or)?
+                .into());
         }
-        Ok(options.open(path_to_open)?.into())
+        Ok(options.open(&path_to_open).map_err(folder_or)?.into())
     }
 
     /// Replaces the shell's currently configured open files with the given set.
