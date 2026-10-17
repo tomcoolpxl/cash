@@ -182,3 +182,28 @@ fn grep_reads_the_shells_device_names() {
     assert_eq!(out.stdout, "x\n1\nnull 1\nclosed 2", "{}", out.stderr);
     assert_eq!(out.stderr, "grep: /dev/fd/7: No such file or directory");
 }
+
+#[test]
+fn grep_r_follows_a_link_round_a_loop_once_and_says_so() {
+    // grep -R went round a junction back to a folder above it until Windows refused the
+    // path; it walks on the shared walker now, which finds the loop by file identity and
+    // says it in GNU grep's words, the status untouched. -r does not go through links.
+    let scratch = Scratch::new("grep-loop");
+    let root = scratch.path().join("gl");
+    std::fs::create_dir_all(root.join("a")).unwrap();
+    std::fs::write(root.join("a").join("f"), "xx\n").unwrap();
+    cash_win32::junction::point(&root.join("a").join("up"), &root).unwrap();
+    let out = run_in(
+        scratch.path(),
+        "grep -R xx gl; echo \"R $?\"; grep -r xx gl; echo \"r $?\"",
+    );
+    assert_eq!(
+        out.stdout, "gl/a/f:xx\nR 0\ngl/a/f:xx\nr 0",
+        "{}",
+        out.stderr
+    );
+    assert_eq!(
+        out.stderr,
+        "grep: gl/a/up: warning: recursive directory loop"
+    );
+}

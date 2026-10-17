@@ -98,6 +98,8 @@ mod suspend;
 // cash: `stty`, GNU's words on the console's four modes; the rest is remembered.
 mod stty;
 mod tree;
+// cash: the folder walks the builtins share, on walkdir.
+mod walk;
 // cash: `xxd`, vim's, dump and reverse; Windows has no hex dump a script can read back.
 mod xxd;
 

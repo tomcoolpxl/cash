@@ -705,3 +705,17 @@ fn find_answers_help_and_version_and_takes_a_leading_double_dash() {
         out.stderr
     );
 }
+
+/// `find -H` follows the starting points' links only, as GNU's does; it was taken as -P.
+#[test]
+fn find_h_follows_the_starting_points_links_only() {
+    let sandbox = Sandbox::new("find-h");
+    let target = sandbox.root.path().join("target");
+    std::fs::create_dir_all(target.join("inner")).unwrap();
+    std::fs::write(target.join("inner").join("f"), "x").unwrap();
+    cash_win32::junction::point(&sandbox.root.path().join("start"), &target).unwrap();
+    cash_win32::junction::point(&target.join("back"), &target).unwrap();
+    let out = sandbox
+        .run("find -P start | wc -l; find -H start -name f; find -H start -name back -type l");
+    assert_eq!(out.stdout, "1\nstart/inner/f\nstart/back", "{}", out.stderr);
+}

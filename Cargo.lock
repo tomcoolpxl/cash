@@ -662,6 +662,7 @@ dependencies = [
  "sha2",
  "sha3",
  "strum",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -670,6 +671,7 @@ dependencies = [
  "utf8-chars",
  "uucore",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]

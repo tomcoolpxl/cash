@@ -25,10 +25,12 @@
 //! and nothing says so.
 
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::SystemTime;
 
 use cash_core::{ExecutionResult, builtins, patterns::Pattern};
+
+use crate::walk::{self as walker, Links};
 use clap::Parser;
 
 /// Search a directory tree for files matching an expression.
@@ -209,41 +211,13 @@ struct Visit<'a> {
     failed: bool,
 }
 
-/// Adds a folder to the ones above what is under it; if it is one of them already, how
-/// that one was printed, for the loop it closes.
-fn enter_folder(
-    actual: &Path,
-    path: &Path,
-    ancestors: &mut Vec<((u32, u64), String)>,
-) -> Option<String> {
-    let info = cash_win32::fs::file_info(actual).ok()?;
-    let identity = (info.volume, info.index);
-    if let Some((_, first)) = ancestors.iter().find(|(seen, _)| *seen == identity) {
-        return Some(first.clone());
-    }
-    ancestors.push((identity, render(path)));
-    None
-}
-
-/// An entry waiting on the walk's stack.
-struct Entry {
-    /// The path to print, as the caller spelled it.
-    path: PathBuf,
-    /// Where it actually is.
-    actual: PathBuf,
-    depth: usize,
-    /// A directory whose contents have been walked, in a contents-first walk.
-    contents_done: bool,
-    /// Under `-L`, the folders above it: their identity and how they were printed.
-    ancestors: Vec<((u32, u64), String)>,
-}
-
 /// The options that apply to the whole walk rather than to one entry.
 struct Walk {
     starts: Vec<String>,
     min_depth: usize,
     max_depth: usize,
-    follow: bool,
+    /// `-P` (none), `-H` (the starting points') or `-L` and `-follow` (every one).
+    links: Links,
     /// `-depth`, or implied by `-delete`: a directory after what is in it, as GNU `find`
     /// does. `-delete` went the other way, so it never removed a directory: it was not
     /// empty yet when its turn came (BI-04).
@@ -284,92 +258,66 @@ impl builtins::Command for FindCommand {
             // directory is its own (D3/D10) — `cd` updates what the shell believes without
             // moving the process — so a start is resolved by the shell. Reading `.` from
             // the process's directory made `cd crates; find .` walk the repository root.
-            let shown = PathBuf::from(start);
             let actual = context.shell.absolute_path(Path::new(start));
-            // An entry is visited when it comes off the stack, unless the walk is
-            // contents-first and it is a directory: it then goes back on, done, under its
-            // contents, and is visited when it comes off again.
-            let mut stack = vec![Entry {
-                path: shown,
-                actual,
-                depth: 0,
-                contents_done: false,
-                ancestors: Vec::new(),
-            }];
-
-            while let Some(entry) = stack.pop() {
-                if stop.requested() {
-                    break 'walking;
-                }
-                let Entry {
-                    path,
-                    actual,
-                    depth,
-                    contents_done,
-                    mut ancestors,
-                } = entry;
-                let metadata = if walk.follow {
-                    std::fs::metadata(&actual).ok()
-                } else {
-                    std::fs::symlink_metadata(&actual).ok()
-                };
-                let is_dir = metadata.as_ref().is_some_and(std::fs::Metadata::is_dir);
-                let descends = is_dir && depth < walk.max_depth;
-
-                // Following links, a folder can be its own ancestor; it is said and left,
-                // as GNU `find` does. The walk went round it without end (BI-13).
-                if walk.follow
-                    && is_dir
-                    && !contents_done
-                    && let Some(first) = enter_folder(&actual, &path, &mut ancestors)
-                {
-                    writeln!(
-                        context.stderr(),
-                        "{}: File system loop detected; '{}' is part of the same file system loop as '{first}'.",
-                        context.command_name,
-                        render(path.as_path())
-                    )?;
-                    failed = true;
-                    continue;
-                }
-
-                if walk.contents_first && descends && !contents_done {
-                    stack.push(Entry {
-                        path: path.clone(),
-                        actual: actual.clone(),
-                        depth,
-                        contents_done: true,
-                        ancestors: ancestors.clone(),
-                    });
-                    if !push_contents(&context, &mut stack, &path, &actual, depth, &ancestors)? {
+            // `-depth` (or `-delete`) visits a directory after what is in it; `-mindepth`
+            // goes on through what it does not show.
+            let options = walker::WalkOptions {
+                links: walk.links,
+                order: walker::Order::Ordinal,
+                contents_first: walk.contents_first,
+                min_depth: walk.min_depth,
+                max_depth: walk.max_depth,
+                one_file_system: false,
+            };
+            let mut entries = walker::Walk::new(start, &actual, &options, stop.clone());
+            while let Some(next) = entries.next() {
+                let entry = match next {
+                    Ok(entry) => entry,
+                    // GNU's `find -L` lists a link whose target is not there as the link.
+                    Err(walker::WalkError::Dangling(entry)) => entry,
+                    Err(walker::WalkError::Stopped) => break 'walking,
+                    // Following links, a folder can be its own ancestor; it is said and
+                    // left, as GNU `find` does. The walk went round it without end (BI-13).
+                    Err(walker::WalkError::Loop { shown, ancestor }) => {
+                        writeln!(
+                            context.stderr(),
+                            "{}: File system loop detected; '{}' is part of the same file system loop as '{}'.",
+                            context.command_name,
+                            render(Path::new(&shown)),
+                            render(Path::new(&ancestor))
+                        )?;
                         failed = true;
+                        continue;
                     }
-                    continue;
-                }
-
+                    Err(walker::WalkError::Io { shown, error }) => {
+                        writeln!(
+                            context.stderr(),
+                            "{}: {}: {}",
+                            context.command_name,
+                            render(Path::new(&shown)),
+                            cash_core::error::os_error_text(&error)
+                        )?;
+                        failed = true;
+                        continue;
+                    }
+                };
                 let mut visit = Visit {
-                    path: actual.as_path(),
-                    rendered: render(path.as_path()),
-                    metadata,
+                    path: entry.path.as_path(),
+                    rendered: render(Path::new(&entry.shown)),
+                    metadata: entry.metadata().ok(),
                     prune: false,
                     quit: false,
                     failed: false,
                 };
-
-                if depth >= walk.min_depth {
-                    evaluate(&expr, &mut visit, &context, &mut batches).await?;
-                }
-
+                evaluate(&expr, &mut visit, &context, &mut batches).await?;
                 failed |= visit.failed;
                 if visit.quit {
                     break 'walking;
                 }
-
-                if walk.contents_first || !descends || visit.prune {
-                    continue;
-                }
-                if !push_contents(&context, &mut stack, &path, &actual, depth, &ancestors)? {
-                    failed = true;
+                // `-prune` keeps the walk out of a folder; after its contents, as under
+                // `-depth`, there is nothing left to keep out of.
+                if visit.prune && !walk.contents_first && entry.kind == walker::Kind::Folder {
+                    entries.skip_folder();
                 }
             }
         }
@@ -427,49 +375,6 @@ async fn run_batches<SE: cash_core::ShellExtensions>(
     Ok(succeeded)
 }
 
-/// Puts what is in a directory on the walk's stack, in name order; whether it could be
-/// read, with the reason said if not.
-fn push_contents<SE: cash_core::ShellExtensions>(
-    context: &cash_core::ExecutionContext<'_, SE>,
-    stack: &mut Vec<Entry>,
-    path: &Path,
-    actual: &Path,
-    depth: usize,
-    ancestors: &[((u32, u64), String)],
-) -> Result<bool, cash_core::Error> {
-    match std::fs::read_dir(actual) {
-        Ok(entries) => {
-            // Reversed, because the stack hands them back in reverse — the listing then
-            // comes out in name order.
-            let mut names: Vec<std::ffi::OsString> = entries
-                .filter_map(Result::ok)
-                .map(|entry| entry.file_name())
-                .collect();
-            names.sort();
-            for name in names.into_iter().rev() {
-                stack.push(Entry {
-                    path: path.join(&name),
-                    actual: actual.join(&name),
-                    depth: depth + 1,
-                    contents_done: false,
-                    ancestors: ancestors.to_vec(),
-                });
-            }
-            Ok(true)
-        }
-        Err(e) => {
-            let e = cash_core::error::os_error_text(&e);
-            writeln!(
-                context.stderr(),
-                "{}: {}: {e}",
-                context.command_name,
-                render(path)
-            )?;
-            Ok(false)
-        }
-    }
-}
-
 /// Renders a path the way cash renders every path it prints (D3).
 fn render(path: &Path) -> String {
     cash_win32::path::render(path)
@@ -484,7 +389,7 @@ fn parse(args: &[String], here: &Path) -> Result<(Walk, Expr), String> {
         starts: Vec::new(),
         min_depth: 0,
         max_depth: usize::MAX,
-        follow: false,
+        links: Links::Never,
         contents_first: false,
     };
 
@@ -495,11 +400,14 @@ fn parse(args: &[String], here: &Path) -> Result<(Walk, Expr), String> {
     // (which change nothing here) and a `--` that ends them.
     while index < args.len() {
         match args[index].as_str() {
-            "-L" | "-follow" => {
-                walk.follow = true;
+            option @ ("-P" | "-H" | "-L" | "-follow") => {
+                walk.links = match option {
+                    "-P" => Links::Never,
+                    "-H" => Links::Roots,
+                    _ => Links::All,
+                };
                 index += 1;
             }
-            "-P" | "-H" => index += 1,
             "--" if walk.starts.is_empty() => index += 1,
             "-D" if walk.starts.is_empty() => index += 2,
             level
@@ -544,7 +452,7 @@ fn parse(args: &[String], here: &Path) -> Result<(Walk, Expr), String> {
                 index += 2;
             }
             "-follow" => {
-                walk.follow = true;
+                walk.links = Links::All;
                 index += 1;
             }
             "-depth" | "-d" => {

@@ -28,6 +28,8 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use cash_core::input::{Dash, Input, InputError};
+
+use crate::walk::{Kind, Links, Order, Walk, WalkError, WalkOptions};
 use cash_core::{ExecutionResult, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long};
 use clap::Parser;
@@ -1243,57 +1245,60 @@ impl<W: Write, E: Write> Walker<'_, W, E> {
     /// Searches what is under a directory, in name order; `shown` is how the directory
     /// is printed, empty for the working directory searched with no operand.
     fn walk(&mut self, shown: &str, actual: &Path) -> std::io::Result<()> {
-        let entries = match std::fs::read_dir(actual) {
-            Ok(entries) => entries,
-            Err(error) => {
-                let reason = cash_core::error::os_error_text(&error);
-                return self.complain(shown, &reason);
-            }
+        // `-r` goes through a link it is named, not those inside; `-R` through every one,
+        // and a link back to a folder above is GNU's warning, not a walk round it for ever.
+        let options = WalkOptions {
+            links: if self.opts().follow {
+                Links::All
+            } else {
+                Links::Roots
+            },
+            order: Order::Ordinal,
+            min_depth: 1,
+            ..WalkOptions::default()
         };
-        let mut names: Vec<std::ffi::OsString> = entries
-            .filter_map(Result::ok)
-            .map(|entry| entry.file_name())
-            .collect();
-        names.sort();
-        for name in names {
-            if self.printer.stop_all || self.stop.requested() {
+        let mut walk = Walk::new(shown, actual, &options, self.stop.clone());
+        while let Some(next) = walk.next() {
+            if self.printer.stop_all {
                 return Ok(());
             }
-            let name_text = name.to_string_lossy().into_owned();
-            let child_shown = if shown.is_empty() {
-                name_text.clone()
-            } else if shown.ends_with('/') {
-                std::format!("{shown}{name_text}")
-            } else {
-                std::format!("{shown}/{name_text}")
-            };
-            let child = actual.join(&name);
-            let metadata = if self.opts().follow {
-                std::fs::metadata(&child)
-            } else {
-                std::fs::symlink_metadata(&child)
-            };
-            let Ok(metadata) = metadata else {
-                // A dangling link under -R, or something gone since the listing.
-                if self.opts().follow {
-                    self.complain(&child_shown, "No such file or directory")?;
-                }
-                continue;
-            };
-            if metadata.file_type().is_symlink() {
-                continue;
-            }
-            if metadata.is_dir() {
-                if self.exclude_dirs.iter().any(|g| g.matches(&name_text)) {
+            let entry = match next {
+                Ok(entry) => entry,
+                Err(WalkError::Stopped) => return Ok(()),
+                Err(WalkError::Loop { shown, .. }) => {
+                    self.printer.out.flush()?;
+                    writeln!(
+                        self.printer.err,
+                        "grep: {shown}: warning: recursive directory loop"
+                    )?;
                     continue;
                 }
-                self.walk(&child_shown, &child)?;
-            } else {
-                if self.filters.excludes(&name_text, false) {
+                // A link -R follows whose target is not there, in GNU's words.
+                Err(WalkError::Dangling(entry)) => {
+                    self.complain(&entry.shown, "No such file or directory")?;
                     continue;
                 }
-                let show_name = self.opts().with_filename.unwrap_or(true);
-                self.search_file(child_shown, &child, show_name)?;
+                Err(WalkError::Io { shown, error }) => {
+                    let reason = cash_core::error::os_error_text(&error);
+                    self.complain(&shown, &reason)?;
+                    continue;
+                }
+            };
+            let name = entry.name().to_string_lossy().into_owned();
+            match entry.kind {
+                Kind::Link => {}
+                Kind::Folder => {
+                    if self.exclude_dirs.iter().any(|g| g.matches(&name)) {
+                        walk.skip_folder();
+                    }
+                }
+                Kind::File | Kind::Other => {
+                    if self.filters.excludes(&name, false) {
+                        continue;
+                    }
+                    let show_name = self.opts().with_filename.unwrap_or(true);
+                    self.search_file(entry.shown, &entry.path, show_name)?;
+                }
             }
         }
         Ok(())

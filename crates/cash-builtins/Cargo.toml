@@ -182,6 +182,9 @@ crossterm = { workspace = true }
 lscolors = "0.21.0"
 nu-ansi-term = { workspace = true }
 unicode-width = { workspace = true }
+# The folder walks the builtins share (`walk.rs`): loops found by file identity, links
+# followed or not, order, depth, one file system. Already in the tree, through `ignore`.
+walkdir = "2.5.0"
 # `uuidgen`: every version util-linux's makes (v1, v3, v4, v5, v6, v7).
 uuid = { workspace = true, features = ["v1", "v3", "v4", "v5", "v6", "v7"] }
 # `gzip`, `gunzip`, `zcat`: deflate from miniz_oxide (pure Rust, no C), the header,
@@ -205,3 +208,4 @@ blake2s_simd = "1.0"
 [dev-dependencies]
 anyhow = { workspace = true }
 pretty_assertions = { workspace = true, features = ["unstable"] }
+tempfile = { workspace = true }
