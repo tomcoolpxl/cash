@@ -35,6 +35,8 @@ use cash_archive::codec::gzip::{
     Input, Member, Start, Trouble, deflate_parallel, header, inflate_member, read_start,
 };
 use cash_core::input::{Dash, InputError, Source};
+
+use crate::walk::{Kind, Links, Order, Walk, WalkError, WalkOptions};
 use cash_core::openfiles::{OpenFile, OpenFiles};
 use cash_core::{ExecutionResult, ShellFd, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long};
@@ -786,22 +788,43 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
 
     /// Every entry of the folder `name`, in name order.
     fn treat_dir(&mut self, name: &str, path: &Path) -> Result<(), Stop> {
-        let entries = match fs::read_dir(path) {
-            Ok(entries) => entries,
-            Err(e) => return self.error(&format!("{name}: {}", strerror(&e))),
-        };
-        let mut names: Vec<String> = entries
-            .filter_map(Result::ok)
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .collect();
-        names.sort();
-        for entry in names {
-            let child = if name.ends_with(['/', '\\']) {
-                format!("{name}{entry}")
+        // GNU's gzip goes through no link unless -f, and says so as its open's ELOOP; under
+        // -f it goes through them, and a loop is said the same way, where GNU's went round
+        // it until the path grew too long.
+        let options = WalkOptions {
+            links: if self.options.force {
+                Links::All
             } else {
-                format!("{name}/{entry}")
-            };
-            self.treat_file(&child)?;
+                Links::Never
+            },
+            order: Order::Ordinal,
+            min_depth: 1,
+            ..WalkOptions::default()
+        };
+        for next in Walk::new(name, path, &options, self.context.stop_token()) {
+            match next {
+                Ok(entry) => match entry.kind {
+                    // The walk goes into it itself.
+                    Kind::Folder => {}
+                    Kind::Link => {
+                        self.error(&format!(
+                            "{}: Too many levels of symbolic links",
+                            entry.shown
+                        ))?;
+                    }
+                    Kind::File | Kind::Other => self.treat_file(&entry.shown)?,
+                },
+                Err(WalkError::Stopped) => return Ok(()),
+                Err(WalkError::Loop { shown, .. }) => {
+                    self.error(&format!("{shown}: Too many levels of symbolic links"))?;
+                }
+                Err(WalkError::Dangling(entry)) => {
+                    self.error(&format!("{}: No such file or directory", entry.shown))?;
+                }
+                Err(WalkError::Io { shown, error }) => {
+                    self.error(&format!("{shown}: {}", strerror(&error)))?;
+                }
+            }
         }
         Ok(())
     }

@@ -33,6 +33,8 @@ use cash_archive::codec::xz::{self, Format};
 use cash_archive::codec::zstd::{FrameError, decompress_frame};
 use cash_archive::codec::{self, Codec, Lookahead};
 use cash_core::input::{Dash, InputError};
+
+use crate::walk::{self as walker, Links, Order, Walk, WalkError, WalkOptions};
 use cash_core::openfiles::OpenFiles;
 use cash_core::{ExecutionResult, builtins};
 use cash_win32::unix::Replacement;
@@ -2093,7 +2095,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         if self.options.recursive {
             let mut expanded = Vec::new();
             for name in files {
-                self.expand(&name, &mut expanded);
+                self.expand(&name, &mut expanded)?;
             }
             files = expanded;
         }
@@ -2111,24 +2113,45 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
     }
 
     /// `name` for `-r`: itself, or every file under it, in name order.
-    fn expand(&self, name: &str, into: &mut Vec<String>) {
+    fn expand(&self, name: &str, into: &mut Vec<String>) -> Result<(), Stop> {
         let path = self.path(name);
         if name == STDIN_MARK || !path.is_dir() {
             into.push(name.to_owned());
-            return;
+            return Ok(());
         }
-        let Ok(entries) = fs::read_dir(&path) else {
-            return;
+        // zstd goes through no link inside a folder, and says so; a folder it cannot list
+        // is said too, where cash passed it over in silence.
+        let root = name.trim_end_matches(['/', '\\']);
+        let options = WalkOptions {
+            links: Links::Never,
+            order: Order::Ordinal,
+            min_depth: 1,
+            ..WalkOptions::default()
         };
-        let mut names: Vec<String> = entries
-            .filter_map(Result::ok)
-            .map(|e| e.file_name().to_string_lossy().into_owned())
-            .collect();
-        names.sort();
-        for entry in names {
-            let child = format!("{}/{entry}", name.trim_end_matches(['/', '\\']));
-            self.expand(&child, into);
+        for next in Walk::new(root, &path, &options, self.context.stop_token()) {
+            match next {
+                Ok(entry) => match entry.kind {
+                    walker::Kind::Folder => {}
+                    walker::Kind::Link => {
+                        self.say(
+                            2,
+                            &format!("Warning : {} is a symbolic link, ignoring\n", entry.shown),
+                        )?;
+                    }
+                    walker::Kind::File | walker::Kind::Other => into.push(entry.shown),
+                },
+                Err(WalkError::Stopped) => break,
+                Err(WalkError::Io { shown, error }) => {
+                    self.say(
+                        1,
+                        &format!("Cannot open directory '{shown}': {}\n", strerror(&error)),
+                    )?;
+                }
+                // Neither comes of a walk that follows no link.
+                Err(WalkError::Loop { .. } | WalkError::Dangling(_)) => {}
+            }
         }
+        Ok(())
     }
 
     /// The whole run, from the checks zstd makes after reading its command line.

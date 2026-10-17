@@ -188,3 +188,31 @@ fn the_overwrite_question_answered_no_keeps_both_files() {
         left.screen
     );
 }
+
+#[test]
+fn r_goes_through_no_link_and_says_a_loop() {
+    // gzip -r and zstd -r followed every link, so a junction back to a folder above sent
+    // them round until Windows refused the path. On the shared walker: GNU's gzip goes
+    // through no link without -f and says so as ELOOP, and with -f a loop is said the
+    // same way; zstd warns of a link and passes it, as zstd does.
+    let scratch = Scratch::new("compress-links");
+    let d = scratch.path().join("d");
+    std::fs::create_dir_all(d.join("sub")).unwrap();
+    std::fs::write(d.join("f"), "x").unwrap();
+    cash_win32::junction::point(&d.join("sub").join("up"), &d).unwrap();
+    let out = run_in(
+        scratch.path(),
+        "gzip -r d; echo \"gzip $?\"; gzip -dr d 2>/dev/null; gzip -rf d; echo \"gzip -f $?\"; \
+         gzip -dr d 2>/dev/null; zstd -r d 2>&1 | grep Warning; echo \"zstd ${PIPESTATUS[0]}\"",
+    );
+    assert_eq!(
+        out.stdout, "gzip 1\ngzip -f 1\nWarning : d/sub/up is a symbolic link, ignoring\nzstd 0",
+        "{}",
+        out.stderr
+    );
+    assert_eq!(
+        out.stderr,
+        "gzip: d/sub/up: Too many levels of symbolic links\n\
+         gzip: d/sub/up: Too many levels of symbolic links"
+    );
+}
