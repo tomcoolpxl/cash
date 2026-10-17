@@ -249,11 +249,22 @@ pub fn is_executable(path: &Path) -> bool {
     if has_program_extension(path) {
         return true;
     }
-    let Ok(mut file) = fs::File::open(path) else {
+    let Ok(mut file) = open_to_read_start(path) else {
         return false;
     };
     let mut magic = [0u8; 2];
     io::Read::read_exact(&mut file, &mut magic).is_ok() && &magic == b"#!"
+}
+
+/// `path` opened to read its first bytes, through a handle that keeps its access time as
+/// it was where its access list allows that (`crate::fs::open_keeping_access_time`).
+fn open_to_read_start(path: &Path) -> io::Result<fs::File> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    use windows_sys::Win32::Foundation::GENERIC_READ;
+
+    crate::fs::open_keeping_access_time(path, GENERIC_READ, |access| {
+        fs::OpenOptions::new().access_mode(access).open(path)
+    })
 }
 
 /// Whether `path`'s extension makes it a program (`exe`, `com`, `cmd`, `bat`, `ps1`); any
