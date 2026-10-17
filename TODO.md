@@ -27,15 +27,42 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ## Picked by the user (the current phase, 2026-10-17)
 
-The user's picks of 2026-10-17 (decisions.md, "ls takes GNU's remaining options" and
-"`tail -f` ends when the reader of its output is gone"), in this order.
+The user's picks after 1.22.0 (decisions.md, "The phase after 1.22.0"), in this
+order. The phase before, released as 1.22.0, is in DONE.md.
 
-1. **Two costs paid on every call**: done (2026-10-17, DONE.md).
-2. **GNU ls options cash's ls has not**: done (2026-10-17, DONE.md), every one of
-   GNU coreutils 9's.
-3. **`tail -f file | head -1` runs until the file grows**: done (2026-10-17, DONE.md).
-
-All three are done; the phase ends with release 1.22.0.
+1. **`timeout 2 cash -c 'sleep 5; echo done'` prints `done`** (2026-10-17, seen in Claude's
+   shell): Git Bash's `timeout` ended the `sleep`, and cash went on to `echo`, where
+   `timeout 2 bash -c …` prints nothing; no trap on TERM or INT ran in cash. What Git
+   Bash's `timeout` sends a native program, and whether this shell's inherited "ignore
+   Ctrl-C" is the cause, is not known yet; to be tried in the user's Terminal.
+2. **`pbcopy` and `pbpaste` on a locked workstation say "the clipboard is in use by another
+   program"** (2026-10-17, the full lane's clipboard test while the screen was locked):
+   Windows refuses `OpenClipboard` with ACCESS_DENIED while the session is locked, the
+   answer it gives for a clipboard another program holds, and cash waits its 1.8 s and
+   says so. The message could name the lock when `LogonUI` holds the session (or when
+   the input desktop is not the default one), and the clipboard test could skip then.
+3. **`ls -l` moves the access time of a file it reads for `#!`** (2026-10-17, found with
+   `ls -u`): to decide `x`, cash reads the first two bytes of a file of two bytes or more
+   without a program extension, and that read is an access; `ls -lu` then shows its own
+   read. Git Bash's ls does the same (Cygwin reads the start of a file for its execute
+   bit); GNU on Linux never reads a file. Asking the handle not to update the access
+   time (`SetFileTime` with all ones) would keep it, where the handle may write
+   attributes.
+4. **`stat`'s blocks are the size's, not the allocation's** (2026-10-17, found with `ls
+   -s`): `%b` is the size in 512-byte blocks, where Git Bash's stat gives the allocation
+   in its 1024-byte units (`%B` 1024): a 5000-byte file is 10 here and 8 there.
+5. **A script's shebang interpreter is looked up twice**, past the hash table (looked into
+   2026-10-17): `execute_via_external` reads the script's head and resolves the
+   interpreter to answer a script whose interpreter is `true` or `false` at once, and
+   the spawn reads and resolves again; the second costs a PATH walk next to starting
+   the interpreter, tens of milliseconds for any real one.
+6. **The PATH search that checks each extension is slow** (2026-10-17, found with the
+   missing-command lookup): `find_executables_in_path` (`pathsearch::search_for_executable`)
+   tries every `PATHEXT` extension in every folder, a file check each, about 38 ms on this
+   machine's 80 folders, where `resolve_command` reads each folder once (`names_beginning`).
+   Still used by `type -a` and `which -a` (every match), `hash NAME`, and carapace's first
+   look for itself; the winglob decision moved off it (DONE.md). The one look per folder
+   would serve them too.
 
 ## Left over from finished phases
 
@@ -65,34 +92,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   waited, not worked: plausibly a `kill` that lands before the builtin reads its stop,
   with `wait` left waiting. Which of the three it was is not known; the test should name
   the tool it is on, and a loop of the three under load should catch it.
-- **`timeout 2 cash -c 'sleep 5; echo done'` prints `done`** (2026-10-17, seen in Claude's
-  shell): Git Bash's `timeout` ended the `sleep`, and cash went on to `echo`, where
-  `timeout 2 bash -c …` prints nothing; no trap on TERM or INT ran in cash. What Git
-  Bash's `timeout` sends a native program, and whether this shell's inherited "ignore
-  Ctrl-C" is the cause, is not known yet; to be tried in the user's Terminal.
-- **`pbcopy` and `pbpaste` on a locked workstation say "the clipboard is in use by another
-  program"** (2026-10-17, the full lane's clipboard test while the screen was locked):
-  Windows refuses `OpenClipboard` with ACCESS_DENIED while the session is locked, the
-  answer it gives for a clipboard another program holds, and cash waits its 1.8 s and
-  says so. The message could name the lock when `LogonUI` holds the session (or when
-  the input desktop is not the default one), and the clipboard test could skip then.
-- **`ls -l` moves the access time of a file it reads for `#!`** (2026-10-17, found with
-  `ls -u`): to decide `x`, cash reads the first two bytes of a file of two bytes or more
-  without a program extension, and that read is an access; `ls -lu` then shows its own
-  read. Git Bash's ls does the same (Cygwin reads the start of a file for its execute
-  bit); GNU on Linux never reads a file. Asking the handle not to update the access
-  time (`SetFileTime` with all ones) would keep it, where the handle may write
-  attributes.
-- **`stat`'s blocks are the size's, not the allocation's** (2026-10-17, found with `ls
-  -s`): `%b` is the size in 512-byte blocks, where Git Bash's stat gives the allocation
-  in its 1024-byte units (`%B` 1024): a 5000-byte file is 10 here and 8 there.
-- **The PATH search that checks each extension is slow** (2026-10-17, found with the
-  missing-command lookup): `find_executables_in_path` (`pathsearch::search_for_executable`)
-  tries every `PATHEXT` extension in every folder, a file check each, about 38 ms on this
-  machine's 80 folders, where `resolve_command` reads each folder once (`names_beginning`).
-  Still used by `type -a` and `which -a` (every match), `hash NAME`, and carapace's first
-  look for itself; the winglob decision moved off it (DONE.md). The one look per folder
-  would serve them too.
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against
@@ -123,11 +122,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
     is a directory query for each of the 80 folders on PATH, at Windows' cost of one,
     and the runnable check of each match; the background `PathIndex` keeps folded
     names only, and would need the names as spelled and each one's runnable answer;
-  - a script's shebang interpreter is looked up twice, past the hash table (looked into
-    2026-10-17): `execute_via_external` reads the script's head and resolves the
-    interpreter to answer a script whose interpreter is `true` or `false` at once, and
-    the spawn reads and resolves again; the second costs a PATH walk next to starting
-    the interpreter, tens of milliseconds for any real one;
   - each `.ps1` run scans PATH for pwsh (looked into 2026-10-17): one walk for `pwsh`,
     then `powershell`, next to PowerShell's own start of a few hundred milliseconds;
   - `HISTCONTROL=erasedups` scans the whole history (50,000 entries) after each command
