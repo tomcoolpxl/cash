@@ -124,6 +124,13 @@ What the phases now in DONE.md left open, each where its phase says more.
   cash's relay ends it then. `cash -c 'tail -f g | head -1; echo done'` prints `a` and
   `done`, then waits for tail before it exits; Git Bash's tail waits too, before `done`;
   GNU's tail on Linux ends at once. The relay could ask its pipe's reader between polls.
+  Looked into 2026-10-17: not with a write of no bytes, which a byte-mode pipe may hand
+  its reader as a read of none, an end to most readers; `NtQueryInformationFile`'s
+  `FilePipeLocalInformation` gives `NamedPipeState` (4, closing, once the other end has
+  gone) if the handle has `FILE_READ_ATTRIBUTES`, untried on the handles cash makes.
+  The relay keeps the real handle; tail would ask between polls
+  (`cash_win32::stdio`, as GNU's `check_output_alive`) and end with 141. Only tail: a
+  general watcher would end `cp a b | true` before it copies.
 - **zstd compresses at ruzstd's fast level only** (phase 28, 2026-10-07): every level
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
