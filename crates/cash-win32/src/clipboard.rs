@@ -35,12 +35,17 @@ const OPEN_FIRST_WAIT: Duration = Duration::from_millis(20);
 const OPEN_LONGEST_WAIT: Duration = Duration::from_millis(250);
 /// What a clipboard another program keeps open is reported as.
 const IN_USE: &str = "the clipboard is in use by another program";
+/// What a clipboard refused while the session is locked is reported as.
+const LOCKED: &str = "the clipboard cannot be used while the session is locked";
 
 /// The clipboard, open to this process until this is dropped.
 struct Open;
 
 impl Open {
     /// Opens the clipboard, retrying while another program holds it, for `OPEN_PATIENCE`.
+    ///
+    /// Windows refuses it with the same answer while the session is locked, when no
+    /// program has it and waiting does not help: that is said at once.
     fn new() -> io::Result<Self> {
         let busy = i32::try_from(ERROR_ACCESS_DENIED).ok();
         let started = std::time::Instant::now();
@@ -54,6 +59,9 @@ impl Open {
             if error.raw_os_error() != busy {
                 return Err(error);
             }
+            if wait == OPEN_FIRST_WAIT && session_locked() {
+                return Err(io::Error::new(io::ErrorKind::PermissionDenied, LOCKED));
+            }
             if started.elapsed() + wait > OPEN_PATIENCE {
                 return Err(io::Error::new(io::ErrorKind::WouldBlock, IN_USE));
             }
@@ -61,6 +69,76 @@ impl Open {
             wait = (wait * 2).min(OPEN_LONGEST_WAIT);
         }
     }
+}
+
+/// Whether this session is locked, when Windows lends no program the clipboard.
+///
+/// From the session's flags (`WTSQuerySessionInformation`, `WTSSessionInfoEx`);
+/// wtsapi32 is loaded only when this is asked, not at every start. False when it cannot
+/// be told, as in a service's session, which is never locked.
+#[must_use]
+pub fn session_locked() -> bool {
+    use windows_sys::Win32::System::LibraryLoader::{
+        GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
+    };
+    use windows_sys::Win32::System::RemoteDesktop::{
+        WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION, WTS_SESSIONSTATE_LOCK, WTSINFOEXW,
+        WTSSessionInfoEx,
+    };
+    type Query = unsafe extern "system" fn(HANDLE, u32, i32, *mut *mut u16, *mut u32) -> i32;
+    type Free = unsafe extern "system" fn(*mut core::ffi::c_void);
+
+    // SAFETY: loads a system DLL from System32 alone; it stays loaded.
+    let module = unsafe {
+        LoadLibraryExW(
+            windows_sys::core::w!("wtsapi32.dll"),
+            std::ptr::null_mut(),
+            LOAD_LIBRARY_SEARCH_SYSTEM32,
+        )
+    };
+    if module.is_null() {
+        return false;
+    }
+    // SAFETY: the module is loaded and the name is NUL terminated.
+    let address = |name: &core::ffi::CStr| unsafe { GetProcAddress(module, name.as_ptr().cast()) };
+    let (Some(query), Some(free)) = (
+        address(c"WTSQuerySessionInformationW"),
+        address(c"WTSFreeMemory"),
+    ) else {
+        return false;
+    };
+    // SAFETY: the documented signature of WTSQuerySessionInformationW.
+    let query =
+        unsafe { std::mem::transmute::<unsafe extern "system" fn() -> isize, Query>(query) };
+    // SAFETY: the documented signature of WTSFreeMemory.
+    let free = unsafe { std::mem::transmute::<unsafe extern "system" fn() -> isize, Free>(free) };
+    let mut buffer: *mut u16 = std::ptr::null_mut();
+    let mut bytes = 0u32;
+    // SAFETY: the out-pointers are valid; the buffer is freed below.
+    let ok = unsafe {
+        query(
+            WTS_CURRENT_SERVER_HANDLE,
+            WTS_CURRENT_SESSION,
+            WTSSessionInfoEx,
+            &raw mut buffer,
+            &raw mut bytes,
+        )
+    };
+    if ok == 0 || buffer.is_null() {
+        return false;
+    }
+    let locked = bytes as usize >= size_of::<WTSINFOEXW>() && {
+        // SAFETY: Windows wrote a WTSINFOEXW of the size it said, level 1 in its union;
+        // read as it lies, the buffer's type promising only a `u16`'s alignment.
+        let info = unsafe { buffer.cast::<WTSINFOEXW>().read_unaligned() };
+        // SAFETY: level 1 is the union's only member.
+        info.Level == 1
+            && unsafe { info.Data.WTSInfoExLevel1.SessionFlags }.cast_unsigned()
+                == WTS_SESSIONSTATE_LOCK
+    };
+    // SAFETY: the buffer came from the query.
+    unsafe { free(buffer.cast()) };
+    locked
 }
 
 impl Drop for Open {
@@ -232,12 +310,17 @@ mod tests {
     fn text_round_trips_and_an_empty_text_empties_the_clipboard() {
         let _turn = CLIPBOARD.lock().unwrap_or_else(PoisonError::into_inner);
         // The clipboard is one per desktop and shared with every program; when another
-        // holds it past cash's retries (a clipboard manager, a remote session), this test
-        // cannot run, so it skips rather than fails — the behaviour is covered when the
-        // clipboard is free.
+        // holds it past cash's retries (a clipboard manager, a remote session), or the
+        // session is locked, this test cannot run, so it skips rather than fails — the
+        // behaviour is covered when the clipboard is free.
         let before = match get_text() {
             Ok(before) => before,
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::PermissionDenied
+                ) =>
+            {
                 eprintln!("skipped: {error}");
                 return;
             }

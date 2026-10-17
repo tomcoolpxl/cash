@@ -151,7 +151,12 @@ fn cash_with_stdin(dir: &std::path::Path, script: &str, stdin: &[u8]) -> (Vec<u8
 #[test]
 fn pbcopy_and_pbpaste_round_trip_through_the_clipboard() {
     // One test for everything the clipboard is used for: it is one per desktop, and
-    // nextest runs tests in parallel. What was there is put back at the end.
+    // nextest runs tests in parallel. What was there is put back at the end. While the
+    // session is locked Windows lends no program the clipboard, so the test cannot run.
+    if cash_win32::clipboard::session_locked() {
+        eprintln!("skipped: the session is locked, when no program has the clipboard");
+        return;
+    }
     let before = cash_win32::clipboard::get_text().expect("read the clipboard");
     let scratch = Scratch::new("pbcopy");
     let dir = scratch.path();

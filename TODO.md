@@ -32,12 +32,7 @@ order. The phase before, released as 1.22.0, is in DONE.md.
 
 1. **`timeout 2 cash -c 'sleep 5; echo done'` prints `done`**: settled, not cash's
    (2026-10-17, DONE.md).
-2. **`pbcopy` and `pbpaste` on a locked workstation say "the clipboard is in use by another
-   program"** (2026-10-17, the full lane's clipboard test while the screen was locked):
-   Windows refuses `OpenClipboard` with ACCESS_DENIED while the session is locked, the
-   answer it gives for a clipboard another program holds, and cash waits its 1.8 s and
-   says so. The message could name the lock when `LogonUI` holds the session (or when
-   the input desktop is not the default one), and the clipboard test could skip then.
+2. **`pbcopy` and `pbpaste` on a locked workstation**: done (2026-10-17, DONE.md).
 3. **`ls -l` moves the access time of a file it reads for `#!`** (2026-10-17, found with
    `ls -u`): to decide `x`, cash reads the first two bytes of a file of two bytes or more
    without a program extension, and that read is an access; `ls -lu` then shows its own

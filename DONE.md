@@ -1910,3 +1910,13 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   a pipe, by 1.18.0 and by 1.22.0, the same. In cash, `timeout` is cash's own and ends
   the command (`timeout 2 cash -c …` gives 124 and no `done`). What it showed on the way,
   that a TERM trap never runs on cash's own `kill -TERM`, is in TODO.md.
+- **`pbcopy` and `pbpaste` on a locked workstation said "the clipboard is in use by
+  another program"** (the user's pick after 1.22.0; found when the full lane's clipboard
+  test failed while the screen was locked): Windows refuses `OpenClipboard` with
+  ACCESS_DENIED while the session is locked, the answer it gives for a clipboard another
+  program holds, and cash waited its 1.8 s and blamed one. At the first refusal cash now
+  asks the session's flags (`WTSQuerySessionInformation`'s `WTSSessionInfoEx`, wtsapi32
+  loaded only then) and says at once "the clipboard cannot be used while the session is
+  locked"; the clipboard tests skip then. Seen unlocked (the flag reads so and the tests
+  run); the locked case rests on Windows' documented flag, the session having been
+  unlocked by the time it was built.
