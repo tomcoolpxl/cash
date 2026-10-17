@@ -486,53 +486,44 @@ impl Pattern {
                 continue;
             }
 
+            // The component's pattern and its matcher, once for every folder it is matched
+            // in; each name read once, the dot-file rule asked before the pattern. The
+            // matches are not sorted folder by folder: the whole expansion is, below. The
+            // folder's sort compared paths part by part, and with a name read twice and a
+            // pattern made for each folder, a glob of System32's DLLs took twice Bash's time.
+            let subpattern = Self::from(&component)
+                .set_extended_globbing(self.enable_extended_globbing)
+                .set_globstar(self.enable_globstar)
+                .set_case_insensitive(self.case_insensitive);
+            let subpattern_starts_with_dot = subpattern
+                .pieces
+                .first()
+                .is_some_and(|piece| piece.as_str().starts_with('.'));
+            let allow_dot_files =
+                !options.require_dot_in_pattern_to_match_dot_files || subpattern_starts_with_dot;
+            let regex = subpattern.matcher()?;
+
             let current_paths = std::mem::take(&mut paths_so_far);
             for current_path in current_paths {
-                let subpattern = Self::from(&component)
-                    .set_extended_globbing(self.enable_extended_globbing)
-                    .set_globstar(self.enable_globstar)
-                    .set_case_insensitive(self.case_insensitive);
-
-                let subpattern_starts_with_dot = subpattern
-                    .pieces
-                    .first()
-                    .is_some_and(|piece| piece.as_str().starts_with('.'));
-
-                let allow_dot_files = !options.require_dot_in_pattern_to_match_dot_files
-                    || subpattern_starts_with_dot;
-
-                let matches_dotfile_policy = |dir_entry: &std::fs::DirEntry| {
-                    !dir_entry.file_name().to_string_lossy().starts_with('.') || allow_dot_files
-                };
-
-                let regex = subpattern.matcher()?;
-                let matches_regex = |dir_entry: &std::fs::DirEntry| {
-                    regex
-                        .is_match(dir_entry.file_name().to_string_lossy().as_ref())
-                        .unwrap_or(false)
-                };
-
-                let mut matching_paths_in_dir: Vec<_> = current_path
-                    .read_dir()
-                    .map_or_else(|_| vec![], |dir| dir.into_iter().collect())
-                    .into_iter()
-                    .filter_map(|result| result.ok())
-                    .filter(matches_regex)
-                    .filter(matches_dotfile_policy)
-                    .map(|entry| entry.path())
-                    .collect();
-
-                if options.include_dot_and_dotdot && allow_dot_files {
-                    for name in [".", ".."] {
-                        if regex.is_match(name).unwrap_or(false) {
-                            matching_paths_in_dir.push(current_path.join(name));
+                if let Ok(entries) = current_path.read_dir() {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name();
+                        let name = name.to_string_lossy();
+                        if (allow_dot_files || !name.starts_with('.'))
+                            && regex.is_match(&name).unwrap_or(false)
+                        {
+                            paths_so_far.push(entry.path());
                         }
                     }
                 }
 
-                matching_paths_in_dir.sort();
-
-                paths_so_far.append(&mut matching_paths_in_dir);
+                if options.include_dot_and_dotdot && allow_dot_files {
+                    for name in [".", ".."] {
+                        if regex.is_match(name).unwrap_or(false) {
+                            paths_so_far.push(current_path.join(name));
+                        }
+                    }
+                }
             }
         }
 
