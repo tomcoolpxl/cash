@@ -1463,8 +1463,9 @@ impl Interpreter {
                 OpCode::NextFile => return Ok(ExecutionResult::NextFile),
                 OpCode::Exit => {
                     let exit_code = stack.pop_scalar_value()?.scalar_as_f64();
-                    return Ok(ExecutionResult::Exit(exit_code as i32));
+                    return Ok(ExecutionResult::Exit(Some(exit_code as i32)));
                 }
+                OpCode::ExitKeepingStatus => return Ok(ExecutionResult::Exit(None)),
                 OpCode::Return => {
                     let return_value = stack.pop_scalar_value()?;
                     stack.restore_caller()?;
@@ -1534,7 +1535,9 @@ impl Interpreter {
             .into_ref(AwkRefType::SpecialGlobalVar(SpecialVar::Convfmt));
         *globals[SpecialVar::Environ as usize].get_mut() =
             AwkValue::from(env).into_ref(AwkRefType::SpecialGlobalVar(SpecialVar::Environ));
-        *globals[SpecialVar::Filename as usize].get_mut() = AwkValue::from("-".to_string())
+        // Empty until the first input is opened, as in gawk (posixutils-rs 7848fe6d): BEGIN
+        // saw `-`.
+        *globals[SpecialVar::Filename as usize].get_mut() = AwkValue::from(String::new())
             .into_ref(AwkRefType::SpecialGlobalVar(SpecialVar::Filename));
         *globals[SpecialVar::Fnr as usize].get_mut() =
             AwkValue::from(0.0).into_ref(AwkRefType::SpecialGlobalVar(SpecialVar::Fnr));
@@ -1803,6 +1806,7 @@ pub fn interpret_with_eol(
     };
     let mut range_pattern_started = vec![false; program.rules.len()];
     let mut return_value = 0;
+    let mut exiting = false;
 
     set_globals_with_assignment_arguments(
         &mut interpreter,
@@ -1833,8 +1837,11 @@ pub fn interpret_with_eol(
             &mut input,
         )?;
         match begin_result {
-            ExecutionResult::Exit(val) => {
-                return_value = val;
+            // `exit` in BEGIN skips the input, but not the END actions, as in gawk
+            // (posixutils-rs 0219d243); the main rules ran on the input.
+            ExecutionResult::Exit(status) => {
+                return_value = status.unwrap_or(return_value);
+                exiting = true;
                 break;
             }
             other => no_next_in_special_action(&other, "BEGIN")
@@ -1846,13 +1853,14 @@ pub fn interpret_with_eol(
         return Ok(return_value);
     }
 
-    'record_loop: while let Some((record, crlf)) = input
-        .next_record(
-            &mut interpreter.globals,
-            &mut global_env,
-            interpreter.last_location.as_ref(),
-        )
-        .map_err(|e| interpreter.outside_error(&e))?
+    'record_loop: while !exiting
+        && let Some((record, crlf)) = input
+            .next_record(
+                &mut interpreter.globals,
+                &mut global_env,
+                interpreter.last_location.as_ref(),
+            )
+            .map_err(|e| interpreter.outside_error(&e))?
     {
         interpreter
             .count_record(&mut global_env)
@@ -1963,8 +1971,8 @@ pub fn interpret_with_eol(
                     input.skip_file();
                     break;
                 }
-                ExecutionResult::Exit(val) => {
-                    return_value = val;
+                ExecutionResult::Exit(status) => {
+                    return_value = status.unwrap_or(return_value);
                     break 'record_loop;
                 }
                 ExecutionResult::Expression(_) => {}
@@ -1982,8 +1990,8 @@ pub fn interpret_with_eol(
             &mut input,
         )?;
         match end_result {
-            ExecutionResult::Exit(val) => {
-                return_value = val;
+            ExecutionResult::Exit(status) => {
+                return_value = status.unwrap_or(return_value);
                 break;
             }
             other => no_next_in_special_action(&other, "END")

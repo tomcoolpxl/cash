@@ -1750,3 +1750,14 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   line, `r` after a line without a newline, `-ni.bak`, `-f -ifoo.sed`, `-i=.bak`, and
   `-l` read as GNU reads it. uutils diffutils' commits change only CI. What was not
   taken is in `research/uutils-sed-evaluation.md`.
+
+- **posixutils-rs awk's fixes up to 0.9.1** (found 2026-10-16 by `cargo xtask upstreams`,
+  done 2026-10-17): its 48 new tests run against cash-awk, gawk 5.4 deciding, and only
+  what generic awk meets ported (the user, that day: no need to replicate gawk deeply).
+  The worst: an expression's parse took time exponential in its nesting, `x =
+  ((((1))))` five seconds and `a[a[a[a[1]]]]` over a minute; now linear, 100 levels
+  through cash. Also `"cmd" | getline line > 0`, a newline after `&&` and `||`,
+  `$NF++`, `exit` in BEGIN, `gsub` without a match, `%#x` of 0, FILENAME before the
+  first input, and bytes that are not UTF-8 written back as read (a Windows-1252 file
+  came out of `awk '{ print }'` as UTF-8). Not taken, in the crate's README: bytes as
+  characters in the C locale and three gawk corners.

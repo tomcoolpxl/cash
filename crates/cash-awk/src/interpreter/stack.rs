@@ -903,7 +903,8 @@ pub(crate) enum ExecutionResult {
     Expression(AwkValue),
     Next,
     NextFile,
-    Exit(i32),
+    /// `exit`, with its status, or `None` for a bare one that keeps the status set
+    Exit(Option<i32>),
 }
 
 impl ExecutionResult {

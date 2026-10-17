@@ -656,7 +656,14 @@ pub(crate) fn builtin_gsub(
         &in_str.clone().scalar_to_string(&global_env.convfmt)?,
         is_sub,
     )?;
-    let result = in_str.assign(result, global_env);
+    // With nothing replaced the target keeps its value and type, and a field is not
+    // assigned, which would rebuild the record, as in gawk (posixutils-rs 36060c75): a
+    // number became a string, so `x = 10; gsub(/q/, "", x); x < 9` compared strings.
+    let result = if count == 0 {
+        Ok(FieldsState::Ok)
+    } else {
+        in_str.assign(result, global_env)
+    };
     stack.push_value(count as f64)?;
     result
 }

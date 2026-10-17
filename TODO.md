@@ -122,10 +122,10 @@ What the phases now in DONE.md left open, each where its phase says more.
   - coolfetch asks sysinfo for everything on each run, nothing kept between runs.
 - **What the upstreams cash took in have done since** (2026-10-16, `cargo xtask
   upstreams`; the weekly Upstreams workflow keeps an `upstreams` issue): posixutils-rs
-  42 commits in `awk/` and 8 in `calc/` (bc) since the revision taken. Each wants
-  looking through, porting what matters and marking the rest `reviewed` in
-  `upstreams.toml`. sevenz-rust2 0.24.0 and uutils diffutils were looked through:
-  nothing to port; uutils sed's fixes were ported (2026-10-17, in DONE.md).
+  8 commits in `calc/` (bc) since the revision taken want looking through, porting
+  what matters and marking the rest `reviewed` in `upstreams.toml`. sevenz-rust2 0.24.0
+  and uutils diffutils were looked through: nothing to port; uutils sed's and
+  posixutils-rs awk's fixes were ported (2026-10-17, in DONE.md).
 - **A Ctrl-C or `kill` on a large `xz` waits for its blocks** (2026-10-16): lzma-rust2's
   threaded encoder takes the whole input at once (13 blocks of 24 MiB from a 300 MB
   file, on 16 threads) and writes the first block only when it is done, about 12 s

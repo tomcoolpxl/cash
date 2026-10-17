@@ -57,7 +57,7 @@ thread_local! {
 /// fatal error.
 pub(crate) fn write_stdout(text: &str, what: &str) -> Result<(), String> {
     STDOUT
-        .with_borrow_mut(|stdout| stdout.writer().write_all(text.as_bytes()))
+        .with_borrow_mut(|stdout| stdout.writer().write_all(&encode_output(text)))
         .map_err(reader_gone)
         .map_err(|error| format!("{what} to \"standard output\" failed: {}", strerror(&error)))
 }
@@ -116,14 +116,50 @@ macro_rules! read_iter_next {
     };
 }
 
-/// Convert bytes to String, trying UTF-8 first, falling back to Latin-1.
-/// Latin-1 maps each byte 0x00-0xFF to the corresponding Unicode code point,
-/// so it preserves byte values faithfully for single-byte encodings.
+/// Where a byte that is not part of valid UTF-8 is kept: byte `b` (0x80 to 0xFF) is the
+/// character U+10FF00 + `b`, at the top of the last private-use plane, which text does not
+/// use, and is written back as `b` (`encode_output`).
+const RAW_BYTE_BASE: u32 = 0x10_FF00;
+
+/// The string for the bytes awk reads: UTF-8, with each byte that is not part of a UTF-8
+/// character kept as itself (`RAW_BYTE_BASE`), so that awk writes back the bytes it read,
+/// as gawk does. A line that was not UTF-8 was read as Latin-1 and written as UTF-8, so
+/// `awk '{ print }'` changed every Windows-1252 accent it passed.
 fn bytes_to_string(buf: Vec<u8>) -> String {
     match String::from_utf8(buf) {
         Ok(s) => s,
-        Err(e) => e.into_bytes().iter().map(|&b| b as char).collect(),
+        Err(e) => {
+            let bytes = e.into_bytes();
+            let mut text = String::with_capacity(bytes.len() + 8);
+            for chunk in bytes.utf8_chunks() {
+                text.push_str(chunk.valid());
+                text.extend(
+                    chunk
+                        .invalid()
+                        .iter()
+                        .filter_map(|&b| char::from_u32(RAW_BYTE_BASE + u32::from(b))),
+                );
+            }
+            text
+        }
     }
+}
+
+/// The bytes awk writes for `text`: its UTF-8, with each byte `bytes_to_string` kept as
+/// a character written back as that byte.
+pub(crate) fn encode_output(text: &str) -> std::borrow::Cow<'_, [u8]> {
+    // Every kept byte is F4 8F BE or F4 8F BF and one more in UTF-8.
+    if !text.as_bytes().contains(&0xF4) {
+        return std::borrow::Cow::Borrowed(text.as_bytes());
+    }
+    let mut bytes = Vec::with_capacity(text.len());
+    for c in text.chars() {
+        match u32::from(c).checked_sub(RAW_BYTE_BASE) {
+            Some(byte @ 0x80..=0xFF) => bytes.push(byte as u8),
+            _ => bytes.extend_from_slice(c.encode_utf8(&mut [0; 4]).as_bytes()),
+        }
+    }
+    std::borrow::Cow::Owned(bytes)
 }
 
 /// The record before the first RS match in `buf`, and the bytes after the match, or
@@ -497,7 +533,7 @@ impl WriteFiles {
                     .insert(filename.to_string(), SpecialFile::Stderr);
                 let _ = flush_stdout();
                 return std::io::stderr()
-                    .write_all(contents.as_bytes())
+                    .write_all(&encode_output(contents))
                     .map_err(|e| format!("print to \"{filename}\" failed: {}", strerror(&e)));
             }
             // gawk's error: standard input is not open for writing. gawk opens
@@ -512,7 +548,7 @@ impl WriteFiles {
         match self.files.entry(filename.to_string()) {
             Entry::Occupied(mut e) => {
                 e.get_mut()
-                    .write_all(contents.as_bytes())
+                    .write_all(&encode_output(contents))
                     .map_err(|e| e.to_string())?;
             }
             Entry::Vacant(e) => {
@@ -531,7 +567,7 @@ impl WriteFiles {
                         };
                         format!("cannot redirect to `{filename}': {reason}")
                     })?;
-                file.write_all(contents.as_bytes())
+                file.write_all(&encode_output(contents))
                     .map_err(|e| e.to_string())?;
                 e.insert(file);
             }
@@ -687,7 +723,7 @@ impl WritePipes {
         if let Some(stdin) = child.stdin.as_mut() {
             use std::io::Write as _;
             stdin
-                .write_all(contents.as_bytes())
+                .write_all(&encode_output(contents.as_str()))
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -908,6 +944,20 @@ impl RecordReader for StdinRecordReader {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bytes_that_are_not_utf8_are_written_back_as_they_were() {
+        // A Windows-1252 accent, a stray continuation byte and 0xFF, among UTF-8 "é".
+        let bytes = b"caf\xe9 \xc3\xa9 \x80\xff end".to_vec();
+        let text = bytes_to_string(bytes.clone());
+        assert_eq!(text.chars().count(), 13, "each stray byte is one character");
+        assert_eq!(encode_output(&text).as_ref(), bytes.as_slice());
+        // Valid UTF-8 is borrowed as it is.
+        assert!(matches!(
+            encode_output("café"),
+            std::borrow::Cow::Borrowed(_)
+        ));
+    }
 
     fn split_records(file_contents: &str, separator: RecordSeparator) -> Vec<String> {
         let mut reader = StringRecordReader::from(file_contents);

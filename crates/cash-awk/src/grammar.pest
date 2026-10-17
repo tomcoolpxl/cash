@@ -264,7 +264,8 @@ append   = { ">>" ~ simple_getline_file_expr }
 pipe     = { "|" ~ simple_getline_file_expr }
 
 print_expr_list    = _{ print_expr ~ ("," ~ opt_newline ~ print_expr)* }
-expr_list          = _{ multiple_expr_list | expr }
+// One argument and then more, so the first is parsed once (posixutils-rs c5441ffc).
+expr_list          = _{ expr ~ ("," ~ opt_newline ~ expr)* }
 multiple_expr_list = _{ expr ~ ("," ~ opt_newline ~ expr)+ }
 
 primary = _{
@@ -340,8 +341,8 @@ add        = { "+" }
 binary_sub = { "-" }
 match_op   = { "~" }
 not_match  = { "!~" }
-and        = { "&&" }
-or         = { "||" }
+and        = { "&&" ~ opt_newline }
+or         = { "||" ~ opt_newline }
 concat     = { "" }
 in_op      = @{ "in" ~ !(letter | "_" | digit) }
 
@@ -361,25 +362,48 @@ eq = { "==" }
 gt = { ">" }
 ge = { ">=" }
 
+// A group with a top-level comma is never a primary, so trying the simple form first
+// costs `(i, j) in a` one short failed parse, not a re-parse of every parenthesised
+// expression (posixutils-rs c5441ffc).
 binary_expr = {
-    multidimensional_in
-  | simple_binary_expr
+    simple_binary_expr
+  | multidimensional_in
 }
 
 multidimensional_in    = { "(" ~ multidimensional_index ~ ")" ~ in_word ~ array_ref }
 // Prefix operators may follow one another, as `- -x` and `!-x` in gawk.
-simple_binary_expr     = { expr_operand ~ (low_infix_op ~ low_operand | high_infix_op ~ operand)* }
+// `cmd | getline [var]` is an operator, binding tighter than a comparison and looser
+// than a concatenation, so `"cmd" | getline line > 0` compares what it returns, as in
+// every awk (posixutils-rs 8d32febb); it was a syntax error.
+simple_binary_expr     = { expr_operand ~ (piped_getline | low_infix_op ~ low_operand | high_infix_op ~ operand)* }
 operand                = _{ prefix_op* ~ primary ~ postfix_op? }
 // An operand that starts an expression: a variable followed by `/=` is the target of an
 // assignment, so `/=` cannot start a regex after it, as in gawk (`x /=2/` is an error).
-expr_operand           = _{ !(lvalue ~ "/=") ~ operand }
+// The target's shape is scanned, not parsed: parsing it here and again as the operand
+// made nested subscripts take time exponential in their depth.
+expr_operand           = _{ !(lvalue_shape ~ "/=") ~ operand }
 low_operand            = _{ assigned | expr_operand }
 assigned               =  { assignment }
 multidimensional_index = { multiple_expr_list }
 
-ternary_expr = { binary_expr ~ "?" ~ expr ~ ":" ~ expr }
+// The `? :` tail is optional, so a plain expression is not parsed once as a ternary
+// that fails and again as itself (posixutils-rs c5441ffc).
+ternary_expr = { binary_expr ~ ("?" ~ expr ~ ":" ~ expr)? }
 
-assignment = { lvalue ~ assignment_op ~ expr }
+assignment = { maybe_assignment ~ lvalue ~ assignment_op ~ expr }
+
+// An assignment's target would otherwise be parsed twice when no assignment operator
+// follows it, once here and once as an operand, and nested targets (a[a[a[1]]], $($(1)))
+// twice per level. This lookahead skips the attempt when the target's shape, scanned
+// without parsing it, is followed by something else; `==` is no assignment. Anything the
+// scan cannot read with confidence (a `/` that may begin a regular expression, a comment,
+// `$++i`) fails the scan, and then the assignment is attempted as before
+// (posixutils-rs 192835c7).
+maybe_assignment = _{ !(lvalue_shape ~ !(assignment_op ~ !"=")) }
+lvalue_shape     = _{ name ~ subscript_shape* ~ !"[" | "$" ~ field_shape }
+field_shape      = _{ "$" ~ field_shape | group_shape | name ~ subscript_shape* ~ !"[" | number }
+subscript_shape  = @{ "[" ~ (string | subscript_shape | !("[" | "]" | "\"" | "/" | "#") ~ ANY)* ~ "]" }
+group_shape      = @{ "(" ~ (string | group_shape | !("(" | ")" | "\"" | "/" | "#") ~ ANY)* ~ ")" }
 
 assignment_op = {
     assign
@@ -399,11 +423,13 @@ div_assign = { "/=" }
 mod_assign = { "%=" }
 pow_assign = { "^=" | "**=" }
 
+// Alternatives that share a prefix are factored, never retried: a choice that re-parses
+// a nested `( expr )` after a later failure makes parsing time exponential in the nesting
+// depth (posixutils-rs c5441ffc). `ternary_expr` also stands for the plain expression.
 expr = {
     input_function
   | assignment
   | ternary_expr
-  | binary_expr
 }
 
 lvalue = {
@@ -412,13 +438,19 @@ lvalue = {
   | field_var
 }
 
-field_var = { "$" ~ prefix_op* ~ primary ~ postfix_op* }
+// `$` binds tighter than `++` and `--`: `$i++` increments the field, so the operand of
+// `$` takes no increment of its own, except a field operand or one with a unary operator:
+// `$$i++` is `$($i++)` and `$-i++` is `$(-(i++))`, as in gawk and mawk (posixutils-rs
+// 5295bd1e; `$NF++` incremented NF and `$2--` was a syntax error). `nested_field` always
+// takes the inner field, so the field is never parsed a second time as a primary.
+field_var    = { "$" ~ (prefix_op+ ~ primary ~ postfix_op? | nested_field | primary) }
+nested_field = { field_var ~ postfix_op? }
 
 // A plain `getline` is a primary, as in gawk, so that `getline x y` is `getline x`
-// joined to `y`; it was a syntax error.
+// joined to `y`; it was a syntax error. Both forms here start with `getline`, so an
+// expression that does not fails them at once.
 input_function = {
-    getline_from_pipe
-  | getline_from_file_cmp
+    getline_from_file_cmp
   | getline_from_file
 }
 
@@ -428,19 +460,7 @@ simple_getline    = { getline_word ~ lvalue? }
 getline_from_file = { getline_word ~ lvalue? ~ "<" ~ simple_getline_file_expr }
 
 simple_getline_file_expr = { prefix_op* ~ primary ~ postfix_op? ~ (getline_infix_op ~ prefix_op* ~ primary ~ postfix_op?)* }
-getline_from_pipe = { unpiped_expr ~ (piped_getline)+ }
 piped_getline     = { "|" ~ getline_word ~ lvalue? }
-
-unpiped_expr           = {
-    unpiped_input_function
-  | assignment
-  | ternary_expr
-  | binary_expr
-}
-unpiped_input_function = {
-    getline_from_file
-  | simple_getline
-}
 
 // The file of `getline <`, where a comparison ends it, as in every awk.
 getline_infix_op         = _{
@@ -479,17 +499,16 @@ simple_binary_print_expr =  {
 print_low_operand        = _{ print_assigned | expr_operand }
 print_assigned           =  { print_assignment }
 binary_print_expr        =  {
-    multidimensional_in
-  | simple_binary_print_expr
+    simple_binary_print_expr
+  | multidimensional_in
 }
 
-print_assignment   = { lvalue ~ assignment_op ~ print_expr }
-ternary_print_expr = { binary_print_expr ~ "?" ~ print_expr ~ ":" ~ print_expr }
+print_assignment   = { maybe_assignment ~ lvalue ~ assignment_op ~ print_expr }
+ternary_print_expr = { binary_print_expr ~ ("?" ~ print_expr ~ ":" ~ print_expr)? }
 
 print_expr = {
     print_assignment
   | ternary_print_expr
-  | binary_print_expr
 }
 
 // A keyword only when no name character follows it, as in gawk: `printx = 1`, `deletex` and

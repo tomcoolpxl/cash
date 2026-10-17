@@ -259,6 +259,7 @@ static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
         .op(Op::infix(Rule::in_op, Assoc::Left))
         .op(Op::infix(Rule::match_op, Assoc::Left) | Op::infix(Rule::not_match, Assoc::Left))
         .op(Op::infix(Rule::comp_op, Assoc::Left) | Op::infix(Rule::print_comp_op, Assoc::Left))
+        .op(Op::postfix(Rule::piped_getline))
         .op(Op::infix(Rule::concat, Assoc::Left))
         .op(Op::infix(Rule::add, Assoc::Left) | Op::infix(Rule::binary_sub, Assoc::Left))
         .op(Op::infix(Rule::mul, Assoc::Left)
@@ -384,6 +385,20 @@ impl<'i> GrammarChildren<'i> for Pairs<'i, Rule> {
         self.next()
             .expect("the grammar rule of a parsed node guarantees this child")
     }
+}
+
+/// The binary expression a `ternary_expr` without its `? :` tail stands for, or `pair`.
+fn plain_operand(pair: Pair<Rule>) -> Pair<Rule> {
+    if matches!(
+        pair.as_rule(),
+        Rule::ternary_expr | Rule::ternary_print_expr
+    ) {
+        let mut inner = pair.clone().into_inner();
+        if let (Some(binary), None) = (inner.next(), inner.next()) {
+            return binary;
+        }
+    }
+    pair
 }
 
 fn first_child(pair: Pair<Rule>) -> Pair<Rule> {
@@ -1313,8 +1328,30 @@ impl Compiler {
         }
     }
 
-    fn map_postfix(&self, lhs: Expr, op: Pair<Rule>) -> Result<Expr, PestError> {
-        // `post_inc` and `post_dec` are the grammar's only postfix operators.
+    fn map_postfix(&self, lhs: Expr, op: Pair<Rule>, locals: &LocalMap) -> Result<Expr, PestError> {
+        if op.as_rule() == Rule::piped_getline {
+            // `cmd | getline [var]`: the target ($0 without one), then the command.
+            let line_col = op.line_col();
+            let mut instructions = Instructions::default();
+            if let Some(lvalue) = op.into_inner().next() {
+                self.compile_lvalue_ref(lvalue, &mut instructions, locals)?;
+            } else {
+                instructions.extend(Instructions::from_instructions_and_line_col(
+                    vec![OpCode::PushZero, OpCode::FieldRef],
+                    line_col,
+                ));
+            }
+            instructions.extend(lhs.instructions);
+            instructions.push(
+                OpCode::CallBuiltin {
+                    function: BuiltinFunction::GetLineFromPipe,
+                    argc: 2,
+                },
+                line_col,
+            );
+            return Ok(Expr::new(ExprKind::Number, instructions));
+        }
+        // Otherwise `post_inc` or `post_dec`.
         let opcode = if op.as_rule() == Rule::post_inc {
             OpCode::PostInc
         } else {
@@ -1473,7 +1510,7 @@ impl Compiler {
         PRATT_PARSER
             .map_primary(|primary| self.map_primary(primary, locals))
             .map_prefix(|op, rhs| self.map_prefix(op, rhs?))
-            .map_postfix(|lhs, op| self.map_postfix(lhs?, op))
+            .map_postfix(|lhs, op| self.map_postfix(lhs?, op, locals))
             .map_infix(|lhs, op, rhs| self.map_infix(lhs?, op, rhs?))
             .parse(expr)
     }
@@ -1513,7 +1550,7 @@ impl Compiler {
             Rule::array_element => true,
             _ => false,
         };
-        let binary = first_child(value.clone());
+        let binary = plain_operand(first_child(value.clone()));
         if !plain || binary.as_rule() != Rule::binary_expr {
             return Ok(None);
         }
@@ -1604,34 +1641,40 @@ impl Compiler {
         locals: &LocalMap,
     ) -> Result<Expr, PestError> {
         let mut prefix_ops = Vec::new();
-        let mut primary_pair = None;
-        let mut postfix_ops = Vec::new();
+        let mut operand = None;
+        let mut postfix_op = None;
         let span = field_var.as_span();
 
         for child in field_var.into_inner() {
             match child.as_rule() {
                 Rule::pre_inc | Rule::pre_dec | Rule::not | Rule::unary_plus | Rule::negate => {
-                    if primary_pair.is_none() {
-                        prefix_ops.push(child);
-                    }
+                    prefix_ops.push(child);
                 }
-                Rule::post_inc | Rule::post_dec => {
-                    postfix_ops.push(child);
-                }
-                _ => {
-                    primary_pair = Some(child);
-                }
+                Rule::post_inc | Rule::post_dec => postfix_op = Some(child),
+                _ => operand = Some(child),
             }
         }
 
-        let primary = primary_pair.ok_or_else(|| {
-            pest_error_from_span(span, "expected an expression after `$`".to_string())
-        })?;
-        let mut expr = self.map_primary(primary, locals)?;
-
-        // Apply postfix ops first (they bind tighter to the primary)
-        for op in postfix_ops {
-            expr = self.map_postfix(expr, op)?;
+        let missing = || pest_error_from_span(span, "expected an expression after `$`".to_string());
+        let operand = operand.ok_or_else(missing)?;
+        let mut expr = if operand.as_rule() == Rule::nested_field {
+            // `$$i++`: the increment applies to the inner field `$i`
+            let mut inner = operand.into_inner();
+            let field = inner.next().ok_or_else(missing)?;
+            let line_col = field.line_col();
+            let mut instructions = self.compile_field_var_expr(field, locals)?.instructions;
+            instructions.push(OpCode::GetField, line_col);
+            let mut expr = Expr::new(ExprKind::LValue, instructions);
+            if let Some(op) = inner.next() {
+                expr = self.map_postfix(expr, op, locals)?;
+            }
+            expr
+        } else {
+            self.map_primary(operand, locals)?
+        };
+        // `$-i++`: the increment binds tighter than the unary operator
+        if let Some(op) = postfix_op {
+            expr = self.map_postfix(expr, op, locals)?;
         }
 
         // Apply prefix ops in reverse order (innermost first)
@@ -1818,35 +1861,6 @@ impl Compiler {
                     instructions.push(comparison_opcode(&comp), comp.line_col());
                 }
             }
-            Rule::getline_from_pipe => {
-                let mut inner = input_function.into_inner();
-                let unpiped_expr = inner.child();
-                let mut lvalues = Vec::new();
-                for piped_getline in inner {
-                    lvalues.push(piped_getline.into_inner().next());
-                }
-                let getline_count = lvalues.len();
-                for lvalue in lvalues.into_iter().rev() {
-                    if let Some(lvalue) = lvalue {
-                        self.compile_lvalue_ref(lvalue.clone(), instructions, locals)?;
-                    } else {
-                        instructions.extend(Instructions::from_instructions_and_line_col(
-                            vec![OpCode::PushZero, OpCode::FieldRef],
-                            line_col,
-                        ));
-                    }
-                }
-                self.compile_expr(unpiped_expr, instructions, locals)?;
-                for _ in 0..getline_count {
-                    instructions.push(
-                        OpCode::CallBuiltin {
-                            function: BuiltinFunction::GetLineFromPipe,
-                            argc: 2,
-                        },
-                        line_col,
-                    );
-                }
-            }
             _ => not_in_grammar(&input_function, "input function"),
         }
         Ok(())
@@ -1908,6 +1922,10 @@ impl Compiler {
                 let line_col = expr.line_col();
                 let mut inner = expr.into_inner();
                 self.compile_binary_expr(inner.child(), instructions, locals)?;
+                if inner.peek().is_none() {
+                    // No `? :`: a plain binary expression.
+                    return Ok(());
+                }
                 let mut true_expr_instructions = Instructions::default();
                 self.compile_expr(inner.child(), &mut true_expr_instructions, locals)?;
                 instructions.push(
@@ -1926,7 +1944,7 @@ impl Compiler {
             Rule::binary_expr | Rule::binary_print_expr => {
                 self.compile_binary_expr(expr, instructions, locals)?;
             }
-            Rule::input_function | Rule::unpiped_input_function => {
+            Rule::input_function => {
                 self.compile_input_function(expr, instructions, locals)?;
             }
             _ => not_in_grammar(&expr, "expression"),
@@ -2382,10 +2400,12 @@ impl Compiler {
                 let stmt_line_col = stmt.line_col();
                 if let Some(expr) = stmt.into_inner().next() {
                     self.compile_expr(expr, instructions, locals)?;
+                    instructions.push(OpCode::Exit, stmt_line_col);
                 } else {
-                    instructions.push(OpCode::PushZero, stmt_line_col);
+                    // A bare `exit` keeps the status an earlier `exit` set, as in gawk
+                    // (posixutils-rs 0219d243): `BEGIN { exit 42 } END { exit }` is 42.
+                    instructions.push(OpCode::ExitKeepingStatus, stmt_line_col);
                 }
-                instructions.push(OpCode::Exit, stmt_line_col);
                 Ok(())
             }
             Rule::return_stmt => {
@@ -4241,7 +4261,7 @@ mod test {
     #[test]
     fn test_compile_exit() {
         let (instructions, _) = compile_stmt("exit;");
-        assert_eq!(instructions, vec![OpCode::PushZero, OpCode::Exit]);
+        assert_eq!(instructions, vec![OpCode::ExitKeepingStatus]);
 
         let (instructions, _) = compile_stmt("exit 1;");
         assert_eq!(instructions, vec![OpCode::PushConstant(0), OpCode::Exit]);
@@ -5402,12 +5422,14 @@ mod test {
             ]
         );
 
+        // The variables are numbered as they come; the target of each pipe goes below
+        // its command.
         let (expr, _) = compile_expr("getline var | getline var2");
         assert_eq!(
             expr,
             vec![
-                OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
                 OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR + 1),
+                OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
                 OpCode::CallBuiltin {
                     function: BuiltinFunction::GetLine,
                     argc: 1
@@ -5423,9 +5445,9 @@ mod test {
         assert_eq!(
             expr,
             vec![
-                OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
-                OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR + 1),
                 OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR + 2),
+                OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR + 1),
+                OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
                 OpCode::PushConstant(0),
                 OpCode::CallBuiltin {
                     function: BuiltinFunction::GetLineFromPipe,

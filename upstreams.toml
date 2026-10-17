@@ -67,6 +67,9 @@ crate = "crates/cash-awk"
 repository = "https://github.com/rustcoreutils/posixutils-rs"
 revision = "96bd8a372541cf7e4c427010a5414a40cf20c805"
 path = "awk"
+# 2026-10-17, to 0.9.1: what generic awk meets was ported, gawk deciding; what was not
+# taken is in the crate's README (item 14).
+reviewed = "a212e7a7f2c31982f4f1424c575149632d3959ec"
 
 [[upstream]]
 crate = "crates/cash-bc"

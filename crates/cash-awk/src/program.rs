@@ -122,6 +122,8 @@ pub enum OpCode {
     Next,
     NextFile,
     Exit,
+    // A bare `exit`: the status an earlier `exit` set stays
+    ExitKeepingStatus,
     Return,
 
     // invalid opcode. Cannot be inside a valid program
