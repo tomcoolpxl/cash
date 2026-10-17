@@ -772,6 +772,10 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
 - **`tail -f` ends when the reader of its output is gone** (the user, 2026-10-17): tried
   with the pipe's state between polls, as GNU tail does on Linux. Turned down: leaving
   it as Git Bash's tail has it, waiting for the file's next line.
+- **ls quotes names on a terminal as GNU ls does** (the user, 2026-10-17): shell-escape
+  (`'a b'`, `"it's"`, `'c'$'\177''d'`) and `?` for a control character left as it is,
+  as GNU coreutils does since 8.25; into a pipe or a file, names as they are. Turned
+  down: names as they are on a terminal too, as cash's ls showed them.
 
 ## 8. Archives and compression
 

@@ -990,6 +990,9 @@ fn sizes_and_times_fixture(name: &str) -> Scratch {
         )
         .unwrap();
     }
+    // NTFS stamps a change with the clock's tick, as coarse as 15.6 ms: the read-only
+    // change must come a tick after the times set above, or the change times tie.
+    std::thread::sleep(std::time::Duration::from_millis(50));
     let mut readonly = std::fs::metadata(scratch.join("plain"))
         .unwrap()
         .permissions();
@@ -1118,4 +1121,139 @@ fn ls_times_as_gnu_ls_has_them() {
          Try 'ls --help' for more information."
     );
     writable_again(&scratch);
+}
+
+/// Names to quote: a space, a quote, DEL (a control character Windows allows in a
+/// name), a folder with a space, and a link to it.
+fn quoting_fixture(name: &str) -> Scratch {
+    let scratch = Scratch::new(name);
+    for name in ["plain", "a b", "it's", "c\u{7f}d"] {
+        std::fs::write(scratch.join(name), "").unwrap();
+    }
+    std::fs::create_dir(scratch.join("sub dir")).unwrap();
+    std::fs::write(scratch.join("sub dir").join("inner"), "").unwrap();
+    cash_win32::junction::point(&scratch.join("link"), &scratch.join("sub dir")).unwrap();
+    scratch
+}
+
+/// `--quoting-style`, `-N`, `-b`, `-Q`, `-q` and `QUOTING_STYLE` quote names as GNU ls
+/// 9.10 does, the last of them given winning. Into a pipe, names are as they are unless
+/// asked.
+#[test]
+fn ls_quotes_names_as_gnu_ls_does() {
+    let scratch = quoting_fixture("ls-quoting");
+    let out = ls_in(
+        scratch.path(),
+        "ls -1; ls -1 --quoting-style=shell-escape; ls -1q; ls -1b; ls -1 -Q -N; ls -1 -N -Q; \
+         ls -1 --quoting-style=locale -d 'a b'; QUOTING_STYLE=c ls -1d plain; \
+         QUOTING_STYLE=c ls -1d -N plain",
+    );
+    assert_eq!(
+        out.stdout,
+        [
+            "a b",
+            "c\u{7f}d",
+            "it's",
+            "link",
+            "plain",
+            "sub dir",
+            "'a b'",
+            "'c'$'\\177''d'",
+            "\"it's\"",
+            "link",
+            "plain",
+            "'sub dir'",
+            "a b",
+            "c?d",
+            "it's",
+            "link",
+            "plain",
+            "sub dir",
+            "a\\ b",
+            "c\\177d",
+            "it's",
+            "link",
+            "plain",
+            "sub\\ dir",
+            "a b",
+            "c\u{7f}d",
+            "it's",
+            "link",
+            "plain",
+            "sub dir",
+            "\"a b\"",
+            "\"c\\177d\"",
+            "\"it's\"",
+            "\"link\"",
+            "\"plain\"",
+            "\"sub dir\"",
+            "\u{2018}a b\u{2019}",
+            "\"plain\"",
+            "plain",
+        ]
+        .join("\n"),
+        "{}",
+        out.stderr
+    );
+}
+
+/// Names that need no quotes get a space before them in `-l` and `-C` where others are
+/// quoted, as GNU ls 9.10 lines them up; headers and link targets are quoted too, and a
+/// style or a `QUOTING_STYLE` GNU does not know is refused or passed over as GNU's are.
+#[test]
+fn ls_lines_up_quoted_names_as_gnu_ls_does() {
+    let scratch = quoting_fixture("ls-quoting-lined-up");
+    let out = ls_in(
+        scratch.path(),
+        "ls -l --time-style=+T --quoting-style=shell | sed -n 's/^.* T //p'; \
+         ls -Cd --quoting-style=shell -- 'a b' \"it's\" plain 'sub dir'; \
+         ls -R --quoting-style=shell 'sub dir'",
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(
+        lines.get(..3),
+        Some(&["'a b'", " c\u{7f}d", "\"it's\""][..]),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        lines
+            .get(3)
+            .is_some_and(|line| line.starts_with(" link -> '") && line.ends_with("sub dir'")),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        lines.get(4..),
+        Some(
+            &[
+                " plain",
+                "'sub dir'",
+                "'a b'  \"it's\"   plain  'sub dir'",
+                "'sub dir':",
+                "inner",
+            ][..]
+        ),
+        "{}",
+        out.stdout
+    );
+
+    let out = ls_in(scratch.path(), "QUOTING_STYLE=bogus ls -d plain");
+    assert_eq!(
+        (out.stdout.as_str(), out.stderr.as_str()),
+        (
+            "plain",
+            "ls: ignoring invalid value of environment variable QUOTING_STYLE: 'bogus'"
+        )
+    );
+    let out = ls_in(scratch.path(), "ls --quoting-style=bogus");
+    assert_eq!(out.code, 1);
+    assert_eq!(
+        out.stderr,
+        "ls: invalid argument 'bogus' for '--quoting-style'\n\
+         Valid arguments are:\n  - 'literal'\n  - 'shell'\n  - 'shell-always'\n  \
+         - 'shell-escape'\n  - 'shell-escape-always'\n  - 'c'\n  - 'c-maybe'\n  - 'escape'\n  \
+         - 'locale'\n  - 'clocale'\n\
+         Try 'ls --help' for more information."
+    );
 }

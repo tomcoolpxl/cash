@@ -1816,3 +1816,38 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   - `stat`'s Change is the change time too, where it was the modification time.
   - The facts come from the open `ls -l` already makes of each file, and otherwise by
     name (`GetFileInformationByName`, Windows 11 24H2) or an attributes-only open.
+
+- **GNU ls's name quoting** (the user's pick of 2026-10-17, the second group): checked
+  against GNU coreutils 9.10 in WSL, every style on names Windows allows and, through
+  the quoting itself, on control characters it does not.
+  - `--quoting-style` with GNU's ten words, `-N`, `-b`, `-Q` (the last given wins) and
+    `QUOTING_STYLE`, a word it does not know said and passed over; `-q` and
+    `--show-control-chars` (the last wins) show a control character the style left as
+    `?`. On a terminal, names are shell-escaped and controls hidden, as GNU's are
+    (decisions.md); into a pipe they are as they are, as before.
+  - Where some names in `-l`, `-C` or `-x` came out quoted in the shell styles, the
+    others get a space before them, as GNU lines them up; `-R` headers and link targets
+    are quoted too.
+  - Not followed: GNU's columns beside a name with a raw control character (DEL, or a
+    C1 control, the only ones a Windows name can hold) in a style that leaves it raw.
+    GNU pads such a name by a width of its own and lines the next column up wrong, 3 or
+    4 spaces where every other name gets 2; cash keeps its columns straight.
+
+- **PIPESTATUS after a compound command** (found 2026-10-17 by the quoting comparison,
+  whose `${PIPESTATUS[0]}` after an `if` read 0): a compound command that is the whole
+  pipeline (`if`, `for`, `case`, `while`, `{ }`) and a function's definition leave
+  PIPESTATUS as the commands inside set it, as Bash does: `if true; then false | true;
+  fi` leaves `1 0`, where cash made it `0`. A subshell, `[[ ]]`, `(( ))` and a function's
+  call still set it as a simple command does.
+- **`stat` showed times in UTC to the second** (found 2026-10-17 with `ls -c`): `%x`,
+  `%y`, `%z`, `%w` and the report's lines read `15:29:57.000000000 +0000` where Git
+  Bash's stat reads `17:29:57.594045400 +0200`. They are in the zone an exported `TZ`
+  names, else Windows', to the 100 ns NTFS keeps, as `ls` already showed them.
+- **The ls times test failed on change times that tied** (found 2026-10-17): its fixture
+  set the times of four files and made one read-only within one tick of the clock NTFS
+  stamps changes with, as coarse as 15.6 ms, so all four changed at once and `ls -c`
+  sorted them by name. The read-only change now comes 50 ms later.
+- **The awk append test took 10 s of the quick lane** (found 2026-10-17): its two loops
+  of two million appends, added with posixutils-rs awk's fixes, ran 10 to 12 s in a
+  debug build, near the 15 s the quick lane gives a test, on this machine, faster than
+  CI's. Half a million each still tells linear from copying: 3 s in all.

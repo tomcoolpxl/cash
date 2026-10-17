@@ -33,9 +33,11 @@ The user's picks of 2026-10-17 (decisions.md, "ls takes GNU's remaining options"
 1. **Two costs paid on every call**: done (2026-10-17, DONE.md).
 2. **GNU ls options cash's ls has not** (2026-10-17): named as not supported: `-Q`,
    `-n`, `-i`, `-H`, `--quoting-style`, `-b`, `-q`, `-N`, `-T`, `--zero`, `--hyperlink`,
-   `-Z`, `--author`, `-D`. The common ones are done (DONE.md), and the times and sizes
-   (`-c`, `-u`, `--time`, `-s`, `-k`, `--si`, `--block-size`, 2026-10-17). Still wanted:
-   name quoting, the script helpers, and the poor fits for Windows.
+   `-Z`, `--author`, `-D`. The common ones are done (DONE.md), the times and sizes
+   (`-c`, `-u`, `--time`, `-s`, `-k`, `--si`, `--block-size`) and name quoting (`-Q`,
+   `--quoting-style`, `-b`, `-q`, `-N`), both 2026-10-17. Still wanted: the script
+   helpers (`--zero`, `-i`, `-H`, `-T`, `--hyperlink`) and the poor fits for Windows
+   (`-n`, `-Z`, `--author`, `-D`).
 3. **`tail -f file | head -1` runs until the file grows** (2026-10-17): uutils checks on
    Linux alone, between polls, whether its standard output still has a reader
    (`ensure_stdout_not_broken`); on Windows tail learns it only when it next writes, and
@@ -71,6 +73,13 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **An archiver killed at once hung past 15 s in CI** (2026-10-17, run 39043122930,
+  slow lane 4/4): `background_builtins::an_archiver_stopped_in_its_walk_writes_no_archive`
+  runs `zip`, `rar` and `7z` on 3000 files as `tool & kill %1; wait %1` and was ended at
+  15 s once, then passed in 1.3 s. The whole archive takes about a second, so it
+  waited, not worked: plausibly a `kill` that lands before the builtin reads its stop,
+  with `wait` left waiting. Which of the three it was is not known; the test should name
+  the tool it is on, and a loop of the three under load should catch it.
 - **`ls -l` moves the access time of a file it reads for `#!`** (2026-10-17, found with
   `ls -u`): to decide `x`, cash reads the first two bytes of a file of two bytes or more
   without a program extension, and that read is an access; `ls -lu` then shows its own

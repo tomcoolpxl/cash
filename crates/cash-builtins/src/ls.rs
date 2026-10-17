@@ -36,6 +36,7 @@ List information about the FILEs (the current directory by default).
   -a, --all                  do not ignore entries starting with . or files
                                both hidden and system, as Explorer hides them
   -A, --almost-all           like -a, but do not list implied . and ..
+  -b, --escape               print C-style escapes for nongraphic characters
   -B, --ignore-backups       do not list implied entries ending with ~
   -c                         with -lt: sort by, and show, the change time (when
                                the file's contents, name or attributes last
@@ -67,9 +68,18 @@ List information about the FILEs (the current directory by default).
   -l                         use a long listing format
   -L, --dereference          show what a link names rather than the link
   -m                         fill the width with names separated by commas
+  -N, --literal              print names as they are, without quoting
   -o                         like -l, but do not list the group
   -p, --indicator-style=slash
                              append / to directories
+  -q, --hide-control-chars   print ? instead of nongraphic characters
+      --show-control-chars   show nongraphic characters as they are (the default
+                               unless the output is a terminal)
+  -Q, --quote-name           enclose names in double quotes
+      --quoting-style=WORD   how names are quoted: literal, locale, shell,
+                               shell-always, shell-escape, shell-escape-always,
+                               c, c-maybe, escape, clocale; QUOTING_STYLE gives it
+                               otherwise, and on a terminal it is shell-escape
   -r, --reverse              reverse order while sorting
   -R, --recursive            list subdirectories recursively
   -s, --size                 print the space each file takes, in blocks
@@ -293,6 +303,15 @@ pub(crate) struct LsCommand {
     #[arg(skip)]
     scale: Option<Scale>,
 
+    /// `-N`, `-b`, `-Q` or `--quoting-style`, the last given: how names are quoted.
+    #[arg(skip)]
+    quoting: Option<QuotingStyle>,
+
+    /// `-q` or `--show-control-chars`, the last given: whether a nongraphic character
+    /// left as it is shows as `?`.
+    #[arg(skip)]
+    hide_control: Option<bool>,
+
     /// The words as given, read in `execute`, where `POSIXLY_CORRECT` can be seen.
     #[arg(skip)]
     raw: Vec<String>,
@@ -486,6 +505,8 @@ impl LsCommand {
             show_blocks: false,
             kibibytes: false,
             scale: None,
+            quoting: None,
+            hide_control: None,
             raw: Vec::new(),
             early: None,
         }
@@ -543,6 +564,12 @@ impl LsCommand {
                 "d" => command.directory = true,
                 "h" | "si" | "block-size" | "k" | "s" | "c" | "u" | "time" => {
                     if let Err(early) = command.size_or_time_option(id, value) {
+                        command.early = Some(early);
+                        return command;
+                    }
+                }
+                "N" | "b" | "Q" | "quoting-style" | "q" | "show-control-chars" => {
+                    if let Err(early) = command.quoting_option(id, value) {
                         command.early = Some(early);
                         return command;
                     }
@@ -684,6 +711,31 @@ impl LsCommand {
         Ok(())
     }
 
+    /// `-N`, `-b`, `-Q`, `--quoting-style`, `-q` and `--show-control-chars`: how names
+    /// are quoted.
+    fn quoting_option(&mut self, id: &str, value: Option<String>) -> Result<(), Early> {
+        match id {
+            "N" => self.quoting = Some(QuotingStyle::Literal),
+            "b" => self.quoting = Some(QuotingStyle::Escape),
+            "Q" => self.quoting = Some(QuotingStyle::C),
+            "quoting-style" => {
+                let word = value.unwrap_or_default();
+                self.quoting = Some(QuotingStyle::named(&word).ok_or_else(|| {
+                    Early::Argmatch(format!(
+                        "invalid argument '{word}' for '--quoting-style'\n\
+                         Valid arguments are:\n  - 'literal'\n  - 'shell'\n  \
+                         - 'shell-always'\n  - 'shell-escape'\n  - 'shell-escape-always'\n  \
+                         - 'c'\n  - 'c-maybe'\n  - 'escape'\n  - 'locale'\n  - 'clocale'"
+                    ))
+                })?);
+            }
+            "q" => self.hide_control = Some(true),
+            "show-control-chars" => self.hide_control = Some(false),
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// `-p`, `--file-type`, `--indicator-style` and `-F`: the marks after names.
     fn indicator_option(&mut self, id: &str, value: Option<String>) -> Result<(), Early> {
         match id {
@@ -807,6 +859,194 @@ impl TimeKind {
     }
 }
 
+/// How names are quoted, GNU's `--quoting-style` (quotearg's styles), for names that are
+/// Unicode, as in a UTF-8 locale: a character is nongraphic when it is a control.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum QuotingStyle {
+    /// As they are.
+    Literal,
+    /// In single quotes where a shell needs them, double where only a `'` needs them.
+    Shell,
+    /// Always quoted so.
+    ShellAlways,
+    /// As `Shell`, with each nongraphic character as `$'\ooo'`.
+    ShellEscape,
+    /// Always quoted so.
+    ShellEscapeAlways,
+    /// In double quotes, with C's escapes.
+    C,
+    /// As `C` where something needs escaping, else as they are.
+    CMaybe,
+    /// C's escapes, and `\ ` for a space, without quotes.
+    Escape,
+    /// Between ‘ and ’, with C's escapes.
+    Locale,
+}
+
+impl QuotingStyle {
+    /// The style a word of `--quoting-style` or `QUOTING_STYLE` names.
+    fn named(word: &str) -> Option<Self> {
+        Some(match word {
+            "literal" => Self::Literal,
+            "shell" => Self::Shell,
+            "shell-always" => Self::ShellAlways,
+            "shell-escape" => Self::ShellEscape,
+            "shell-escape-always" => Self::ShellEscapeAlways,
+            "c" => Self::C,
+            "c-maybe" => Self::CMaybe,
+            "escape" => Self::Escape,
+            "locale" | "clocale" => Self::Locale,
+            _ => return None,
+        })
+    }
+
+    /// Whether names are quoted only where they need it, so that GNU ls puts a space before
+    /// the others where some are (`-l`, `-C`, `-x`).
+    const fn aligns(self) -> bool {
+        matches!(self, Self::Shell | Self::ShellEscape)
+    }
+
+    /// `name` as this style writes it, and whether it came out in quotes.
+    fn quote(self, name: &str) -> (String, bool) {
+        match self {
+            Self::Literal => (name.to_owned(), false),
+            Self::Shell => shell_quote(name, false, false),
+            Self::ShellAlways => shell_quote(name, true, false),
+            Self::ShellEscape => shell_quote(name, false, true),
+            Self::ShellEscapeAlways => shell_quote(name, true, true),
+            Self::C => (std::format!("\"{}\"", c_escaped(name, true, false)), true),
+            Self::CMaybe => {
+                if name.chars().any(|c| c.is_control() || c == '"') {
+                    (std::format!("\"{}\"", c_escaped(name, true, false)), true)
+                } else {
+                    (name.to_owned(), false)
+                }
+            }
+            Self::Escape => (c_escaped(name, false, true), false),
+            Self::Locale => (
+                std::format!("\u{2018}{}\u{2019}", c_escaped(name, false, false)),
+                true,
+            ),
+        }
+    }
+}
+
+/// C's escape of a control character: its letter, else its UTF-8 bytes in octal.
+fn push_c_escape(out: &mut String, c: char) {
+    out.push('\\');
+    match c {
+        '\u{7}' => out.push('a'),
+        '\u{8}' => out.push('b'),
+        '\t' => out.push('t'),
+        '\n' => out.push('n'),
+        '\u{b}' => out.push('v'),
+        '\u{c}' => out.push('f'),
+        '\r' => out.push('r'),
+        _ => {
+            let mut bytes = [0; 4];
+            for (index, byte) in c.encode_utf8(&mut bytes).bytes().enumerate() {
+                if index > 0 {
+                    out.push('\\');
+                }
+                for digit in [byte >> 6, (byte >> 3) & 7, byte & 7] {
+                    out.push(char::from(b'0' + digit));
+                }
+            }
+        }
+    }
+}
+
+/// `name` with C's escapes for control characters and `\`; `"` escaped too for a C
+/// string, and a space as `\ ` for the escape style.
+fn c_escaped(name: &str, quote: bool, space: bool) -> String {
+    let mut out = String::with_capacity(name.len() + 2);
+    for c in name.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' if quote => out.push_str("\\\""),
+            ' ' if space => out.push_str("\\ "),
+            c if c.is_control() => push_c_escape(&mut out, c),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// `name` for a shell, as GNU's quotearg quotes it in its shell styles: unquoted when the
+/// shell takes it as it is, unless `always`; in double quotes when only a `'` needs them
+/// and nothing in it is special between double quotes; else in single quotes, a `'` as
+/// `'\''`. With `escape`, each control character is `$'\ooo'` between the quoted parts;
+/// without, tab, CR and newline go into the quotes and the others stay as they are.
+fn shell_quote(name: &str, always: bool, escape: bool) -> (String, bool) {
+    let mut needs = always;
+    // Whether every character can stand between double quotes as it is.
+    let mut compatible = true;
+    let mut single = false;
+    let mut escaped = false;
+    for (index, c) in name.chars().enumerate() {
+        match c {
+            '\'' => {
+                single = true;
+                needs = true;
+            }
+            ' ' => needs = true,
+            '#' | '~' if index == 0 => needs = true,
+            '#' | '~' => compatible = false,
+            '!' | '"' | '$' | '&' | '(' | ')' | '*' | ';' | '<' | '=' | '>' | '?' | '[' | '\\'
+            | '^' | '`' | '|' => {
+                needs = true;
+                compatible = false;
+            }
+            '\t' | '\n' | '\r' => {
+                needs = true;
+                compatible = false;
+                escaped |= escape;
+            }
+            c if c.is_control() => {
+                compatible = false;
+                if escape {
+                    needs = true;
+                    escaped = true;
+                }
+            }
+            _ => {}
+        }
+    }
+    if !needs {
+        return (name.to_owned(), false);
+    }
+    if escaped {
+        let mut out = String::from("'");
+        // Whether a `$'` is open: controls in a row share it, and the quote that ends the
+        // name ends it.
+        let mut dollar = false;
+        for c in name.chars() {
+            if c.is_control() {
+                if !dollar {
+                    out.push_str("'$'");
+                    dollar = true;
+                }
+                push_c_escape(&mut out, c);
+            } else if c == '\'' {
+                out.push_str("'\\''");
+                dollar = false;
+            } else {
+                if dollar {
+                    out.push_str("''");
+                    dollar = false;
+                }
+                out.push(c);
+            }
+        }
+        out.push('\'');
+        return (out, true);
+    }
+    if single && compatible {
+        return (std::format!("\"{name}\""), true);
+    }
+    (std::format!("'{}'", name.replace('\'', "'\\''")), true)
+}
+
 /// What an entry is read for: the long format's columns, the time to keep, and the facts
 /// (`cash_win32::fs::FileFacts`) that `-s`, the totals and `-c` need.
 #[derive(Clone, Copy)]
@@ -875,6 +1115,10 @@ struct Look {
     width: Option<usize>,
     /// How sizes and blocks are shown.
     sizes: Sizes,
+    /// How names are quoted.
+    quoting: QuotingStyle,
+    /// Whether a nongraphic character left as it is shows as `?` (`-q`).
+    hide_control: bool,
 }
 
 /// How `-l` shows a time (`--time-style`): a strftime format for a file changed within
@@ -1159,7 +1403,7 @@ impl LsCommand {
                 if i > 0 || !file_items.is_empty() {
                     writeln!(out)?;
                 }
-                writeln!(out, "{dir_str}:")?;
+                writeln!(out, "{}:", shown_name(dir_str, &look))?;
             }
 
             match self.list_operand(&context, &mut out, dir_path, dir_str, &look, is_tty)? {
@@ -1308,7 +1552,40 @@ impl LsCommand {
             dates,
             width: self.line_width(context, is_tty),
             sizes: self.sizes(context),
+            quoting: self.quoting_style(context, is_tty),
+            // GNU ls hides them on a terminal unless told not to.
+            hide_control: self.hide_control.unwrap_or(is_tty),
         })
+    }
+
+    /// How names are quoted: the option, else `QUOTING_STYLE` (a word it does not know is
+    /// said and passed over, as GNU ls says it), else shell-escape on a terminal, as GNU
+    /// ls quotes there, and as they are elsewhere (the user, 2026-10-17).
+    fn quoting_style<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        is_tty: bool,
+    ) -> QuotingStyle {
+        if let Some(style) = self.quoting {
+            return style;
+        }
+        if let Some(value) = context.shell.env_str("QUOTING_STYLE") {
+            match QuotingStyle::named(&value) {
+                Some(style) => return style,
+                None => {
+                    let _ = writeln!(
+                        context.stderr(),
+                        "{}: ignoring invalid value of environment variable QUOTING_STYLE: '{value}'",
+                        context.command_name
+                    );
+                }
+            }
+        }
+        if is_tty {
+            QuotingStyle::ShellEscape
+        } else {
+            QuotingStyle::Literal
+        }
     }
 
     /// The scales of sizes and blocks, as GNU ls finds them: `-h`, `--si` or
@@ -1594,7 +1871,7 @@ impl LsCommand {
                     match self.read_entries(&item.path, true) {
                         Ok(sub_items) => {
                             writeln!(out)?;
-                            writeln!(out, "{sub_str}:")?;
+                            writeln!(out, "{}:", shown_name(&sub_str, look))?;
                             unreadable |= self.show_directory(
                                 context,
                                 out,
@@ -1660,7 +1937,7 @@ impl LsCommand {
                     out,
                     "{}{prefix}{}",
                     fields(item, look, width),
-                    self.format_name(item, look)
+                    self.format_name(item, look, false)
                 )?;
             }
         }
@@ -1761,11 +2038,12 @@ impl LsCommand {
         };
         let max_size_len = items.iter().map(|i| size_text(i).len()).max().unwrap_or(1);
         let blocks_width = self.blocks_width(items, look);
+        let align = align_names(items, look);
 
         for (index, item) in items.iter().enumerate() {
             let size_str = size_text(item);
             let date_str = format_date(item.time, look);
-            let display_name = self.format_name(item, look);
+            let display_name = self.format_name(item, look, align);
             let prefix = prefixes
                 .and_then(|prefixes| prefixes.get(index))
                 .map_or("", String::as_str);
@@ -1823,7 +2101,7 @@ impl LsCommand {
     ) -> Result<(), std::io::Error> {
         let width = self.blocks_width(items, look);
         for item in items {
-            let display_name = self.format_name(item, look);
+            let display_name = self.format_name(item, look, false);
             writeln!(out, "{}{display_name}", fields(item, look, width))?;
         }
         Ok(())
@@ -1843,13 +2121,14 @@ impl LsCommand {
         // Columns are measured in the cells a name takes on screen, not its bytes: an
         // icon, an accented letter or a CJK name is one or two cells whatever its length.
         let blocks_width = self.blocks_width(items, look);
+        let align = align_names(items, look);
         let names: Vec<(usize, String)> = items
             .iter()
             .map(|i| {
                 let fields = fields(i, look, blocks_width);
                 (
-                    fields.len() + self.format_name_plain(i, look).width(),
-                    fields + &self.format_name(i, look),
+                    fields.len() + self.format_name_plain(i, look, align).width(),
+                    fields + &self.format_name(i, look, align),
                 )
             })
             .collect();
@@ -1909,7 +2188,7 @@ impl LsCommand {
         let blocks_width = self.show_blocks.then_some(0);
         for (index, item) in items.iter().enumerate() {
             let fields = fields(item, look, blocks_width);
-            let length = fields.len() + self.format_name_plain(item, look).width();
+            let length = fields.len() + self.format_name_plain(item, look, false).width();
             if index > 0 {
                 text.push(',');
                 if look.width.is_none_or(|width| position + length + 2 < width) {
@@ -1921,7 +2200,7 @@ impl LsCommand {
                 }
             }
             text.push_str(&fields);
-            text.push_str(&self.format_name(item, look));
+            text.push_str(&self.format_name(item, look, false));
             position += length;
         }
         writeln!(out, "{text}")
@@ -1972,25 +2251,26 @@ impl LsCommand {
         }
     }
 
-    fn format_name_plain(&self, item: &ItemInfo, look: &Look) -> String {
+    /// The name as `format_name` shows it, without colour: for measuring.
+    fn format_name_plain(&self, item: &ItemInfo, look: &Look, align: bool) -> String {
         let mut s = self.attribute_prefix(item);
         if look.icons {
             s.push_str(icon_for(item));
             s.push(' ');
         }
-        s.push_str(&item.name);
-        self.push_marks(&mut s, item);
+        s.push_str(&quoted_name(&item.name, look, align));
+        self.push_marks(&mut s, item, look);
         s
     }
 
     /// What follows a name: its `-F` mark, or in the long format a link's target and the
     /// target's mark, as GNU ls writes them. Outside the long format a link shows no
     /// target: `link@` with `-F`, `link` without.
-    fn push_marks(&self, s: &mut String, item: &ItemInfo) {
+    fn push_marks(&self, s: &mut String, item: &ItemInfo, look: &Look) {
         match &item.symlink_target {
             Some(target) if self.long => {
                 s.push_str(" -> ");
-                s.push_str(target);
+                s.push_str(&shown_name(target, look));
                 let style = self.indicator_style();
                 if style != Indicator::None {
                     let mark = match item.target {
@@ -2005,13 +2285,15 @@ impl LsCommand {
         }
     }
 
-    fn format_name(&self, item: &ItemInfo, look: &Look) -> String {
+    /// The name as a listing shows it: quoted in the listing's style, coloured, with its
+    /// marks; after a space where `align` lines it up with quoted names.
+    fn format_name(&self, item: &ItemInfo, look: &Look, align: bool) -> String {
         let mut shown = String::new();
         if look.icons {
             shown.push_str(icon_for(item));
             shown.push(' ');
         }
-        shown.push_str(&item.name);
+        shown.push_str(&quoted_name(&item.name, look, align));
 
         let mut s = self.attribute_prefix(item);
         s.push_str(&match look
@@ -2023,8 +2305,38 @@ impl LsCommand {
             None => shown,
         });
 
-        self.push_marks(&mut s, item);
+        self.push_marks(&mut s, item, look);
         s
+    }
+}
+
+/// Whether names that need no quotes get a space before them, where some among `items`
+/// came out quoted, as GNU ls lines them up (`-l`, `-C`, `-x`).
+fn align_names(items: &[ItemInfo], look: &Look) -> bool {
+    look.quoting.aligns() && items.iter().any(|item| look.quoting.quote(&item.name).1)
+}
+
+/// `name` quoted in the listing's style, with `-q`'s `?` for a nongraphic character the
+/// style left as it is, as GNU ls applies it after quoting.
+fn shown_name(name: &str, look: &Look) -> String {
+    let (quoted, _) = look.quoting.quote(name);
+    if look.hide_control {
+        quoted
+            .chars()
+            .map(|c| if c.is_control() { '?' } else { c })
+            .collect()
+    } else {
+        quoted
+    }
+}
+
+/// [`shown_name`], after a space when `align` asks it of a name that needed no quotes.
+fn quoted_name(name: &str, look: &Look, align: bool) -> String {
+    let shown = shown_name(name, look);
+    if align && !look.quoting.quote(name).1 {
+        std::format!(" {shown}")
+    } else {
+        shown
     }
 }
 
@@ -2779,10 +3091,19 @@ mod tests {
             Some(Early::Said("-i is not supported by cash's ls".to_owned()))
         );
         assert_eq!(
-            parsed("--quoting-style c").early,
+            parsed("--auth").early,
             Some(Early::Said(
-                "--quoting-style is not supported by cash's ls".to_owned()
+                "--author is not supported by cash's ls".to_owned()
             ))
+        );
+        // The last of -N, -b, -Q and --quoting-style wins, and -q or --show-control-chars.
+        let command = parsed("-b --quoting-style c -N -Q dir -q --show-control-chars");
+        assert_eq!(command.quoting, Some(QuotingStyle::C));
+        assert_eq!(command.hide_control, Some(false));
+        assert_eq!(command.paths, ["dir"]);
+        assert_eq!(
+            parsed("-Q --quoting=shell").quoting,
+            Some(QuotingStyle::Shell)
         );
         // coreutils 9's --classify[=WHEN]; -f is -a and -U.
         assert_eq!(parsed("-F --classify=never").indicator, Indicator::None);
@@ -2886,6 +3207,70 @@ mod tests {
             (2_002_944, 1000, "2.1M"),
         ] {
             assert_eq!(human_size(bytes, base), shown, "{bytes} in {base}s");
+        }
+    }
+
+    #[test]
+    fn names_are_quoted_as_gnu_ls_quotes_them() {
+        use QuotingStyle::{
+            C, CMaybe, Escape, Literal, Locale, Shell, ShellAlways, ShellEscape, ShellEscapeAlways,
+        };
+        // GNU ls 9.10's, in C.UTF-8.
+        for (style, name, shown) in [
+            (Literal, "a b\u{1}", "a b\u{1}"),
+            (Shell, "plain", "plain"),
+            (Shell, "a b", "'a b'"),
+            (Shell, "it's", "\"it's\""),
+            (Shell, "it's here", "\"it's here\""),
+            (Shell, "#it's", "\"#it's\""),
+            (Shell, "it's!", "'it'\\''s!'"),
+            (Shell, "it's#", "'it'\\''s#'"),
+            (Shell, "it's\\", "'it'\\''s\\'"),
+            (Shell, "q\"q", "'q\"q'"),
+            (Shell, "back\\slash", "'back\\slash'"),
+            (Shell, "~x", "'~x'"),
+            (Shell, "x~", "x~"),
+            (Shell, "=a", "'=a'"),
+            (Shell, "a,b", "a,b"),
+            (Shell, "a{b}", "a{b}"),
+            (Shell, "%a", "%a"),
+            (Shell, "end\u{1}", "end\u{1}"),
+            (Shell, "tab\t", "'tab\t'"),
+            (Shell, "it's\u{1}", "'it'\\''s\u{1}'"),
+            (ShellAlways, "plain", "'plain'"),
+            (ShellAlways, "it's", "\"it's\""),
+            (ShellEscape, "plain", "plain"),
+            (ShellEscape, "\u{1}", "''$'\\001'"),
+            (ShellEscape, "end\u{1}", "'end'$'\\001'"),
+            (ShellEscape, "c\u{1}d", "'c'$'\\001''d'"),
+            (ShellEscape, "\u{1}\u{2}x", "''$'\\001\\002''x'"),
+            (ShellEscape, "a\u{1}'", "'a'$'\\001'\\'''"),
+            (ShellEscape, "a\u{1}'b", "'a'$'\\001'\\''b'"),
+            (ShellEscape, "it's\u{1}", "'it'\\''s'$'\\001'"),
+            (ShellEscape, "tab\t", "'tab'$'\\t'"),
+            (ShellEscape, "x\u{80}y", "'x'$'\\302\\200''y'"),
+            (ShellEscape, "a'", "\"a'\""),
+            (ShellEscapeAlways, "plain", "'plain'"),
+            (ShellEscapeAlways, "a'", "\"a'\""),
+            (C, "plain", "\"plain\""),
+            (C, "c\u{1}d", "\"c\\001d\""),
+            (C, "a\u{1}'", "\"a\\001'\""),
+            (C, "back\\slash", "\"back\\\\slash\""),
+            (C, "q\"q", "\"q\\\"q\""),
+            (CMaybe, "a b", "a b"),
+            (CMaybe, "back\\slash", "back\\slash"),
+            (CMaybe, "q\"q", "\"q\\\"q\""),
+            (CMaybe, "tab\t", "\"tab\\t\""),
+            (Escape, "it's here", "it's\\ here"),
+            (Escape, "back\\slash", "back\\\\slash"),
+            (Escape, "q\"q", "q\"q"),
+            (Escape, "x\u{80}y", "x\\302\\200y"),
+            (Locale, "it's", "\u{2018}it's\u{2019}"),
+            (Locale, "back\\slash", "\u{2018}back\\\\slash\u{2019}"),
+            (Locale, "q\"q", "\u{2018}q\"q\u{2019}"),
+            (Locale, "tab\t", "\u{2018}tab\\t\u{2019}"),
+        ] {
+            assert_eq!(style.quote(name).0, shown, "{name:?} in {style:?}");
         }
     }
 }
