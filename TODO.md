@@ -70,6 +70,12 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   `timeout 2 bash -c …` prints nothing; no trap on TERM or INT ran in cash. What Git
   Bash's `timeout` sends a native program, and whether this shell's inherited "ignore
   Ctrl-C" is the cause, is not known yet; to be tried in the user's Terminal.
+- **`pbcopy` and `pbpaste` on a locked workstation say "the clipboard is in use by another
+  program"** (2026-10-17, the full lane's clipboard test while the screen was locked):
+  Windows refuses `OpenClipboard` with ACCESS_DENIED while the session is locked, the
+  answer it gives for a clipboard another program holds, and cash waits its 1.8 s and
+  says so. The message could name the lock when `LogonUI` holds the session (or when
+  the input desktop is not the default one), and the clipboard test could skip then.
 - **`ls -l` moves the access time of a file it reads for `#!`** (2026-10-17, found with
   `ls -u`): to decide `x`, cash reads the first two bytes of a file of two bytes or more
   without a program extension, and that read is an access; `ls -lu` then shows its own
