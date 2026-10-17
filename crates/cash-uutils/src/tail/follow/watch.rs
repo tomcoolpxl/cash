@@ -564,6 +564,13 @@ pub fn follow(mut observer: Observer, settings: &Settings) -> UResult<()> {
             timeout_counter = 0;
         }
 
+        // cash: GNU's tail ends between polls once the reader of its output has gone
+        // (`check_output_alive`), as uutils does on Linux; on Windows tail heard of it only
+        // at its next write, when the file grew, and `tail -f log | head -1` ran on.
+        if cash_win32::stdio::stdout_reader_gone() {
+            cash_win32::stdio::end_for_a_gone_reader();
+        }
+
         let mut paths = vec![]; // Paths worth checking for new content to print
 
         // Helper closure to process a single event

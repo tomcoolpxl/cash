@@ -1867,6 +1867,17 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
     `//DIRED-OPTIONS// --quoting-style=…`; a later `-C`, `-x` or `-m`, or
     `--hyperlink`, turns it off, and with `--zero` it is refused, as in GNU ls.
 
+- **`tail -f file | head -1` ran until the file grew** (the user's pick of 2026-10-17):
+  GNU's tail asks between polls whether its output still has a reader
+  (`check_output_alive`), and uutils does on Linux; on Windows tail heard of it only at
+  its next write, and `tail -f g | head -1; echo done` waited for the file to grow, as
+  Git Bash's tail does. The relay of a bundled tool's output keeps the real standard
+  output, and tail asks it between polls, from the pipe's state
+  (`NtQueryInformationFile`'s `FilePipeLocalInformation`, which the write end of a
+  `std::io::pipe()` answers): once the reader has gone it ends with 141, within one
+  `-s` interval (1 s by default). Only tail asks: a watcher on every bundled tool would
+  end `cp a b | true` before it copied.
+
 - **PIPESTATUS after a compound command** (found 2026-10-17 by the quoting comparison,
   whose `${PIPESTATUS[0]}` after an `if` read 0): a compound command that is the whole
   pipeline (`if`, `for`, `case`, `while`, `{ }`) and a function's definition leave

@@ -33,19 +33,9 @@ The user's picks of 2026-10-17 (decisions.md, "ls takes GNU's remaining options"
 1. **Two costs paid on every call**: done (2026-10-17, DONE.md).
 2. **GNU ls options cash's ls has not**: done (2026-10-17, DONE.md), every one of
    GNU coreutils 9's.
-3. **`tail -f file | head -1` runs until the file grows** (2026-10-17): uutils checks on
-   Linux alone, between polls, whether its standard output still has a reader
-   (`ensure_stdout_not_broken`); on Windows tail learns it only when it next writes, and
-   cash's relay ends it then. `cash -c 'tail -f g | head -1; echo done'` prints `a` and
-   `done`, then waits for tail before it exits; Git Bash's tail waits too, before `done`;
-   GNU's tail on Linux ends at once. The relay could ask its pipe's reader between polls.
-   Looked into 2026-10-17: not with a write of no bytes, which a byte-mode pipe may hand
-   its reader as a read of none, an end to most readers; `NtQueryInformationFile`'s
-   `FilePipeLocalInformation` gives `NamedPipeState` (4, closing, once the other end has
-   gone) if the handle has `FILE_READ_ATTRIBUTES`, untried on the handles cash makes.
-   The relay keeps the real handle; tail would ask between polls
-   (`cash_win32::stdio`, as GNU's `check_output_alive`) and end with 141. Only tail: a
-   general watcher would end `cp a b | true` before it copies.
+3. **`tail -f file | head -1` runs until the file grows**: done (2026-10-17, DONE.md).
+
+All three are done; the phase ends with release 1.22.0.
 
 ## Left over from finished phases
 

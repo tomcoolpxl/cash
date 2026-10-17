@@ -70,3 +70,31 @@ fn tail_follows_a_growing_file_by_polling_without_printing_it_again() {
         );
     }
 }
+
+#[test]
+fn tail_follow_ends_once_the_reader_of_its_output_has_gone() {
+    // GNU's tail asks between polls whether its output still has a reader, and ends as
+    // SIGPIPE ends it; this one heard of it only at its next write, when the file grew,
+    // and `tail -f f | head -1` ran until then, here for ever. A reader that stays keeps
+    // it following: this tail ends when the `sleep` it watches does.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("f"), "a\nb\n").unwrap();
+    for (script, want) in [
+        (
+            r#"tail -f -s 0.2 f | head -1; echo "${PIPESTATUS[*]}""#,
+            "a\n141 0",
+        ),
+        (
+            r#"sleep 2 & p=$!; tail -f -s 0.2 --pid=$p f | cat; echo "${PIPESTATUS[*]}""#,
+            "a\nb\n0 0",
+        ),
+    ] {
+        let out = run_in(dir.path(), script);
+        assert_eq!(
+            (out.stdout.as_str(), out.code),
+            (want, 0),
+            "{script}: {}",
+            out.stderr
+        );
+    }
+}

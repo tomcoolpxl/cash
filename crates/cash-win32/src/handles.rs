@@ -250,7 +250,7 @@ struct Job {
 }
 
 /// Looks up an export of `ntdll.dll`, loaded in every process.
-fn ntdll(name: &core::ffi::CStr) -> Option<unsafe extern "system" fn() -> isize> {
+pub(crate) fn ntdll(name: &core::ffi::CStr) -> Option<unsafe extern "system" fn() -> isize> {
     use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
 
     // SAFETY: ntdll is loaded into every Windows process.

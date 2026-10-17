@@ -30,7 +30,7 @@
 use std::io::{Read, Seek, Write};
 use std::os::windows::io::AsRawHandle;
 use std::path::Path;
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
 use windows_sys::Win32::Foundation::{ERROR_INVALID_HANDLE, HANDLE, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_DELETE_ON_CLOSE;
@@ -264,6 +264,7 @@ pub fn with_broken_pipe_ending<T>(body: impl FnOnce() -> T) -> T {
     }
 
     let real_value = real as usize;
+    REAL_STDOUT.store(real_value, Ordering::Relaxed);
     let relay = std::thread::Builder::new()
         .name("cash-stdout-relay".into())
         .spawn(move || relay_or_end(reader, real_value as HANDLE));
@@ -281,7 +282,47 @@ pub fn with_broken_pipe_ending<T>(body: impl FnOnce() -> T) -> T {
     if let Ok(relay) = relay {
         let _ = relay.join();
     }
+    REAL_STDOUT.store(0, Ordering::Relaxed);
     value
+}
+
+/// The process's real standard output while [`with_broken_pipe_ending`] relays to it, 0
+/// otherwise: the handle whose reader [`stdout_reader_gone`] asks about.
+static REAL_STDOUT: AtomicUsize = AtomicUsize::new(0);
+
+/// Whether the reader of this process's standard output, a pipe, has gone.
+///
+/// The relay's real one if there is a relay. For a program that waits rather than
+/// writes, as `tail -f` does, to end as it would on its next write, as GNU's tail asks
+/// (`check_output_alive`). False when it cannot be asked, or is no pipe.
+#[must_use]
+pub fn stdout_reader_gone() -> bool {
+    use windows_sys::Win32::Storage::FileSystem::{FILE_TYPE_PIPE, GetFileType};
+
+    let handle = match REAL_STDOUT.load(Ordering::Relaxed) {
+        // SAFETY: reads the process's standard-handle table and returns a handle.
+        0 => unsafe { GetStdHandle(STD_OUTPUT_HANDLE) },
+        real => real as HANDLE,
+    };
+    if handle.is_null() || handle == INVALID_HANDLE_VALUE {
+        return false;
+    }
+    // SAFETY: `GetFileType` only asks about the handle, whatever it is.
+    let pipe = unsafe { GetFileType(handle) } == FILE_TYPE_PIPE;
+    pipe && pipe_reader_gone(handle) == Some(true)
+}
+
+/// Ends the process as SIGPIPE ends a Unix program whose reader has gone: at once, with
+/// 141, nothing run or written on the way out (D71).
+pub fn end_for_a_gone_reader() -> ! {
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
+
+    // SAFETY: returns the pseudo-handle of this process.
+    let this = unsafe { GetCurrentProcess() };
+    // SAFETY: `this` is the pseudo-handle of this process.
+    unsafe { TerminateProcess(this, 141) };
+    // TerminateProcess on this process does not return; should it, exit as plainly.
+    std::process::exit(141)
 }
 
 /// Passes what `reader` gives on to `real`, the process's standard output, until it
@@ -289,7 +330,6 @@ pub fn with_broken_pipe_ending<T>(body: impl FnOnce() -> T) -> T {
 fn relay_or_end(mut reader: std::io::PipeReader, real: HANDLE) {
     use windows_sys::Win32::Foundation::{ERROR_BROKEN_PIPE, ERROR_NO_DATA, GetLastError};
     use windows_sys::Win32::Storage::FileSystem::WriteFile;
-    use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
 
     let mut buf = vec![0u8; 64 * 1024];
     loop {
@@ -316,11 +356,7 @@ fn relay_or_end(mut reader: std::io::PipeReader, real: HANDLE) {
                 // SAFETY: called right after the failed call.
                 let error = unsafe { GetLastError() };
                 if error == ERROR_NO_DATA || error == ERROR_BROKEN_PIPE {
-                    // As SIGPIPE does: at once, with nothing run or written on the way out.
-                    // SAFETY: returns the pseudo-handle of this process.
-                    let this = unsafe { GetCurrentProcess() };
-                    // SAFETY: `this` is the pseudo-handle of this process.
-                    unsafe { TerminateProcess(this, 141) };
+                    end_for_a_gone_reader();
                 }
                 return;
             }
@@ -370,5 +406,71 @@ fn push_rendered(out: &mut Vec<u8>, field: &[u8]) {
             out.extend_from_slice(path::render(Path::new(text)).as_bytes());
         }
         _ => out.extend_from_slice(field),
+    }
+}
+
+/// Whether the reader of the pipe whose writing end is `handle` has gone, from the pipe's
+/// state (`FILE_PIPE_CLOSING_STATE`); `None` when it cannot be asked: not a pipe, or a
+/// handle without `FILE_READ_ATTRIBUTES`.
+fn pipe_reader_gone(handle: HANDLE) -> Option<bool> {
+    use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
+
+    /// `FILE_PIPE_LOCAL_INFORMATION`, which windows-sys gates behind its kernel feature.
+    #[repr(C)]
+    #[derive(Default)]
+    struct PipeLocalInformation {
+        named_pipe_type: u32,
+        named_pipe_configuration: u32,
+        maximum_instances: u32,
+        current_instances: u32,
+        inbound_quota: u32,
+        read_data_available: u32,
+        outbound_quota: u32,
+        write_quota_available: u32,
+        named_pipe_state: u32,
+        named_pipe_end: u32,
+    }
+    type QueryInformationFile = unsafe extern "system" fn(
+        HANDLE,
+        *mut IO_STATUS_BLOCK,
+        *mut core::ffi::c_void,
+        u32,
+        i32,
+    ) -> i32;
+    const FILE_PIPE_LOCAL_INFORMATION: i32 = 24;
+    const FILE_PIPE_CLOSING_STATE: u32 = 4;
+
+    let query = crate::handles::ntdll(c"NtQueryInformationFile")?;
+    // SAFETY: the documented signature of NtQueryInformationFile.
+    let query = unsafe {
+        std::mem::transmute::<unsafe extern "system" fn() -> isize, QueryInformationFile>(query)
+    };
+    let mut status = IO_STATUS_BLOCK::default();
+    let mut information = PipeLocalInformation::default();
+    // SAFETY: a handle, an IO_STATUS_BLOCK and a buffer of the size given.
+    let code = unsafe {
+        query(
+            handle,
+            &raw mut status,
+            (&raw mut information).cast(),
+            u32::try_from(size_of::<PipeLocalInformation>()).unwrap_or(0),
+            FILE_PIPE_LOCAL_INFORMATION,
+        )
+    };
+    (code >= 0).then_some(information.named_pipe_state == FILE_PIPE_CLOSING_STATE)
+}
+
+#[cfg(test)]
+mod pipe_state_tests {
+    use super::*;
+
+    #[test]
+    fn a_pipe_says_when_its_reader_has_gone() {
+        let (reader, writer) = std::io::pipe().unwrap();
+        let handle = writer.as_raw_handle() as HANDLE;
+        let open = pipe_reader_gone(handle);
+        drop(reader);
+        let gone = pipe_reader_gone(handle);
+        assert_eq!((open, gone), (Some(false), Some(true)));
     }
 }
