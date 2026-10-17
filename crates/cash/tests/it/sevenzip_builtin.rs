@@ -241,3 +241,28 @@ fn a_password_is_asked_for_and_given_on_standard_input() {
         "0\nhello\nERROR: aes.7z\nCannot open encrypted archive. Wrong password?\n\n2"
     );
 }
+
+/// A junction is gone through, and one back to a folder above is said as 7-Zip 26.03 says
+/// the path it went round to, status 1: at the junction, so each file is stored once.
+#[test]
+fn a_junction_loop_is_said_at_the_junction_and_each_file_stored_once() {
+    let scratch = Scratch::new("7z-walk");
+    let d = scratch.path().join("d");
+    std::fs::create_dir_all(d.join("sub")).expect("folders");
+    std::fs::create_dir_all(scratch.path().join("other")).expect("a folder");
+    std::fs::write(d.join("a.txt"), "a").expect("a file");
+    std::fs::write(d.join("sub").join("b.txt"), "b").expect("a file");
+    std::fs::write(scratch.path().join("other").join("o.txt"), "o").expect("a file");
+    cash_win32::junction::point(&d.join("out"), &scratch.path().join("other")).expect("a junction");
+    cash_win32::junction::point(&d.join("sub").join("up"), &d).expect("a junction");
+    let out = run_in(
+        scratch.path(),
+        "7z a -bso0 -bsp0 x.7z d 2>&1 | grep -c 'cannot be resolved'; echo \"rc=${PIPESTATUS[0]}\"; \
+         7z l -ba -slt x.7z | sed -n 's/^Path = //p' | tr '\\\\' / | sort",
+    );
+    assert_eq!(
+        out.stdout, "2\nrc=1\nd\nd/a.txt\nd/out\nd/out/o.txt\nd/sub\nd/sub/b.txt\nd/sub/up",
+        "{}",
+        out.stderr
+    );
+}

@@ -315,17 +315,11 @@ impl Walk {
 
     /// The folder at or above the root that the link `link` names, shown: a loop.
     fn ancestor(&self, link: &Path) -> Option<String> {
-        let identity = |path: &Path| {
-            cash_win32::fs::file_info(path)
-                .ok()
-                .map(|info| (info.volume, info.index))
-        };
-        let target = identity(link)?;
-        link.ancestors()
+        let above = link
+            .ancestors()
             .skip(1)
-            .take_while(|folder| folder.starts_with(&self.root))
-            .find(|folder| identity(folder) == Some(target))
-            .map(|folder| self.shown(folder))
+            .take_while(|folder| folder.starts_with(&self.root));
+        loop_ancestor(link, above).map(|folder| self.shown(folder))
     }
 }
 
@@ -414,6 +408,22 @@ fn walkdir_of(
         Order::FilesFirst => walk.sort_by_key(files_first),
     }
     .into_iter()
+}
+
+/// The folder of `folders`, a link's own above it, that the link `link` names: a loop.
+/// Each is read with no more than its attributes, which the listing right of the folder
+/// it is in grants, so one that cannot be read is still told.
+pub(crate) fn loop_ancestor<'p>(
+    link: &Path,
+    mut folders: impl Iterator<Item = &'p Path>,
+) -> Option<&'p Path> {
+    let identity = |path: &Path| {
+        cash_win32::fs::file_info(path)
+            .ok()
+            .map(|info| (info.volume, info.index))
+    };
+    let target = identity(link)?;
+    folders.find(|folder| identity(folder) == Some(target))
 }
 
 /// What a followed link names is, by its metadata.

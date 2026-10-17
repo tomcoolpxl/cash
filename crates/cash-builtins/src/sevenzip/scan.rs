@@ -24,6 +24,10 @@ const ERROR_INVALID_FUNCTION: i32 = 1;
 /// Windows' `ERROR_FILE_NOT_FOUND`: "The system cannot find the file specified."
 const ERROR_FILE_NOT_FOUND: i32 = 2;
 
+/// Windows' `ERROR_CANT_RESOLVE_FILENAME`, "The name of the file cannot be resolved by the
+/// system.": what 7-Zip says once a junction loop has made the path too deep.
+const ERROR_CANT_RESOLVE_FILENAME: i32 = 1921;
+
 /// A file or folder the scan took.
 #[derive(Debug, Clone)]
 pub(super) struct DirItem {
@@ -111,6 +115,8 @@ impl Stat {
 /// A name found on disk: its name there, and its facts.
 struct Found {
     name: String,
+    /// A junction or symbolic link gone through: the facts are what it names.
+    followed: bool,
     attrib: u32,
     size: u64,
     modified: u64,
@@ -126,6 +132,7 @@ impl Found {
     fn of(name: String, meta: &fs::Metadata) -> Self {
         Self {
             name,
+            followed: false,
             attrib: meta.file_attributes(),
             size: if meta.is_dir() { 0 } else { meta.file_size() },
             modified: meta.last_write_time(),
@@ -211,7 +218,10 @@ impl Walker<'_> {
             }
             let meta = entry.metadata()?;
             if meta.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0 && !self.symlinks {
-                return Ok(Found::of(entry_name, &fs::metadata(&path)?));
+                return Ok(Found {
+                    followed: true,
+                    ..Found::of(entry_name, &fs::metadata(&path)?)
+                });
             }
             return Ok(Found::of(entry_name, &meta));
         }
@@ -225,14 +235,18 @@ impl Walker<'_> {
         for entry in fs::read_dir(&dir)? {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().into_owned();
-            let mut meta = entry.metadata()?;
+            let meta = entry.metadata()?;
             if meta.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0
                 && !self.symlinks
                 && let Ok(target) = fs::metadata(entry.path())
             {
-                meta = target;
+                found.push(Found {
+                    followed: true,
+                    ..Found::of(name, &target)
+                });
+            } else {
+                found.push(Found::of(name, &meta));
             }
-            found.push(Found::of(name, &meta));
         }
         found.sort_by_cached_key(|f| f.name.to_uppercase());
         Ok(found)
@@ -279,16 +293,30 @@ impl Walker<'_> {
         }
     }
 
-    /// `EnumerateDirItems_Spec`: the folder `name` under `phy`, with `stack`'s masks.
+    /// `EnumerateDirItems_Spec`: the folder `found` under `phy`, with `stack`'s masks. A
+    /// junction back to a folder above it is not gone into: 7-Zip goes round it until the
+    /// path is too deep and says so; cash says the same of the junction, and stores each
+    /// file once.
     fn enter(
         &mut self,
         stack: &[&Node],
-        name: &str,
+        found: &Found,
         phy: &str,
         log: &str,
         add_parts: &[String],
         enter: bool,
     ) {
+        let name = &found.name;
+        if found.followed {
+            let link = self.path(&format!("{phy}{name}"));
+            if crate::walk::loop_ancestor(&link, link.ancestors().skip(1)).is_some() {
+                self.error(
+                    &format!("{phy}{name}/"),
+                    &io::Error::from_raw_os_error(ERROR_CANT_RESOLVE_FILENAME),
+                );
+                return;
+            }
+        }
         self.enumerate(
             stack,
             &format!("{phy}{name}/"),
@@ -381,16 +409,9 @@ impl Walker<'_> {
                 need_enter[index] = false;
                 let mut deeper = stack.to_vec();
                 deeper.push(&node.children()[index]);
-                self.enter(&deeper, &found.name, phy, log, &[], true);
+                self.enter(&deeper, &found, phy, log, &[], true);
             } else {
-                self.enter(
-                    stack,
-                    &found.name,
-                    phy,
-                    log,
-                    std::slice::from_ref(name),
-                    true,
-                );
+                self.enter(stack, &found, phy, log, std::slice::from_ref(name), true);
             }
         }
         for (index, child) in node.children().iter().enumerate() {
@@ -413,7 +434,7 @@ impl Walker<'_> {
                 Ok(found) => {
                     let mut deeper = stack.to_vec();
                     deeper.push(child);
-                    self.enter(&deeper, &found.name, phy, log, &[], false);
+                    self.enter(&deeper, &found, phy, log, &[], false);
                 }
             }
         }
@@ -454,9 +475,9 @@ impl Walker<'_> {
         {
             let mut deeper = stack.to_vec();
             deeper.push(&node.children()[index]);
-            self.enter(&deeper, &found.name, phy, log, &[], enter);
+            self.enter(&deeper, found, phy, log, &[], enter);
         } else if enter {
-            self.enter(stack, &found.name, phy, log, &parts, enter);
+            self.enter(stack, found, phy, log, &parts, enter);
         }
     }
 }
