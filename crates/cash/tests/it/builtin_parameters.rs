@@ -802,6 +802,35 @@ fn printf_says_what_is_not_a_number_and_fails() {
 }
 
 #[test]
+fn printf_takes_its_options_as_bash_does() {
+    // Parsed by hand now, not by clap: what Bash's `internal_getopt` takes and says.
+    let out = cash(
+        r#"printf -vfoo '%s-' a b; echo "[$foo]"; printf -v x -v y hi; echo "[$x][$y]"; printf -- -x; printf -; echo; printf -x; echo "rc $?"; printf -v; echo "rc $?"; printf; echo "rc $?"; printf -v 1x hi; echo "rc $?"; printf -v 'a[2]' hi; echo "${a[2]}""#,
+    );
+    assert_eq!(
+        out.stdout, "[a-b-]\n[][hi]\n-x-\nrc 2\nrc 2\nrc 2\nrc 2\nhi",
+        "{}",
+        out.stderr
+    );
+    let said: Vec<&str> = out
+        .stderr
+        .lines()
+        .map(|line| line.split_once(": line 1: ").map_or(line, |(_, said)| said))
+        .collect();
+    assert_eq!(
+        said,
+        [
+            "printf: -x: invalid option",
+            "printf: usage: printf [-v var] format [arguments]",
+            "printf: -v: option requires an argument",
+            "printf: usage: printf [-v var] format [arguments]",
+            "printf: usage: printf [-v var] format [arguments]",
+            "printf: `1x': not a valid identifier",
+        ]
+    );
+}
+
+#[test]
 fn printf_stops_all_output_at_backslash_c() {
     // `\c` in `%b` ended only that pass; the arguments left over were formatted (BI-10).
     let out = cash(r#"printf '%b|' 'a\cb' c d; echo; printf '%s %b\n' x 'y\cz' w v"#);

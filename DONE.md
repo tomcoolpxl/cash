@@ -1698,3 +1698,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   2026-10-17): `sort --version` said `sort (uutils coreutils) 1.19.0`, a uutils release
   there never was; rm, sort, tee, uniq, shuf, head and tail say the 0.12.0 they came
   from now, as the bundled tools say theirs.
+
+- **`printf` took 1.4 times Bash's time** (found 2026-10-17 in the hot-paths survey,
+  done the same day): clap's parse of its arguments, which change from call to call, was
+  most of what a call cost over `true`. Its one option is parsed by hand, as Bash's
+  `internal_getopt` takes `-v NAME`, with clap's errors said in Bash's words as before:
+  100,000 calls took 1.030 s, now 0.719 s, against 0.698 s for Git Bash's bash. A bad
+  `-v` name says `` `1x': not a valid identifier ``, status 2, as Bash's does, where it
+  said "failed to parse parameter", status 1.

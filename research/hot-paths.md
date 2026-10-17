@@ -79,10 +79,12 @@ program cache: those showed no cost worth taking.
 
 ## Left open
 
-- `printf` is still 1.4 times bash's time (6.3 µs a call against 2.2 for `true`): its
-  arguments change from call to call, so its parse is not remembered, and uucore parses
-  the format on every call. Dropping the 64 KiB buffer it makes for each call gained
-  nothing measurable, and was left as it was.
+- `printf` was 1.4 times bash's time (6.3 µs a call against 2.2 for `true`): its
+  arguments change from call to call, so its parse is not remembered. Dropping the 64 KiB
+  buffer it makes for each call gained nothing measurable, and was left as it was. Its
+  one option, `-v`, is parsed by hand since (2026-10-17), as Bash's `internal_getopt`
+  takes it: 100,000 calls of `printf '%s %d\n' x "$i"` took 1.030 s, now 0.719 s,
+  against 0.698 s for Git Bash's bash. uucore still parses the format on every call.
 - The parse caches of words, tokens, patterns and `eval`'s programs are 64-entry LRUs
   behind a global lock, and each hit copies its key and its result: past 64 distinct
   words in a loop a word costs 1.8 µs against 1.3, and an `eval` in a loop copies its

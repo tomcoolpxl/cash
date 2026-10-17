@@ -135,11 +135,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
   real; until then the page says so.
-- **`printf` takes 1.4 times Bash's time** (2026-10-17, `research/hot-paths.md`): 6.3 µs
-  a call where `true` takes 2.2; its arguments change from call to call, so clap's
-  parse cannot be remembered as `read`'s and `declare`'s are, and uucore parses the
-  format on every call. A hand-made parse of its one option (`-v`) would take clap's
-  part, with clap's errors kept in Bash's words.
 - **The parse caches are 64-entry LRUs behind a global lock** (2026-10-17): words,
   tokens, patterns and `eval`'s programs (the `cached` crate); each hit copies its key and
   its value, and past 64 distinct words in a loop a word costs 1.8 µs against 1.3. An

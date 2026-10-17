@@ -28,6 +28,64 @@ pub(crate) struct PrintfCommand {
 impl builtins::Command for PrintfCommand {
     type Error = cash_core::Error;
 
+    /// Parsed by hand, as Bash's `internal_getopt` parses `-v NAME`: clap's parse was most
+    /// of what a `printf` in a loop cost over `true`, and its arguments change from call
+    /// to call, so it cannot be remembered as `read`'s is. A bad option is clap's error of
+    /// the kind clap gave, which the builtins say in Bash's words: `printf: -x: invalid
+    /// option`, `-v: option requires an argument`, and the usage line.
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        use clap::error::{ContextKind, ContextValue, ErrorKind};
+
+        let mut args = args.into_iter().skip(1).peekable();
+        let mut output_variable = None;
+        while let Some(option) = args.next_if(|arg| arg.len() > 1 && arg.starts_with('-')) {
+            if option == "--" {
+                break;
+            }
+            let letters = option.strip_prefix('-').unwrap_or_default();
+            if let Some(attached) = letters.strip_prefix('v') {
+                let name = if attached.is_empty() {
+                    args.next().ok_or_else(|| {
+                        let mut error = clap::Error::new(ErrorKind::InvalidValue);
+                        error.insert(
+                            ContextKind::InvalidArg,
+                            ContextValue::String("-v".to_owned()),
+                        );
+                        error.insert(
+                            ContextKind::InvalidValue,
+                            ContextValue::String(String::new()),
+                        );
+                        error
+                    })?
+                } else {
+                    attached.to_owned()
+                };
+                output_variable = Some(name);
+            } else {
+                // The first letter is the one Bash names; `--long` is said as `--`.
+                let named = letters
+                    .chars()
+                    .next()
+                    .filter(|&letter| letter != '-')
+                    .map_or_else(|| option.clone(), |letter| format!("-{letter}"));
+                let mut error = clap::Error::new(ErrorKind::UnknownArgument);
+                error.insert(ContextKind::InvalidArg, ContextValue::String(named));
+                return Err(error);
+            }
+        }
+        let format_and_args: Vec<String> = args.collect();
+        if format_and_args.is_empty() {
+            return Err(clap::Error::new(ErrorKind::MissingRequiredArgument));
+        }
+        Ok(Self {
+            output_variable,
+            format_and_args,
+        })
+    }
+
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
@@ -35,6 +93,18 @@ impl builtins::Command for PrintfCommand {
         let Some((fmt, args)) = self.format_and_args.split_first() else {
             return Err(ErrorKind::PrintfInvalidUsage("missing operand".into()).into());
         };
+        // `-v` names a variable or an array's element (`a[1]`), which Bash checks before
+        // it formats anything; a bad name said "failed to parse parameter", status 1.
+        if let Some(name) = &self.output_variable
+            && !assignable(name)
+        {
+            writeln!(
+                context.error_stream(),
+                "{}: `{name}': not a valid identifier",
+                context.command_name
+            )?;
+            return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
+        }
         // Numbers are read here, as Bash reads them, and what is wrong with one is said
         // here, on the builtin's standard error (BI-09).
         let (args, complaints) = numbers::prepare(fmt, args);
@@ -138,6 +208,17 @@ fn print_formatted(
     format_via_uucore(format_string, zone, args, &mut out, before_pass)?;
     out.flush()?;
     Ok(())
+}
+
+/// Whether `-v` may assign to `name`: a variable's name, or an array element's, a name
+/// with a subscript in brackets after it.
+fn assignable(name: &str) -> bool {
+    match name.split_once('[') {
+        Some((array, subscript)) => {
+            subscript.ends_with(']') && cash_core::env::valid_variable_name(array)
+        }
+        None => cash_core::env::valid_variable_name(name),
+    }
 }
 
 fn has_count_spec(fmt: &str) -> bool {
