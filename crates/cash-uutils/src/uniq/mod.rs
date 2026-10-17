@@ -714,7 +714,7 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 
 pub fn uu_app() -> Command {
     let cmd = Command::new("uniq")
-        .version(uucore::crate_version!())
+        .version(crate::UUTILS_VERSION)
         .about(translate!("uniq-about"))
         .override_usage(format_usage(&translate!("uniq-usage")))
         .infer_long_args(true)

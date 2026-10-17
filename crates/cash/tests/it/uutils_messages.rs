@@ -51,3 +51,18 @@ fn the_tools_taken_from_uutils_speak_english_not_message_ids() {
         }
     }
 }
+
+#[test]
+fn the_tools_taken_from_uutils_name_the_uutils_release_they_came_from() {
+    // `sort --version` said `sort (uutils coreutils) 1.19.0`, cash's version, a uutils
+    // release there never was; the bundled tools say 0.12.0, and so do these now.
+    for tool in ["rm", "sort", "tee", "uniq", "shuf", "head", "tail"] {
+        let out = run(&format!("{tool} --version"));
+        assert_eq!(
+            out.stdout.lines().next(),
+            Some(format!("{tool} (uutils coreutils) 0.12.0").as_str()),
+            "{}",
+            out.stderr
+        );
+    }
+}

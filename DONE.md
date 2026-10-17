@@ -1693,3 +1693,8 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   for each group that means the same (`'always', 'yes', 'force'` and so on), with a
   `Try` line and status 1, as cash's `--format` already did. `--icons`, cash's own,
   says it as GNU's `--hyperlink` does. Checked against Git Bash's ls.
+
+- **The tools taken from uutils gave cash's version as uutils'** (found and done
+  2026-10-17): `sort --version` said `sort (uutils coreutils) 1.19.0`, a uutils release
+  there never was; rm, sort, tee, uniq, shuf, head and tail say the 0.12.0 they came
+  from now, as the bundled tools say theirs.

@@ -118,11 +118,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   waits out every block in flight. Writing the block in pieces and asking
   `shutdown_flag` between them would end it within a piece; that means taking
   lzma-rust2 (20.5k lines) in as cash's own, as crossterm was (`[patch.crates-io]`).
-- **The tools taken from uutils give cash's version as uutils'** (2026-10-17): `sort
-  --version` says `sort (uutils coreutils) 1.19.0`, a uutils release there never was
-  (`uucore::crate_version!` reads the crate it is built in), where the bundled ones say
-  0.12.0; also `rm`, `tee`, `uniq`, `shuf`, `head` and `tail`. Either uutils' 0.12.0, or
-  a name that says the tool is cash's own.
 - **`tail -f file | head -1` runs until the file grows** (2026-10-17): uutils checks on
   Linux alone, between polls, whether its standard output still has a reader
   (`ensure_stdout_not_broken`); on Windows tail learns it only when it next writes, and

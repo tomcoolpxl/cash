@@ -43,7 +43,7 @@ pub struct Options {
 
 pub fn uu_app() -> Command {
     Command::new("tee")
-        .version(uucore::crate_version!())
+        .version(crate::UUTILS_VERSION)
         .help_template(uucore::localized_help_template("tee"))
         .about(translate!("tee-about"))
         .override_usage(format_usage(&translate!("tee-usage")))

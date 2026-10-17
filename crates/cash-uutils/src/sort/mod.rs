@@ -2435,7 +2435,7 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 pub fn uu_app() -> Command {
     uucore::clap_localization::configure_localized_command(
         Command::new("sort")
-            .version(uucore::crate_version!())
+            .version(crate::UUTILS_VERSION)
             .about(translate!("sort-about"))
             .after_help(translate!("sort-after-help"))
             .override_usage(format_usage(&translate!("sort-usage"))),

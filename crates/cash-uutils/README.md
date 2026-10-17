@@ -85,5 +85,8 @@ as it registers the uutils tools it uses unchanged.
     seek takes is the whole file, where a cast wrapped it to a seek past the end; an
     event for a path not followed, or without its new name, changes nothing; a watcher
     that was not started is an error.
+- **`--version` names uutils' 0.12.0** (2026-10-17), as the bundled tools do: uucore's
+  `crate_version!` gave this crate's version, `sort (uutils coreutils) 1.19.0`, a uutils
+  release there never was.
 - **Style.** The workspace's style lints that uutils was not written to are allowed in
   `src/lib.rs`, as for `cash-sed`; the lints for code that can panic apply in full.

@@ -183,7 +183,7 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 pub fn uu_app() -> Command {
     Command::new("shuf")
         .about(translate!("shuf-about"))
-        .version(uucore::crate_version!())
+        .version(crate::UUTILS_VERSION)
         .help_template(uucore::localized_help_template("shuf"))
         .override_usage(format_usage(&translate!("shuf-usage")))
         .infer_long_args(true)

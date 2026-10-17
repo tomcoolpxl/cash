@@ -363,7 +363,7 @@ fn handle_parse_error(e: clap::Error, args: &[OsString]) -> Box<dyn UError> {
 
 pub fn uu_app() -> Command {
     Command::new("rm")
-        .version(uucore::crate_version!())
+        .version(crate::UUTILS_VERSION)
         .about(translate!("rm-about"))
         .help_template(uucore::localized_help_template(uucore::util_name()))
         .override_usage(format_usage(&translate!("rm-usage")))

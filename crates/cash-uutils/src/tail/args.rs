@@ -465,7 +465,7 @@ pub fn uu_app() -> Command {
     let polling_help = translate!("tail-help-polling-windows");
 
     Command::new("tail")
-        .version(uucore::crate_version!())
+        .version(crate::UUTILS_VERSION)
         .help_template(uucore::localized_help_template("tail"))
         .about(translate!("tail-about"))
         .override_usage(format_usage(&translate!("tail-usage")))

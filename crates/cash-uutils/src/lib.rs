@@ -33,6 +33,11 @@
 
 mod messages;
 
+/// The uutils release the tools came from, which `--version` names as the bundled ones
+/// do: `uucore::crate_version!` gave this crate's version, a uutils release there never
+/// was (`sort (uutils coreutils) 1.19.0`).
+pub(crate) const UUTILS_VERSION: &str = "(uutils coreutils) 0.12.0";
+
 pub mod head;
 pub mod rm;
 pub mod shuf;

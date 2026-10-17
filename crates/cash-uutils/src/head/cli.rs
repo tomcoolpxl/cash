@@ -21,7 +21,7 @@ pub mod options {
 
 pub fn uu_app() -> Command {
     Command::new("head")
-        .version(uucore::crate_version!())
+        .version(crate::UUTILS_VERSION)
         .help_template(uucore::localized_help_template("head"))
         .about(translate!("head-about"))
         .override_usage(format_usage(&translate!("head-usage")))
