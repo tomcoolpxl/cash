@@ -776,6 +776,13 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   (`'a b'`, `"it's"`, `'c'$'\177''d'`) and `?` for a control character left as it is,
   as GNU coreutils does since 8.25; into a pipe or a file, names as they are. Turned
   down: names as they are on a terminal too, as cash's ls showed them.
+- **`ls --hyperlink` links to `file:///C:/…`, with no host** (2026-10-17): GNU ls writes
+  `file://HOSTNAME/path`, and Windows Terminal opens a `file:` link only when its host
+  is empty, `localhost` or WSL's (`TerminalPage::_IsUriSupported`: ShellExecute cannot
+  open the host form), so GNU's form would get Terminal's "could not open" dialog. The
+  drive's colon stays as it is, as RFC 8089 writes a Windows path; a share is
+  `file://server/share/…`. `-T` is checked as GNU checks it and changes nothing: cash
+  lines columns up with spaces, never tabs.
 
 ## 8. Archives and compression
 

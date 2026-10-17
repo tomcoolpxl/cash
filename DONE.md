@@ -1832,6 +1832,26 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
     C1 control, the only ones a Windows name can hold) in a style that leaves it raw.
     GNU pads such a name by a width of its own and lines the next column up wrong, 3 or
     4 spaces where every other name gets 2; cash keeps its columns straight.
+  - Fixed after: c-maybe lines names up as the shell styles do, and `-C` and `-x`
+    without a width (`-w 0`) line nothing up, as GNU has them.
+
+- **GNU ls's script helpers** (the user's pick of 2026-10-17, the third group): checked
+  against GNU coreutils 9.10 in WSL, and `-i` against Git Bash's ls.
+  - `--zero` ends each line of entries with NUL in every layout, the totals too, while
+    headers and the blank lines between folders keep their newline; it makes names
+    literal, one to a line unless long, and colourless, each of which an option after
+    it can undo, as GNU's does.
+  - `-i` shows each entry's file index, NTFS's file ID, the number Git Bash's `ls -i`
+    and `stat` show, padded as GNU pads it (`-m` not), before `-s`'s blocks.
+  - `-H` follows the links named on the command line, and
+    `--dereference-command-line-symlink-to-dir` those to folders, even with `-l`; the
+    last of them and `-L` wins.
+  - `-T` is checked as GNU's `xstrtoumax` reads it (decimal, hex, octal; GNU's errors,
+    status 2) and changes nothing: cash writes spaces, never tabs.
+  - `--hyperlink[=WHEN]` makes names, headers and link targets OSC 8 links to what they
+    resolve to, the quotes of a quoted name outside the link where names line up, as
+    GNU writes them; the URLs are `file:///C:/…`, with no host, the form Windows
+    Terminal opens (decisions.md).
 
 - **PIPESTATUS after a compound command** (found 2026-10-17 by the quoting comparison,
   whose `${PIPESTATUS[0]}` after an `if` read 0): a compound command that is the whole

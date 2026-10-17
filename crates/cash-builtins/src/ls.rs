@@ -58,8 +58,18 @@ List information about the FILEs (the current directory by default).
                                KB for 1000, KiB for 1024, shown after each size
                                when there is no number) or both; human-readable,
                                si; LS_BLOCK_SIZE or BLOCK_SIZE give it otherwise
+  -H, --dereference-command-line
+                             follow symbolic links listed on the command line
+      --dereference-command-line-symlink-to-dir
+                             follow each command line symbolic link
+                               that points to a directory
       --hide=PATTERN         do not list implied entries matching shell PATTERN
                                (overridden by -a or -A)
+      --hyperlink[=WHEN]     hyperlink file names: always, auto (when the output
+                               is a terminal), never (the default); file:///C:/…
+                               URLs, with no host, which Windows Terminal opens
+  -i, --inode                print the index number of each file (NTFS's file
+                               ID, as Git Bash shows it)
   -I, --ignore=PATTERN       do not list implied entries matching shell PATTERN
   -k, --kibibytes            -s's blocks and the totals in 1024 bytes
       --indicator-style=WORD  append an indicator with style WORD to names:
@@ -85,6 +95,8 @@ List information about the FILEs (the current directory by default).
   -s, --size                 print the space each file takes, in blocks
   -S                         sort by file size, largest first
   -t                         sort by time, newest first; see --time
+  -T, --tabsize=COLS         checked as GNU ls checks it; cash lines columns up
+                               with spaces, never tabs, whatever COLS is
       --time=WORD            the time -l shows and -t sorts by: atime, access,
                                use (-u); ctime, status (-c); mtime, modification
                                (the default); birth, creation; without -l, any
@@ -95,6 +107,7 @@ List information about the FILEs (the current directory by default).
   -w, --width=COLS           set the output width to COLS; 0 means no limit
   -x                         list entries by lines instead of by columns
   -X                         sort alphabetically by entry extension
+      --zero                 end each output line with NUL, not newline
   -1                         list one file per line
       --sort=WORD            sort by WORD instead of name: none (-U), size (-S),
                                time (-t), version (-v), extension (-X), name
@@ -275,9 +288,23 @@ pub(crate) struct LsCommand {
     #[arg(skip)]
     time_style: Option<String>,
 
-    /// `-L`: what a link names is shown, and gone into with `-R`.
+    /// `-L`, `-H` or `--dereference-command-line-symlink-to-dir`, the last given: which
+    /// links are followed. `None` is GNU's default: a link named on the command line to
+    /// a folder is listed as the folder, unless `-l`, `-d` or `-F` asks for the link.
     #[arg(skip)]
-    dereference: bool,
+    deref: Option<Deref>,
+
+    /// `-i`: each entry's file index before it.
+    #[arg(skip)]
+    inode: bool,
+
+    /// `--zero`: each line of entries ends with NUL.
+    #[arg(skip)]
+    zero: bool,
+
+    /// `--hyperlink`'s WHEN, `always` when it has none.
+    #[arg(skip)]
+    hyperlink: Option<String>,
 
     /// A folder `-RL` would have gone round: said, status 2.
     #[arg(skip)]
@@ -458,6 +485,31 @@ const LONGS: &[Long<'static, &str>] = &[
     Long::new("depth", Arg::Required, "depth"),
 ];
 
+/// The options [`LsCommand::grouped_option`] reads, each group by a helper of its own.
+const GROUPED_OPTIONS: &[&str] = &[
+    "h",
+    "si",
+    "block-size",
+    "k",
+    "s",
+    "c",
+    "u",
+    "time",
+    "N",
+    "b",
+    "Q",
+    "quoting-style",
+    "q",
+    "show-control-chars",
+    "L",
+    "H",
+    "dereference-command-line-symlink-to-dir",
+    "i",
+    "T",
+    "zero",
+    "hyperlink",
+];
+
 impl LsCommand {
     /// Reads the command line as GNU's `getopt_long` loop does, in order, options anywhere
     /// until `--` unless `order` says otherwise; `--help` and `--version` end the reading
@@ -498,7 +550,10 @@ impl LsCommand {
             hide: Vec::new(),
             ignore_backups: false,
             time_style: None,
-            dereference: false,
+            deref: None,
+            inode: false,
+            zero: false,
+            hyperlink: None,
             looped: std::sync::atomic::AtomicBool::new(false),
             tty: false,
             time_kind: TimeKind::Modification,
@@ -560,16 +615,9 @@ impl LsCommand {
                     .hide
                     .push(NamePattern::new(value.unwrap_or_default())),
                 "B" => command.ignore_backups = true,
-                "L" => command.dereference = true,
                 "d" => command.directory = true,
-                "h" | "si" | "block-size" | "k" | "s" | "c" | "u" | "time" => {
-                    if let Err(early) = command.size_or_time_option(id, value) {
-                        command.early = Some(early);
-                        return command;
-                    }
-                }
-                "N" | "b" | "Q" | "quoting-style" | "q" | "show-control-chars" => {
-                    if let Err(early) = command.quoting_option(id, value) {
+                id if GROUPED_OPTIONS.contains(&id) => {
+                    if let Err(early) = command.grouped_option(id, value) {
                         command.early = Some(early);
                         return command;
                     }
@@ -711,6 +759,47 @@ impl LsCommand {
         Ok(())
     }
 
+    /// The options read by a helper of their group's: the sizes and times, the quoting,
+    /// and the rest.
+    fn grouped_option(&mut self, id: &str, value: Option<String>) -> Result<(), Early> {
+        match id {
+            "h" | "si" | "block-size" | "k" | "s" | "c" | "u" | "time" => {
+                self.size_or_time_option(id, value)
+            }
+            "N" | "b" | "Q" | "quoting-style" | "q" | "show-control-chars" => {
+                self.quoting_option(id, value)
+            }
+            _ => self.helper_option(id, value),
+        }
+    }
+
+    /// `-L`, `-H`, `--dereference-command-line-symlink-to-dir`, `-i`, `-T`, `--zero` and
+    /// `--hyperlink`.
+    fn helper_option(&mut self, id: &str, value: Option<String>) -> Result<(), Early> {
+        match id {
+            "L" => self.deref = Some(Deref::Always),
+            "H" => self.deref = Some(Deref::CommandLine),
+            "dereference-command-line-symlink-to-dir" => self.deref = Some(Deref::CommandLineDirs),
+            "i" => self.inode = true,
+            // Checked as GNU checks it; cash writes no tabs, so the size changes nothing.
+            "T" => check_tab_size(&value.unwrap_or_default())?,
+            // GNU's: NUL after each line, names as they are, one to a line unless long,
+            // no colour; each can be asked for again after it.
+            "zero" => {
+                self.zero = true;
+                self.hide_control = Some(false);
+                if !self.long {
+                    self.layout = Layout::OneColumn;
+                }
+                self.color = Some("never".to_owned());
+                self.quoting = Some(QuotingStyle::Literal);
+            }
+            "hyperlink" => self.hyperlink = Some(value.unwrap_or_else(|| "always".to_owned())),
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// `-N`, `-b`, `-Q`, `--quoting-style`, `-q` and `--show-control-chars`: how names
     /// are quoted.
     fn quoting_option(&mut self, id: &str, value: Option<String>) -> Result<(), Early> {
@@ -799,6 +888,8 @@ struct ItemInfo {
     time: SystemTime,
     /// The bytes the volume gives it, when `-s`, a total or `-c` asked for its facts.
     allocation: Option<u64>,
+    /// Its file index, NTFS's file ID, when `-i` asked for its facts.
+    index: Option<u64>,
     /// Windows' attribute bits: read-only, hidden, system, archive.
     attributes: u32,
     symlink_target: Option<String>,
@@ -857,6 +948,42 @@ impl TimeKind {
         }
         .unwrap_or(SystemTime::UNIX_EPOCH)
     }
+}
+
+/// Which links ls follows, GNU's `dereference_symlink`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Deref {
+    /// `-H`: those named on the command line.
+    CommandLine,
+    /// `--dereference-command-line-symlink-to-dir`: those named on the command line that
+    /// name a folder.
+    CommandLineDirs,
+    /// `-L`: every one, and `-R` goes into the folders they name.
+    Always,
+}
+
+/// `-T`'s COLS, read as GNU's `xstrtoumax` reads it, in base 0: decimal, `0x` hex or a
+/// leading `0` for octal, after blanks; a size past 64 bits is said to be too large.
+fn check_tab_size(text: &str) -> Result<(), Early> {
+    let digits = text.trim_start();
+    let (digits, radix) = match digits
+        .strip_prefix("0x")
+        .or_else(|| digits.strip_prefix("0X"))
+    {
+        Some(hex) => (hex, 16),
+        None => match digits.strip_prefix('0') {
+            Some(octal) if !octal.is_empty() => (octal, 8),
+            _ => (digits, 10),
+        },
+    };
+    if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
+        return Err(Early::Said(std::format!("invalid tab size: '{text}'")));
+    }
+    u64::from_str_radix(digits, radix).map(|_| ()).map_err(|_| {
+        Early::Said(std::format!(
+            "invalid tab size: '{text}': Value too large for defined data type"
+        ))
+    })
 }
 
 /// How names are quoted, GNU's `--quoting-style` (quotearg's styles), for names that are
@@ -1119,6 +1246,11 @@ struct Look {
     quoting: QuotingStyle,
     /// Whether a nongraphic character left as it is shows as `?` (`-q`).
     hide_control: bool,
+    /// What ends each line of entries: NUL under `--zero`, else a newline. Headers and
+    /// the blank lines between folders keep theirs, as in GNU ls.
+    eol: char,
+    /// Whether names are links to their files (`--hyperlink`).
+    hyperlink: bool,
 }
 
 /// How `-l` shows a time (`--time-style`): a strftime format for a file changed within
@@ -1365,7 +1497,7 @@ impl LsCommand {
             }
 
             if self.shown_as_entry(&path) {
-                let followed = self.followed(&path, None);
+                let followed = self.followed_operand(&path);
                 if let Some(item) = inspect_path(&path, path_str, self.want(), followed) {
                     file_items.push(item);
                 }
@@ -1403,7 +1535,7 @@ impl LsCommand {
                 if i > 0 || !file_items.is_empty() {
                     writeln!(out)?;
                 }
-                writeln!(out, "{}:", shown_name(dir_str, &look))?;
+                writeln!(out, "{}:", header(dir_str, dir_path, &look))?;
             }
 
             match self.list_operand(&context, &mut out, dir_path, dir_str, &look, is_tty)? {
@@ -1555,6 +1687,8 @@ impl LsCommand {
             quoting: self.quoting_style(context, is_tty),
             // GNU ls hides them on a terminal unless told not to.
             hide_control: self.hide_control.unwrap_or(is_tty),
+            eol: if self.zero { '\0' } else { '\n' },
+            hyperlink: when(self.hyperlink.as_deref(), "hyperlink", is_tty)?,
         })
     }
 
@@ -1636,19 +1770,43 @@ impl LsCommand {
         Want {
             long: self.long,
             time: self.time_kind,
-            facts: self.long || self.show_blocks || self.time_kind == TimeKind::Change,
+            facts: self.long
+                || self.show_blocks
+                || self.inode
+                || self.time_kind == TimeKind::Change,
         }
     }
 
-    /// The width of `-s`'s blocks among `items`, for padding; `None` without `-s`.
-    fn blocks_width(&self, items: &[ItemInfo], look: &Look) -> Option<usize> {
-        self.show_blocks.then(|| {
-            items
-                .iter()
-                .map(|item| look.sizes.blocks.format(block_bytes(item)).len())
-                .max()
-                .unwrap_or(1)
-        })
+    /// The widths of `-i`'s indexes and `-s`'s blocks among `items`, for padding; `None`
+    /// for each not asked for.
+    fn field_widths<'a>(
+        &self,
+        items: impl Iterator<Item = &'a ItemInfo> + Clone,
+        look: &Look,
+    ) -> FieldWidths {
+        FieldWidths {
+            index: self.inode.then(|| {
+                items
+                    .clone()
+                    .map(|item| index_text(item).len())
+                    .max()
+                    .unwrap_or(1)
+            }),
+            blocks: self.show_blocks.then(|| {
+                items
+                    .map(|item| look.sizes.blocks.format(block_bytes(item)).len())
+                    .max()
+                    .unwrap_or(1)
+            }),
+        }
+    }
+
+    /// The fields before names unpadded, as `-m` writes them.
+    const fn unpadded_fields(&self) -> FieldWidths {
+        FieldWidths {
+            index: if self.inode { Some(0) } else { None },
+            blocks: if self.show_blocks { Some(0) } else { None },
+        }
     }
 
     /// The width a line may take, as GNU ls finds it: `-w`, else `COLUMNS`, else the
@@ -1682,17 +1840,31 @@ impl LsCommand {
     /// or a link named on the command line that `-l` or `-F` asks about itself, as GNU ls
     /// decides; `-L` goes through a link always.
     fn shown_as_entry(&self, path: &Path) -> bool {
+        if self.directory || !path.is_dir() {
+            return true;
+        }
+        // A link to a folder is listed as the folder, as GNU's default follows it, unless
+        // -l or -F asks for the link and no option says to follow it.
         let link = path
             .symlink_metadata()
             .is_ok_and(|metadata| metadata.file_type().is_symlink());
-        self.directory
-            || !path.is_dir()
-            || (link && !self.dereference && (self.long || self.indicator == Indicator::Classify))
+        link && self.deref.is_none() && (self.long || self.indicator == Indicator::Classify)
+    }
+
+    /// What an operand shown as an entry shows: what it names when `-L` or `-H` follows
+    /// it, or `--dereference-command-line-symlink-to-dir` a link to a folder, and it is
+    /// there; otherwise itself.
+    fn followed_operand(&self, path: &Path) -> Option<Metadata> {
+        match self.deref {
+            Some(Deref::Always | Deref::CommandLine) => std::fs::metadata(path).ok(),
+            Some(Deref::CommandLineDirs) => std::fs::metadata(path).ok().filter(Metadata::is_dir),
+            None => None,
+        }
     }
 
     /// `-L`: what `path`, a link, names, when it is there; otherwise what the listing knew.
     fn followed(&self, path: &Path, known: Option<Metadata>) -> Option<Metadata> {
-        if self.dereference {
+        if self.deref == Some(Deref::Always) {
             std::fs::metadata(path).ok().or(known)
         } else {
             known
@@ -1839,7 +2011,7 @@ impl LsCommand {
         // ls counts them: their allocations, where it counted their sizes.
         if self.long || self.show_blocks {
             let total: u64 = items.iter().map(block_bytes).sum();
-            writeln!(out, "total {}", look.sizes.blocks.format(total))?;
+            write!(out, "total {}{}", look.sizes.blocks.format(total), look.eol)?;
         }
 
         self.render_items(out, items, look, is_tty)?;
@@ -1855,7 +2027,7 @@ impl LsCommand {
                     // Joined once: `ls -R foo/` printed `foo//bar:`.
                     let sub_str = crate::walk::join_shown(dir_str, &item.name);
                     // With -L a link to a folder above is not gone round, as GNU ls says.
-                    if self.dereference
+                    if self.deref == Some(Deref::Always)
                         && crate::walk::loop_ancestor(&item.path, item.path.ancestors().skip(1))
                             .is_some()
                     {
@@ -1871,7 +2043,7 @@ impl LsCommand {
                     match self.read_entries(&item.path, true) {
                         Ok(sub_items) => {
                             writeln!(out)?;
-                            writeln!(out, "{}:", shown_name(&sub_str, look))?;
+                            writeln!(out, "{}:", header(&sub_str, &item.path, look))?;
                             unreadable |= self.show_directory(
                                 context,
                                 out,
@@ -1924,20 +2096,14 @@ impl LsCommand {
                 .unzip();
             self.render_long(out, &items, look, Some(&prefixes))?;
         } else {
-            let items: Vec<&ItemInfo> = rows.iter().map(|(_, item)| item).collect();
-            let width = self.show_blocks.then(|| {
-                items
-                    .iter()
-                    .map(|item| look.sizes.blocks.format(block_bytes(item)).len())
-                    .max()
-                    .unwrap_or(1)
-            });
+            let widths = self.field_widths(rows.iter().map(|(_, item)| item), look);
             for (prefix, item) in &rows {
-                writeln!(
+                write!(
                     out,
-                    "{}{prefix}{}",
-                    fields(item, look, width),
-                    self.format_name(item, look, false)
+                    "{}{prefix}{}{}",
+                    fields(item, look, widths),
+                    self.format_name(item, look, false),
+                    look.eol
                 )?;
             }
         }
@@ -2037,7 +2203,7 @@ impl LsCommand {
             }
         };
         let max_size_len = items.iter().map(|i| size_text(i).len()).max().unwrap_or(1);
-        let blocks_width = self.blocks_width(items, look);
+        let widths = self.field_widths(items.iter(), look);
         let align = align_names(items, look);
 
         for (index, item) in items.iter().enumerate() {
@@ -2076,7 +2242,7 @@ impl LsCommand {
             // -g leaves the owner out, -o and -G the group.
             let mut line = std::format!(
                 "{}{permissions} {:>max_links_len$} ",
-                fields(item, look, blocks_width),
+                fields(item, look, widths),
                 links[index]
             );
             if !self.no_owner {
@@ -2087,7 +2253,11 @@ impl LsCommand {
                 line.push_str(&group);
                 line.push(' ');
             }
-            writeln!(out, "{line}{size} {date} {prefix}{display_name}")?;
+            write!(
+                out,
+                "{line}{size} {date} {prefix}{display_name}{}",
+                look.eol
+            )?;
         }
 
         Ok(())
@@ -2099,10 +2269,15 @@ impl LsCommand {
         items: &[ItemInfo],
         look: &Look,
     ) -> Result<(), std::io::Error> {
-        let width = self.blocks_width(items, look);
+        let widths = self.field_widths(items.iter(), look);
         for item in items {
             let display_name = self.format_name(item, look, false);
-            writeln!(out, "{}{display_name}", fields(item, look, width))?;
+            write!(
+                out,
+                "{}{display_name}{}",
+                fields(item, look, widths),
+                look.eol
+            )?;
         }
         Ok(())
     }
@@ -2120,13 +2295,13 @@ impl LsCommand {
     ) -> Result<(), std::io::Error> {
         // Columns are measured in the cells a name takes on screen, not its bytes: an
         // icon, an accented letter or a CJK name is one or two cells whatever its length.
-        let blocks_width = self.blocks_width(items, look);
+        let widths = self.field_widths(items.iter(), look);
         // Not without a width (`-w 0`), as GNU ls has it.
         let align = look.width.is_some() && align_names(items, look);
         let names: Vec<(usize, String)> = items
             .iter()
             .map(|i| {
-                let fields = fields(i, look, blocks_width);
+                let fields = fields(i, look, widths);
                 (
                     fields.len() + self.format_name_plain(i, look, align).width(),
                     fields + &self.format_name(i, look, align),
@@ -2155,14 +2330,14 @@ impl LsCommand {
                     }
                     column += 1;
                 }
-                writeln!(out, "{line}")?;
+                write!(out, "{line}{}", look.eol)?;
             }
         } else {
             let mut line = String::new();
             for (index, (width, shown)) in names.iter().enumerate() {
                 let column = index % columns;
                 if column == 0 && index > 0 {
-                    writeln!(out, "{line}")?;
+                    write!(out, "{line}{}", look.eol)?;
                     line.clear();
                 }
                 line.push_str(shown);
@@ -2170,7 +2345,7 @@ impl LsCommand {
                     pad(&mut line, column, *width);
                 }
             }
-            writeln!(out, "{line}")?;
+            write!(out, "{line}{}", look.eol)?;
         }
         Ok(())
     }
@@ -2185,10 +2360,10 @@ impl LsCommand {
     ) -> Result<(), std::io::Error> {
         let mut text = String::new();
         let mut position = 0;
-        // -m pads no blocks.
-        let blocks_width = self.show_blocks.then_some(0);
+        // -m pads no fields.
+        let widths = self.unpadded_fields();
         for (index, item) in items.iter().enumerate() {
-            let fields = fields(item, look, blocks_width);
+            let fields = fields(item, look, widths);
             let length = fields.len() + self.format_name_plain(item, look, false).width();
             if index > 0 {
                 text.push(',');
@@ -2196,7 +2371,7 @@ impl LsCommand {
                     text.push(' ');
                     position += 2;
                 } else {
-                    text.push('\n');
+                    text.push(look.eol);
                     position = 0;
                 }
             }
@@ -2204,7 +2379,7 @@ impl LsCommand {
             text.push_str(&self.format_name(item, look, false));
             position += length;
         }
-        writeln!(out, "{text}")
+        write!(out, "{text}{}", look.eol)
     }
 
     /// Whether names get their `-F` marks: `--classify=auto` only on a terminal.
@@ -2271,7 +2446,12 @@ impl LsCommand {
         match &item.symlink_target {
             Some(target) if self.long => {
                 s.push_str(" -> ");
-                s.push_str(&shown_name(target, look));
+                let shown = shown_name(target, look);
+                if look.hyperlink {
+                    s.push_str(&hyperlinked(&shown, &file_url(&link_url_path(item)), false));
+                } else {
+                    s.push_str(&shown);
+                }
                 let style = self.indicator_style();
                 if style != Indicator::None {
                     let mark = match item.target {
@@ -2294,7 +2474,11 @@ impl LsCommand {
             shown.push_str(icon_for(item));
             shown.push(' ');
         }
-        shown.push_str(&quoted_name(&item.name, look, align));
+        if look.hyperlink {
+            shown.push_str(&linked_name(&item.name, &link_url_path(item), look, align));
+        } else {
+            shown.push_str(&quoted_name(&item.name, look, align));
+        }
 
         let mut s = self.attribute_prefix(item);
         s.push_str(&match look
@@ -2329,6 +2513,89 @@ fn shown_name(name: &str, look: &Look) -> String {
     } else {
         quoted
     }
+}
+
+/// A folder's header, `shown` quoted, and a link to `path` under `--hyperlink`.
+fn header(shown: &str, path: &Path, look: &Look) -> String {
+    if look.hyperlink {
+        let target = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        hyperlinked(&shown_name(shown, look), &file_url(&target), false)
+    } else {
+        shown_name(shown, look)
+    }
+}
+
+/// [`quoted_name`] as a link to `target`, as GNU ls writes it: where names line up the
+/// quotes of a quoted name stay outside the link, as the space before another does.
+fn linked_name(name: &str, target: &Path, look: &Look, align: bool) -> String {
+    let quoted = look.quoting.quote(name).1;
+    let shown = hyperlinked(&shown_name(name, look), &file_url(target), align && quoted);
+    if align && !quoted {
+        std::format!(" {shown}")
+    } else {
+        shown
+    }
+}
+
+/// `shown` as an OSC 8 link to `url`, its first and last characters outside it when
+/// `outer` says so.
+fn hyperlinked(shown: &str, url: &str, outer: bool) -> String {
+    let (before, inside, after) = match (outer, shown.chars().next(), shown.chars().last()) {
+        (true, Some(first), Some(last)) if shown.len() >= first.len_utf8() + last.len_utf8() => (
+            first.to_string(),
+            shown
+                .get(first.len_utf8()..shown.len() - last.len_utf8())
+                .unwrap_or_default(),
+            last.to_string(),
+        ),
+        _ => (String::new(), shown, String::new()),
+    };
+    std::format!("{before}\x1b]8;;{url}\x1b\\{inside}\x1b]8;;\x1b\\{after}")
+}
+
+/// The file an entry's link goes to: what a link resolves to, as GNU ls links it, its
+/// target beside it when it resolves to nothing; else the entry.
+fn link_url_path(item: &ItemInfo) -> PathBuf {
+    if let Ok(resolved) = std::fs::canonicalize(&item.path) {
+        return resolved;
+    }
+    match (&item.symlink_target, item.path.parent()) {
+        (Some(target), Some(parent)) => parent.join(target),
+        _ => item.path.clone(),
+    }
+}
+
+/// The `file:` URL of `path`, as GNU ls escapes it: every byte but letters, digits,
+/// `-._~` and the separators as `%xx`. With no host, as Windows Terminal opens only
+/// those (GNU names the machine): `file:///C:/…`, the drive's colon kept; a share's is
+/// `file://server/share/…`.
+fn file_url(path: &Path) -> String {
+    use std::fmt::Write as _;
+    let text = path.to_string_lossy().replace('\\', "/");
+    let text = if let Some(share) = text.strip_prefix("//?/UNC/") {
+        std::format!("//{share}")
+    } else {
+        text.strip_prefix("//?/").unwrap_or(&text).to_owned()
+    };
+    let drive = text.as_bytes().get(..2).is_some_and(|start| {
+        start.first().is_some_and(u8::is_ascii_alphabetic) && start.get(1) == Some(&b':')
+    });
+    let mut url = String::from(if text.starts_with("//") {
+        "file:"
+    } else {
+        "file:///"
+    });
+    for (index, byte) in text.bytes().enumerate() {
+        if byte.is_ascii_alphanumeric()
+            || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/')
+            || (drive && index == 1)
+        {
+            url.push(char::from(byte));
+        } else {
+            let _ = write!(url, "%{byte:02x}");
+        }
+    }
+    url
 }
 
 /// [`shown_name`], after a space when `align` asks it of a name that needed no quotes.
@@ -2632,6 +2899,7 @@ fn inspect_dot(dir_path: &Path, name: &str, want: Want) -> Option<ItemInfo> {
         size: metadata.len(),
         time: want.time.of(&metadata),
         allocation: None,
+        index: None,
         attributes: attributes_of(&metadata),
         symlink_target: None,
         target: None,
@@ -2657,17 +2925,44 @@ fn take_facts(item: &mut ItemInfo, facts: Option<cash_win32::fs::FileFacts>, wan
         return;
     };
     item.allocation = Some(facts.allocation);
+    item.index = Some(facts.index);
     if want.time == TimeKind::Change && facts.change_time != 0 {
         item.time = filetime_to_system(facts.change_time);
     }
 }
 
-/// What comes before an entry's name: its blocks under `-s`, padded to `width`, as GNU
-/// ls writes them (`-m` pads nothing).
-fn fields(item: &ItemInfo, look: &Look, width: Option<usize>) -> String {
-    width.map_or_else(String::new, |width| {
-        std::format!("{:>width$} ", look.sizes.blocks.format(block_bytes(item)))
-    })
+/// The widths the fields before names are padded to, `None` for one not shown.
+#[derive(Clone, Copy)]
+struct FieldWidths {
+    /// `-i`'s file index.
+    index: Option<usize>,
+    /// `-s`'s blocks.
+    blocks: Option<usize>,
+}
+
+/// What comes before an entry's name: its file index under `-i`, then its blocks under
+/// `-s`, each padded to its width, as GNU ls writes them (`-m` pads nothing).
+fn fields(item: &ItemInfo, look: &Look, widths: FieldWidths) -> String {
+    use std::fmt::Write as _;
+    let mut text = String::new();
+    if let Some(width) = widths.index {
+        let _ = write!(text, "{:>width$} ", index_text(item));
+    }
+    if let Some(width) = widths.blocks {
+        let _ = write!(
+            text,
+            "{:>width$} ",
+            look.sizes.blocks.format(block_bytes(item))
+        );
+    }
+    text
+}
+
+/// `-i`'s field: the file index NTFS gives the entry, `?` where it could not be read, as
+/// GNU ls shows an unknown one.
+fn index_text(item: &ItemInfo) -> String {
+    item.index
+        .map_or_else(|| String::from("?"), |index| index.to_string())
 }
 
 /// A `FILETIME`, 100 ns since 1601, as a [`SystemTime`].
@@ -2712,6 +3007,7 @@ fn dev_entry<SE: cash_core::ShellExtensions>(
         size: 0,
         time: SystemTime::now(),
         allocation: Some(0),
+        index: None,
         attributes: 0,
         symlink_target: None,
         target: None,
@@ -2779,6 +3075,7 @@ fn inspect_path(
         size: symlink_metadata.len(),
         time: want.time.of(&symlink_metadata),
         allocation: None,
+        index: None,
         attributes: attributes_of(&symlink_metadata),
         symlink_target,
         target,
@@ -3088,8 +3385,8 @@ mod tests {
         );
         // GNU's options cash's ls has not are named, not called invalid.
         assert_eq!(
-            parsed("-i").early,
-            Some(Early::Said("-i is not supported by cash's ls".to_owned()))
+            parsed("-Z").early,
+            Some(Early::Said("-Z is not supported by cash's ls".to_owned()))
         );
         assert_eq!(
             parsed("--auth").early,
@@ -3273,5 +3570,55 @@ mod tests {
         ] {
             assert_eq!(style.quote(name).0, shown, "{name:?} in {style:?}");
         }
+    }
+
+    #[test]
+    fn tab_sizes_are_read_as_gnu_ls_reads_them() {
+        for good in [
+            "0",
+            "8",
+            " 4",
+            "0x10",
+            "0X1f",
+            "010",
+            "18446744073709551615",
+        ] {
+            assert_eq!(check_tab_size(good), Ok(()), "{good}");
+        }
+        for bad in ["", "x", "-1", "+4", "4x", "0x", "08", "1.5"] {
+            assert_eq!(
+                check_tab_size(bad),
+                Err(Early::Said(std::format!("invalid tab size: '{bad}'"))),
+                "{bad}"
+            );
+        }
+        assert_eq!(
+            check_tab_size("18446744073709551616"),
+            Err(Early::Said(
+                "invalid tab size: '18446744073709551616': Value too large for defined data type"
+                    .to_owned()
+            ))
+        );
+    }
+
+    #[test]
+    fn hyperlinks_go_to_file_urls_with_no_host() {
+        for (path, url) in [
+            (r"C:\Users\a b\it's", "file:///C:/Users/a%20b/it%27s"),
+            (r"\\?\C:\x\été", "file:///C:/x/%c3%a9t%c3%a9"),
+            (r"\\?\UNC\server\share\f", "file://server/share/f"),
+            (r"\\server\share\f", "file://server/share/f"),
+            (r"C:\x~y-z_w.t+(1)", "file:///C:/x~y-z_w.t%2b%281%29"),
+        ] {
+            assert_eq!(file_url(Path::new(path)), url, "{path}");
+        }
+        assert_eq!(
+            hyperlinked("'a b'", "file:///C:/a%20b", true),
+            "'\x1b]8;;file:///C:/a%20b\x1b\\a b\x1b]8;;\x1b\\'"
+        );
+        assert_eq!(
+            hyperlinked("'a b'", "file:///C:/a%20b", false),
+            "\x1b]8;;file:///C:/a%20b\x1b\\'a b'\x1b]8;;\x1b\\"
+        );
     }
 }

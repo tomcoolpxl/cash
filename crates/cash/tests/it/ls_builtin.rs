@@ -1264,3 +1264,134 @@ fn ls_lines_up_quoted_names_as_gnu_ls_does() {
          Try 'ls --help' for more information."
     );
 }
+
+/// A file, a name with a space, a folder, and a junction to it, for the script helpers.
+fn helpers_fixture(name: &str) -> Scratch {
+    let scratch = Scratch::new(name);
+    std::fs::write(scratch.join("plain"), "").unwrap();
+    std::fs::write(scratch.join("a b"), "").unwrap();
+    std::fs::create_dir(scratch.join("sub")).unwrap();
+    std::fs::write(scratch.join("sub").join("inner"), "").unwrap();
+    cash_win32::junction::point(&scratch.join("linkdir"), &scratch.join("sub")).unwrap();
+    scratch
+}
+
+/// `--zero`, `-i`, `-H`, `--dereference-command-line-symlink-to-dir` and `-T` as GNU ls
+/// 9.10 has them: NUL after each line of entries, never after a header or between
+/// folders; the file index Git Bash's `ls -i` and `stat` show; links named on the command
+/// line followed; a tab size checked.
+#[test]
+fn ls_script_helpers_as_gnu_ls_has_them() {
+    let scratch = helpers_fixture("ls-helpers");
+    let out = ls_in(
+        scratch.path(),
+        "ls --zero; echo; ls --zero sub plain; echo; ls --zero -m; echo; \
+         ls --zero --quoting-style=shell -d 'a b'; echo; ls -1 --zero -C -d plain sub",
+    );
+    assert_eq!(
+        out.stdout,
+        "a b\0linkdir\0plain\0sub\0\nplain\0\nsub:\ninner\0\na b, linkdir, plain, sub\0\n\
+         'a b'\0\nplain  sub\0",
+        "{}",
+        out.stderr
+    );
+
+    let out = ls_in(
+        scratch.path(),
+        "ls -i1 plain; stat -c %i plain; ls -1H linkdir; \
+         ls -1lH --time-style=+T linkdir | sed -n 's/^.* T //p'; \
+         ls -1l --time-style=+T linkdir | cut -c1; ls -1dlH --time-style=+T linkdir | cut -c1; \
+         ls -1l --dereference-command-line-symlink-to-dir --time-style=+T linkdir \
+         | sed -n 's/^.* T //p'; ls -1F linkdir; ls -Cd -T 4 -w 40 plain sub",
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    let index = lines.get(1).copied().unwrap_or_default();
+    assert!(
+        index.parse::<u64>().is_ok_and(|index| index > 0),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(lines.first().copied(), Some(&*format!("{index} plain")));
+    assert_eq!(
+        lines.get(2..),
+        Some(
+            &[
+                "inner",
+                "inner",
+                "l",
+                "d",
+                "inner",
+                "linkdir@",
+                "plain  sub"
+            ][..]
+        ),
+        "{}",
+        out.stderr
+    );
+
+    let out = ls_in(
+        scratch.path(),
+        "ls -T x; echo $?; ls -T -1; ls -T 99999999999999999999; echo $?",
+    );
+    assert_eq!(out.stdout, "2\n2", "{}", out.stderr);
+    assert_eq!(
+        out.stderr,
+        "ls: invalid tab size: 'x'\nls: invalid tab size: '-1'\n\
+         ls: invalid tab size: '99999999999999999999': Value too large for defined data type"
+    );
+}
+
+/// `--hyperlink` makes each name an OSC 8 link to its file, as GNU ls 9.10 does, with no
+/// host in the URL, which Windows Terminal opens (GNU names the machine): headers too,
+/// a link's name and target to what it resolves to, and the quotes of a quoted name
+/// outside the link where names line up.
+#[test]
+fn ls_hyperlinks_names_as_gnu_ls_does() {
+    let scratch = helpers_fixture("ls-hyperlinks");
+    let link = |text: &str| format!("\x1b\\{text}\x1b]8;;\x1b\\");
+    let out = ls_in(
+        scratch.path(),
+        "ls -1 --hyperlink 'a b'; ls --hyperlink=always sub plain; \
+         ls -l --time-style=+T --hyperlink=always --quoting-style=shell 'a b' plain \
+         | sed -n 's/^.* T //p'; ls -ld --time-style=+T --hyperlink=always linkdir \
+         | sed -n 's/^.* T //p'; ls --hyperlink=auto plain; ls --hyperlink=never plain",
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    let starts = |line: usize, start: &str, end: &str| {
+        lines
+            .get(line)
+            .is_some_and(|text| text.starts_with(start) && text.ends_with(end))
+    };
+    let url = "\x1b]8;;file:///";
+    assert!(
+        starts(0, url, &format!("/a%20b{}", link("a b"))),
+        "{lines:?}"
+    );
+    assert!(
+        starts(1, url, &format!("/plain{}", link("plain"))),
+        "{lines:?}"
+    );
+    assert_eq!(lines.get(2), Some(&""), "{lines:?}");
+    assert!(
+        starts(3, url, &format!("/sub{}:", link("sub"))),
+        "{lines:?}"
+    );
+    assert!(
+        starts(4, url, &format!("/sub/inner{}", link("inner"))),
+        "{lines:?}"
+    );
+    assert!(
+        starts(5, &format!("'{url}"), &format!("{}'", link("a b"))),
+        "{lines:?}"
+    );
+    assert!(starts(6, &format!(" {url}"), &link("plain")), "{lines:?}");
+    // The junction's name and target both go to the folder it names.
+    assert!(
+        lines.get(7).is_some_and(|line| line
+            .split(" -> ")
+            .all(|part| part.starts_with(url) && part.contains("/sub\x1b\\"))),
+        "{lines:?}"
+    );
+    assert_eq!(lines.get(8..), Some(&["plain", "plain"][..]), "{lines:?}");
+    assert!(!out.stdout.contains("?/"), "{}", out.stdout);
+}
