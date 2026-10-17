@@ -42,22 +42,14 @@ impl Keybindings {
 
     /// Adds a keybinding
     ///
-    /// # Panics
-    ///
-    /// If `command` is an empty [`ReedlineEvent::UntilFound`]
+    /// An empty [`ReedlineEvent::UntilFound`] is accepted; it never matches anything and
+    /// behaves like an unbound key (reedline 0.52; it panicked).
     pub fn add_binding(
         &mut self,
         modifier: KeyModifiers,
         key_code: KeyCode,
         command: ReedlineEvent,
     ) {
-        if let ReedlineEvent::UntilFound(subcommands) = &command {
-            assert!(
-                !subcommands.is_empty(),
-                "UntilFound should contain a series of potential events to handle"
-            );
-        }
-
         let key_combo = KeyCombination { modifier, key_code };
         self.bindings.insert(key_combo, command);
     }
@@ -289,4 +281,24 @@ pub fn add_common_selection_bindings(kb: &mut Keybindings) {
         KC::Char('a'),
         edit_bind(EC::SelectAll),
     );
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn empty_until_found_is_accepted() {
+        // reedline 0.52's test: an empty list of events panicked when it was bound.
+        let mut kb = Keybindings::new();
+        kb.add_binding(
+            KeyModifiers::NONE,
+            KeyCode::Char('x'),
+            ReedlineEvent::UntilFound(vec![]),
+        );
+        assert_eq!(
+            kb.find_binding(KeyModifiers::NONE, KeyCode::Char('x')),
+            Some(ReedlineEvent::UntilFound(vec![]))
+        );
+    }
 }

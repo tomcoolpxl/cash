@@ -1732,3 +1732,12 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   (`FindFirstFileExW`), the long names still compared, and a prefix with a wildcard
   character lists it whole as before: `compgen -c no` took 24 ms, now 17.7, the same
   names for every prefix tried, the empty one's 7,963 among them.
+
+- **reedline 0.52's fixes, against cash-reedline** (found 2026-10-16 by `cargo xtask
+  upstreams`, done 2026-10-17): ported one by one with upstream's tests, the panics
+  (vi counts, an empty `UntilFound`, the menus' parsing, slicing and divisions, a style
+  range inside a character, the undo stack's index) and the behaviour fixes (vi `P` of
+  a line, Enter over an empty menu, a history that refuses a line, a cursor query that
+  gets no answer, the right prompt on exit, double-width characters at the margin, a
+  resize's row). What was not taken, and why, is in the crate's README; 0.52.1 changes
+  only Android's history locking, and `upstreams.toml` says reviewed to it.

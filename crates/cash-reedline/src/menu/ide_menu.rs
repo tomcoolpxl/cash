@@ -495,8 +495,16 @@ impl IdeMenu {
 
         let display_value = suggestion.display_value();
 
-        let padding_right = (self.working_details.completion_width as usize)
-            .saturating_sub(self.completions.display_widths[index] + border_width + padding);
+        let padding_right = (self.working_details.completion_width as usize).saturating_sub(
+            // 0 out of range, as the columnar menu reads it (reedline 0.52).
+            self.completions
+                .display_widths
+                .get(index)
+                .copied()
+                .unwrap_or(0)
+                + border_width
+                + padding,
+        );
 
         let max_string_width =
             (self.working_details.completion_width as usize).saturating_sub(border_width + padding);

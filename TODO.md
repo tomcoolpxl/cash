@@ -118,11 +118,6 @@ What the phases now in DONE.md left open, each where its phase says more.
   `awk/` and 8 in `calc/` (bc). Each wants looking through, porting what matters and
   marking the rest `reviewed` in `upstreams.toml`. sevenz-rust2 0.24.0 was looked
   through: nothing to port.
-- **reedline 0.52's fixes, against cash-reedline** (taken from 0.51.0): panics on a vi
-  count past `u16::MAX`, an empty `UntilFound` keybinding, a failed history search in
-  the hinter, and in the menu's selection parsing, among about twenty fixes. cash had
-  already fixed the `SubstringSearch` `todo!()` (`engine.rs`); the rest want comparing
-  one by one.
 - **A Ctrl-C or `kill` on a large `xz` waits for its blocks** (2026-10-16): lzma-rust2's
   threaded encoder takes the whole input at once (13 blocks of 24 MiB from a 300 MB
   file, on 16 threads) and writes the first block only when it is done, about 12 s

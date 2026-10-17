@@ -26,6 +26,9 @@ version = "0.29.0"
 crate = "crates/cash-reedline"
 name = "reedline"
 version = "0.51.0"
+# 0.52.0 (2026-10-17): its fixes ported; what was not taken, and why, is in the crate's
+# README. 0.52.1 changes only the history file's locking on Android.
+reviewed = "0.52.1"
 
 [[upstream]]
 crate = "crates/cash-archive/src/sevenz"

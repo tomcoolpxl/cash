@@ -2,9 +2,10 @@
 
 The line editor of cash's prompt: [reedline](https://github.com/nushell/reedline) 0.51.0,
 © 2021 the Nushell Project Developers, under the MIT License (`LICENSE`), made cash's own
-on 2026-10-10. From 2026-09-26 until then it was carried in `vendor/reedline` as a
-patched copy. The package is `cash-reedline`; its library keeps the name `reedline`, so
-cash's code, its tests and the examples in its documentation say `reedline::`.
+on 2026-10-10, with 0.52.0's fixes ported on 2026-10-17. From 2026-09-26 until then it
+was carried in `vendor/reedline` as a patched copy. The package is `cash-reedline`; its
+library keeps the name `reedline`, so cash's code, its tests and the examples in its
+documentation say `reedline::`.
 
 ## Made cash's own (2026-10-10)
 
@@ -17,15 +18,16 @@ cash's code, its tests and the examples in its documentation say `reedline::`.
   `EraseSelection`, `PasteAtSelectionEdge`, `LineStartNonBlank`). The selection model
   Helix gave the core editor stays: vi and emacs run on it.
 - **What could panic in the code cash runs** now returns an error or says why it cannot:
-  - a history that cannot be read or written is an error from `print_history`,
-    `submit_buffer` and the history search, where it was `expect("todo: error
-    handling")`; moving through it leaves the line as it is, and a hint is not shown;
+  - a history that cannot be read or written is an error from `print_history` and the
+    history search, where it was `expect("todo: error handling")`; moving through it
+    leaves the line as it is, and a hint is not shown; a line it will not store is
+    still returned (0.52's way, below);
   - a substring search through the history shows the line found, or what was typed, as
     the prefix search does: reedline left that case to `todo!()`, a crash if reached;
   - `Menu::settings` has no default that panics: every menu says (cash's `QuoteAwareMenu`
     passes its wrapped menu's on);
-  - the undo stack shortens itself with `truncate` rather than a `resize_with` whose
-    closure panicked;
+  - the undo stack shortened itself with `truncate` rather than a `resize_with` whose
+    closure panicked; since 0.52 it has no index to go wrong (below);
   - where the editor cuts its text at positions it keeps on character boundaries, each
     module says why they are (every caret goes through `rest_policy::recohere`).
 - **Six types its public items use are exported** (`KeyCombination`, `RepaintSignal`,
@@ -38,6 +40,47 @@ cash's code, its tests and the examples in its documentation say `reedline::`.
   style.
 - A test of crossterm's colour codes asks for colour, so `NO_COLOR` in a developer's
   shell no longer fails it.
+
+## reedline 0.52.0's fixes (2026-10-17)
+
+Ported one by one against this copy, each with upstream's tests and marked
+`reedline 0.52` where the code says why:
+
+- **Panics closed**: a vi count past `u16::MAX` saturates; an empty `UntilFound`
+  binding is accepted; the menus' selection parsing and `truncate_with_ansi` cut where
+  they should (the cut could land in one segment at an offset found in another); the
+  list menu's page, the columnar and IDE menus' display widths and the description
+  menu's example are read through `get`; the columnar menu's grid is `NonZero` in both
+  directions, so moving over a menu still waiting for its answer, `with_columns(0)` or
+  a terminal 0 columns wide no longer divides by zero, and neither do the description
+  menu and the cursor column; a highlighter's style range inside a multi-byte character
+  styles the whole grapheme; the undo stack is a zipper of undo, current and redo, with
+  no index to go stale.
+- **Behaviour fixed**: vi `P` of a whole line puts it above the current line, not above
+  the one before; the menus' `string_difference` keeps the whole diff when the old text
+  is a start of the new; moving between the lines of a recalled multi-line entry keeps
+  the history walk going; Enter over an open menu with no suggestions submits the line;
+  a line the history refuses to store is still returned, kept like an excluded one, with
+  the error left for `take_history_save_error`; a terminal that does not answer the
+  cursor query in time no longer fails `read_line` (upstream's report was brush exiting
+  the shell); the right prompt survives the erase on exit; the cursor row, the rows
+  reserved and a click are all worked out by one grapheme walk, so a double-width
+  character at the margin no longer puts the cursor a row out; a resize records the
+  cursor row as such (`PromptStartRow::Resized`) instead of beside a flag.
+
+Not taken:
+
+- *No-op cursor moves fall through* and *Up and Down report whether they moved*: they
+  build on an edit status cash's copy does not carry, and cash binds no chain where a
+  move is followed by anything (Reedline's emacs bindings put the move last).
+- *Re-use a bottom-row prompt if the cursor returns unmoved*: patch 1 below already
+  re-uses a prompt only when the cursor is back on the very cell.
+- *Trust the measured cursor row over a short terminal size*: it answers a stale kernel
+  window size on Unix; on Windows the size and the cursor both come from the console.
+- *Propagate history errors*: a history that fails while moving through it leaves the
+  line as it is here, rather than ending `read_line`.
+- The features, the SQLite, Helix and external printer fixes, and refactors that only
+  reshape code (paste-after's shape, the prompt height's `- 1`).
 
 ## The changes made while it was a patched copy
 

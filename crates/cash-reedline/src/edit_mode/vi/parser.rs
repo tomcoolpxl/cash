@@ -184,8 +184,12 @@ where
             while let Some(&c) = input.peek() {
                 if let Some(c) = c.to_digit(10) {
                     let _ = input.next();
-                    count *= 10;
-                    count += c as usize;
+                    // reedline 0.52: a count of 20 digits overflowed; it is capped, as
+                    // Helix caps it.
+                    count = count
+                        .saturating_mul(10)
+                        .saturating_add(c as usize)
+                        .min(u16::MAX as usize);
                 } else {
                     return Some(count);
                 }
@@ -270,6 +274,16 @@ mod tests {
                 motion: ParseResult::Incomplete,
             }
         );
+    }
+
+    #[test]
+    fn oversized_count_saturates_instead_of_overflowing() {
+        // reedline 0.52's test: 20 digits overflow usize; the count clamps like Helix's.
+        let mut input: Vec<char> = "99999999999999999999".chars().collect();
+        input.push('x');
+        let output = vi_parse(&input);
+        assert_eq!(output.multiplier, Some(u16::MAX as usize));
+        assert_eq!(output.command, Some(Command::DeleteChar));
     }
 
     #[test]

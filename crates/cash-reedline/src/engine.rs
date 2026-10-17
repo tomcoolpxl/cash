@@ -143,6 +143,8 @@ pub struct Reedline {
     history_exclusion_prefix: Option<String>,
     history_excluded_item: Option<HistoryItem>,
     history_cursor_on_excluded: bool,
+    /// Last failed `history.save`, until [`Reedline::take_history_save_error`].
+    history_save_error: Option<ReedlineError>,
     input_mode: InputMode,
 
     // State of the painter after a `ReedlineEvent::ExecuteHostCommand` was requested, used after
@@ -374,6 +376,7 @@ impl Reedline {
             history_exclusion_prefix: None,
             history_excluded_item: None,
             history_cursor_on_excluded: false,
+            history_save_error: None,
             input_mode: InputMode::Regular,
             suspended_state: None,
             last_render_snapshot: None,
@@ -947,6 +950,15 @@ impl Reedline {
                 "No command run",
             ))),
         }
+    }
+
+    /// Take the error of the last failed history save, if any.
+    ///
+    /// [`read_line`](Self::read_line) still returns the line when the [`History`]
+    /// refuses to store it; the entry is then treated like an excluded one.
+    /// Cleared on read, set at most once per `read_line` (reedline 0.52).
+    pub fn take_history_save_error(&mut self) -> Option<ReedlineError> {
+        self.history_save_error.take()
     }
 
     /// Wait for input and provide the user with a specified [`Prompt`].
@@ -1646,18 +1658,29 @@ impl Reedline {
                 self.painter.clear_scrollback()?;
                 Ok(EventStatus::Handled)
             }
+            // reedline 0.52: a menu with no suggestions has nothing to accept, and
+            // swallowing the key made Enter look dead; the guard lets it through to
+            // submit as if no menu were open (`submit_buffer` closes stragglers).
             ReedlineEvent::Enter | ReedlineEvent::Submit | ReedlineEvent::SubmitOrNewline
-                if self.menus.iter().any(|menu| menu.is_active()) =>
+                if self
+                    .menus
+                    .iter()
+                    .any(|menu| menu.is_active() && !menu.get_values().is_empty()) =>
             {
-                for menu in self.menus.iter_mut() {
-                    if menu.is_active() {
-                        menu.replace_in_buffer(&mut self.editor);
-                        menu.menu_event(MenuEvent::Deactivate);
-
-                        return Ok(EventStatus::Handled);
-                    }
+                // reedline 0.52: the active menu found, where a loop fell through to
+                // `unreachable!()`; were the two scans ever to differ, the event would
+                // read as not applying.
+                if let Some(menu) = self
+                    .menus
+                    .iter_mut()
+                    .find(|menu| menu.is_active() && !menu.get_values().is_empty())
+                {
+                    menu.replace_in_buffer(&mut self.editor);
+                    menu.menu_event(MenuEvent::Deactivate);
+                    Ok(EventStatus::Handled)
+                } else {
+                    Ok(EventStatus::Inapplicable)
                 }
-                unreachable!()
             }
             ReedlineEvent::Enter => {
                 if let Some(event) = self.try_expand_abbreviation_at_cursor(true) {
@@ -2111,7 +2134,12 @@ impl Reedline {
         if self.input_mode == InputMode::HistoryTraversal {
             self.input_mode = InputMode::Regular;
         }
+        self.apply_edit_commands(commands);
+    }
 
+    /// [`run_edit_commands`](Self::run_edit_commands) without ending history
+    /// traversal, for the engine's own line moves inside a recalled entry.
+    fn apply_edit_commands(&mut self, commands: &[EditCommand]) {
         // Adopt the current edit mode's rest policy so these commands resolve
         // under it (e.g. block-caret selection geometry) — but *without*
         // committing the cursor first. A commit here would apply the policy's
@@ -2136,10 +2164,10 @@ impl Reedline {
             // If we're at the top, move to previous history
             self.previous_history();
         } else {
-            // Through `run_edit_commands` so the cursor settles under the mode's
+            // Through `apply_edit_commands` so the cursor settles under the mode's
             // rest policy — a bare `editor.move_line_up` skips the commit boundary,
             // leaving a vi-normal caret past the last grapheme on a short line.
-            self.run_edit_commands(&[EditCommand::MoveLineUp { select: false }]);
+            self.apply_edit_commands(&[EditCommand::MoveLineUp { select: false }]);
         }
     }
 
@@ -2150,7 +2178,7 @@ impl Reedline {
             self.next_history();
         } else {
             // See `up_command`: settle under the rest policy via the commit boundary.
-            self.run_edit_commands(&[EditCommand::MoveLineDown { select: false }]);
+            self.apply_edit_commands(&[EditCommand::MoveLineDown { select: false }]);
         }
     }
 
@@ -2539,6 +2567,9 @@ impl Reedline {
     }
 
     fn submit_buffer(&mut self, prompt: &dyn Prompt) -> io::Result<EventStatus> {
+        // A menu that let the submit through (no suggestions to accept) must not
+        // stay active into the next line's editing (reedline 0.52).
+        self.deactivate_menus();
         let buffer = self.editor.get_buffer().to_string();
         self.hide_hints = true;
         // Additional repaint to show the content without hints etc.
@@ -2552,19 +2583,37 @@ impl Reedline {
             let mut entry = HistoryItem::from_command_line(&buffer);
             entry.session_id = self.get_history_session_id();
 
-            if self
+            let excluded = self
                 .history_exclusion_prefix
                 .as_ref()
-                .map(|prefix| buffer.starts_with(prefix))
-                .unwrap_or(false)
-            {
-                entry.id = Some(Self::FILTERED_ITEM_ID);
-                self.history_last_run_id = entry.id;
-                self.history_excluded_item = Some(entry);
+                .is_some_and(|prefix| buffer.starts_with(prefix));
+
+            // reedline 0.52: a failed save no longer fails `read_line`, which
+            // dropped the command just typed. It ran but was not stored: the
+            // excluded shape, so Up still recalls it, and the error waits for
+            // `take_history_save_error`.
+            let saved = if excluded {
+                None
             } else {
-                entry = self.history.save(entry).map_err(io::Error::other)?;
-                self.history_last_run_id = entry.id;
-                self.history_excluded_item = None;
+                match self.history.save(entry.clone()) {
+                    Ok(saved) => Some(saved),
+                    Err(err) => {
+                        self.history_save_error = Some(err);
+                        None
+                    }
+                }
+            };
+
+            match saved {
+                Some(saved) => {
+                    self.history_last_run_id = saved.id;
+                    self.history_excluded_item = None;
+                }
+                None => {
+                    entry.id = Some(Self::FILTERED_ITEM_ID);
+                    self.history_last_run_id = entry.id;
+                    self.history_excluded_item = Some(entry);
+                }
             }
         }
         self.run_edit_commands(&[EditCommand::Clear]);
@@ -2771,6 +2820,143 @@ mod tests {
 
         // The buffer should still be unchanged
         assert_eq!(reedline.current_buffer_contents(), multiline_command);
+    }
+
+    // --- history walk across a recalled multi-line entry (#1109 regression) ---
+
+    /// History holds `older` then `one\ntwo` (newest).
+    fn two_entry_history_engine() -> Reedline {
+        let mut rl = seam_engine(Box::<Emacs>::default());
+        for cmd in ["older", "one\ntwo"] {
+            rl.history
+                .save(HistoryItem::from_command_line(cmd))
+                .expect("save history");
+        }
+        rl
+    }
+
+    #[test]
+    fn down_inside_recalled_multiline_entry_keeps_walking_forward() {
+        let mut rl = two_entry_history_engine();
+        drive(&mut rl, &[key(KeyCode::Up)]);
+        assert_eq!(rl.editor.get_buffer(), "one\ntwo", "setup");
+        assert_eq!(rl.editor.insertion_point(), 3, "setup: end of line 1");
+
+        drive(&mut rl, &[key(KeyCode::Down)]);
+        assert_eq!(rl.editor.get_buffer(), "one\ntwo", "moves to line 2 first");
+        assert!(rl.editor.insertion_point() > 3, "setup: on line 2");
+
+        drive(&mut rl, &[key(KeyCode::Down)]);
+        assert_eq!(
+            rl.editor.get_buffer(),
+            "",
+            "from the last line, Down walks forward to the empty draft"
+        );
+    }
+
+    #[test]
+    fn up_inside_recalled_multiline_entry_keeps_walking_back() {
+        let mut rl = two_entry_history_engine();
+        drive(&mut rl, &[key(KeyCode::Up), key(KeyCode::Down)]);
+        assert_eq!(rl.editor.get_buffer(), "one\ntwo", "setup");
+        assert!(rl.editor.insertion_point() > 3, "setup: on line 2");
+
+        drive(&mut rl, &[key(KeyCode::Up)]);
+        assert_eq!(rl.editor.get_buffer(), "one\ntwo", "moves to line 1 first");
+        assert!(rl.editor.insertion_point() <= 3, "setup: on line 1");
+
+        drive(&mut rl, &[key(KeyCode::Up)]);
+        assert_eq!(
+            rl.editor.get_buffer(),
+            "older",
+            "from the first line, Up walks back to the older entry"
+        );
+    }
+
+    // --- a history that refuses to save (reedline 0.52) ---
+
+    struct RefusingHistory;
+
+    impl History for RefusingHistory {
+        fn save(&mut self, _h: HistoryItem) -> crate::Result<HistoryItem> {
+            Err(ReedlineError(ReedlineErrorVariants::OtherHistoryError(
+                "refused",
+            )))
+        }
+        fn load(&self, _id: HistoryItemId) -> crate::Result<HistoryItem> {
+            Err(ReedlineError(ReedlineErrorVariants::OtherHistoryError(
+                "not used",
+            )))
+        }
+        fn count(&self, _query: SearchQuery) -> crate::Result<i64> {
+            Ok(0)
+        }
+        fn search(&self, _query: SearchQuery) -> crate::Result<Vec<HistoryItem>> {
+            Ok(vec![])
+        }
+        fn update(
+            &mut self,
+            _id: HistoryItemId,
+            _updater: &dyn Fn(HistoryItem) -> HistoryItem,
+        ) -> crate::Result<()> {
+            Err(ReedlineError(ReedlineErrorVariants::OtherHistoryError(
+                "not used",
+            )))
+        }
+        fn clear(&mut self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn delete(&mut self, _h: HistoryItemId) -> crate::Result<()> {
+            Ok(())
+        }
+        fn sync(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+        fn session(&self) -> Option<HistorySessionId> {
+            None
+        }
+    }
+
+    fn refusing_history_engine() -> Reedline {
+        let mut rl = seam_engine(Box::<Emacs>::default()).with_history(Box::new(RefusingHistory));
+        rl.painter.force_prompt_anchored_for_test(0);
+        rl
+    }
+
+    #[test]
+    fn failed_history_save_still_returns_the_line_and_stashes_the_error() {
+        let mut rl = refusing_history_engine();
+        let signal = drive_until_signal(&mut rl, &[ch('l'), ch('s'), key(KeyCode::Enter)]);
+        assert!(
+            matches!(signal, Some(Signal::Success(ref s)) if s == "ls"),
+            "got {signal:?}"
+        );
+        assert!(
+            rl.take_history_save_error().is_some(),
+            "the save error is stashed"
+        );
+        assert!(rl.take_history_save_error().is_none(), "cleared on read");
+    }
+
+    #[test]
+    fn failed_history_save_keeps_the_entry_reachable() {
+        let mut rl = refusing_history_engine();
+        drive_until_signal(&mut rl, &[ch('l'), ch('s'), key(KeyCode::Enter)]);
+
+        drive(&mut rl, &[key(KeyCode::Up)]);
+        assert_eq!(rl.editor.get_buffer(), "ls", "Up recalls the unsaved entry");
+
+        rl.update_last_command_context(&|mut item| {
+            item.exit_status = Some(7);
+            item
+        })
+        .expect("context update works off the store");
+        assert_eq!(
+            rl.history_excluded_item
+                .as_ref()
+                .and_then(|i| i.exit_status),
+            Some(7)
+        );
     }
 
     #[test]
@@ -3910,6 +4096,81 @@ mod tests {
             .unwrap();
         assert!(menu_is_active(&reedline));
         reedline
+    }
+
+    /// The menu maintenance the paint cycle runs between keystrokes (value refresh
+    /// only, no layout: the headless test painter has no width), so an assertion
+    /// after a typed character sees what a user would on screen.
+    fn apply_menu_maintenance(reedline: &mut Reedline) {
+        for menu in reedline.menus.iter_mut() {
+            if menu.is_active() {
+                menu.update_values(
+                    &mut reedline.editor,
+                    reedline.completer.as_mut(),
+                    reedline.history.as_ref(),
+                );
+            }
+        }
+    }
+
+    // --- a stale menu must not intercept Enter (reedline 0.52) ---
+    //
+    // The completion menu stays active while the user types past it, and any
+    // Enter while a menu is active is routed to the menu. Left unguarded that
+    // turns Enter into a dead key (empty menu).
+
+    /// A menu whose filtered suggestions are empty has nothing to accept: Enter
+    /// must close it and submit the line, not be swallowed.
+    #[test]
+    fn enter_with_an_empty_menu_submits_the_line() {
+        let mut reedline = engine_with_active_menu(false, false);
+        reedline.painter.force_prompt_anchored_for_test(0);
+        let prompt = DefaultPrompt::default();
+        // "thz" matches nothing; the menu refilters to empty but stays active.
+        reedline
+            .handle_event(
+                &prompt,
+                ReedlineEvent::Edit(vec![EditCommand::InsertChar('z')]),
+            )
+            .unwrap();
+        apply_menu_maintenance(&mut reedline);
+        assert!(menu_is_active(&reedline));
+
+        let status = reedline
+            .handle_event(&prompt, ReedlineEvent::Enter)
+            .unwrap();
+        assert!(
+            matches!(status, EventStatus::Exits(Signal::Success(ref s)) if s == "thz"),
+            "Enter was swallowed by an empty menu"
+        );
+        assert!(!menu_is_active(&reedline));
+    }
+
+    /// The full shape of the report this fixes: Tab opens the menu mid-line, the
+    /// user types the rest of the statement and hits Enter, which the stale menu
+    /// consumed instead of submitting.
+    #[test]
+    fn typing_past_a_completion_then_enter_runs_the_line() {
+        let mut reedline = engine_with_active_menu(false, false);
+        reedline.painter.force_prompt_anchored_for_test(0);
+        let prompt = DefaultPrompt::default();
+        for c in " more words".chars() {
+            reedline
+                .handle_event(
+                    &prompt,
+                    ReedlineEvent::Edit(vec![EditCommand::InsertChar(c)]),
+                )
+                .unwrap();
+        }
+        apply_menu_maintenance(&mut reedline);
+
+        let status = reedline
+            .handle_event(&prompt, ReedlineEvent::Enter)
+            .unwrap();
+        assert!(
+            matches!(status, EventStatus::Exits(Signal::Success(ref s)) if s == "th more words"),
+            "the line was not submitted intact"
+        );
     }
 
     /// Engine with a completion menu open over "th" and partial completions on, so

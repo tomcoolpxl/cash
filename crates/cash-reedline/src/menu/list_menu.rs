@@ -441,7 +441,9 @@ impl Menu for ListMenu {
             };
 
             let end = end.min(self.total_values());
-            &self.values[start..end]
+            // reedline 0.52: pages recorded for an earlier, longer list could put
+            // `start` past `end`; the empty menu shows then, where the range panicked.
+            self.values.get(start..end).unwrap_or(&[])
         }
     }
 
