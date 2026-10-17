@@ -5,6 +5,11 @@
 //! A file's facts come from its folder's listing, as `FindFirstFile` gives them to
 //! 7-Zip: the name's case as it is on disk, and the times the folder's index holds,
 //! which can lag behind the file's own for a folder just written to.
+//!
+//! A link is a symbolic link or a junction (a name surrogate), the builtins' one answer:
+//! another reparse point, a cloud placeholder or a deduplicated file, is the file or
+//! folder it holds, as 7-Zip, which keeps reparse data only when it reads as a link
+//! (`CReparseAttr::Parse`), takes it.
 
 use std::fs;
 use std::io;
@@ -13,9 +18,8 @@ use std::path::PathBuf;
 
 use super::censor::{Censor, Node, check_to_root};
 
-/// `FILE_ATTRIBUTE_DIRECTORY` and `FILE_ATTRIBUTE_REPARSE_POINT`.
+/// `FILE_ATTRIBUTE_DIRECTORY`.
 const ATTRIBUTE_DIRECTORY: u32 = 0x10;
-const ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 
 /// Windows' `ERROR_INVALID_FUNCTION`, 7-Zip's error for a name that is a file where a
 /// folder was meant, or the other way round.
@@ -115,6 +119,8 @@ impl Stat {
 /// A name found on disk: its name there, and its facts.
 struct Found {
     name: String,
+    /// A symbolic link or junction, not gone through.
+    link: bool,
     /// A junction or symbolic link gone through: the facts are what it names.
     followed: bool,
     attrib: u32,
@@ -132,6 +138,7 @@ impl Found {
     fn of(name: String, meta: &fs::Metadata) -> Self {
         Self {
             name,
+            link: meta.file_type().is_symlink(),
             followed: false,
             attrib: meta.file_attributes(),
             size: if meta.is_dir() { 0 } else { meta.file_size() },
@@ -221,7 +228,7 @@ impl Walker<'_> {
                 continue;
             }
             let meta = entry.metadata()?;
-            if meta.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0 && !self.symlinks {
+            if meta.file_type().is_symlink() && !self.symlinks {
                 return Ok(Found {
                     followed: true,
                     ..Found::of(entry_name, &fs::metadata(&path)?)
@@ -240,7 +247,7 @@ impl Walker<'_> {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().into_owned();
             let meta = entry.metadata()?;
-            if meta.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0
+            if meta.file_type().is_symlink()
                 && !self.symlinks
                 && let Ok(target) = fs::metadata(entry.path())
             {
@@ -260,9 +267,9 @@ impl Walker<'_> {
         (self.warn)(shown, error);
     }
 
-    /// Whether the scan keeps `found` as a link: `-snl`, and a reparse point.
+    /// Whether the scan keeps `found` as a link: `-snl`, and a symbolic link or junction.
     const fn kept_link(&self, found: &Found) -> bool {
-        self.symlinks && found.attrib & ATTRIBUTE_REPARSE_POINT != 0
+        self.symlinks && found.link
     }
 
     fn add(&mut self, phy: &str, log: &str, found: &Found) {
