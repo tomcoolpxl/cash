@@ -268,3 +268,25 @@ fn a_console_is_refused_the_archive() {
         left.screen
     );
 }
+
+#[test]
+fn tar_reads_cashs_path_spellings_and_device_names() {
+    // tar resolved member names, `-T` and `-X` files with `base.join`, past cash's
+    // spellings: `/c/x` became `C:/c/x`. And a `-T` list on `/dev/stdin` is the shell's.
+    let scratch = Scratch::new("tar-spellings");
+    std::fs::write(scratch.path().join("member.txt"), "data").unwrap();
+    let windows = scratch
+        .path()
+        .to_string_lossy()
+        .replace(std::path::MAIN_SEPARATOR, "/");
+    // `C:/Users/...` as `/c/Users/...`.
+    let (drive, rest) = windows.split_once(':').unwrap();
+    let unix = format!("/{}{rest}", drive.to_ascii_lowercase());
+    let out = run_in(
+        scratch.path(),
+        &format!(
+            "tar cf - '{unix}/member.txt' | tar tf - | tail -c 11; echo member.txt | tar cf - -T /dev/stdin | tar tf -"
+        ),
+    );
+    assert_eq!(out.stdout, "member.txt\nmember.txt", "{}", out.stderr);
+}

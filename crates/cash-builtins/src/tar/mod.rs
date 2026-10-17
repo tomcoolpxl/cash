@@ -34,6 +34,7 @@ use cash_archive::codec::{self, Codec, Lookahead};
 use cash_archive::listing::{self, mode_string};
 use cash_archive::member::{Kind, Member, Timestamp};
 use cash_archive::select::{self, Flags};
+use cash_core::input::Dash;
 use cash_core::openfiles::OpenFiles;
 use cash_core::timefmt::Zone;
 use cash_core::{ExecutionResult, builtins};
@@ -467,7 +468,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         let mut out = Vec::new();
         for name in self.options.names.clone() {
             match name {
-                Name::Chdir(dir) => base = base.join(&dir),
+                Name::Chdir(dir) => base = resolve(&base, &dir),
                 Name::Path(path) => out.push((path, base.clone())),
                 Name::FilesFrom(file) => {
                     let bytes = match self.read_named(&base, &file) {
@@ -491,7 +492,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                         };
                         let text = String::from_utf8_lossy(line).into_owned();
                         if let Some(dir) = text.strip_prefix("-C").filter(|_| !self.options.null) {
-                            base = base.join(dir.trim_start());
+                            base = resolve(&base, dir.trim_start());
                         } else if !text.is_empty() {
                             out.push((text, base.clone()));
                         }
@@ -502,18 +503,14 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         Ok(out)
     }
 
-    /// The bytes of a file a name list or a pattern list is read from: `-` and
-    /// `/dev/stdin` are standard input, `/dev/null` is nothing.
+    /// The bytes of a file a name list or a pattern list is read from: `-` is standard
+    /// input, and a device's name (`/dev/stdin`, `/dev/null`, `/dev/fd/3`) the shell's,
+    /// as its `<` opens them; another name is under the folder `-C` left in force.
     fn read_named(&self, base: &Path, name: &str) -> io::Result<Vec<u8>> {
-        match name {
-            "-" | "/dev/stdin" => {
-                let mut bytes = Vec::new();
-                self.context.stdin().read_to_end(&mut bytes)?;
-                Ok(bytes)
-            }
-            "/dev/null" => Ok(Vec::new()),
-            _ => fs::read(base.join(name)),
+        if name == "-" || cash_win32::devices::dev_name(Path::new(name)).is_some() {
+            return self.context.open_input(name, Dash::Stdin)?.read_all();
         }
+        fs::read(resolve(base, name))
     }
 
     /// The folder `-C` leaves in force at the end: where members are extracted when no
@@ -522,7 +519,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         let mut base = self.path(".");
         for name in &self.options.names {
             if let Name::Chdir(dir) = name {
-                base = base.join(dir);
+                base = resolve(&base, dir);
             }
         }
         base
@@ -539,12 +536,14 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                 ));
             }
             Box::new(self.context.stdin())
-        } else if name == "/dev/null" {
-            Box::new(io::empty())
         } else {
-            match fs::File::open(self.path(&name)) {
-                Ok(file) => Box::new(file),
-                Err(e) => return Err(self.fatal(&format!("{name}: Cannot open: {}", strerror(&e)))),
+            // Opened as the shell's `<` opens it: a device's name is the shell's, and what
+            // is read goes through the stop token.
+            match self.context.open_input(&name, Dash::Stdin) {
+                Ok(input) => Box::new(input),
+                Err(e) => {
+                    return Err(self.fatal(&format!("{name}: Cannot open: {}", e.reason())));
+                }
             }
         };
         self.decompress(input)
@@ -655,6 +654,17 @@ fn utf8_locale<SE: cash_core::ShellExtensions>(
 /// A member's time for `std`.
 fn system_time(time: Timestamp) -> Option<std::time::SystemTime> {
     time.system_time()
+}
+
+/// `name` as cash reads a path, `/c/x` and `//srv/share` among the spellings, under
+/// `base`, the folder `-C` left in force, when it is relative.
+pub(super) fn resolve(base: &Path, name: &str) -> PathBuf {
+    let accepted = cash_win32::path::accept_path(name);
+    if accepted.is_absolute() {
+        accepted
+    } else {
+        base.join(accepted)
+    }
 }
 
 /// Whether `path` names a folder, without opening a pipe.

@@ -388,7 +388,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                 name.as_str()
             };
             let trimmed = if trimmed.is_empty() { "/" } else { trimmed };
-            let path = base.join(trimmed);
+            let path = super::resolve(base, trimmed);
             self.dump(output, &mut walk, trimmed, &path)?;
         }
         Ok(())

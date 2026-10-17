@@ -83,7 +83,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         let mut writer = Writer::new(io::BufWriter::new(file), self.write_options_for_edit());
         writer.start_at(end);
         for (name, base) in names {
-            let other = base.join(&name);
+            let other = super::resolve(&base, &name);
             let input = match fs::File::open(&other) {
                 Ok(file) => file,
                 Err(e) => {
