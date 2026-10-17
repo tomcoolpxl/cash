@@ -1631,3 +1631,9 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   as its widest name, where every column took the widest name's width; the width is
   `COLUMNS`, the terminal's, or 80 into a pipe, where the console's was taken. `ls -l` on
   a link to a folder shows the link, as GNU's does. `help ls` gives `ls --help`'s options.
+
+- **The clipboard test failed while another program held the clipboard** (found
+  2026-10-16, done 2026-10-17): an open of the clipboard tried for 200 ms, ten times
+  20 ms apart, and a clipboard manager or a program copying can hold it longer. It tries
+  for two seconds now, the wait doubling from 20 ms up to 250 ms; a unit test holds it
+  from another thread for half a second.

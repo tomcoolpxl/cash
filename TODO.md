@@ -86,11 +86,6 @@ What the phases now in DONE.md left open, each where its phase says more.
 - **ls's words for a bad `--color` or `--classify`** (2026-10-17): `Valid arguments
   are: 'always', 'auto', 'never'`, status 2, where GNU's ls lists them three to a line
   (`'always', 'yes', 'force'` and so on), status 1, as cash's `--format` now does.
-- **The clipboard test fails while another program holds the clipboard** (2026-10-16):
-  `clipboard_and_small_tools::pbcopy_and_pbpaste_round_trip_through_the_clipboard` reads
-  the clipboard first and fails with "the clipboard is in use by another program" on a
-  busy desktop (a clipboard manager, an app copying). A short retry of the open, in
-  `cash_win32::clipboard` or in the test, would ride it out.
 - **Work done again on every call, from the 2026-10-16 survey** (after `ls` was found
   re-reading Windows Terminal's settings per listing; the session facts now have one
   place, `cash_win32::facts`). Still worked out each time:

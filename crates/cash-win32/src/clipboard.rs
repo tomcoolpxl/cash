@@ -25,10 +25,14 @@ use windows_sys::Win32::System::Memory::{
 const CF_TEXT: u32 = 1;
 /// `CF_UNICODETEXT`: UTF-16, NUL-terminated.
 const CF_UNICODETEXT: u32 = 13;
-/// How many times opening the clipboard is tried while another program holds it.
-const OPEN_ATTEMPTS: u32 = 10;
-/// The wait between two attempts.
-const OPEN_RETRY_WAIT: Duration = Duration::from_millis(20);
+/// How long opening the clipboard is tried while another program holds it: a clipboard
+/// manager reading what was copied, or a program copying, can keep it open past the
+/// 200 ms tried before, on a busy desktop.
+const OPEN_PATIENCE: Duration = Duration::from_secs(2);
+/// The first wait between two attempts, doubled after each up to `OPEN_LONGEST_WAIT`.
+const OPEN_FIRST_WAIT: Duration = Duration::from_millis(20);
+/// The longest wait between two attempts.
+const OPEN_LONGEST_WAIT: Duration = Duration::from_millis(250);
 /// What a clipboard another program keeps open is reported as.
 const IN_USE: &str = "the clipboard is in use by another program";
 
@@ -36,10 +40,12 @@ const IN_USE: &str = "the clipboard is in use by another program";
 struct Open;
 
 impl Open {
-    /// Opens the clipboard, retrying while another program holds it.
+    /// Opens the clipboard, retrying while another program holds it, for `OPEN_PATIENCE`.
     fn new() -> io::Result<Self> {
         let busy = i32::try_from(ERROR_ACCESS_DENIED).ok();
-        for attempt in 1..=OPEN_ATTEMPTS {
+        let started = std::time::Instant::now();
+        let mut wait = OPEN_FIRST_WAIT;
+        loop {
             // SAFETY: a null window is allowed; the clipboard is then owned by no window.
             if unsafe { OpenClipboard(std::ptr::null_mut()) } != 0 {
                 return Ok(Self);
@@ -48,11 +54,12 @@ impl Open {
             if error.raw_os_error() != busy {
                 return Err(error);
             }
-            if attempt < OPEN_ATTEMPTS {
-                std::thread::sleep(OPEN_RETRY_WAIT);
+            if started.elapsed() + wait > OPEN_PATIENCE {
+                return Err(io::Error::new(io::ErrorKind::WouldBlock, IN_USE));
             }
+            std::thread::sleep(wait);
+            wait = (wait * 2).min(OPEN_LONGEST_WAIT);
         }
-        Err(io::Error::new(io::ErrorKind::WouldBlock, IN_USE))
     }
 }
 
@@ -202,6 +209,24 @@ mod tests {
 
     /// The clipboard is one per desktop, so the tests take turns.
     static CLIPBOARD: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn an_open_waits_out_a_program_that_holds_the_clipboard_half_a_second() {
+        let _turn = CLIPBOARD.lock().unwrap_or_else(PoisonError::into_inner);
+        // Another thread stands for another program: the clipboard opened on one thread
+        // is closed to the others until it is closed again. 200 ms was all an open tried.
+        let (held, holding) = std::sync::mpsc::channel();
+        let holder = std::thread::spawn(move || {
+            let open = Open::new();
+            let _ = held.send(open.is_ok());
+            std::thread::sleep(Duration::from_millis(500));
+            drop(open);
+        });
+        if holding.recv() == Ok(true) {
+            assert!(Open::new().is_ok());
+        }
+        let _ = holder.join();
+    }
 
     #[test]
     fn text_round_trips_and_an_empty_text_empties_the_clipboard() {
