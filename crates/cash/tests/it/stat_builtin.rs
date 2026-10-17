@@ -255,3 +255,25 @@ fn stat_shows_a_links_target() {
         "{out}"
     );
 }
+
+/// `%b` counts the blocks of 512 bytes (`%B`) the volume gives a file, as `st_blocks`
+/// does, so `%b` times `%B` is its space on the disk, as `ls -s` counts it in KiB: it
+/// was the size's, 10 for a file of 5000 bytes that takes 8 KiB.
+#[test]
+fn stat_blocks_are_the_space_the_volume_gives() {
+    let scratch = Scratch::new("stat-blocks");
+    let file = scratch.join("five");
+    std::fs::write(&file, vec![0u8; 5000]).unwrap();
+    let posix = file.to_string_lossy().replace('\\', "/");
+    let out = cash(&format!(
+        "stat -c '%b %B' '{posix}'; ls -s '{posix}' | cut -d' ' -f1"
+    ));
+    let lines: Vec<&str> = out.lines().collect();
+    let kib: u64 = lines.get(1).and_then(|n| n.parse().ok()).unwrap();
+    assert!(kib >= 5, "{out}");
+    assert_eq!(
+        lines.first().copied(),
+        Some(&*format!("{} 512", kib * 2)),
+        "{out}"
+    );
+}

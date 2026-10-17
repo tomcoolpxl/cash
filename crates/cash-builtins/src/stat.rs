@@ -311,7 +311,16 @@ impl FileStatInfo {
         zone: &Zone,
     ) -> Self {
         let name = written.to_string_lossy().to_string();
-        let blocks = meta.len().div_ceil(512);
+        // NTFS's facts of the file: its change time and the space the volume gives it.
+        let facts = cash_win32::fs::file_facts(path, !meta.is_symlink());
+        // The blocks of 512 bytes (`%B`) the volume gives it, as `st_blocks` counts them,
+        // so `%b` times `%B` is its space on the disk, as Git Bash's stat gives it; the
+        // size's where the facts cannot be read. They were the size's always: 10 for a
+        // file of 5000 bytes on 8 KiB.
+        let blocks = facts
+            .as_ref()
+            .map_or_else(|| meta.len(), |facts| facts.allocation)
+            .div_ceil(512);
         let link_target = meta
             .is_symlink()
             .then(|| std::fs::read_link(path).ok())
@@ -373,7 +382,7 @@ impl FileStatInfo {
         // NTFS keeps a change time of its own, of the contents, the name or the attributes,
         // which Git Bash's stat shows as Change, as `ls -c` does; the modification time
         // where it cannot be read. It was always the modification time.
-        let ctime = cash_win32::fs::file_facts(path, !meta.is_symlink())
+        let ctime = facts
             .map(|facts| facts.change_time)
             .filter(|&time| time != 0)
             .unwrap_or(mtime);

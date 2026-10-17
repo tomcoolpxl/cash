@@ -33,16 +33,9 @@ order. The phase before, released as 1.22.0, is in DONE.md.
 1. **`timeout 2 cash -c 'sleep 5; echo done'` prints `done`**: settled, not cash's
    (2026-10-17, DONE.md).
 2. **`pbcopy` and `pbpaste` on a locked workstation**: done (2026-10-17, DONE.md).
-3. **`ls -l` moves the access time of a file it reads for `#!`** (2026-10-17, found with
-   `ls -u`): to decide `x`, cash reads the first two bytes of a file of two bytes or more
-   without a program extension, and that read is an access; `ls -lu` then shows its own
-   read. Git Bash's ls does the same (Cygwin reads the start of a file for its execute
-   bit); GNU on Linux never reads a file. Asking the handle not to update the access
-   time (`SetFileTime` with all ones) would keep it, where the handle may write
-   attributes.
-4. **`stat`'s blocks are the size's, not the allocation's** (2026-10-17, found with `ls
-   -s`): `%b` is the size in 512-byte blocks, where Git Bash's stat gives the allocation
-   in its 1024-byte units (`%B` 1024): a 5000-byte file is 10 here and 8 there.
+3. **`ls -l` moves the access time of a file it reads for `#!`**: done (2026-10-17,
+   DONE.md).
+4. **`stat`'s blocks are the size's, not the allocation's**: done (2026-10-17, DONE.md).
 5. **A script's shebang interpreter is looked up twice**, past the hash table (looked into
    2026-10-17): `execute_via_external` reads the script's head and resolves the
    interpreter to answer a script whose interpreter is `true` or `false` at once, and

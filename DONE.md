@@ -1920,3 +1920,17 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   locked"; the clipboard tests skip then. Seen unlocked (the flag reads so and the tests
   run); the locked case rests on Windows' documented flag, the session having been
   unlocked by the time it was built.
+- **`ls -l` moved the access time of a file it read for `#!`** (the user's pick after
+  1.22.0): `ls -l`, `ls -F` (and the colours) and `stat` read a file's first two bytes to
+  tell whether it runs, and NTFS took the read for an access, so `ls -lu` showed ls's
+  own read, as Git Bash's ls does; GNU's reads no file. The read now goes through a
+  handle opened with `FILE_WRITE_ATTRIBUTES` and told to keep the access time
+  (`SetFileTime` with all ones). Where the access list lends no such handle, the read
+  is as before, and the rest of that folder is not asked again: asking each file of
+  `C:/Windows/System32` made `ls -l` 40% slower (520 ms to 715 ms in a debug build),
+  and with the folder remembered it is as before (530 ms).
+- **`stat`'s blocks were the size's, not the allocation's** (the user's pick after
+  1.22.0): `%b` and the report's `Blocks:` count the blocks of 512 bytes (`%B`) the
+  volume gives the file, from the facts stat reads for the change time anyway, so `%b`
+  times `%B` is its space on the disk: 16 for a file of 5000 bytes on 8 KiB, where Git
+  Bash's stat says 8 of 1024; it was 10, the size's.
