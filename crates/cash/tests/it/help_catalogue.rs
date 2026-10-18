@@ -111,7 +111,7 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
         "{text}"
     );
     // A draft ends with the builtin's own `--help`.
-    let draft = run("help -m comm");
+    let draft = run("help -m csplit");
     assert!(
         draft.stdout.contains("\nUSAGE AND OPTIONS\n"),
         "{}",

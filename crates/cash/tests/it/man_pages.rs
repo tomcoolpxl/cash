@@ -39,13 +39,13 @@ fn man_prints_a_page_as_text_when_its_output_is_not_a_terminal() {
     );
 
     // A draft ends with the command's own --help.
-    let out = run("man comm");
+    let out = run("man csplit");
     assert!(
         out.stdout.contains("\nUSAGE AND OPTIONS\n"),
         "{}",
         out.stdout
     );
-    assert!(out.stdout.contains("--check-order"), "{}", out.stdout);
+    assert!(out.stdout.contains("--suffix-format"), "{}", out.stdout);
 }
 
 #[test]
