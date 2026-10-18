@@ -452,7 +452,7 @@ fn page_head<SE: cash_core::ShellExtensions>(
         |text: &str| render::wrap(&render::inline(text, style.colour), style.width, "", 0);
     let mut out = render::wrap(
         &format!(
-            "{} \u{2014} {}",
+            "{} - {}",
             render::paint(name, render::COMMAND, style.colour),
             render::inline(&summary_of(name, registration)?, style.colour)
         ),

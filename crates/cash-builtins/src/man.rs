@@ -164,42 +164,65 @@ fn apropos<SE: cash_core::ShellExtensions>(
 /// The browser on the screen until it is left: a frame, then a key or a resize.
 fn browse(out: &mut impl std::io::Write, mut browser: Browser<'_>) -> std::io::Result<()> {
     let (mut width, mut height) = terminal_size();
+    // The rows on the screen, so that only those that changed are written again.
+    let mut shown: Vec<String> = Vec::new();
     loop {
-        for (row, line) in browser.frame(width, height).iter().enumerate() {
-            write!(out, "\x1b[{};1H{line}", row + 1)?;
+        let frame = browser.frame(width, height);
+        let mut text = String::from("\x1b[?2026h");
+        for (row, line) in frame.iter().enumerate() {
+            if shown.get(row) != Some(line) {
+                let _ = std::fmt::Write::write_fmt(
+                    &mut text,
+                    format_args!("\x1b[{};1H{line}", row + 1),
+                );
+            }
         }
+        text.push_str("\x1b[?2026l");
+        out.write_all(text.as_bytes())?;
         out.flush()?;
-        match event::read()? {
-            Event::Key(key) if key.kind != KeyEventKind::Release => {
-                let control = key.modifiers.contains(KeyModifiers::CONTROL);
-                if control && key.code == KeyCode::Char('c') {
-                    return Ok(());
+        shown = frame;
+        // Every key waiting is taken before the next frame, so a held key does not
+        // draw the frames it passes.
+        let mut event = event::read()?;
+        loop {
+            match event {
+                Event::Key(key) if key.kind != KeyEventKind::Release => {
+                    let control = key.modifiers.contains(KeyModifiers::CONTROL);
+                    if control && key.code == KeyCode::Char('c') {
+                        return Ok(());
+                    }
+                    if let Some(key) = key_of(key)
+                        && browser.key(key) == Outcome::Quit
+                    {
+                        return Ok(());
+                    }
                 }
-                if let Some(key) = key_of(key)
-                    && browser.key(key) == Outcome::Quit
-                {
-                    return Ok(());
+                Event::Resize(columns, rows) => {
+                    width = usize::from(columns).max(1);
+                    height = usize::from(rows).max(1);
+                    write!(out, "\x1b[2J")?;
+                    shown.clear();
                 }
+                _ => {}
             }
-            Event::Resize(columns, rows) => {
-                width = usize::from(columns).max(1);
-                height = usize::from(rows).max(1);
-                write!(out, "\x1b[2J")?;
+            if !event::poll(std::time::Duration::ZERO)? {
+                break;
             }
-            _ => {}
+            event = event::read()?;
         }
     }
 }
 
-/// The browser's key for a key pressed: Up and Down choose a topic, with Ctrl or Shift
-/// they move the page a line; Ctrl with Page Up and Page Down moves it a section.
+/// The browser's key for a key pressed: Up and Down choose a topic, with Shift they
+/// move the page a line; Ctrl with Page Up and Page Down moves it a section. Ctrl with
+/// Up and Down is Windows Terminal's (scroll to a mark), and never comes here.
 const fn key_of(key: KeyEvent) -> Option<Key> {
     let control = key.modifiers.contains(KeyModifiers::CONTROL);
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
     let alt = key.modifiers.contains(KeyModifiers::ALT);
     Some(match key.code {
-        KeyCode::Up if control || shift => Key::LineUp,
-        KeyCode::Down if control || shift => Key::LineDown,
+        KeyCode::Up if shift => Key::LineUp,
+        KeyCode::Down if shift => Key::LineDown,
         KeyCode::Up => Key::Up,
         KeyCode::Down => Key::Down,
         KeyCode::PageUp if control => Key::SectionUp,
@@ -228,10 +251,7 @@ mod tests {
     fn keys_map_to_the_browser_s() {
         let key = |code, modifiers| key_of(KeyEvent::new(code, modifiers));
         assert_eq!(key(KeyCode::Down, KeyModifiers::NONE), Some(Key::Down));
-        assert_eq!(
-            key(KeyCode::Down, KeyModifiers::CONTROL),
-            Some(Key::LineDown)
-        );
+        assert_eq!(key(KeyCode::Down, KeyModifiers::SHIFT), Some(Key::LineDown));
         assert_eq!(key(KeyCode::Up, KeyModifiers::SHIFT), Some(Key::LineUp));
         assert_eq!(
             key(KeyCode::PageDown, KeyModifiers::CONTROL),

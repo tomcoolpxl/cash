@@ -70,7 +70,7 @@ fn help_is_the_syntax_and_the_examples_and_points_to_man() {
     let out = run("help sed");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
-    assert!(text.starts_with("sed \u{2014} "), "{text}");
+    assert!(text.starts_with("sed - "), "{text}");
     assert!(
         text.contains("\nSYNTAX\n") && text.contains("\nEXAMPLES\n"),
         "{text}"
@@ -99,7 +99,7 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
     let out = run("help -m sed");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
-    assert!(text.starts_with("sed \u{2014} "), "{text}");
+    assert!(text.starts_with("sed - "), "{text}");
     assert!(text.contains("\nDIFFERENT IN CASH\n"), "{text}");
     assert!(text.contains("CASH_EOL=lf"), "{text}");
     // A page written in full has its own options, and no `--help` after them.

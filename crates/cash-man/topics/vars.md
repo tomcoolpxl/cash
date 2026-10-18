@@ -1,5 +1,5 @@
 ---
-title: Variables cash reads and sets
+title: Variables cash sets
 summary: The `CASH_*` variables, the Bash variables cash sets, and how Windows' variables are seen.
 see: export paths crlf keys config
 ---

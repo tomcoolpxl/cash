@@ -1,5 +1,5 @@
 ---
-title: Configuration: config.toml, options and startup files
+title: Configuration
 summary: The config file's keys and defaults, cash's command-line options, and the startup files it reads.
 see: cashctl shopt set keys vars
 ---

@@ -1,5 +1,5 @@
 ---
-title: Tools to install: winget and Scoop names for common commands
+title: Tools to install
 summary: The package that installs a command cash cannot find, by its winget id and its Scoop name.
 see: installing
 ---

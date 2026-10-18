@@ -1,5 +1,5 @@
 ---
-title: Jobs, Ctrl-C and Ctrl-Z on Windows
+title: Jobs, Ctrl-C, Ctrl-Z
 summary: Job objects, what Ctrl-C and Ctrl-Z do, `kill` and its signals, and `detach`.
 see: jobs fg bg kill wait disown detach trap cashctl elevation
 ---

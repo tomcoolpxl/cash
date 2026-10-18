@@ -1,5 +1,5 @@
 ---
-title: Where cash differs from Bash and Git Bash
+title: Differences from Bash
 summary: Every place cash knowingly behaves unlike Bash 5.3 or Git Bash, each with its reason.
 see: paths crlf job-control elevation vars config
 ---

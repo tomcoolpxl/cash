@@ -107,7 +107,7 @@ page, Up and Down with a modifier a line; no panes taking turns, no Tab.
 |---|---|
 | Up Down | the topic before or after: its page shows at once |
 | PgUp PgDn, Home End | a screen up or down, the start or the end of the page |
-| Ctrl+Up Ctrl+Down (Shift too) | a line up or down in the page |
+| Shift+Up Shift+Down | a line up or down in the page (Windows Terminal takes Ctrl with them) |
 | Ctrl+PgUp Ctrl+PgDn | the section before or after |
 | letters, Backspace | narrow the list: by name, then summary, then the pages' text |
 | Ctrl-F | find in the page as you type; F3, Shift-F3 and Enter go between matches |

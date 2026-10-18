@@ -241,7 +241,7 @@ pub fn draw(page: &Page, manual: &Manual, width: usize) -> Drawn {
         .collect();
     if !page.summary.is_empty() {
         top.push(Word {
-            pieces: vec![("\u{2014}".to_owned(), Style::Plain)],
+            pieces: vec![("-".to_owned(), Style::Plain)],
             space_before: true,
         });
         let mut summary = words(&page.summary);
@@ -930,7 +930,7 @@ mod tests {
         );
         assert_eq!(
             page.text(false),
-            "cd \u{2014} Change the directory.\n\nSYNTAX\n        cd DIRECTORY    go to DIRECTORY\n\n\
+            "cd - Change the directory.\n\nSYNTAX\n        cd DIRECTORY    go to DIRECTORY\n\n\
              EXAMPLES\n    Go home:\n\n        cd\n\nSEE ALSO\n    pwd, paths, nowhere\n"
         );
         let titles: Vec<&str> = page.sections.iter().map(|s| s.title.as_str()).collect();
@@ -965,7 +965,7 @@ mod tests {
         );
         assert_eq!(
             page.text(false),
-            "cd \u{2014} s\n\nHOW IT WORKS\n    one two three\n    four five six\n    seven eight\n\n\
+            "cd - s\n\nHOW IT WORKS\n    one two three\n    four five six\n    seven eight\n\n\
              \x20   - alpha beta\n      gamma delta\n      epsilon zeta\n    - next\n\n\
              \x20   10. ordered item\n        that wraps\n        here\n"
         );

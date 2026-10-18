@@ -1,5 +1,5 @@
 ---
-title: Line endings: CRLF and LF
+title: Line endings: CRLF, LF
 summary: Why `sed` and `awk` keep CRLF files CRLF, and how `$(...)` and `read` treat CR.
 see: sed awk dos2unix unix2dos read mapfile
 ---

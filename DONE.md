@@ -2364,3 +2364,19 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   list was run in cash and in Git Bash, and every example runs against Git Bash, its
   output frozen. Two options did not work and now do: `chmod -c`, which says only what
   changed, and `chmod --reference=FILE`, both refused as modes.
+- **`man`'s screen made plain, as the user asked on trying it** (2026-10-18): the list,
+  one line, and the page, no boxes and no titles; the page's first line stays on top as
+  it scrolls, and the bottom line is in reverse video. The list's top row says "type to
+  filter", and shows what is typed. The chosen entry was one row under the screen
+  whenever the line between the topics and the commands was in view, as the scrolling
+  did not count it; it counts it. Topics are titled short enough for the list
+  ("Configuration", "Elevation: sudo, UAC") and drawn as the commands are. A page's
+  head reads `name - summary`, in `help` too: no em dash. Shift with Up or Down moves
+  the page a line: Windows Terminal takes Ctrl with them (scroll to a mark). Pages are
+  drawn once for a width, keys held down are taken before the next frame, and only the
+  rows that changed are written, in one synchronized update.
+- **The manual's third twenty pages written in full** (2026-10-18, batch 3): unset,
+  declare, local, trap, wait, shopt, getopts, eval, exit, which, tee, less (and more),
+  mapfile, printenv, rmdir, basename, dirname, seq, sleep and du. Every option the pages
+  list was run in cash and in Git Bash, and every example runs against Git Bash, its
+  output frozen. `less` lists only the options cash's pager has.

@@ -1,5 +1,5 @@
 ---
-title: Elevation: sudo, su, elevate and UAC
+title: Elevation: sudo, UAC
 summary: Running commands as Administrator or as another user, which tool does it, and what escapes cash's job.
 see: sudo su sudoedit elevate detach id job-control
 ---

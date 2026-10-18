@@ -16,7 +16,7 @@ fn man_prints_a_page_as_text_when_its_output_is_not_a_terminal() {
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(
         out.stdout
-            .starts_with("cd \u{2014} Change the shell's working directory.\n"),
+            .starts_with("cd - Change the shell's working directory.\n"),
         "{}",
         out.stdout
     );
@@ -27,7 +27,7 @@ fn man_prints_a_page_as_text_when_its_output_is_not_a_terminal() {
     // Alone, Getting started; a topic by its name or its title.
     let out = run("man");
     assert!(
-        out.stdout.starts_with("Getting started \u{2014} "),
+        out.stdout.starts_with("Getting started - "),
         "{}",
         out.stdout
     );

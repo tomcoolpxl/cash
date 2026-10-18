@@ -173,10 +173,7 @@ fn help_tools_opens_and_lists_jq_with_both_names() {
     let out = run("help tools");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
-    assert!(
-        text.starts_with("Tools to install: winget and Scoop names for common commands \u{2014} "),
-        "{text}"
-    );
+    assert!(text.starts_with("Tools to install - "), "{text}");
     // The prose is wrapped where the width says, so the hint may span two lines.
     let unwrapped = text.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(unwrapped.contains(JQ_HINT), "{text}");

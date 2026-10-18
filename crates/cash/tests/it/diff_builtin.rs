@@ -153,7 +153,7 @@ fn help_diff_is_a_page_with_windows_notes_and_its_own_options() {
     let out = run("help -m diff");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
-    assert!(text.starts_with("diff \u{2014} "), "{text}");
+    assert!(text.starts_with("diff - "), "{text}");
     assert!(text.contains("\nDIFFERENT IN CASH\n"), "{text}");
     assert!(text.contains("--strip-trailing-cr"), "{text}");
     assert!(
@@ -173,7 +173,7 @@ fn help_diff_is_a_page_with_windows_notes_and_its_own_options() {
     // cmp's own summary, though the page is diff's.
     assert!(
         cmp.stdout
-            .starts_with("cmp \u{2014} Compare two files byte by byte"),
+            .starts_with("cmp - Compare two files byte by byte"),
         "{}",
         cmp.stdout
     );

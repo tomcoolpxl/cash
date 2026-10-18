@@ -1,5 +1,5 @@
 ---
-title: Installing and upgrading: the installer, Scoop, the Terminal profile, tool links, fonts
+title: Installing and updating
 summary: What the installer and the Scoop install set up, the optional steps, and how to upgrade while a cash window is open.
 see: config keys ls which
 ---
