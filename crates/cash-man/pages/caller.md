@@ -17,7 +17,8 @@ see: trap return
 
 Where a function was called from, in a script:
 
-    printf '%s\n' 'where() { caller 0; }' 'outer() { where; }' outer > calls.sh
+    printf '%s\n' 'where() { caller 0; }' 'outer() { where; }' outer \
+        > calls.sh
     bash calls.sh
 
 Every call, out to the script itself:
