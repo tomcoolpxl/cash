@@ -91,6 +91,12 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **The clipboard's unit test puts back only text** (2026-10-18, seen in the quick
+  lane): `cash-win32`'s `text_round_trips_and_an_empty_text_empties_the_clipboard` runs
+  in every quick lane on the developer's own clipboard, saves its text and puts it back,
+  but an image or a file list there is replaced by the text it saved (none). Small: save
+  and restore every format, or skip unless the clipboard holds text only.
+
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against
