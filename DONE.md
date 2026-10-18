@@ -2310,3 +2310,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   shown, as its bytes hold the fixture's new times. Writing them found and fixed bugs
   in find, rm, test, export, read, alias, command, exec and pwd, and filed the rest in
   TODO.md.
+- **A Windows variable spelled in another case is that variable** (2026-10-18, found
+  writing export's man page; the user picked the fix and its limit): reading folded
+  case already, but an assignment was exact, so `export Path=/x` made a second variable
+  beside `PATH`; the shell went on looking commands up in `PATH`, and a program got one
+  of the two in hash order (`mixed` three times in five). Now an assignment to a name
+  that differs only in case from one inherited from Windows lands on it, unless the
+  name is all in lower case: `for path in "$@"` and `local temp` stay a script's own,
+  as in Bash, so its command lookup holds. A script's own `$Foo` and `$FOO` stay two.
+  A program gets twins that remain in a fixed order, the inherited spelling last, so it
+  wins. Creating 20,000 capitalised variables takes as long as before.

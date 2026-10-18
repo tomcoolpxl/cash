@@ -112,6 +112,9 @@ pub struct ShellEnvironment {
     export_variables_on_modification: bool,
     /// Count of total entries (may include duplicates with shadowed variables).
     entry_count: usize,
+    /// The variables inherited from Windows, by their folded spelling: an assignment to
+    /// `Path` lands on `PATH` ([`ShellEnvironment::mark_inherited`]).
+    inherited: HashMap<String, String>,
 }
 
 impl Default for ShellEnvironment {
@@ -127,6 +130,40 @@ impl ShellEnvironment {
             scopes: vec![(EnvironmentScope::Global, ShellVariableMap::default())],
             export_variables_on_modification: false,
             entry_count: 0,
+            inherited: HashMap::new(),
+        }
+    }
+
+    /// Records `name` as a variable inherited from Windows, so that a name differing
+    /// from it only in case, and not all in lower case, is it.
+    ///
+    /// cash: reading folded case already (D31), but an assignment was exact, so
+    /// `export Path=/x` made a second variable beside `PATH`: the shell went on looking
+    /// commands up in `PATH`, and a program got one of the two at random. A script's
+    /// own `path` or `temp`, all in lower case, stays its own, as in Bash: folding those
+    /// would have `for path in "$@"` break the script's command lookup.
+    pub fn mark_inherited(&mut self, name: &str) {
+        self.inherited
+            .insert(cash_win32::fold::name_key(name), name.to_owned());
+    }
+
+    /// Whether `name` is spelled as a variable inherited from Windows is.
+    pub fn is_inherited_spelling(&self, name: &str) -> bool {
+        self.inherited
+            .get(&cash_win32::fold::name_key(name))
+            .is_some_and(|spelled| spelled == name)
+    }
+
+    /// The name `name` stands for when no variable is spelled so: an inherited Windows
+    /// variable's, for a name that differs from it only in case and is not all in lower
+    /// case (`Path` for `PATH`); `name` otherwise.
+    fn inherited_spelling<'a>(&self, name: Cow<'a, str>) -> Cow<'a, str> {
+        if self.inherited.is_empty() || !name.chars().any(char::is_uppercase) {
+            return name;
+        }
+        match self.inherited.get(&cash_win32::fold::name_key(&name)) {
+            Some(spelled) if spelled != name.as_ref() => Cow::Owned(spelled.clone()),
+            _ => name,
         }
     }
 
@@ -443,13 +480,15 @@ impl ShellEnvironment {
         for _ in 0..NAMEREF_DEPTH_LIMIT {
             // By the exact name, as assignments find a variable: the case-insensitive
             // fallback folded the name of every variable not set yet, on every write.
+            // Only a name with a capital in it is looked up among those inherited from
+            // Windows (`mark_inherited`).
             let Some(var) = self
                 .scopes
                 .iter()
                 .rev()
                 .find_map(|(_, map)| map.get(current.as_ref()))
             else {
-                return Some(current);
+                return Some(self.inherited_spelling(current));
             };
 
             let Some(target) = var.nameref_target() else {

@@ -30,6 +30,12 @@ for working through it. What is done, phases and findings, is in DONE.md.
 The user's picks after 1.27.0 (decisions.md, "The phase after 1.27.0"), in this order.
 The phases before, released as 1.22.0 to 1.27.0, are in DONE.md.
 
+After 1.28.0 (decisions.md, "The phase after 1.28.0"): first the four findings below
+under "Found along the way", picked to be fixed, as they change pages already written:
+the case of a Windows variable's name (fold on assignment only for inherited Windows
+names), uutils' error texts, `cp`'s copy time, and the alias read as text; then the man
+batches straight on (step 7), before items 2 to 5.
+
 1. **`man`, cash's own manual** (the user, 2026-10-18): `research/man-browser-design.md`,
    in the steps of its section 7, each ending in a commit:
    1. the pages' model, in the crate `cash-man`: done (2026-10-18, DONE.md);
@@ -97,20 +103,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   "unexpected EOF while looking for matching `''". Bash substitutes an alias's text and
   reads on; cash's parser takes it as words of its own. Rare in practice (an alias
   that opens a quote); the fix is in the tokenizer's alias expansion. Medium.
-
-- **Two variables whose names differ in case reach a program at random** (2026-10-18,
-  found writing export's man page): reading ignores case only when no name is spelled
-  exactly (`$Path` reads `PATH`), but an assignment is exact, so `export Path=/x`
-  makes a second variable beside `PATH`. The shell goes on looking commands up in
-  `PATH`; a program gets both, and Rust's `Command` keeps one of two names that
-  differ only in case, the one added last, in hash-map order:
-  `export FOO=upper Foo=mixed; printenv FOO` gave `mixed` three times in five. The
-  vars and paths topics said `$Foo` and `$FOO` cannot be two variables; they now say
-  what happens. Fixes, to pick: an assignment lands on a variable already spelled
-  otherwise (no `$x` and `$X` as two, against Bash), or only the well-known Windows
-  names (`PATH`, `TEMP`, ...) fold on assignment, or the boundary picks one name
-  deterministically and warns. Danger of leaving: a script that writes `Path` gets a
-  different PATH in programs than in the shell. Small to medium.
 
 - **`cp` keeps the source's modification time without `-p`** (2026-10-18, found
   writing cp's man page): `touch -d 2020-01-02 old; cp old new` gives `new` the time of

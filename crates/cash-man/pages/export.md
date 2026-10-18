@@ -92,7 +92,9 @@ back as they were. `env` and `printenv` show what a program would get instead,
 
 ## Different in cash
 
-- `$Path` reads `PATH`, as Windows' names ignore case, but `export Path=x` makes a
-  second variable: export `PATH` as it is spelled (see `help vars`).- `PATH` reads Unix-style in the shell, `/c/tools:/c/Windows`, and programs get the
+- A variable inherited from Windows is the same in any spelling with a capital in
+  it, as Windows' names ignore case: `export Path=x` sets `PATH`. An all-lower-case
+  `path` is a script's own, as in Bash (see `help vars`).
+- `PATH` reads Unix-style in the shell, `/c/tools:/c/Windows`, and programs get the
   Windows form, `C:\tools;C:\Windows`. No other variable is changed on the way: see
   `help paths`.

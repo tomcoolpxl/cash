@@ -70,8 +70,9 @@ on purpose: `old-tool.exe "$(winpath -w "$dir")"`. `winpath -u` gives `/c/...`, 
 `$PATH` reads Unix-style, `/c/tools:/c/Windows`, because `:` separates its entries and a
 drive letter has one too. So `PATH=/c/tools:$PATH` and `IFS=: read -ra dirs <<< "$PATH"`
 work. Programs cash starts get the Windows form, with semicolons. No other variable is
-translated: `GOPATH` or `PYTHONPATH` pass through as you wrote them. `$Path` reads
-`$PATH`, as in Windows, but `Path=x` makes another variable: assign `PATH`.
+translated: `GOPATH` or `PYTHONPATH` pass through as you wrote them. `$Path` is
+`$PATH`, as in Windows, and `Path=x` sets it; an all-lower-case `path` is a script's
+own variable, as in Bash.
 
 ## Long paths, globbing, links
 

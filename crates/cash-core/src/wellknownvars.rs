@@ -55,6 +55,7 @@ pub(crate) fn inherit_env_vars(
 
         let mut var = ShellVariable::new(ShellValue::String(v));
         var.export();
+        shell.env_mut().mark_inherited(&k);
         shell.env_mut().set_global(k, var)?;
     }
 

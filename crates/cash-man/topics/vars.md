@@ -7,10 +7,11 @@ see: export paths crlf keys config
 
 Windows variable names ignore case. cash reads them so when no variable is spelled
 exactly: `$Path` and `$path` read `PATH`. The usual names (`PATH`, `HOME`, `TEMP`,
-`USERNAME`, `SYSTEMROOT`, `APPDATA`, ...) are upper-cased as cash starts. An
-assignment is exact, as in Bash: `Path=x` makes a second variable and leaves `PATH`
-as it was, so spell the names as they are, `PATH=...`; a program given two names
-that differ only in case gets one of them.
+`USERNAME`, `SYSTEMROOT`, `APPDATA`, ...) are upper-cased as cash starts. A variable
+inherited from Windows is the same one in any spelling with a capital in it:
+`Path=x` and `export Temp=x` set `PATH` and `TEMP`. A name all in lower case is a
+script's own, as in Bash, so `for path in "$@"` and `local temp` leave `PATH` and
+`TEMP` alone. Your own variables keep their case: `$Foo` and `$FOO` are two.
 
 ## cash's own
 

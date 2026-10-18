@@ -204,6 +204,27 @@ fn a_locally_defined_variable_beats_a_case_insensitive_environment_match() {
     );
 }
 
+/// An assignment to an inherited Windows variable spelled in another case lands on it,
+/// unless the name is all in lower case, a script's own as in Bash; a program then
+/// always gets the shell's `PATH`. `export Path=...` made a second variable, and a
+/// program got one of the two at random.
+#[test]
+fn a_windows_variable_spelled_in_another_case_is_that_variable() {
+    let out = cash(
+        r#"export Path="/c/Windows/System32:$PATH"; printf '%s\n' "${PATH%%:*}"
+for path in a b; do :; done; printf '%s %s\n' "$path" "${PATH%%:*}"
+export path=mine
+for i in 1 2 3 4 5 6; do printenv PATH | cut -d';' -f1; done | sort -u
+FOO=upper; Foo=mixed; printf '%s %s\n' "$FOO" "$Foo""#,
+    );
+    assert_eq!(
+        out.stdout.replace("\r\n", "\n").trim_end(),
+        "/c/Windows/System32\nb /c/Windows/System32\nC:\\Windows\\System32\nupper mixed",
+        "{}",
+        out.stderr
+    );
+}
+
 #[test]
 fn exported_variables_reach_children_unchanged() {
     let out = cash(r#"export CASH_EDGE='a b;c'; cmd.exe /d /s /c "echo %CASH_EDGE%""#);

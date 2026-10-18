@@ -843,6 +843,17 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   with the user's yes; more corpus rounds. Every example in a page runs as a test
   against Git Bash or the real tool. 1.27.0 is tagged and taken to Scoop once CI is
   green.
+- **The phase after 1.28.0** (the user, 2026-10-18): the man batches straight on, about
+  20 pages a release, before the other items of the phase after 1.27.0. With them, the
+  findings of the first batch are fixed: an assignment to a name that differs only in
+  case from an inherited Windows variable (`Path` for `PATH`) lands on it, unless the
+  name is all lower case: `for path in ...` and `local temp=...` are a script's own
+  variables, as in Bash, and folding them would break its command lookup (the user,
+  after that side effect was weighed). A script's own `$x` and `$X` stay two (not
+  every name folded, nor a choice made only as a program starts); twins that remain
+  reach a program in a fixed order, the inherited name winning; uutils' Windows error texts in GNU's words; `cp`
+  giving a copy the time it was made; an alias read as text, so a quote it opens goes
+  on into the line. The fixes come first, as they change pages already written.
 
 ## 8. Archives and compression
 

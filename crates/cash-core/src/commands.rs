@@ -819,7 +819,7 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 pub fn exported_environment(
     shell: &Shell<impl extensions::ShellExtensions>,
 ) -> Vec<(String, String)> {
-    shell
+    let mut environment = shell
         .env()
         .iter_exported()
         // NOTE: To match bash behavior, we only include exported variables
@@ -841,7 +841,17 @@ pub fn exported_environment(
 
             (k.clone(), value.into_owned())
         })
-        .collect()
+        .collect::<Vec<_>>();
+    // Two names that differ only in case are one to Windows, and a program gets the value
+    // set last: in a fixed order, the spelling inherited from Windows last, so `PATH`
+    // and not a script's own exported `path`. In hash order, a program got either.
+    environment.sort_by_cached_key(|(name, _)| {
+        (
+            cash_win32::fold::name_key(name),
+            shell.env().is_inherited_spelling(name),
+        )
+    });
+    environment
 }
 
 /// The variable through which a cash learns the name it was started by.

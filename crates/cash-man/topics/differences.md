@@ -18,7 +18,8 @@ and in the fewest places it can.
 - Globbing and `find -name` ignore case, as the file system does; `shopt -u nocaseglob`
   turns that off.
 - Reading a variable ignores case when no name is spelled exactly: `$Path` reads
-  `$PATH`. Assigning does not: `Path=x` is a variable of its own.
+  `$PATH`. A variable inherited from Windows is set in any spelling with a capital,
+  `Path=x`; an all-lower-case `path` is a script's own, as in Bash.
 - At the prompt, an unquoted `C:\...` or `\\server\share` keeps its backslashes
   (`shopt winpaths`; off in scripts).
 - `sh`, `bash` and `cash` always run cash, however they are started: otherwise `bash`
