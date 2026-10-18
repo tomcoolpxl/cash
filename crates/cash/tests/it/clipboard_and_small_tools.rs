@@ -157,6 +157,11 @@ fn pbcopy_and_pbpaste_round_trip_through_the_clipboard() {
         eprintln!("skipped: the session is locked, when no program has the clipboard");
         return;
     }
+    // Only text is put back: an image, a file list or formatted text would be lost.
+    if !cash_win32::clipboard::holds_text_only() {
+        eprintln!("skipped: the clipboard holds more than text, which this would lose");
+        return;
+    }
     let before = cash_win32::clipboard::get_text().expect("read the clipboard");
     let scratch = Scratch::new("pbcopy");
     let dir = scratch.path();

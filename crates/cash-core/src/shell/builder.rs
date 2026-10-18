@@ -267,6 +267,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             catches_fatal_errors: false,
             word_substitution_ends: Vec::new(),
             current_command: None,
+            globignore_seen: None,
             name: None,
             args: vec![],
             version: None,

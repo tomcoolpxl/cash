@@ -2105,3 +2105,14 @@ each item's entry is under "Found along the way, done" below.
   - **A last `**` did not match its own folder, and `**/` gave an empty word**:
     `sub/**` gives `sub/` first, `./**` gives `./`, `*/**` the folders found without
     the slash, as in Bash; the working folder `**/` reaches is left out.
+- **`GLOBIGNORE` did not show in `shopt dotglob`** (found 2026-10-18 by the corpus; the
+  user's pick after 1.26.0): Bash turns dotglob on as `GLOBIGNORE` is given patterns
+  and off as it is unset. cash has no hook from a variable to an option, so the shell
+  notes what `GLOBIGNORE` was when last looked at and takes the same turn where it
+  shows, before a word is globbed and when `shopt` reads the options. A `GLOBIGNORE`
+  set and unset between two such looks is not seen.
+- **Two clipboard tests put back only text** (found 2026-10-18 in the quick lane):
+  `cash-win32`'s round trip, in every quick lane, and the `pbcopy` test borrowed the
+  clipboard of whoever ran them and put back its text alone, so an image, a file list or
+  formatted text there was lost. They skip now unless the clipboard holds only text
+  (`clipboard::holds_text_only`), as they skip while the session is locked.

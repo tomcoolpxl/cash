@@ -228,6 +228,33 @@ pub fn get_text() -> io::Result<Option<String>> {
     ansi_text(bytes.get(..end).unwrap_or_default()).map(Some)
 }
 
+/// Whether the clipboard holds only text, or nothing.
+///
+/// Text is its three encodings and the locale Windows adds to them: all that
+/// [`get_text`] and [`set_text`] can save and put back. A test that borrows the clipboard
+/// of whoever runs it asks first, so an image, a file list or formatted text there is
+/// not lost.
+#[must_use]
+pub fn holds_text_only() -> bool {
+    use windows_sys::Win32::System::DataExchange::EnumClipboardFormats;
+    /// `CF_OEMTEXT` and `CF_LOCALE`, which Windows makes from the others.
+    const CF_OEMTEXT: u32 = 7;
+    const CF_LOCALE: u32 = 16;
+    let Ok(_open) = Open::new() else {
+        return false;
+    };
+    let mut format = 0;
+    loop {
+        // SAFETY: the clipboard is open to this process; 0 starts the listing.
+        format = unsafe { EnumClipboardFormats(format) };
+        match format {
+            0 => return true,
+            CF_TEXT | CF_UNICODETEXT | CF_OEMTEXT | CF_LOCALE => {}
+            _ => return false,
+        }
+    }
+}
+
 /// A copy of the global memory block `memory`, which the clipboard owns.
 fn block_bytes(memory: HANDLE) -> io::Result<Vec<u8>> {
     // SAFETY: the handle is a global memory block the clipboard owns while it is open.
@@ -326,6 +353,12 @@ mod tests {
             }
             Err(error) => panic!("read the clipboard: {error}"),
         };
+        // The test puts back the text it found; an image, a file list or formatted text
+        // there would be lost, on the clipboard of whoever runs the tests.
+        if !holds_text_only() {
+            eprintln!("skipped: the clipboard holds more than text, which this would lose");
+            return;
+        }
 
         let text = format!("cash clipboard test {}\r\nhéllo €\r\n", std::process::id());
         set_text(&text).unwrap();

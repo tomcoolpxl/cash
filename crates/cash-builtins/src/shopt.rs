@@ -39,6 +39,9 @@ impl builtins::Command for ShoptCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
+        // dotglob as GLOBIGNORE leaves it, which Bash sets as the variable is assigned.
+        context.shell.follow_globignore();
+
         if self.set && self.unset {
             writeln!(
                 context.error_stream(),

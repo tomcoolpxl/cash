@@ -32,16 +32,7 @@ items 2 and 3, both changes to how a script is read, go together, as Bash expand
 alias as it reads each command. The phases before, released as 1.22.0 to 1.26.0, are in
 DONE.md.
 
-1. **Two small fixes**:
-   - **`GLOBIGNORE` does not show in `shopt dotglob`** (found 2026-10-18 by the corpus):
-     a glob finds dot files while it is set, as in Bash, but Bash also turns the dotglob
-     option itself on when `GLOBIGNORE` is set and off when it is unset, so `shopt
-     dotglob` says `on`, and a dotglob turned on by hand ends with the unset. cash has no
-     hook from a variable to an option.
-   - **The clipboard's unit test puts back only text** (found 2026-10-18 in the quick
-     lane): `cash-win32`'s `text_round_trips_and_an_empty_text_empties_the_clipboard`
-     runs in every quick lane on the developer's own clipboard, saves its text and puts
-     it back, but an image or a file list there is replaced by the text it saved.
+1. **Two small fixes**: done (2026-10-18, DONE.md).
 2. **extglob is on from the start** (found 2026-10-18 by the corpus): `shopt extglob`
    says `on`, and `+(x)` matches before `shopt -s extglob`, where Bash has it off. cash
    parses a whole script with one set of options, so a script that turns extglob on

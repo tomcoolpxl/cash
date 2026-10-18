@@ -139,6 +139,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     #[cfg_attr(feature = "serde", serde(skip))]
     current_command: Option<std::sync::Arc<str>>,
 
+    /// What `GLOBIGNORE` was when last looked at: `None` unset, else whether it held
+    /// patterns ([`Self::follow_globignore`]).
+    globignore_seen: Option<bool>,
+
     /// Shell name
     name: Option<String>,
 
@@ -278,6 +282,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             catches_fatal_errors: self.catches_fatal_errors,
             word_substitution_ends: Vec::new(),
             current_command: self.current_command.clone(),
+            globignore_seen: self.globignore_seen,
         }
     }
 }
@@ -494,6 +499,28 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     /// Names the simple command about to run, as written (`$BASH_COMMAND`). Not while
     /// a trap's handler runs: as in Bash, `$BASH_COMMAND` there is the command the trap
     /// came at, which a DEBUG trap prints (it printed its own `echo`).
+    /// Turns dotglob on or off as Bash does when `GLOBIGNORE` changes: on once it holds
+    /// patterns, off once it is unset; set but empty, it leaves dotglob as it was.
+    ///
+    /// Bash does it as the variable is assigned. cash has no hook from a variable to an
+    /// option, so it does it where it shows: before a word is globbed, and when `shopt`
+    /// reads the options. A dotglob turned off by hand stays off until `GLOBIGNORE`
+    /// changes again, and a `GLOBIGNORE` set and unset between two looks is not seen.
+    pub fn follow_globignore(&mut self) {
+        let now = self
+            .env_str("GLOBIGNORE")
+            .map(|value| value.split(':').any(|pattern| !pattern.is_empty()));
+        if now == self.globignore_seen {
+            return;
+        }
+        match now {
+            Some(true) => self.options.glob_matches_dotfiles = true,
+            None => self.options.glob_matches_dotfiles = false,
+            Some(false) => {}
+        }
+        self.globignore_seen = now;
+    }
+
     pub(crate) fn set_current_command(&mut self, text: std::sync::Arc<str>) {
         if !self.call_stack().is_any_trap_active() {
             self.current_command = Some(text);

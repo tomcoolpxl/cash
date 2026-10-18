@@ -663,6 +663,19 @@ fn globignore_and_a_last_globstar_match_as_in_bash() {
 }
 
 #[test]
+fn globignore_turns_dotglob_on_and_its_unset_turns_it_off() {
+    // As Bash 5.3: patterns in GLOBIGNORE turn dotglob on, an empty one leaves it, and
+    // unsetting it turns dotglob off.
+    assert_eq!(
+        output(
+            "shopt -q dotglob; echo $?; GLOBIGNORE=x; shopt -q dotglob; echo $?; \
+             GLOBIGNORE=; shopt -q dotglob; echo $?; unset GLOBIGNORE; shopt -q dotglob; echo $?"
+        ),
+        (0, "1\n0\n0\n1".into())
+    );
+}
+
+#[test]
 fn associative_unset_at_and_star_are_literal_keys() {
     assert_eq!(
         output("declare -A a=([@]=at [*]=star [x]=other); unset 'a[@]'; declare -p a"),

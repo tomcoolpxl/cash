@@ -1232,39 +1232,43 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         Ok(result)
     }
 
-    fn expand_pathnames_in_field(&self, field: WordField) -> Result<Vec<String>, error::Error> {
+    fn expand_pathnames_in_field(&mut self, field: WordField) -> Result<Vec<String>, error::Error> {
         let pattern = patterns::Pattern::from(field.clone())
             .set_extended_globbing(self.parser_options.enable_extended_globbing)
             .set_globstar(self.shell.options().enable_star_star_glob)
             .set_case_insensitive(self.shell.options().case_insensitive_pathname_expansion);
 
         // A GLOBIGNORE that is set and not empty takes the names its patterns match out of
-        // what a glob finds, `.` and `..` always, and lets a glob find dot files, as dotglob
-        // does, as in Bash.
-        let ignored: Vec<IgnoredNames> = self
-            .shell
-            .env_str("GLOBIGNORE")
-            .map(|value| {
-                value
-                    .split(':')
-                    .filter(|pattern| !pattern.is_empty())
-                    .map(|pattern| {
-                        IgnoredNames::new(pattern, |part| {
-                            patterns::Pattern::from(part)
-                                .set_extended_globbing(self.parser_options.enable_extended_globbing)
-                                .set_case_insensitive(
-                                    self.shell.options().case_insensitive_pathname_expansion,
-                                )
+        // what a glob finds, `.` and `..` always, and has dotglob on, as in Bash.
+        let ignored: Vec<IgnoredNames> = if pattern.globs() {
+            self.shell.follow_globignore();
+            self.shell
+                .env_str("GLOBIGNORE")
+                .map(|value| {
+                    value
+                        .split(':')
+                        .filter(|pattern| !pattern.is_empty())
+                        .map(|pattern| {
+                            IgnoredNames::new(pattern, |part| {
+                                patterns::Pattern::from(part)
+                                    .set_extended_globbing(
+                                        self.parser_options.enable_extended_globbing,
+                                    )
+                                    .set_case_insensitive(
+                                        self.shell.options().case_insensitive_pathname_expansion,
+                                    )
+                            })
                         })
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        let globignore = !ignored.is_empty() && pattern.globs();
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let globignore = !ignored.is_empty();
 
         let options = patterns::FilenameExpansionOptions {
-            require_dot_in_pattern_to_match_dot_files: !self.shell.options().glob_matches_dotfiles
-                && !globignore,
+            require_dot_in_pattern_to_match_dot_files: !self.shell.options().glob_matches_dotfiles,
             include_dot_and_dotdot: !self.shell.options().glob_skip_dots && !globignore,
         };
 
