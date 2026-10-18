@@ -1,13 +1,17 @@
 ---
-name: ls
+names: ls dir vdir
 summary: List directory contents, with colours, icons and a tree.
+summary dir: List directory contents in columns (`ls -C -b`).
+summary vdir: List directory contents in long form (`ls -l -b`).
 kind: Coreutils written for Windows
-see: dir vdir tree stat dircolors find croot paths
+see: tree stat dircolors find croot paths
 ---
 
 ## Syntax
 
     ls [OPTION]... [FILE]...
+    dir [OPTION]... [FILE]...
+    vdir [OPTION]... [FILE]...
 
     ls                 list the current directory
     ls DIRECTORY       list a directory
@@ -15,6 +19,8 @@ see: dir vdir tree stat dircolors find croot paths
     ls -a              the hidden files too: names starting with a dot
     ls -lt             the newest first
     ls --tree          a directory and those below it, as a tree
+    dir                ls -C -b: columns, odd characters escaped
+    vdir               ls -l -b: a file a line, the same
 
 ## Examples
 

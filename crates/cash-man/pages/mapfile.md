@@ -1,6 +1,7 @@
 ---
-name: mapfile
+names: mapfile readarray
 summary: Read lines into an array (also called readarray).
+summary readarray: Read lines into an indexed array (the same as `mapfile`).
 kind: Bash builtins
 see: read declare
 ---

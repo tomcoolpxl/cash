@@ -1,6 +1,7 @@
 ---
-name: declare
+names: declare typeset
 summary: Declare variables and give them attributes.
+summary typeset: Set variables and their attributes (the same as `declare`).
 kind: Bash builtins
 see: local export readonly unset
 ---
@@ -8,6 +9,7 @@ see: local export readonly unset
 ## Syntax
 
     declare [-aAfFgilnrtux] [-p] [NAME[=VALUE]]...
+    typeset ...                the same: ksh's name for it
 
     declare -a ARR=(x y)     an indexed array
     declare -A MAP           an associative array, keys of text

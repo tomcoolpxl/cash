@@ -1,0 +1,7 @@
+unsigned char abc_bin[] = {
+  0x61, 0x62, 0x63
+};
+unsigned int abc_bin_len = 3;
+--- status 0
+--- file abc.bin
+abc

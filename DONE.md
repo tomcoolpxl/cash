@@ -2404,3 +2404,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   groups, each id its SID's last part, and take GNU's options. A script being run was
   missing from `FUNCNAME`, `BASH_SOURCE` and `BASH_LINENO`, and `caller` named its
   frame `source`; it is `main`, from line 0, as in Bash.
+- **The manual's sixth twenty pages written in full** (2026-10-19, batch 6): enable,
+  help, disown, nice (with renice), nohup, ps, pgrep (with pkill, pidof, killall),
+  tree, df, free, uptime, gzip (with gunzip, zcat), xxd, od, shuf, split, truncate, tty,
+  clear (with reset) and expr; readarray joined mapfile's page, typeset declare's, base32
+  and basenc base64's, dir and vdir ls's. Every option was run in cash, and in Git Bash
+  where it has the tool; the examples of tools Git Bash lacks (tree, free, pgrep,
+  uptime) or answers for MSYS2 (ps) are only parsed. `dir` and `vdir` were uutils' own
+  `ls`, whose modes are not cash's (`-rwxrwxrwx` for every file); they are cash's `ls`
+  with GNU's `-C -b` and `-l -b`. `split --filter` is refused by uutils on Windows: in
+  TODO.md.
