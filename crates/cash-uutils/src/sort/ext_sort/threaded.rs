@@ -14,7 +14,7 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
 
 use itertools::Itertools;
-use uucore::error::{UResult, strip_errno};
+use uucore::error::UResult;
 
 use crate::sort::Output;
 use crate::sort::chunks::RecycledChunk;
@@ -69,7 +69,7 @@ pub fn ext_sort(
                 let _ = writeln!(
                     stderr(),
                     "sort: could not run compress program '{prog}': {}",
-                    strip_errno(&err)
+                    cash_win32::errno::strerror(&err)
                 );
                 effective_settings.compress_prog = None;
             }

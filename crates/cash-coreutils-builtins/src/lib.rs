@@ -37,14 +37,36 @@ use std::ffi::OsString;
 
 // cash: the tools taken from uutils and made cash's own, under the names their
 // adapters give uucore for its own messages.
+#[cfg(feature = "coreutils.cat")]
+use cash_uutils::cat as uu_cat;
+#[cfg(feature = "coreutils.cp")]
+use cash_uutils::cp as uu_cp;
 #[cfg(feature = "coreutils.head")]
 use cash_uutils::head as uu_head;
+#[cfg(feature = "coreutils.ln")]
+use cash_uutils::ln as uu_ln;
+#[cfg(feature = "coreutils.mkdir")]
+use cash_uutils::mkdir as uu_mkdir;
+#[cfg(feature = "coreutils.mv")]
+use cash_uutils::mv as uu_mv;
+#[cfg(feature = "coreutils.paste")]
+use cash_uutils::paste as uu_paste;
+#[cfg(feature = "coreutils.pr")]
+use cash_uutils::pr as uu_pr;
+#[cfg(feature = "coreutils.ptx")]
+use cash_uutils::ptx as uu_ptx;
 #[cfg(feature = "coreutils.rm")]
 use cash_uutils::rm as uu_rm;
+#[cfg(feature = "coreutils.rmdir")]
+use cash_uutils::rmdir as uu_rmdir;
+#[cfg(feature = "coreutils.shred")]
+use cash_uutils::shred as uu_shred;
 #[cfg(feature = "coreutils.shuf")]
 use cash_uutils::shuf as uu_shuf;
 #[cfg(feature = "coreutils.sort")]
 use cash_uutils::sort as uu_sort;
+#[cfg(feature = "coreutils.tac")]
+use cash_uutils::tac as uu_tac;
 #[cfg(feature = "coreutils.tail")]
 use cash_uutils::tail as uu_tail;
 #[cfg(feature = "coreutils.tee")]

@@ -130,16 +130,13 @@ copies, hard ones (on the same drive) or symbolic ones.
 
 ## Different in cash
 
-- It is uutils' `cp`, carried inside cash, so it is the same on every machine, with or
-  without Git or MSYS2.
-- A copy keeps the original's modification time even without `-p`, as Windows'
-  CopyFile copies it; GNU's `cp` gives the copy the time it was made.
+- It is cash's own copy of uutils' `cp`, carried inside cash, so it is the same on every
+  machine, with or without Git or MSYS2. Its errors are in GNU's words: `cp: cannot
+  stat 'x': No such file or directory`.
 - `-s` makes a symbolic link only where Windows lets your account make one (Developer
-  Mode, or an elevated shell); otherwise it says `A required privilege is not held by
-  the client`. `ln -s` makes a junction for a directory without that privilege.
+  Mode, or an elevated shell); otherwise it says `Operation not permitted`. `ln -s`
+  makes a junction for a directory without that privilege.
 - `-f` replaces a read-only file. `--reflink` is refused: it is Linux's and macOS's.
-- `-p` of a read-only file makes the copy, then says `Access is denied` and exits 1.
 - `-Z` and `--context` set SELinux contexts, which Windows does not have; they change
   nothing.
-- A source that is not there is said in Windows' words, without its name: `cp: The
-  system cannot find the file specified.`
+- `-i` answered no exits 1, as GNU coreutils 9 does; Git Bash's older coreutils exit 0.

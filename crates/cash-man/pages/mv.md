@@ -103,12 +103,13 @@ simple `~` one. `-S .orig` or `SIMPLE_BACKUP_SUFFIX` changes the simple suffix;
 
 ## Different in cash
 
-- It is uutils' `mv`, carried inside cash, so it is the same on every machine, with or
-  without Git or MSYS2.
+- It is cash's own copy of uutils' `mv`, carried inside cash, so it is the same on
+  every machine, with or without Git or MSYS2. Its errors are in GNU's words: `mv:
+  cannot move 'a' to 'nodir/a': No such file or directory`.
 - A file that another program has open cannot be moved on Windows, as it can on
-  Linux: `mv` says `Access is denied` or that the file is in use. `fuser` or `lsof`
-  name the program.
-- When `-i` asks and the answer is not yes, `mv` leaves the file and exits 1, where
-  GNU's `mv` exits 0.
+  Linux: `mv` says `Permission denied` or `Device or resource busy`. `fuser` or
+  `lsof` name the program.
+- When `-i` asks and the answer is not yes, `mv` leaves the file and exits 1, as GNU
+  coreutils 9 does; Git Bash's older coreutils exit 0.
 - `--exchange` is refused: it is Linux's atomic swap. `-Z` and `--context` set SELinux
   contexts, which Windows does not have.

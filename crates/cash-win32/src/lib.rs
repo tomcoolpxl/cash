@@ -37,6 +37,8 @@ pub mod devices;
 pub mod elevate;
 pub mod endless;
 pub mod env;
+// Windows' errors in `strerror`'s words, as the GNU tools print them.
+pub mod errno;
 // Writing to the Application event log, for `logger`.
 pub mod eventlog;
 pub mod exit;

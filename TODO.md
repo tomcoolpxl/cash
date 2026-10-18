@@ -30,11 +30,11 @@ for working through it. What is done, phases and findings, is in DONE.md.
 The user's picks after 1.27.0 (decisions.md, "The phase after 1.27.0"), in this order.
 The phases before, released as 1.22.0 to 1.27.0, are in DONE.md.
 
-After 1.28.0 (decisions.md, "The phase after 1.28.0"): first the four findings below
-under "Found along the way", picked to be fixed, as they change pages already written:
-the case of a Windows variable's name (fold on assignment only for inherited Windows
-names), uutils' error texts, `cp`'s copy time, and the alias read as text; then the man
-batches straight on (step 7), before items 2 to 5.
+After 1.28.0 (decisions.md, "The phase after 1.28.0"): first the four findings picked
+to be fixed, as they change pages already written: the case of a Windows variable's
+name, uutils' error texts and `cp`'s copy time (all three done, DONE.md), and the alias
+read as text (under "Found along the way"); then the man batches straight on (step 7),
+before items 2 to 5.
 
 1. **`man`, cash's own manual** (the user, 2026-10-18): `research/man-browser-design.md`,
    in the steps of its section 7, each ending in a commit:
@@ -103,34 +103,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   "unexpected EOF while looking for matching `''". Bash substitutes an alias's text and
   reads on; cash's parser takes it as words of its own. Rare in practice (an alias
   that opens a quote); the fix is in the tokenizer's alias expansion. Medium.
-
-- **`cp` keeps the source's modification time without `-p`** (2026-10-18, found
-  writing cp's man page): `touch -d 2020-01-02 old; cp old new` gives `new` the time of
-  2020, as Windows' `CopyFileExW` (under `std::fs::copy`, under `uu_cp`) copies it;
-  GNU's `cp`, and Git Bash's, give the copy the time it was made unless `-p`, `-a` or
-  `--preserve=timestamps` asks otherwise. A build that copies a file and compares times
-  (`make`) sees the copy as old. The fix sets the copy's time to now after the copy
-  when timestamps are not to be kept, in cash's own copy of `uu_cp`. Medium; it goes
-  with the error texts below. With it: `cp -p` of a read-only file makes the copy and
-  then fails, `cp: Access is denied. (os error 5)`, status 1, as it sets the copy's
-  times after making it read-only; Git Bash's `cp -p` succeeds.
-
-- **uutils' tools speak Windows' error texts, and `cp` names no file** (2026-10-18,
-  found writing the man pages, against Git Bash 5.3): `cp nosuch x` says `cp: The
-  system cannot find the file specified. (os error 2)` where GNU says `cp: cannot stat
-  'nosuch': No such file or directory`; `cat nosuch` says `cat: nosuch: The system
-  cannot find the file specified.` (GNU: `No such file or directory`); `mkdir docs`
-  over a directory says `mkdir: docs: File exists` (GNU: `cannot create directory
-  'docs': File exists`), `mkdir nosuch/x` ends `The system cannot find the path
-  specified.` (GNU: `No such file or directory`), and `mkdir -p afile` over a file
-  ends `Cannot create a file when that file already exists.` (GNU: `File exists`);
-  `ln nosuch z` says `failed to create hard link 'z' =>
-  'nosuch'` (GNU: `failed to access 'nosuch'`). The statuses agree, but for `mv -i`
-  answered no (or not at all): GNU leaves the file and exits 0, `uu_mv` exits 1. They
-  come from
-  `uu_cp`, `uu_cat`, `uu_mkdir` and `uu_ln` as crates; the fix is cash's own copy of
-  each (as `rm` and `sort` are) or a wrapper that puts uucore's Windows errors in
-  POSIX's words. Medium.
 
 - **A `case` of more than 64 patterns with brackets or extended globs** compiles each
   pattern again on every pass: compiled patterns are kept in an LRU of 64, which a

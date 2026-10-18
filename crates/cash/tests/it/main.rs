@@ -74,6 +74,8 @@ mod crash_safety;
 mod corpus;
 // BIN-05: every `tests/corpus` case against the oracle's frozen output.
 mod corpus_goldens;
+// The times `cp` gives a copy, as GNU's `cp` gives them.
+mod cp_times;
 mod crlf_scripts;
 // D13: what the keyboard's Ctrl-C does to a script, outside `read`.
 mod ctrl_c;
@@ -157,6 +159,8 @@ mod kill_targets;
 mod kill_term;
 mod line_ending_tools;
 mod link_tools;
+// `ln -s`: a junction for a directory without the privilege for symbolic links.
+mod ln_links;
 // `logger`: to the Application event log, read back with wevtutil; util-linux's -s line.
 mod logger_builtin;
 // Programs started from a directory too long for Windows to start one in.

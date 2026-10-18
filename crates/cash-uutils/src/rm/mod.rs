@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use thiserror::Error;
 use uucore::display::Quotable;
-use uucore::error::{FromIo, UError, UResult, USimpleError, strip_errno};
+use uucore::error::{FromIo, UError, UResult, USimpleError};
 use uucore::parser::shortcut_value_parser::ShortcutValueParser;
 use uucore::quoting_style::{QuotingStyle, locale_aware_escape_name};
 use uucore::{format_usage, os_str_as_bytes, prompt_yes, show_error};
@@ -57,7 +57,7 @@ fn write_verbose_line(message: &str) -> UResult<()> {
     writeln!(io::stdout().lock(), "{message}").map_err(|err| {
         USimpleError::new(
             1,
-            translate!("rm-error-standard-output", "error" => strip_errno(&err)),
+            translate!("rm-error-standard-output", "error" => cash_win32::errno::strerror(&err)),
         )
     })?;
     Ok(())

@@ -84,10 +84,12 @@ its `README.md`.
 
 ## uutils coreutils
 
-`crates/cash-uutils`, the `rm`, `sort`, `tee`, `uniq`, `shuf`, `head` and `tail` cash
-runs, is taken and modified from [uutils coreutils](https://github.com/uutils/coreutils)
-0.12.0 (`uu_rm`, `uu_sort`, `uu_tee`, `uu_uniq`, `uu_shuf`, `uu_head`, `uu_tail`), © the
-uutils developers, under the MIT License, whose text is in
+`crates/cash-uutils`, the `cat`, `cp`, `head`, `ln`, `mkdir`, `mv`, `paste`, `pr`, `ptx`,
+`rm`, `rmdir`, `shred`, `shuf`, `sort`, `tac`, `tail`, `tee` and `uniq` cash runs, is
+taken and modified from [uutils coreutils](https://github.com/uutils/coreutils) 0.12.0
+(`uu_cat`, `uu_cp`, `uu_head`, `uu_ln`, `uu_mkdir`, `uu_mv`, `uu_paste`, `uu_pr`,
+`uu_ptx`, `uu_rm`, `uu_rmdir`, `uu_shred`, `uu_shuf`, `uu_sort`, `uu_tac`, `uu_tail`,
+`uu_tee`, `uu_uniq`), © the uutils developers, under the MIT License, whose text is in
 [crates/cash-uutils/LICENSE](crates/cash-uutils/LICENSE). The changes are listed in
 its `README.md`.
 

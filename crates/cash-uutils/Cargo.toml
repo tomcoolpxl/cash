@@ -1,6 +1,6 @@
 [package]
 name = "cash-uutils"
-description = "rm, sort, tee, uniq, shuf, head and tail for cash, taken from uutils coreutils and made its own"
+description = "cat, cp, head, ln, mkdir, mv, paste, pr, ptx, rm, rmdir, shred, shuf, sort, tac, tail, tee and uniq for cash, taken from uutils coreutils and made its own"
 version.workspace = true
 authors.workspace = true
 categories.workspace = true
@@ -31,6 +31,37 @@ uucore = { workspace = true, features = [
     "i18n-decimal",
     "i18n-collator",
     "i18n-datetime",
+    # mkdir, cat, ln, tac, paste, pr, stat, mv, cp
+    "backup-control",
+    "buf-copy",
+    "entries",
+    "fast-inc",
+    "fsext",
+    "fsxattr",
+    "i18n-charmap",
+    "i18n-common",
+    "libc",
+    "mode",
+    "perms",
+    "pipes",
+    "safe-copy",
+    "time",
+    "update-control",
+] }
+# rmdir, tac, shred, mv, cp
+libc = "0.2.190"
+# tac
+memmap2 = "0.9.11"
+# tac, ptx, pr
+regex = { workspace = true }
+# cp
+filetime = "0.2.29"
+walkdir = "2.5.0"
+# cat, mv, cp
+windows-sys = { version = "0.61", default-features = false, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
 ] }
 # sort, head and tail
 memchr = "2.7.2"

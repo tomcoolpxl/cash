@@ -90,7 +90,6 @@ gives a file of both. `cat -A` shows which: `^M$` ends a CRLF line, `$` an LF on
 
 ## Different in cash
 
-- It is uutils' `cat`, carried inside cash, so it is the same on every machine, with
-  or without Git or MSYS2.
-- A file that is not there is said in Windows' words: `cat: nosuch: The system cannot
-  find the file specified.`, where GNU says `No such file or directory`.
+- It is cash's own copy of uutils' `cat`, carried inside cash, so it is the same on
+  every machine, with or without Git or MSYS2. Its errors are in GNU's words: `cat:
+  nosuch: No such file or directory`.

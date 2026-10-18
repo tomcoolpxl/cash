@@ -2320,3 +2320,30 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   as in Bash, so its command lookup holds. A script's own `$Foo` and `$FOO` stay two.
   A program gets twins that remain in a fixed order, the inherited spelling last, so it
   wins. Creating 20,000 capitalised variables takes as long as before.
+- **Eleven more uutils tools made cash's own, their errors in GNU's words** (2026-10-18,
+  found writing the man pages; the user picked own copies of every tool that differed):
+  cat, cp, ln, mkdir, mv, paste, pr, ptx, rmdir, shred and tac join rm, sort, tee, uniq,
+  shuf, head and tail in `crates/cash-uutils`, about 15,000 lines, Windows only. A sweep
+  of every bundled tool against Git Bash 5.3 found two kinds of difference, both gone:
+  Windows' text for an error ("The system cannot find the file specified. (os error
+  2)") where GNU prints `strerror`'s (`No such file or directory`), now from one map in
+  `cash_win32::errno` that gives each Windows code Cygwin's errno, used by cash-core's
+  `os_error_text`, the taken-in tools (sort and tee too) and cash's own `stat`; and
+  messages shaped otherwise (`cp: cannot stat 'x'`, `cannot create regular file`, `mv:
+  cannot move 'a' to 'b'`, `mkdir: cannot create directory 'a'`, `ln: failed to access`,
+  `paste: x:`, `ptx`'s quoting, `shred`'s `failed to open for writing`). `mv` fell back
+  to copying on any failed rename and called every failure of it `Permission denied`;
+  it falls back only across drives or onto a held target, with the real error. `ln -s`
+  makes a junction for a directory without the privilege for symbolic links, as spec
+  D27 decided and uutils' `ln` never did, and says how to get the privilege for a file.
+  `-i` answered no exits 1 in cp, mv and ln, as GNU coreutils 9.12 does (Git Bash's
+  8.32 exits 0). Every possible panic clippy found in the copied code is rewritten or
+  says why it cannot happen. Tests: each tool's error, the release each names,
+  `ln -s`'s junction.
+- **`cp` dates a copy now, and `cp -p` copies a read-only file** (2026-10-18, found
+  writing cp's man page): Windows' `CopyFileExW` gave every copy its source's
+  modification time, so `make` took a fresh copy for an old file; now a copy gets the
+  present time unless `-p`, `-a` or `--preserve=timestamps` keeps the source's. `cp -p`
+  of a read-only file made the copy and failed with `Access is denied`, as Windows sets
+  no time on a read-only file; the times are set with the attribute lifted for the
+  moment. Each case was checked against Git Bash.

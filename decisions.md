@@ -851,9 +851,14 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   variables, as in Bash, and folding them would break its command lookup (the user,
   after that side effect was weighed). A script's own `$x` and `$X` stay two (not
   every name folded, nor a choice made only as a program starts); twins that remain
-  reach a program in a fixed order, the inherited name winning; uutils' Windows error texts in GNU's words; `cp`
-  giving a copy the time it was made; an alias read as text, so a quote it opens goes
-  on into the line. The fixes come first, as they change pages already written.
+  reach a program in a fixed order, the inherited name winning. uutils' Windows error
+  texts in GNU's words, by making all twelve tools that differ cash's own code (cp, mv,
+  ln, mkdir, rmdir, cat, stat, tac, pr, paste, ptx, shred, about 16,000 lines, as rm
+  and sort are), each with GNU's message shapes, and sort and tee, cash's already,
+  with GNU's words (the user, over a mapping of the texts where cash runs a tool, or
+  own copies of the seven most used). `cp` giving a copy the time it was made. An
+  alias read as text, so a quote it opens goes on into the line. The fixes come
+  first, as they change pages already written.
 
 ## 8. Archives and compression
 

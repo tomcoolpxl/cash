@@ -11,7 +11,7 @@ use std::fs::OpenOptions;
 use std::io::{self, Error, ErrorKind, Write};
 use std::path::PathBuf;
 use uucore::display::Quotable;
-use uucore::error::{UResult, strip_errno};
+use uucore::error::UResult;
 use uucore::show_error;
 
 mod cli;
@@ -109,7 +109,11 @@ fn open(
             name: name.clone(),
         })),
         Err(f) => {
-            show_error!("{}: {}", name.maybe_quote(), strip_errno(&f));
+            show_error!(
+                "{}: {}",
+                name.maybe_quote(),
+                cash_win32::errno::strerror(&f)
+            );
             match output_error {
                 Some(OutputErrorMode::Exit | OutputErrorMode::ExitNoPipe) => Some(Err(f)),
                 _ => None,
@@ -144,7 +148,7 @@ impl MultiWriter {
                 Err(e) => {
                     show_error!(
                         "{}",
-                        translate!("tee-error-stdin", "error" => strip_errno(&e))
+                        translate!("tee-error-stdin", "error" => cash_win32::errno::strerror(&e))
                     );
                     return Err(());
                 }
@@ -197,7 +201,11 @@ fn process_error(
     if ignore_pipe && e.kind() == ErrorKind::BrokenPipe {
         return Ok(());
     }
-    show_error!("{}: {}", writer.name.maybe_quote(), strip_errno(&e));
+    show_error!(
+        "{}: {}",
+        writer.name.maybe_quote(),
+        cash_win32::errno::strerror(&e)
+    );
     if let Some(OutputErrorMode::Exit | OutputErrorMode::ExitNoPipe) = mode {
         Err(())
     } else {

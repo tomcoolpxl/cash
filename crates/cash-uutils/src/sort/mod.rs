@@ -48,7 +48,7 @@ use std::sync::OnceLock;
 use thiserror::Error;
 use uucore::diagnostics::OptionValue;
 use uucore::display::Quotable;
-use uucore::error::{FromIo, strip_errno};
+use uucore::error::FromIo;
 use uucore::error::{UError, UResult, USimpleError, UUsageError};
 use uucore::extendedbigdecimal::ExtendedBigDecimal;
 use uucore::i18n::collator::{compute_sort_key_utf8, locale_cmp};
@@ -146,28 +146,28 @@ pub enum SortError {
         silent: bool,
     },
 
-    #[error("{}", translate!("sort-open-failed", "path" => format!("{}", .path.maybe_quote()), "error" => strip_errno(.error)))]
+    #[error("{}", translate!("sort-open-failed", "path" => format!("{}", .path.maybe_quote()), "error" => cash_win32::errno::strerror(.error)))]
     OpenFailed {
         path: PathBuf,
         error: std::io::Error,
     },
 
-    #[error("{}", translate!("sort-truncate-failed", "path" => format!("{}", .path.maybe_quote()), "error" => strip_errno(.error)))]
+    #[error("{}", translate!("sort-truncate-failed", "path" => format!("{}", .path.maybe_quote()), "error" => cash_win32::errno::strerror(.error)))]
     TruncateFailed {
         path: PathBuf,
         error: std::io::Error,
     },
 
-    #[error("{}", translate!("sort-cannot-read", "path" => format!("{}", .path.maybe_quote()), "error" => strip_errno(.error)))]
+    #[error("{}", translate!("sort-cannot-read", "path" => format!("{}", .path.maybe_quote()), "error" => cash_win32::errno::strerror(.error)))]
     ReadFailed {
         path: PathBuf,
         error: std::io::Error,
     },
 
-    #[error("{}", translate!("sort-open-tmp-file-failed", "error" => strip_errno(.error)))]
+    #[error("{}", translate!("sort-open-tmp-file-failed", "error" => cash_win32::errno::strerror(.error)))]
     OpenTmpFileFailed { error: std::io::Error },
 
-    #[error("{}", translate!("sort-compress-prog-execution-failed", "prog" => .prog, "error" => strip_errno(.error)))]
+    #[error("{}", translate!("sort-compress-prog-execution-failed", "prog" => .prog, "error" => cash_win32::errno::strerror(.error)))]
     CompressProgExecutionFailed { prog: String, error: std::io::Error },
 
     #[error("{}", translate!("sort-compress-prog-terminated-abnormally", "prog" => .prog.quote()))]
@@ -178,7 +178,7 @@ pub enum SortError {
 
     /// cash: a temporary file that cannot be written, as GNU sort says it, where uutils
     /// panicked.
-    #[error("{}: {}", translate!("sort-error-write-failed", "output" => format!("{}", .path.maybe_quote())), strip_errno(.error))]
+    #[error("{}: {}", translate!("sort-error-write-failed", "output" => format!("{}", .path.maybe_quote())), cash_win32::errno::strerror(.error))]
     TmpFileWriteFailed {
         path: PathBuf,
         error: std::io::Error,

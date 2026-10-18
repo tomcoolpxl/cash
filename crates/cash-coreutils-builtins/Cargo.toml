@@ -113,7 +113,7 @@ default = []
 'coreutils.base64' = ["dep:uu_base64"]
 'coreutils.basename' = ["dep:uu_basename"]
 'coreutils.basenc' = ["dep:uu_basenc"]
-'coreutils.cat' = ["dep:uu_cat"]
+'coreutils.cat' = ["dep:cash-uutils"]
 'coreutils.cksum' = ["dep:uu_cksum"]
 'coreutils.b2sum' = ["dep:uu_b2sum"]
 'coreutils.md5sum' = ["dep:uu_md5sum"]
@@ -123,7 +123,7 @@ default = []
 'coreutils.sha384sum' = ["dep:uu_sha384sum"]
 'coreutils.sha512sum' = ["dep:uu_sha512sum"]
 'coreutils.comm' = ["dep:uu_comm"]
-'coreutils.cp' = ["dep:uu_cp"]
+'coreutils.cp' = ["dep:cash-uutils"]
 'coreutils.csplit' = ["dep:uu_csplit"]
 'coreutils.cut' = ["dep:uu_cut"]
 'coreutils.date' = ["dep:uu_date"]
@@ -145,36 +145,36 @@ default = []
 'coreutils.hostname' = ["dep:uu_hostname"]
 'coreutils.join' = ["dep:uu_join"]
 'coreutils.link' = ["dep:uu_link"]
-'coreutils.ln' = ["dep:uu_ln"]
+'coreutils.ln' = ["dep:cash-uutils"]
 'coreutils.ls' = ["dep:uu_ls"]
-'coreutils.mkdir' = ["dep:uu_mkdir"]
+'coreutils.mkdir' = ["dep:cash-uutils"]
 'coreutils.mktemp' = ["dep:uu_mktemp"]
 'coreutils.more' = ["dep:uu_more"]
-'coreutils.mv' = ["dep:uu_mv"]
+'coreutils.mv' = ["dep:cash-uutils"]
 'coreutils.nl' = ["dep:uu_nl"]
 'coreutils.nproc' = ["dep:uu_nproc"]
 'coreutils.numfmt' = ["dep:uu_numfmt"]
 'coreutils.od' = ["dep:uu_od"]
-'coreutils.paste' = ["dep:uu_paste"]
+'coreutils.paste' = ["dep:cash-uutils"]
 'coreutils.pathchk' = ["dep:uu_pathchk"]
-'coreutils.pr' = ["dep:uu_pr"]
+'coreutils.pr' = ["dep:cash-uutils"]
 'coreutils.printenv' = ["dep:uu_printenv"]
 'coreutils.printf' = ["dep:uu_printf"]
-'coreutils.ptx' = ["dep:uu_ptx"]
+'coreutils.ptx' = ["dep:cash-uutils"]
 'coreutils.pwd' = ["dep:uu_pwd"]
 'coreutils.readlink' = ["dep:uu_readlink"]
 'coreutils.realpath' = ["dep:uu_realpath"]
 'coreutils.rm' = ["dep:cash-uutils"]
-'coreutils.rmdir' = ["dep:uu_rmdir"]
+'coreutils.rmdir' = ["dep:cash-uutils"]
 'coreutils.seq' = ["dep:uu_seq"]
-'coreutils.shred' = ["dep:uu_shred"]
+'coreutils.shred' = ["dep:cash-uutils"]
 'coreutils.shuf' = ["dep:cash-uutils"]
 'coreutils.sleep' = ["dep:uu_sleep"]
 'coreutils.sort' = ["dep:cash-uutils"]
 'coreutils.split' = ["dep:uu_split"]
 'coreutils.sum' = ["dep:uu_sum"]
 'coreutils.sync' = ["dep:uu_sync"]
-'coreutils.tac' = ["dep:uu_tac"]
+'coreutils.tac' = ["dep:cash-uutils"]
 'coreutils.tail' = ["dep:cash-uutils"]
 'coreutils.tee' = ["dep:cash-uutils"]
 'coreutils.uptime' = ["dep:uu_uptime"]
@@ -209,7 +209,6 @@ uu_base32 = { version = "0.12.0", optional = true }
 uu_base64 = { version = "0.12.0", optional = true }
 uu_basename = { version = "0.12.0", optional = true }
 uu_basenc = { version = "0.12.0", optional = true }
-uu_cat = { version = "0.12.0", optional = true }
 uu_cksum = { version = "0.12.0", optional = true }
 uu_b2sum = { version = "0.12.0", optional = true }
 uu_md5sum = { version = "0.12.0", optional = true }
@@ -219,7 +218,6 @@ uu_sha256sum = { version = "0.12.0", optional = true }
 uu_sha384sum = { version = "0.12.0", optional = true }
 uu_sha512sum = { version = "0.12.0", optional = true }
 uu_comm = { version = "0.12.0", optional = true }
-uu_cp = { version = "0.12.0", optional = true }
 uu_csplit = { version = "0.12.0", optional = true }
 uu_cut = { version = "0.12.0", optional = true }
 uu_date = { version = "0.12.0", optional = true }
@@ -240,33 +238,24 @@ uu_fold = { version = "0.12.0", optional = true }
 uu_hostname = { version = "0.12.0", optional = true }
 uu_join = { version = "0.12.0", optional = true }
 uu_link = { version = "0.12.0", optional = true }
-uu_ln = { version = "0.12.0", optional = true }
 uu_ls = { version = "0.12.0", optional = true }
-uu_mkdir = { version = "0.12.0", optional = true }
 uu_mktemp = { version = "0.12.0", optional = true }
 uu_more = { version = "0.12.0", optional = true }
-uu_mv = { version = "0.12.0", optional = true }
 uu_nl = { version = "0.12.0", optional = true }
 uu_nproc = { version = "0.12.0", optional = true }
 uu_numfmt = { version = "0.12.0", optional = true }
 uu_od = { version = "0.12.0", optional = true }
-uu_paste = { version = "0.12.0", optional = true }
 uu_pathchk = { version = "0.12.0", optional = true }
-uu_pr = { version = "0.12.0", optional = true }
 uu_printenv = { version = "0.12.0", optional = true }
 uu_printf = { version = "0.12.0", optional = true }
-uu_ptx = { version = "0.12.0", optional = true }
 uu_pwd = { version = "0.12.0", optional = true }
 uu_readlink = { version = "0.12.0", optional = true }
 uu_realpath = { version = "0.12.0", optional = true }
-uu_rmdir = { version = "0.12.0", optional = true }
 uu_seq = { version = "0.12.0", optional = true }
-uu_shred = { version = "0.12.0", optional = true }
 uu_sleep = { version = "0.12.0", optional = true }
 uu_split = { version = "0.12.0", optional = true }
 uu_sum = { version = "0.12.0", optional = true }
 uu_sync = { version = "0.12.0", optional = true }
-uu_tac = { version = "0.12.0", optional = true }
 uu_uptime = { version = "0.12.0", optional = true }
 uu_timeout = { version = "0.12.0", optional = true }
 uu_test = { version = "0.12.0", optional = true }

@@ -207,11 +207,12 @@ impl builtins::Command for StatCommand {
                         &Zone::of_shell(context.shell),
                     ),
                     Err(e) => {
+                        // In GNU's words, `No such file or directory`, not Windows'.
                         writeln!(
                             context.stderr(),
                             "stat: cannot stat '{}': {}",
                             path.display(),
-                            e
+                            cash_core::error::os_error_text(&e)
                         )?;
                         had_error = true;
                         continue;

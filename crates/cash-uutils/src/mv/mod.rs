@@ -1,0 +1,1129 @@
+// This file is part of the uutils coreutils package.
+//
+// For the full copyright and license information, please view the LICENSE
+// file that was distributed with this source code.
+
+// spell-checker:ignore (ToDO) sourcepath targetpath nushell canonicalized unwriteable
+// spell-checker:ignore renameat symlinkat unlinkat unguessability RDONLY CLOEXEC
+// spell-checker:ignore renamer fsetxattr
+
+mod error;
+
+use clap::builder::ValueParser;
+use clap::error::ErrorKind;
+use clap::{Arg, ArgAction, ArgMatches, Command};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+
+use rustc_hash::FxHashSet;
+use std::env;
+use std::ffi::OsString;
+use std::fs;
+use std::io::{self, IsTerminal};
+use std::os::windows;
+use std::path::{Path, PathBuf, absolute};
+
+use crate::messages::translate;
+use uucore::backup_control::{self, backup_would_destroy_source};
+use uucore::display::Quotable;
+use uucore::error::{FromIo, UError, UResult, USimpleError, UUsageError, set_exit_code};
+use uucore::fs::{
+    MissingHandling, ResolveMode, are_hardlinks_or_one_way_symlink_to_same_file,
+    are_hardlinks_to_same_file, canonicalize, path_ends_with_terminator,
+};
+use uucore::update_control;
+
+// These are exposed for projects (e.g. nushell) that want to create an `Options` value, which
+// requires these enums
+pub use uucore::{backup_control::BackupMode, update_control::UpdateMode};
+use uucore::{format_usage, prompt_yes, show};
+
+use crate::mv::error::MvError;
+
+// cash: the tool's messages, compiled in (see `crate::messages`).
+static MESSAGES: crate::messages::Messages =
+    crate::messages::Messages::new(include_str!("en-US.ftl"));
+
+/// Options contains all the possible behaviors and flags for mv.
+///
+/// All options are public so that the options can be programmatically
+/// constructed by other crates, such as nushell. That means that this struct is
+/// part of our public API. It should therefore not be changed without good reason.
+///
+/// The fields are documented with the arguments that determine their value.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Options {
+    /// specifies overwrite behavior
+    /// '-n' '--no-clobber'
+    /// '-i' '--interactive'
+    /// '-f' '--force'
+    pub overwrite: OverwriteMode,
+
+    /// `--backup[=CONTROL]`, `-b`
+    pub backup: BackupMode,
+
+    /// '-S' --suffix' backup suffix
+    pub suffix: String,
+
+    /// Available update mode "--update-mode=all|none|older"
+    pub update: UpdateMode,
+
+    /// Specifies target directory
+    /// '-t, --target-directory=DIRECTORY'
+    pub target_dir: Option<OsString>,
+
+    /// Treat destination as a normal file
+    /// '-T, --no-target-directory
+    pub no_target_dir: bool,
+
+    /// '-v, --verbose'
+    pub verbose: bool,
+
+    /// '--strip-trailing-slashes'
+    pub strip_slashes: bool,
+
+    /// '-g, --progress'
+    pub progress_bar: bool,
+
+    /// `--debug`
+    pub debug: bool,
+
+    /// `-Z, --context`
+    pub context: Option<String>,
+
+    /// `--exchange` atomically exchange source and destination
+    pub exchange: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            overwrite: OverwriteMode::default(),
+            backup: BackupMode::default(),
+            suffix: backup_control::DEFAULT_BACKUP_SUFFIX.to_owned(),
+            update: UpdateMode::default(),
+            target_dir: None,
+            no_target_dir: false,
+            verbose: false,
+            strip_slashes: false,
+            progress_bar: false,
+            debug: false,
+            context: None,
+            exchange: false,
+        }
+    }
+}
+
+/// specifies behavior of the overwrite flag
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+pub enum OverwriteMode {
+    /// No flag specified - prompt for unwriteable files when stdin is TTY
+    #[default]
+    Default,
+    /// '-n' '--no-clobber'   do not overwrite
+    NoClobber,
+    /// '-i' '--interactive'  prompt before overwrite
+    Interactive,
+    ///'-f' '--force'         overwrite without prompt
+    Force,
+}
+
+static OPT_FORCE: &str = "force";
+static OPT_INTERACTIVE: &str = "interactive";
+static OPT_NO_CLOBBER: &str = "no-clobber";
+static OPT_STRIP_TRAILING_SLASHES: &str = "strip-trailing-slashes";
+static OPT_TARGET_DIRECTORY: &str = "target-directory";
+static OPT_NO_TARGET_DIRECTORY: &str = "no-target-directory";
+static OPT_VERBOSE: &str = "verbose";
+static OPT_PROGRESS: &str = "progress";
+static ARG_FILES: &str = "files";
+static OPT_DEBUG: &str = "debug";
+static OPT_CONTEXT: &str = "context";
+static OPT_SELINUX: &str = "selinux";
+static OPT_EXCHANGE: &str = "exchange";
+
+#[uucore::main]
+pub fn uumain(args: impl uucore::Args) -> UResult<()> {
+    let matches = uucore::clap_localization::handle_clap_result(uu_app(), args)?;
+
+    let files: Vec<OsString> = matches
+        .get_many::<OsString>(ARG_FILES)
+        .unwrap_or_default()
+        .cloned()
+        .collect();
+
+    if files.len() == 1 && !matches.contains_id(OPT_TARGET_DIRECTORY) {
+        let err = uu_app().error(
+            ErrorKind::TooFewValues,
+            translate!("mv-error-insufficient-arguments", "arg_files" => ARG_FILES),
+        );
+        uucore::clap_localization::handle_clap_error_with_exit_code(err, 1);
+    }
+
+    let overwrite_mode = determine_overwrite_mode(&matches);
+    let backup_mode =
+        backup_control::determine_backup_mode(env::var("VERSION_CONTROL").ok(), &matches)?;
+    let update_mode = update_control::determine_update_mode(&matches);
+
+    if backup_mode != BackupMode::None
+        && (overwrite_mode == OverwriteMode::NoClobber
+            || update_mode == UpdateMode::None
+            || update_mode == UpdateMode::NoneFail)
+    {
+        return Err(UUsageError::new(
+            1,
+            translate!("mv-error-backup-with-no-clobber"),
+        ));
+    }
+
+    let backup_suffix = backup_control::determine_backup_suffix(&matches);
+
+    let target_dir = matches
+        .get_one::<OsString>(OPT_TARGET_DIRECTORY)
+        .map(OsString::from);
+
+    if let Some(ref maybe_dir) = target_dir
+        && !Path::new(&maybe_dir).is_dir()
+    {
+        return Err(MvError::TargetNotADirectory(maybe_dir.quote().to_string()).into());
+    }
+
+    // Handle -Z and --context options
+    // If -Z is used, use the default context (empty string)
+    // If --context=value is used, use that specific value
+    let context = if matches.get_flag(OPT_SELINUX) {
+        Some(String::new())
+    } else {
+        matches.get_one::<String>(OPT_CONTEXT).cloned()
+    };
+
+    let opts = Options {
+        overwrite: overwrite_mode,
+        backup: backup_mode,
+        suffix: backup_suffix,
+        update: update_mode,
+        target_dir,
+        no_target_dir: matches.get_flag(OPT_NO_TARGET_DIRECTORY),
+        verbose: matches.get_flag(OPT_VERBOSE) || matches.get_flag(OPT_DEBUG),
+        strip_slashes: matches.get_flag(OPT_STRIP_TRAILING_SLASHES),
+        progress_bar: matches.get_flag(OPT_PROGRESS),
+        debug: matches.get_flag(OPT_DEBUG),
+        context,
+        exchange: matches.get_flag(OPT_EXCHANGE),
+    };
+
+    mv(&files[..], &opts)
+}
+
+pub fn uu_app() -> Command {
+    Command::new("mv")
+        .version(crate::UUTILS_VERSION)
+        .about(translate!("mv-about"))
+        .help_template(uucore::localized_help_template(uucore::util_name()))
+        .override_usage(format_usage(&translate!("mv-usage")))
+        .after_help(format!(
+            "{}\n\n{}",
+            translate!("mv-after-help"),
+            backup_control::BACKUP_CONTROL_LONG_HELP
+        ))
+        .infer_long_args(true)
+        .arg(
+            Arg::new(OPT_FORCE)
+                .short('f')
+                .long(OPT_FORCE)
+                .help(translate!("mv-help-force"))
+                .overrides_with_all([OPT_INTERACTIVE, OPT_NO_CLOBBER])
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new(OPT_INTERACTIVE)
+                .short('i')
+                .long(OPT_INTERACTIVE)
+                .help(translate!("mv-help-interactive"))
+                .overrides_with_all([OPT_FORCE, OPT_NO_CLOBBER])
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new(OPT_NO_CLOBBER)
+                .short('n')
+                .long(OPT_NO_CLOBBER)
+                .help(translate!("mv-help-no-clobber"))
+                .overrides_with_all([OPT_FORCE, OPT_INTERACTIVE])
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new(OPT_STRIP_TRAILING_SLASHES)
+                .long(OPT_STRIP_TRAILING_SLASHES)
+                .help(translate!("mv-help-strip-trailing-slashes"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(backup_control::arguments::backup())
+        .arg(backup_control::arguments::backup_no_args())
+        .arg(backup_control::arguments::suffix())
+        .arg(update_control::arguments::update())
+        .arg(update_control::arguments::update_no_args())
+        .arg(
+            Arg::new(OPT_TARGET_DIRECTORY)
+                .short('t')
+                .long(OPT_TARGET_DIRECTORY)
+                .help(translate!("mv-help-target-directory"))
+                .value_name("DIRECTORY")
+                .value_hint(clap::ValueHint::DirPath)
+                .conflicts_with(OPT_NO_TARGET_DIRECTORY)
+                .value_parser(ValueParser::os_string()),
+        )
+        .arg(
+            Arg::new(OPT_NO_TARGET_DIRECTORY)
+                .short('T')
+                .long(OPT_NO_TARGET_DIRECTORY)
+                .help(translate!("mv-help-no-target-directory"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new(OPT_VERBOSE)
+                .short('v')
+                .long(OPT_VERBOSE)
+                .help(translate!("mv-help-verbose"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new(OPT_PROGRESS)
+                .short('g')
+                .long(OPT_PROGRESS)
+                .help(translate!("mv-help-progress"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new(OPT_SELINUX)
+                .short('Z')
+                .help(translate!("mv-help-selinux"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new(OPT_CONTEXT)
+                .long(OPT_CONTEXT)
+                .value_name("CTX")
+                .value_parser(clap::value_parser!(String))
+                .help(translate!("mv-help-context"))
+                .num_args(0..=1)
+                .require_equals(true)
+                .default_missing_value(""),
+        )
+        .arg(
+            Arg::new(ARG_FILES)
+                .action(ArgAction::Append)
+                .num_args(1..)
+                .required(true)
+                .value_parser(ValueParser::os_string())
+                .value_hint(clap::ValueHint::AnyPath),
+        )
+        .arg(
+            Arg::new(OPT_DEBUG)
+                .long(OPT_DEBUG)
+                .help(translate!("mv-help-debug"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new(OPT_EXCHANGE)
+                .long(OPT_EXCHANGE)
+                .help(translate!("mv-help-exchange"))
+                .action(ArgAction::SetTrue),
+        )
+}
+
+fn determine_overwrite_mode(matches: &ArgMatches) -> OverwriteMode {
+    // This does not exactly match the GNU implementation:
+    // The GNU mv defaults to Force, but if more than one of the
+    // overwrite options are supplied, only the last takes effect.
+    // To default to no-clobber in that situation seems safer:
+    //
+    if matches.get_flag(OPT_NO_CLOBBER) {
+        OverwriteMode::NoClobber
+    } else if matches.get_flag(OPT_INTERACTIVE) {
+        OverwriteMode::Interactive
+    } else if matches.get_flag(OPT_FORCE) {
+        OverwriteMode::Force
+    } else {
+        OverwriteMode::Default
+    }
+}
+
+fn parse_paths(files: &[OsString], opts: &Options) -> Vec<PathBuf> {
+    let paths = files.iter().map(Path::new);
+
+    if opts.strip_slashes {
+        paths
+            .map(|p| p.components().as_path().to_owned())
+            .collect::<Vec<PathBuf>>()
+    } else {
+        paths.map(ToOwned::to_owned).collect::<Vec<PathBuf>>()
+    }
+}
+
+fn handle_two_paths(source: &Path, target: &Path, opts: &Options) -> UResult<()> {
+    // `mv` never follows a symlink source, so the guard must not either.
+    if backup_would_destroy_source(source, target, &opts.suffix, opts.backup, false) {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            translate!("mv-error-backup-might-destroy-source", "target" => target.quote(), "source" => source.quote()),
+        )
+        .into());
+    }
+    let Ok(source_metadata) = source.symlink_metadata() else {
+        return Err(if path_ends_with_terminator(source) {
+            MvError::CannotStatNotADirectory(source.quote().to_string()).into()
+        } else {
+            MvError::NoSuchFile(source.quote().to_string()).into()
+        });
+    };
+
+    // `symlink_metadata` does not follow symlinks, so this is equivalent to
+    // `source.is_dir() && !source.is_symlink()` without the extra `stat` calls.
+    let source_is_dir = source_metadata.is_dir();
+    let target_is_dir = match target.symlink_metadata() {
+        Ok(metadata) if metadata.is_symlink() => fs::canonicalize(target).is_ok_and(|p| p.is_dir()),
+        Ok(metadata) => metadata.is_dir(),
+        Err(_) => false,
+    };
+
+    if path_ends_with_terminator(target)
+        && (!target_is_dir && !source_is_dir)
+        && !opts.no_target_dir
+        && opts.update != UpdateMode::IfOlder
+    {
+        return Err(MvError::FailedToAccessNotADirectory(target.quote().to_string()).into());
+    }
+
+    assert_not_same_file(source, target, target_is_dir, opts)?;
+
+    if target_is_dir {
+        if opts.no_target_dir {
+            if source.is_dir() {
+                let hardlink_params = (None, None);
+
+                rename(
+                    source,
+                    target,
+                    opts,
+                    None,
+                    hardlink_params.0,
+                    hardlink_params.1,
+                )
+                .map_err(|e| -> Box<dyn UError> {
+                    let message = if is_directory_not_empty_error(&e) {
+                        translate!(
+                            "mv-error-cannot-overwrite-non-empty-directory",
+                            "target" => target.quote()
+                        )
+                    } else {
+                        translate!(
+                            "mv-error-cannot-move",
+                            "source" => source.quote(),
+                            "target" => target.quote()
+                        )
+                    };
+                    e.map_err_context(|| message)
+                })
+            } else {
+                Err(MvError::DirectoryToNonDirectory(target.quote().to_string()).into())
+            }
+        } else {
+            move_files_into_dir(&[source.to_path_buf()], target, opts)
+        }
+    } else if source_is_dir && target.exists() {
+        match opts.overwrite {
+            OverwriteMode::NoClobber => return Ok(()),
+            OverwriteMode::Interactive => prompt_overwrite(target, None)?,
+            OverwriteMode::Force => {}
+            OverwriteMode::Default => {
+                let (writable, mode) = is_writable(target);
+                if !writable && io::stdin().is_terminal() {
+                    prompt_overwrite(target, mode)?;
+                }
+            }
+        }
+        Err(MvError::NonDirectoryToDirectory(
+            source.quote().to_string(),
+            target.quote().to_string(),
+        )
+        .into())
+    } else {
+        let hardlink_params = (None, None);
+
+        rename(
+            source,
+            target,
+            opts,
+            None,
+            hardlink_params.0,
+            hardlink_params.1,
+        )
+        .map_err(|e| {
+            // cash: an error from Windows is `cannot move 'a' to 'b': ...` in GNU's
+            // words; uutils gave Windows' text alone. A message of `rename`'s own
+            // stays as it is.
+            if e.raw_os_error().is_some() {
+                USimpleError::new(
+                    1,
+                    format!(
+                        "{}: {}",
+                        translate!(
+                            "mv-error-cannot-move",
+                            "source" => source.quote(),
+                            "target" => target.quote()
+                        ),
+                        cash_win32::errno::strerror(&e)
+                    ),
+                )
+            } else {
+                USimpleError::new(1, format!("{e}"))
+            }
+        })
+    }
+}
+
+fn assert_not_same_file(
+    source: &Path,
+    target: &Path,
+    target_is_dir: bool,
+    opts: &Options,
+) -> UResult<()> {
+    // we'll compare canonicalized_source and canonicalized_target for same file detection
+    let canonicalized_source = match canonicalize(
+        absolute(source)?,
+        MissingHandling::Normal,
+        ResolveMode::Logical,
+    ) {
+        Ok(source) if source.exists() => source,
+        _ => absolute(source)?, // file or symlink target doesn't exist but its absolute path is still used for comparison
+    };
+
+    // special case if the target exists, is a directory, and the `-T` flag wasn't used
+    let target_is_dir = target_is_dir && !opts.no_target_dir;
+    let canonicalized_target = if target_is_dir {
+        // `mv source_file target_dir` => target_dir/source_file
+        // canonicalize the path that exists (target directory) and join the source file name
+        canonicalize(
+            absolute(target)?,
+            MissingHandling::Normal,
+            ResolveMode::Logical,
+        )?
+        .join(source.file_name().unwrap_or_default())
+    } else {
+        // `mv source target_dir/target` => target_dir/target
+        // we canonicalize target_dir and join /target
+        match absolute(target)?.parent() {
+            Some(parent) if parent.to_str() != Some("") => {
+                canonicalize(parent, MissingHandling::Normal, ResolveMode::Logical)?
+                    .join(target.file_name().unwrap_or_default())
+            }
+            // path.parent() returns Some("") or None if there's no parent
+            _ => absolute(target)?, // absolute paths should always have a parent, but we'll fall back just in case
+        }
+    };
+
+    let same_file = opts.backup == BackupMode::None
+        && (canonicalized_source.eq(&canonicalized_target)
+            || are_hardlinks_to_same_file(source, target)
+            || are_hardlinks_or_one_way_symlink_to_same_file(source, target));
+
+    // get the expected target path to show in errors
+    // this is based on the argument and not canonicalized
+    // only computed when an error is actually reported
+    let target_display = || match source.file_name() {
+        Some(file_name) if target_is_dir => {
+            // join target_dir/source_file in a platform-independent manner
+            let mut path = target
+                .display()
+                .to_string()
+                .trim_end_matches('/')
+                .to_owned();
+
+            path.push('/');
+            path.push_str(&file_name.to_string_lossy());
+
+            path.quote().to_string()
+        }
+        _ => target.quote().to_string(),
+    };
+
+    if same_file
+        && (canonicalized_source.eq(&canonicalized_target)
+            || source.eq(Path::new("."))
+            || source.ends_with("/.")
+            || source.is_file())
+    {
+        return Err(MvError::SameFile(source.quote().to_string(), target_display()).into());
+    } else if (same_file || canonicalized_target.starts_with(canonicalized_source))
+        // don't error if we're moving a symlink of a directory into itself
+        && !source.is_symlink()
+    {
+        return Err(
+            MvError::SelfTargetSubdirectory(source.quote().to_string(), target_display()).into(),
+        );
+    }
+    Ok(())
+}
+
+fn handle_multiple_paths(paths: &[PathBuf], opts: &Options) -> UResult<()> {
+    // cash: called with more than two paths; none is no panic.
+    let Some((target_dir, sources)) = paths.split_last() else {
+        return Ok(());
+    };
+    if opts.no_target_dir {
+        return Err(UUsageError::new(
+            1,
+            translate!("mv-error-extra-operand", "operand" => target_dir.quote()),
+        ));
+    }
+
+    move_files_into_dir(sources, target_dir, opts)
+}
+
+/// Execute the mv command. This moves 'source' to 'target', where
+/// 'target' is a directory. If 'target' does not exist, and source is a single
+/// file or directory, then 'source' will be renamed to 'target'.
+pub fn mv(files: &[OsString], opts: &Options) -> UResult<()> {
+    let paths = parse_paths(files, opts);
+
+    if opts.exchange {
+        return Err(USimpleError::new(
+            1,
+            translate!("mv-error-exchange-not-supported"),
+        ));
+    }
+
+    if let Some(ref name) = opts.target_dir {
+        return move_files_into_dir(&paths, &PathBuf::from(name), opts);
+    }
+
+    match paths.as_slice() {
+        [path0, path1] => handle_two_paths(path0, path1, opts),
+        _ => handle_multiple_paths(&paths, opts),
+    }
+}
+
+#[allow(clippy::cognitive_complexity)]
+fn move_files_into_dir(files: &[PathBuf], target_dir: &Path, options: &Options) -> UResult<()> {
+    // remember the moved destinations for further usage
+    let mut moved_destinations: FxHashSet<PathBuf> =
+        FxHashSet::with_capacity_and_hasher(files.len(), rustc_hash::FxBuildHasher);
+    // Create hardlink tracking context
+
+    if !target_dir.is_dir() {
+        return Err(MvError::NotADirectory(target_dir.quote().to_string()).into());
+    }
+
+    let display_manager = options.progress_bar.then(MultiProgress::new);
+
+    let count_progress = if let Some(ref display_manager) = display_manager {
+        if files.len() > 1 {
+            Some(
+                display_manager.add(
+                    ProgressBar::new(u64::try_from(files.len()).unwrap_or(u64::MAX)).with_style(
+                        ProgressStyle::with_template(&format!(
+                            "{} {{msg}} {{wide_bar}} {{pos}}/{{len}}",
+                            translate!("mv-progress-moving")
+                        ))
+                        .unwrap_or_else(|_| ProgressStyle::default_bar()),
+                    ),
+                ),
+            )
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    for sourcepath in files {
+        if sourcepath.symlink_metadata().is_err() {
+            show!(MvError::NoSuchFile(sourcepath.quote().to_string()));
+            continue;
+        }
+
+        if let Some(ref pb) = count_progress {
+            let msg = format!("{} (scanning hardlinks)", sourcepath.to_string_lossy());
+            pb.set_message(msg);
+        }
+
+        let targetpath = if let Some(name) = sourcepath.file_name() {
+            target_dir.join(name)
+        } else {
+            show!(MvError::NoSuchFile(sourcepath.quote().to_string()));
+            continue;
+        };
+
+        if moved_destinations.contains(&targetpath) && options.backup != BackupMode::Numbered {
+            // If the target file was already created in this mv call, do not overwrite
+            show!(USimpleError::new(
+                1,
+                translate!("mv-error-will-not-overwrite-just-created", "target" => targetpath.quote(), "source" => sourcepath.quote()),
+            ));
+            continue;
+        }
+
+        // Check if we have mv dir1 dir2 dir2
+        // And generate an error if this is the case
+        if let Err(e) = assert_not_same_file(sourcepath, target_dir, true, options) {
+            show!(e);
+            continue;
+        }
+
+        let hardlink_params = (None, None);
+
+        match rename(
+            sourcepath,
+            &targetpath,
+            options,
+            display_manager.as_ref(),
+            hardlink_params.0,
+            hardlink_params.1,
+        ) {
+            Err(e) if e.to_string().is_empty() => set_exit_code(1),
+            Err(e) => {
+                let message = if is_directory_not_empty_error(&e) {
+                    translate!(
+                        "mv-error-cannot-overwrite-non-empty-directory",
+                        "target" => targetpath.quote()
+                    )
+                } else {
+                    translate!(
+                        "mv-error-cannot-move",
+                        "source" => sourcepath.quote(),
+                        "target" => targetpath.quote()
+                    )
+                };
+                let e = e.map_err_context(|| message);
+                if let Some(ref pb) = display_manager {
+                    pb.suspend(|| show!(e));
+                } else {
+                    show!(e);
+                }
+            }
+            Ok(()) => {
+                moved_destinations.insert(targetpath.clone());
+            }
+        }
+        if let Some(ref pb) = count_progress {
+            pb.inc(1);
+        }
+    }
+    Ok(())
+}
+
+fn rename(
+    from: &Path,
+    to: &Path,
+    opts: &Options,
+    display_manager: Option<&MultiProgress>,
+    _hardlink_tracker: Option<()>,
+    _hardlink_scanner: Option<()>,
+) -> io::Result<()> {
+    let mut backup_path = None;
+
+    if to.exists() {
+        if opts.update == UpdateMode::None {
+            if opts.debug {
+                println!("{}", translate!("mv-debug-skipped", "target" => to.quote()));
+            }
+            return Ok(());
+        }
+
+        if (opts.update == UpdateMode::IfOlder)
+            && fs::metadata(from)?.modified()? <= fs::metadata(to)?.modified()?
+        {
+            return Ok(());
+        }
+
+        if opts.update == UpdateMode::NoneFail {
+            let err_msg = translate!("mv-error-not-replacing", "target" => to.quote());
+            return Err(io::Error::other(err_msg));
+        }
+
+        match opts.overwrite {
+            OverwriteMode::NoClobber => {
+                if opts.debug {
+                    println!("{}", translate!("mv-debug-skipped", "target" => to.quote()));
+                }
+                return Ok(());
+            }
+            OverwriteMode::Interactive => prompt_overwrite(to, None)?,
+            OverwriteMode::Force => {}
+            OverwriteMode::Default => {
+                // GNU mv prompts when stdin is a TTY and target is not writable
+                let (writable, mode) = is_writable(to);
+                if !writable && io::stdin().is_terminal() {
+                    prompt_overwrite(to, mode)?;
+                }
+            }
+        }
+
+        backup_path = backup_control::get_backup_path(opts.backup, to, &opts.suffix);
+        if let Some(ref backup_path) = backup_path {
+            // For backup renames, we don't need to track hardlinks as we're just moving the existing file
+            rename_with_fallback(to, backup_path, display_manager, false, None, None)?;
+        }
+    }
+
+    // "to" may no longer exist if it was backed up
+    // `symlink_metadata` does not follow symlinks, so a symlink to a directory
+    // is not reported as a directory, as with the previous
+    // `to.exists() && to.is_dir() && !to.is_symlink()` check
+    if to
+        .symlink_metadata()
+        .is_ok_and(|metadata| metadata.is_dir())
+    {
+        // normalize behavior between *nix and windows
+        if from.is_dir() {
+            if is_empty_dir(to) {
+                fs::remove_dir(to)?;
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::DirectoryNotEmpty,
+                    translate!("mv-error-directory-not-empty"),
+                ));
+            }
+        }
+    }
+
+    {
+        rename_with_fallback(from, to, display_manager, opts.verbose, None, None)?;
+    }
+
+    if opts.verbose {
+        let message = if let Some(path) = backup_path {
+            translate!("mv-verbose-renamed-with-backup", "from" => from.quote(), "to" => to.quote(), "backup" => path.quote())
+        } else {
+            translate!("mv-verbose-renamed", "from" => from.quote(), "to" => to.quote())
+        };
+
+        match display_manager {
+            Some(pb) => pb.suspend(|| {
+                println!("{message}");
+            }),
+            None => println!("{message}"),
+        }
+    }
+    Ok(())
+}
+
+fn is_directory_not_empty_error(err: &io::Error) -> bool {
+    err.kind() == io::ErrorKind::DirectoryNotEmpty
+}
+
+fn is_fifo(_filetype: fs::FileType) -> bool {
+    false
+}
+
+/// A wrapper around `fs::rename`, so that if it fails, we try falling back on
+/// copying and removing.
+fn rename_with_fallback(
+    from: &Path,
+    to: &Path,
+    display_manager: Option<&MultiProgress>,
+    verbose: bool,
+    _hardlink_tracker: Option<()>,
+    _hardlink_scanner: Option<()>,
+) -> io::Result<()> {
+    fs::rename(from, to).or_else(|err| {
+        const EXDEV: i32 = windows_sys::Win32::Foundation::ERROR_NOT_SAME_DEVICE as _;
+
+        // We will only copy if:
+        // 1. Files are on different devices (EXDEV error)
+        // 2. On Windows, if the target file exists and source file is opened by another process
+        //    (MoveFileExW fails with "Access Denied" even if the source file has FILE_SHARE_DELETE permission)
+        // cash: the second only for Windows' "Access Denied" over a target that is
+        // there; uutils fell back on any failure, so `mv a nodir/b` copied, failed
+        // again, and said `Permission denied` for a directory that is not there.
+        let should_fallback = matches!(err.raw_os_error(), Some(EXDEV))
+            || (err.kind() == io::ErrorKind::PermissionDenied
+                && to.exists()
+                && from.is_file()
+                && can_delete_file(from));
+        if !should_fallback {
+            return Err(err);
+        }
+        // Get metadata without following symlinks
+        let metadata = from.symlink_metadata()?;
+        let file_type = metadata.file_type();
+        if file_type.is_symlink() {
+            rename_symlink_fallback(from, to)
+        } else if file_type.is_dir() {
+            rename_dir_fallback(from, to, display_manager, verbose)
+        } else if is_fifo(file_type) {
+            rename_fifo_fallback(from, to)
+        } else {
+            rename_file_fallback(from, to)
+        }
+    })
+}
+
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "fn sig must match on all platforms"
+)]
+fn rename_fifo_fallback(_from: &Path, _to: &Path) -> io::Result<()> {
+    Ok(())
+}
+
+/// Move the given symlink to the given destination. On Windows, dangling
+/// symlinks return an error.
+fn rename_symlink_fallback(from: &Path, to: &Path) -> io::Result<()> {
+    let path_symlink_points_to = fs::read_link(from)?;
+    if path_symlink_points_to.exists() {
+        if path_symlink_points_to.is_dir() {
+            windows::fs::symlink_dir(&path_symlink_points_to, to)?;
+        } else {
+            windows::fs::symlink_file(&path_symlink_points_to, to)?;
+        }
+        fs::remove_file(from)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            translate!("mv-error-dangling-symlink"),
+        ))
+    }
+}
+
+fn rename_dir_fallback(
+    from: &Path,
+    to: &Path,
+    display_manager: Option<&MultiProgress>,
+    verbose: bool,
+) -> io::Result<()> {
+    // We remove the destination directory if it exists to match the
+    // behavior of `fs::rename`.
+    if to.exists() {
+        fs::remove_dir_all(to)?;
+    }
+
+    // Calculate total size of directory
+    // Silently degrades:
+    //    If finding the total size fails for whatever reason,
+    //    the progress bar wont be shown for this file / dir.
+    //    (Move will probably fail due to permission error later?)
+    let total_size = display_manager.and_then(|_| get_dir_size(from).ok());
+
+    let progress_bar = match (display_manager, total_size) {
+        (Some(display_manager), Some(total_size)) => {
+            let template = "{msg}: [{elapsed_precise}] {wide_bar} {bytes:>7}/{total_bytes:7}";
+            let style = ProgressStyle::with_template(template)
+                .unwrap_or_else(|_| ProgressStyle::default_bar());
+            let bar = ProgressBar::new(total_size).with_style(style);
+            Some(display_manager.add(bar))
+        }
+        (_, _) => None,
+    };
+
+    // Retrieve xattrs through a file descriptor so a concurrent renamer cannot
+    // redirect the list/get calls to a different inode.
+
+    // Use directory copying (with or without hardlink support)
+    let result = copy_dir_contents(from, to, verbose, progress_bar.as_ref(), display_manager);
+
+    // Apply xattrs using a file descriptor to avoid TOCTOU races, ignoring
+    // ENOTSUP/EOPNOTSUPP (filesystem without xattr support, which is expected
+    // for cross-device moves).
+    //
+    // The fd is opened read-only: a directory cannot be opened for writing, and
+    // fsetxattr checks write permission on the inode, not the open mode.
+
+    result?;
+
+    // Remove the source directory after successful copy
+    fs::remove_dir_all(from)?;
+
+    Ok(())
+}
+
+/// Copy directory recursively, optionally preserving hardlinks
+/// Create `path`, refusing to reuse anything already there.
+///
+/// `create_dir_all` would accept a symlink planted at `path` after the caller
+/// removed the destination, redirecting the move out of the destination tree.
+fn create_dir_fail_closed(path: &Path) -> io::Result<()> {
+    fs::create_dir(path).map_err(|e| {
+        if e.kind() == io::ErrorKind::AlreadyExists {
+            io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                translate!("mv-error-dest-appeared", "path" => path.quote()),
+            )
+        } else {
+            e
+        }
+    })
+}
+
+fn get_dir_size(path: &Path) -> io::Result<u64> {
+    let metadata = path.symlink_metadata()?;
+
+    if !metadata.is_dir() {
+        return Ok(metadata.len());
+    }
+
+    let mut size = 0;
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        size += entry.metadata()?.len();
+        if entry.file_type()?.is_dir() {
+            size += get_dir_size(&entry.path())?;
+        }
+    }
+    Ok(size)
+}
+
+fn copy_dir_contents(
+    from: &Path,
+    to: &Path,
+    verbose: bool,
+    progress_bar: Option<&ProgressBar>,
+    display_manager: Option<&MultiProgress>,
+) -> io::Result<()> {
+    // Create the destination directory
+    create_dir_fail_closed(to)?;
+
+    {
+        copy_dir_contents_recursive(from, to, verbose, progress_bar, display_manager)?;
+    }
+
+    Ok(())
+}
+
+fn copy_dir_contents_recursive(
+    from_dir: &Path,
+    to_dir: &Path,
+    verbose: bool,
+    progress_bar: Option<&ProgressBar>,
+    display_manager: Option<&MultiProgress>,
+) -> io::Result<()> {
+    // Helper closure to print verbose messages
+    let print_verbose = |from: &Path, to: &Path| {
+        if verbose {
+            let message =
+                translate!("mv-verbose-renamed", "from" => from.quote(), "to" => to.quote());
+            match display_manager {
+                Some(pb) => pb.suspend(|| {
+                    println!("{message}");
+                }),
+                None => println!("{message}"),
+            }
+        }
+    };
+
+    let entries = fs::read_dir(from_dir)?;
+
+    for entry in entries {
+        let entry = entry?;
+        let from_path = entry.path();
+        // cash: an entry read from a directory always has a name.
+        let Some(file_name) = from_path.file_name() else {
+            continue;
+        };
+        let to_path = to_dir.join(file_name);
+
+        if let Some(pb) = progress_bar {
+            pb.set_message(from_path.to_string_lossy().to_string());
+        }
+
+        if from_path.is_symlink() {
+            // Handle symlinks first, before checking is_dir() which follows symlinks.
+            // This prevents symlinks to directories from being expanded into full copies.
+            {
+                rename_symlink_fallback(&from_path, &to_path)?;
+            }
+
+            print_verbose(&from_path, &to_path);
+        } else if from_path.is_dir() {
+            // Recursively copy subdirectory (only real directories, not symlinks)
+            create_dir_fail_closed(&to_path)?;
+
+            // Preserve ownership (uid/gid) of the subdirectory
+
+            print_verbose(&from_path, &to_path);
+
+            copy_dir_contents_recursive(
+                &from_path,
+                &to_path,
+                verbose,
+                progress_bar,
+                display_manager,
+            )?;
+        } else {
+            // Copy file with or without hardlink support based on platform
+            {
+                // Symlinks are already handled above, so this is always a regular file
+                fs::copy(&from_path, &to_path)?;
+            }
+
+            print_verbose(&from_path, &to_path);
+        }
+
+        if let Some(pb) = progress_bar
+            && let Ok(metadata) = from_path.metadata()
+        {
+            pb.inc(metadata.len());
+        }
+    }
+
+    Ok(())
+}
+
+fn rename_file_fallback(from: &Path, to: &Path) -> io::Result<()> {
+    // Remove existing target file if it exists
+    if to.is_symlink() {
+        fs::remove_file(to).map_err(|err| {
+            let inter_device_msg = translate!("mv-error-inter-device-move-failed", "from" => from.quote(), "to" => to.quote(), "err" => err);
+            io::Error::new(err.kind(), inter_device_msg)
+        })?;
+    } else if to.exists() {
+        // For non-symlinks, just remove the file without special error handling
+        fs::remove_file(to)?;
+    }
+
+    // Check if this file is part of a hardlink group and if so, create a hardlink instead of copying
+
+    // Open src/dst with O_NOFOLLOW and keep the fds alive across copy,
+    // chown, xattr, and chmod so a concurrent path-swap can't redirect any
+    // step to a different inode.
+
+    // cash: the copy's and the removal's own errors, which the caller puts after
+    // `cannot move 'a' to 'b'`; uutils called every one of them `Permission denied`.
+    fs::copy(from, to)?;
+
+    fs::remove_file(from)?;
+    Ok(())
+}
+
+fn is_empty_dir(path: &Path) -> bool {
+    fs::read_dir(path).is_ok_and(|mut contents| contents.next().is_none())
+}
+
+/// Check if file is writable.
+fn is_writable(path: &Path) -> (bool, Option<u32>) {
+    if let Ok(metadata) = path.metadata() {
+        (!metadata.permissions().readonly(), None)
+    } else {
+        (false, None) // If we can't get metadata, prompt user to be safe
+    }
+}
+
+fn get_interactive_prompt(to: &Path, _cached_mode: Option<u32>) -> String {
+    translate!("mv-prompt-overwrite", "target" => to.quote())
+}
+
+/// Prompts the user for confirmation and returns an error if declined.
+fn prompt_overwrite(to: &Path, cached_mode: Option<u32>) -> io::Result<()> {
+    if !prompt_yes!("{}", get_interactive_prompt(to, cached_mode)) {
+        return Err(io::Error::other(""));
+    }
+    Ok(())
+}
+
+/// Checks if a file can be deleted by attempting to open it with delete permissions.
+fn can_delete_file(path: &Path) -> bool {
+    use std::fs::OpenOptions;
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::DELETE;
+
+    OpenOptions::new().access_mode(DELETE).open(path).is_ok()
+}

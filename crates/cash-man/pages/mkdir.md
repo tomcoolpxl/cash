@@ -78,10 +78,9 @@ scratch files.
 
 ## Different in cash
 
-- It is uutils' `mkdir`, carried inside cash, the same on every machine.
-- Errors are in Windows' words: `mkdir nosuch/x` says `The system cannot find the
-  path specified.` where GNU says `No such file or directory`, and a directory that is
-  there gives `mkdir: docs: File exists`.
+- It is cash's own copy of uutils' `mkdir`, carried inside cash, the same on every
+  machine. Its errors are in GNU's words: `mkdir: cannot create directory 'docs': File
+  exists`.
 - `-m` is accepted and ignored: Windows has access lists, not mode bits. Git Bash's
   `mkdir -m 700` fails, `cannot change permissions`.
 - Names Windows forbids are refused: `CON`, `NUL`, `COM1`, and names with `<>:"|?*`.

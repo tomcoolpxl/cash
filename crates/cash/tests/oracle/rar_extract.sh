@@ -147,13 +147,13 @@ z rar x -or rar50/multifile.rar out1/
 tree out1
 echo "== answers piped in: y, n, A, E, Q"
 for answer in y n a e q Y N; do
-  rm -rf out2 && mkdir out2 && cp out1/hello.txt out1/tiny.txt out2/
+  rm -rf out2 && mkdir out2 && cp -p out1/hello.txt out1/tiny.txt out2/
   echo "== answer $answer"
   printf '%s\n' "$answer" | z rar x rar50/multifile.rar out2/
   tree out2
 done
 echo "== a rename, its name piped in"
-rm -rf out2 && mkdir out2 && cp out1/hello.txt out2/
+rm -rf out2 && mkdir out2 && cp -p out1/hello.txt out2/
 printf 'r\nrenamed.txt\n' | z rar x rar50/multifile.rar out2/
 tree out2
 

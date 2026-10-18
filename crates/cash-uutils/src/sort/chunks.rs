@@ -19,7 +19,7 @@ use super::MESSAGES;
 use crate::messages::translate;
 use memchr::memchr_iter;
 use self_cell::self_cell;
-use uucore::error::{UResult, USimpleError, strip_errno};
+use uucore::error::{UResult, USimpleError};
 
 use crate::sort::{GeneralBigDecimalParseResult, GlobalSettings, Line, numeric_str_cmp::NumInfo};
 
@@ -430,7 +430,7 @@ fn read_to_buffer<T: Read>(
             Err(e) => {
                 return Err(USimpleError::new(
                     2,
-                    translate!("sort-read-failed", "error" => strip_errno(&e)),
+                    translate!("sort-read-failed", "error" => cash_win32::errno::strerror(&e)),
                 ));
             }
         }

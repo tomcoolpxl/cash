@@ -1,12 +1,16 @@
 # cash-uutils
 
-`rm`, `sort`, `tee`, `uniq`, `shuf`, `head` and `tail` for cash: taken from
-[uutils coreutils](https://github.com/uutils/coreutils) 0.12.0 (`uu_rm`, `uu_sort`,
-`uu_tee`, `uu_uniq`, `uu_shuf`, `uu_head`, `uu_tail`), © the uutils developers, under
-the MIT License (`LICENSE`), and made cash's own on 2026-10-10 (`head` and `tail` on
-2026-10-17). Until then the first five were carried in `vendor/uutils` as patched
-copies, and `head` and `tail` were used from crates.io as published, as the other
-uutils tools cash bundles still are.
+`cat`, `cp`, `head`, `ln`, `mkdir`, `mv`, `paste`, `pr`, `ptx`, `rm`, `rmdir`, `shred`,
+`shuf`, `sort`, `tac`, `tail`, `tee` and `uniq` for cash: taken from
+[uutils coreutils](https://github.com/uutils/coreutils) 0.12.0 (`uu_cat`, `uu_cp`,
+`uu_head`, `uu_ln`, `uu_mkdir`, `uu_mv`, `uu_paste`, `uu_pr`, `uu_ptx`, `uu_rm`,
+`uu_rmdir`, `uu_shred`, `uu_shuf`, `uu_sort`, `uu_tac`, `uu_tail`, `uu_tee`,
+`uu_uniq`), © the uutils developers, under the MIT License (`LICENSE`), and made cash's
+own: `rm`, `sort`, `tee`, `uniq` and `shuf` on 2026-10-10, `head` and `tail` on
+2026-10-17, the other eleven on 2026-10-18 to say their errors in GNU's words. Until
+then the first five were carried in `vendor/uutils` as patched copies, and the rest
+were used from crates.io as published, as the other uutils tools cash bundles still
+are.
 
 Each tool is a module with its own `uumain`, which `cash-coreutils-builtins` registers
 as it registers the uutils tools it uses unchanged.
@@ -22,7 +26,9 @@ as it registers the uutils tools it uses unchanged.
 - **Windows only.** Code for Unix, Linux, Redox and WASI is gone (`rm`'s safe
   traversal, `tee`'s splicing and raw writes, `sort`'s resource limits, file
   descriptor counts, permissions and single-threaded path, `head`'s and `tail`'s
-  splicing, `tail`'s non-blocking FIFO open and its watch of a file's directory on Linux),
+  splicing, `tail`'s non-blocking FIFO open and its watch of a file's directory on Linux,
+  `cp`'s copy-on-write for Linux and macOS, SELinux and SMACK, `mv`'s hard-link
+  tracking, `mkdir`'s umask and modes, `cat`'s raw writes),
   with the tests of it, and so are the binaries' `main.rs` files. `sort` always had
   uucore's `i18n-collator`; its feature switch went, the collator kept. `tail`'s one
   rstest table is a loop over the same cases.
@@ -91,5 +97,38 @@ as it registers the uutils tools it uses unchanged.
 - **`rm -i` asks in GNU's words** (2026-10-18, found writing rm's man page): `remove
   regular file 'a.txt'?`, as GNU's `rm` asks and the prompts beside it did; uutils
   asked `remove file`. Marked `// cash:`.
+- **Errors in GNU's words** (2026-10-18). An error from Windows is worded as glibc's
+  `strerror` words it, `No such file or directory`, through `cash_win32::errno`, which
+  maps each Windows code to the errno Cygwin gives it; uutils printed Windows' text
+  ("The system cannot find the file specified.") wherever it did not go through
+  uucore's `UIoError`, and uucore's `strip_errno` only cut off `(os error 2)`. Every
+  `strip_errno` here is `cash_win32::errno::strerror`, in `sort` and `tee` too.
+- **Messages shaped as GNU's** (2026-10-18), each checked against Git Bash 5.3:
+  `mkdir: cannot create directory 'a': File exists` (uutils: `a: File exists`); `cp:
+  cannot stat 'x'` for a source that is not there (uutils looked for Linux's words to
+  know it), `cannot open 'x' for reading` and `cannot create regular file 'y'` (uutils:
+  `'x' -> 'y': ...`); `mv: cannot move 'a' to 'b': ...` (uutils: Windows' text alone);
+  `ln: failed to access 'x'` for a hard link's missing source, and a link's name joined
+  to its directory with `/`; `paste: x: ...` with the file named; `ptx` quoting a name
+  only when it needs it; `shred: x: failed to open for writing: ...`. Marked `// cash:`.
+- **`mv` copies only across drives, or onto a target another program holds**
+  (2026-10-18): uutils fell back to copying and deleting on any failed rename, so `mv a
+  nodir/b` copied, failed again, and said `Permission denied`; and it called every
+  failure of that fallback `Permission denied`. The fallback keeps its own errors.
+- **`cp` dates a copy now** (2026-10-18): Windows' `CopyFileExW`, under `fs::copy`,
+  gives a copy its source's modification time; GNU's `cp` gives it the present time
+  unless `-p`, `-a` or `--preserve=timestamps` keeps the source's, and so does this
+  one (`date_copy_now`). `cp -p` of a read-only file sets its times with the read-only
+  attribute lifted for the moment (`set_times_of_copy`): Windows sets no time on a
+  read-only file, so it made the copy and failed with `Access is denied`.
+- **`ln -s` makes a junction for a directory without the privilege** (2026-10-18,
+  spec D27): a symbolic link needs Developer Mode or an elevated shell; for a directory
+  a junction needs neither. A symbolic link to a file that Windows refuses says how to
+  get one. The target of a relative link is looked at from the link's directory, where
+  uutils looked from the working directory.
+- **`-i` answered no exits 1**, in `cp`, `mv` and `ln`, as GNU coreutils 9 does; Git
+  Bash's coreutils 8.32 exits 0.
 - **Style.** The workspace's style lints that uutils was not written to are allowed in
-  `src/lib.rs`, as for `cash-sed`; the lints for code that can panic apply in full.
+  `src/lib.rs`, as for `cash-sed`; the lints for code that can panic apply in full:
+  each unwrap and slice the copied code had is rewritten, or says why it cannot fail
+  (`#[expect(..., reason)]`), and the large buffers are on the heap.
