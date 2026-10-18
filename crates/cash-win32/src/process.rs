@@ -1082,23 +1082,28 @@ mod module_tests {
             .stdout(std::process::Stdio::null())
             .spawn()
             .unwrap();
-        // A process being started has no module list to read until its loader has run.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        let listed = loop {
-            if let Some(listed) = modules(child.id()) {
-                break listed;
-            }
-            assert!(std::time::Instant::now() < deadline, "no module list");
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        };
-        drop(child.stdin.take());
-        let _ = child.wait();
-        let named = |name: &str| {
+        // A process being started has no module list to read until its loader has run,
+        // and then a short one while it runs: a list read that early was empty, and the
+        // test failed on it (quick lane, 2026-10-18). It waits for the loader's work.
+        let named = |listed: &[std::path::PathBuf], name: &str| {
             listed
                 .iter()
                 .any(|m| m.to_string_lossy().to_ascii_lowercase().ends_with(name))
         };
-        assert!(named("\\cmd.exe") && named("\\kernel32.dll"), "{listed:?}");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let listed = modules(child.id()).unwrap_or_default();
+            if named(&listed, "\\cmd.exe") && named(&listed, "\\kernel32.dll") {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "no module list naming cmd.exe and kernel32.dll: {listed:?}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        drop(child.stdin.take());
+        let _ = child.wait();
         // To a snapshot 0 is the caller; the System Idle Process lists nothing.
         assert_eq!(modules(0), None);
     }
