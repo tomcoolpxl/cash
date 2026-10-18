@@ -367,6 +367,23 @@ fn install_creates_directories_and_copies_files() {
 }
 
 #[test]
+fn sync_flushes_a_file_and_succeeds_unelevated() {
+    // uutils' sync flushed every volume for `sync` and `sync FILE` alike, which Windows
+    // allows only elevated: both failed with status 5, ending a script under `set -e`.
+    let out = cash(
+        "d=$(mktemp -d); cd \"$d\" || exit; printf 'x\\n' > f.txt; \
+         sync; echo \"all $?\"; sync f.txt; echo \"file $?\"; sync -d f.txt; \
+         echo \"data $?\"; sync -f f.txt; echo \"fs $?\"; sync nosuch 2>/dev/null; \
+         echo \"missing $?\"; sync -d 2>/dev/null; echo \"data alone $?\"; cd /; rm -rf \"$d\"",
+    );
+    assert_eq!(
+        out.stdout, "all 0\nfile 0\ndata 0\nfs 0\nmissing 1\ndata alone 1",
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn install_backs_up_keeps_times_and_takes_makefiles_options() {
     // `-c`, `-p`, `-b`, `-S`, `--backup`, `-T`, `-o` and `-g` were refused, so a Makefile's
     // `install -c -o root -m 755 prog DIR` failed; and the copy kept the source's time.

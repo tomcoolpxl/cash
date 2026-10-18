@@ -498,6 +498,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("dir".into(), builtin::<ls::LsCommand, SE>());
     m.insert("vdir".into(), builtin::<ls::LsCommand, SE>());
     m.insert("tty".into(), builtin::<tty::TtyCommand, SE>());
+    m.insert("sync".into(), builtin::<sync::SyncCommand, SE>());
     m.insert("stat".into(), builtin::<stat::StatCommand, SE>());
     m.insert(
         "nohup".into(),

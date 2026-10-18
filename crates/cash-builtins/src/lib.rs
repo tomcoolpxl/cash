@@ -159,6 +159,10 @@ mod ls_icon_table;
 
 mod tty;
 
+// `sync` as GNU means it: a file flushed by itself, and only the drives Windows lets
+// this process flush.
+mod sync;
+
 mod stat;
 
 mod nohup;
