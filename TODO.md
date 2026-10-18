@@ -36,7 +36,8 @@ The phases before, released as 1.22.0 to 1.27.0, are in DONE.md.
    2. rendering: done (2026-10-18, DONE.md);
    3. `help` on the new pages: done (2026-10-18, DONE.md); its short view, with a
       pointer to `man NAME`, comes with step 4, once `man` exists;
-   4. the browser;
+   4. the browser: `man` with its browser, `man -k`, and plain text on a pipe (done,
+      2026-10-18, DONE.md); a pseudo-console test and `help`'s short view next;
    5. the examples' test;
    6. the first batch of about 20 pages at full depth, and drafts for the rest; then a
       release;

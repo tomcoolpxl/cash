@@ -7,6 +7,7 @@
 //! order ([`page::Heading`]), so every page reads the same way; the design is
 //! `research/man-browser-design.md`.
 
+pub mod browser;
 pub mod page;
 pub mod render;
 pub mod search;
@@ -34,7 +35,8 @@ pub const KINDS: [&str; 8] = [
 ];
 
 /// The order the topics are listed in; any other topic follows, by name.
-pub const TOPIC_ORDER: [&str; 10] = [
+pub const TOPIC_ORDER: [&str; 11] = [
+    "getting-started",
     "paths",
     "crlf",
     "elevation",

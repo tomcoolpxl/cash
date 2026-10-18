@@ -37,7 +37,9 @@ mod logger;
 // cash: what the compressors share (D78): where output goes, byte counts, the console.
 mod compress;
 mod croot;
+// cash: `man`, its own manual's browser, on `cash-man`'s pages.
 mod fileuse;
+mod man;
 // cash: `flock`, util-linux's, on LockFileEx; the lock is one byte far past the content.
 mod flock;
 // cash: `free`, procps-ng's, on Windows' memory counters; Windows has no `free`.

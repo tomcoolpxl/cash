@@ -2233,3 +2233,15 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   each name's summary (`summary egrep:`), as the old index did. The old catalogue's
   pages, topics, index and build script are gone; `helpdocs` keeps the F1 screen and
   the helpers of `help`'s own lists.
+- **`man`, step 4: the browser** (2026-10-18): `man NAME` opens a full-screen browser,
+  cash's topics (Getting started first, a new topic) and every command from A to Z on
+  the left, the page on the right; typing narrows the list fuzzily by name and
+  summary, Enter opens, Tab switches panes, `/` and `n`/`N` find in the page with the
+  matches in reverse video, Ctrl-F finds in every page, Enter on a page lists its
+  See-also pages on the left, Backspace and Alt-Left/Right go back and forward, `1` to
+  `8` and `[` `]` jump between sections, `?` shows the keys, Esc leaves a search and
+  then the browser. The section the top line is in stays on the pane's top border.
+  Under 80 columns one pane fills the screen. A draft ends with the command's own
+  `--help`. Not on a terminal, `man` prints the page as text; `man -k WORD` lists the
+  names and summaries that hold WORD. A line of code wider than a narrow pane goes on
+  below, never cut. `man` has its own page, written in full.

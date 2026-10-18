@@ -255,6 +255,12 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
             builtin::<croot::CrootCommand, SE>().streams_output(),
         );
 
+        // cash: its own manual, a browser over a page for each command and topic.
+        m.insert(
+            "man".into(),
+            builtin::<man::ManCommand, SE>().streams_output(),
+        );
+
         // cash (D80): zoxide's directory jump, on the directories an interactive cash records.
         m.insert("z".into(), builtin::<z::ZCommand, SE>());
     }
@@ -580,7 +586,7 @@ mod tests {
         streaming.sort_unstable();
         assert_eq!(
             streaming,
-            ["croot", "free", "less", "more", "nc", "top", "watch"]
+            ["croot", "free", "less", "man", "more", "nc", "top", "watch"]
         );
     }
 }

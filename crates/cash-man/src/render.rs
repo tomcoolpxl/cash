@@ -10,7 +10,7 @@
 //! `1. ` items, code indented by four spaces or fenced, tables, `` `code` `` and
 //! `**bold**`. Anything else is a paragraph.
 
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::Manual;
 use crate::page::{Page, Subject};
@@ -158,6 +158,62 @@ impl Drawn {
             out.push('\n');
         }
         out
+    }
+}
+
+/// A command's own `--help` added to its drawn page as a section, before its See
+/// also: what a draft, not yet written in full, ends with.
+pub fn add_own_help(drawn: &mut Drawn, own: &str) {
+    let at = drawn
+        .sections
+        .iter()
+        .find(|section| section.title == "SEE ALSO")
+        .map_or(drawn.lines.len(), |section| section.line.saturating_sub(1));
+    let section = drawn
+        .sections
+        .iter()
+        .position(|section| section.line > at)
+        .unwrap_or(drawn.sections.len());
+    let mut lines = vec![Line::default(), heading_line("USAGE AND OPTIONS")];
+    for text in own.lines() {
+        let mut line = Line::default();
+        if !text.trim().is_empty() {
+            line.spans.push(Span {
+                text: format!("    {}", text.trim_end()),
+                style: Style::Plain,
+                link: None,
+            });
+        }
+        lines.push(line);
+    }
+    for line in &mut lines {
+        line.section = section;
+    }
+    let added = lines.len();
+    for later in drawn.sections.iter_mut().skip(section) {
+        later.line += added;
+    }
+    for later in drawn.lines.iter_mut().skip(at) {
+        later.section += 1;
+    }
+    drawn.sections.insert(
+        section,
+        SectionStart {
+            title: "USAGE AND OPTIONS".to_owned(),
+            line: at + 1,
+        },
+    );
+    drawn.lines.splice(at..at, lines);
+}
+
+fn heading_line(title: &str) -> Line {
+    Line {
+        spans: vec![Span {
+            text: title.to_owned(),
+            style: Style::Heading,
+            link: None,
+        }],
+        section: 0,
     }
 }
 
@@ -619,6 +675,31 @@ impl Drawer {
         self.drawn.lines.push(line);
     }
 
+    /// `line`, broken where it passes the width and the rest on lines indented by
+    /// `indent`: a line of code wider than a narrow pane, which is never cut.
+    fn push_broken(&mut self, line: Line, indent: usize) {
+        if line.width() <= self.width || self.width <= indent + 8 {
+            self.push(line);
+            return;
+        }
+        let mut current = Line::default();
+        let mut used = 0;
+        for span in line.spans {
+            for c in span.text.chars() {
+                let w = c.width().unwrap_or(0);
+                if used + w > self.width {
+                    self.push(std::mem::take(&mut current));
+                    current.push(&" ".repeat(indent), Style::Plain, None);
+                    used = indent;
+                }
+                let mut buffer = [0; 4];
+                current.push(c.encode_utf8(&mut buffer), span.style, span.link.as_deref());
+                used += w;
+            }
+        }
+        self.push(current);
+    }
+
     fn blank(&mut self) {
         if self
             .drawn
@@ -720,7 +801,7 @@ impl Drawer {
                         for (piece, style) in pieces {
                             line.push(&piece, style, None);
                         }
-                        self.push(line);
+                        self.push_broken(line, CODE_INDENT + 4);
                     }
                 }
                 Block::Table(rows) => self.table(&rows),
@@ -988,6 +1069,23 @@ mod tests {
             "{text}"
         );
         assert_eq!(page.lines[2].spans[0].style, Style::Mark);
+    }
+
+    #[test]
+    fn code_wider_than_a_narrow_pane_goes_on_and_is_never_cut() {
+        let page = drawn(
+            "---\nsummary: s\nkind: k\n---\n## Examples\n\n    tar -czf site.tar.gz site/    # an archive\n",
+            30,
+        );
+        let lines: Vec<String> = page.lines.iter().map(Line::plain).collect();
+        let at = lines
+            .iter()
+            .position(|line| line.contains("tar -czf"))
+            .unwrap();
+        assert_eq!(lines[at], "        tar -czf site.tar.gz s");
+        assert_eq!(lines[at + 1], "            ite/    # an archi");
+        assert_eq!(lines[at + 2], "            ve");
+        assert!(page.lines.iter().all(|line| line.width() <= 30));
     }
 
     #[test]

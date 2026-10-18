@@ -848,6 +848,7 @@ dependencies = [
 name = "cash-man"
 version = "1.27.0"
 dependencies = [
+ "cash-picker",
  "flate2",
  "unicode-width 0.2.2",
 ]
