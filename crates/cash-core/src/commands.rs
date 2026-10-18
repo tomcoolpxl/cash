@@ -1066,6 +1066,25 @@ pub async fn run_for_builtin<SE: extensions::ShellExtensions>(
     run_for_builtin_exporting(shell, params, argv, &[]).await
 }
 
+/// [`run_for_builtin`], in the directory `dir` rather than the shell's own.
+///
+/// As `find -execdir` runs its command in the directory of each file. The shell's own
+/// working directory is left as it is: the command runs in a copy.
+///
+/// # Errors
+///
+/// As [`run_for_builtin`]; and when `dir` is not a directory.
+pub async fn run_for_builtin_in<SE: extensions::ShellExtensions>(
+    shell: &Shell<SE>,
+    params: ExecutionParameters,
+    argv: &[String],
+    dir: &std::path::Path,
+) -> Result<ExecutionResult, error::Error> {
+    let mut shell = shell.clone();
+    shell.set_working_dir(dir)?;
+    run_for_builtin(&shell, params, argv).await
+}
+
 /// [`run_for_builtin`], with `exported` (name and value) set and exported in the copy of
 /// the shell the command runs in, as `xargs --process-slot-var` gives each command its
 /// slot.

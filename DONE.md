@@ -2261,3 +2261,7 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   with `cash -n`; the examples of cash's own commands run with status 0. Pages written
   in full are checked: cd's three runnable examples and sed's thirteen give what Git
   Bash gave, `sed -i`'s files and `config.ini.bak` included, and man's four run.
+- **`find`'s `-execdir`, `-ok` and `-okdir`** (2026-10-18, found writing find's man page):
+  `find --help` listed them and cash refused each as an unknown predicate. `-execdir`
+  runs in each file's directory with `./name` for `{}`, once a directory with `+`;
+  `-ok` and `-okdir` ask as GNU find asks, `< rm ... ./a.txt > ? `, and run on a `y`.

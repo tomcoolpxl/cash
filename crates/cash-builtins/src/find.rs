@@ -25,7 +25,7 @@
 //! and nothing says so.
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use cash_core::{ExecutionResult, builtins, patterns::Pattern};
@@ -175,10 +175,25 @@ enum Action {
     Print0,
     Delete,
     /// `-exec cmd {} \;` runs once per entry; `-exec cmd {} +` batches.
-    Exec(Vec<String>, bool),
+    Exec(Exec),
     Prune,
     Quit,
 }
+
+/// A command an entry runs: `-exec`, `-execdir`, `-ok` or `-okdir`.
+struct Exec {
+    argv: Vec<String>,
+    /// `+`: once for many entries, after the walk.
+    batch: bool,
+    /// `-execdir`, `-okdir`: in the entry's own directory, `{}` its name as `./name`.
+    in_dir: bool,
+    /// `-ok`, `-okdir`: asked on standard error first, run on a `y`.
+    ask: bool,
+}
+
+/// The commands `-exec ... +` and `-execdir ... +` gathered for after the walk: each
+/// command, the directory it runs in (`-execdir`'s), and its paths.
+type Batches = Vec<(Vec<String>, Option<PathBuf>, Vec<String>)>;
 
 /// The expression, as parsed.
 enum Expr {
@@ -248,7 +263,7 @@ impl builtins::Command for FindCommand {
         };
 
         let mut failed = false;
-        let mut batches: Vec<(Vec<String>, Vec<String>)> = Vec::new();
+        let mut batches: Batches = Vec::new();
         // A Ctrl-C, or `kill` of a background job, stops the walk.
         let stop = context.stop_token();
 
@@ -366,12 +381,12 @@ fn command_line_chunks<'a>(argv: &[String], paths: &'a [String]) -> Vec<&'a [Str
 /// (BI-11). Whether every run succeeded: one that fails fails find, as in GNU `find`.
 async fn run_batches<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
-    batches: Vec<(Vec<String>, Vec<String>)>,
+    batches: Batches,
 ) -> Result<bool, cash_core::Error> {
     let mut succeeded = true;
-    for (argv, collected) in batches {
+    for (argv, dir, collected) in batches {
         for chunk in command_line_chunks(&argv, &collected) {
-            if !run(context, &argv, chunk).await? {
+            if !run(context, &argv, chunk, dir.as_deref()).await? {
                 succeeded = false;
             }
         }
@@ -684,16 +699,24 @@ impl ExprParser<'_> {
             "-delete" => Ok(Expr::Action(Action::Delete)),
             "-prune" => Ok(Expr::Action(Action::Prune)),
             "-quit" => Ok(Expr::Action(Action::Quit)),
-            "-exec" => {
+            name @ ("-exec" | "-execdir" | "-ok" | "-okdir") => {
                 let mut argv = Vec::new();
                 let mut batch = false;
+                // Asking for each file and running for many at once do not go together:
+                // after `-ok` a `+` is a word of the command, as in GNU `find`, which then
+                // finds no `;`.
+                let ask = name.starts_with("-ok");
                 loop {
                     let Some(part) = self.take() else {
-                        return Err(String::from("missing terminator to `-exec'"));
+                        return Err(if ask {
+                            std::format!("missing argument to `{name}'")
+                        } else {
+                            std::format!("missing terminator to `{name}'")
+                        });
                     };
                     match part.as_str() {
                         ";" => break,
-                        "+" => {
+                        "+" if !ask => {
                             batch = true;
                             break;
                         }
@@ -701,15 +724,15 @@ impl ExprParser<'_> {
                     }
                 }
                 if argv.is_empty() {
-                    return Err(String::from("missing command to `-exec'"));
+                    return Err(std::format!("missing command to `{name}'"));
                 }
                 // With `+` the paths are words of their own, so `{}` must be one, and
                 // once, as GNU `find` requires; `x{}y {}` ran `x{}y` as it was.
                 if batch {
                     let holders = argv.iter().filter(|part| part.contains("{}")).count();
                     if holders > 1 {
-                        return Err(String::from(
-                            "Only one instance of {} is supported with -exec ... +",
+                        return Err(std::format!(
+                            "Only one instance of {{}} is supported with {name} ... +"
                         ));
                     }
                     if let Some(part) = argv
@@ -717,11 +740,16 @@ impl ExprParser<'_> {
                         .find(|part| part.contains("{}") && *part != "{}")
                     {
                         return Err(std::format!(
-                            "In '-exec ... {{}} +' the '{{}}' must appear by itself, but you specified '{part}'"
+                            "In '{name} ... {{}} +' the '{{}}' must appear by itself, but you specified '{part}'"
                         ));
                     }
                 }
-                Ok(Expr::Action(Action::Exec(argv, batch)))
+                Ok(Expr::Action(Action::Exec(Exec {
+                    argv,
+                    batch,
+                    in_dir: name.ends_with("dir"),
+                    ask,
+                })))
             }
             "-help" | "--help" => Err(HELP_ASKED.to_owned()),
             "-version" | "--version" => Err(VERSION_ASKED.to_owned()),
@@ -739,7 +767,7 @@ async fn evaluate<SE: cash_core::ShellExtensions>(
     expr: &Expr,
     visit: &mut Visit<'_>,
     context: &cash_core::ExecutionContext<'_, SE>,
-    batches: &mut Vec<(Vec<String>, Vec<String>)>,
+    batches: &mut Batches,
 ) -> Result<bool, cash_core::Error> {
     match expr {
         Expr::Test(test) => Ok(matches(test, visit)),
@@ -815,7 +843,7 @@ async fn act<SE: cash_core::ShellExtensions>(
     action: &Action,
     visit: &mut Visit<'_>,
     context: &cash_core::ExecutionContext<'_, SE>,
-    batches: &mut Vec<(Vec<String>, Vec<String>)>,
+    batches: &mut Batches,
 ) -> Result<bool, cash_core::Error> {
     match action {
         Action::Print => {
@@ -860,22 +888,77 @@ async fn act<SE: cash_core::ShellExtensions>(
                 }
             }
         }
-        Action::Exec(argv, batch) => {
-            if *batch {
-                // Held until the walk ends, so one command sees every match.
-                if let Some(slot) = batches.iter_mut().find(|(held, _)| held == argv) {
-                    slot.1.push(visit.rendered.clone());
+        Action::Exec(exec) => {
+            // `-execdir`: in the entry's own directory, the entry as `./name`.
+            let (path, dir) = if exec.in_dir {
+                let name = visit.path.file_name().map_or_else(
+                    || ".".to_owned(),
+                    |name| name.to_string_lossy().into_owned(),
+                );
+                let dir = match visit.path.parent() {
+                    Some(parent) if visit.path.file_name().is_some() => {
+                        if parent.as_os_str().is_empty() {
+                            PathBuf::from(".")
+                        } else {
+                            parent.to_path_buf()
+                        }
+                    }
+                    _ => visit.path.to_path_buf(),
+                };
+                (std::format!("./{name}"), Some(dir))
+            } else {
+                (visit.rendered.clone(), None)
+            };
+            if exec.batch {
+                // Held until the walk ends, so one command sees every match (in each
+                // directory, for `-execdir`).
+                if let Some(slot) = batches
+                    .iter_mut()
+                    .find(|(held, held_dir, _)| *held == exec.argv && *held_dir == dir)
+                {
+                    slot.2.push(path);
                 } else {
-                    batches.push((argv.clone(), vec![visit.rendered.clone()]));
+                    batches.push((exec.argv.clone(), dir, vec![path]));
                 }
                 return Ok(true);
             }
-
+            if exec.ask && !confirmed(context, &exec.argv, &path)? {
+                return Ok(false);
+            }
             // A command that fails, or cannot start, makes the test false; it is not
             // find's failure, as in GNU `find`, whose status stays 0.
-            run(context, argv, std::slice::from_ref(&visit.rendered)).await
+            run(
+                context,
+                &exec.argv,
+                std::slice::from_ref(&path),
+                dir.as_deref(),
+            )
+            .await
         }
     }
+}
+
+/// `-ok`: asks on standard error whether to run the command on `path`, as GNU `find`
+/// asks, by the command's name (`< rm ... ./a.txt > ? `), and reads the answer, a line
+/// of standard input; yes when it starts with `y` or `Y`. No answer is no.
+fn confirmed<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    argv: &[String],
+    path: &str,
+) -> Result<bool, cash_core::Error> {
+    let program = argv.first().map_or("", String::as_str);
+    write!(context.stderr(), "< {program} ... {path} > ? ")?;
+    let mut answer = Vec::new();
+    let mut byte = [0u8; 1];
+    let mut input = context.stdin();
+    while matches!(std::io::Read::read(&mut input, &mut byte), Ok(1)) {
+        if byte[0] == b'\n' {
+            break;
+        }
+        answer.push(byte[0]);
+    }
+    let answer = String::from_utf8_lossy(&answer);
+    Ok(answer.trim_start().starts_with(['y', 'Y']))
 }
 
 /// Runs one `-exec` command, substituting `{}` with the paths it was given, and says
@@ -889,6 +972,7 @@ async fn run<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     argv: &[String],
     paths: &[String],
+    dir: Option<&Path>,
 ) -> Result<bool, cash_core::Error> {
     // `-exec cmd \;` with no `{}` still runs once per match, as `find` does. With one
     // path, `{}` is replaced inside a word too, `"<{}>"`, as in GNU `find`; it was left.
@@ -906,8 +990,22 @@ async fn run<SE: cash_core::ShellExtensions>(
         return Ok(false);
     };
 
-    match cash_core::commands::run_for_builtin(context.shell, context.params.clone(), &parts).await
-    {
+    let ran = match dir {
+        Some(dir) => {
+            cash_core::commands::run_for_builtin_in(
+                context.shell,
+                context.params.clone(),
+                &parts,
+                dir,
+            )
+            .await
+        }
+        None => {
+            cash_core::commands::run_for_builtin(context.shell, context.params.clone(), &parts)
+                .await
+        }
+    };
+    match ran {
         Ok(result) => Ok(result.is_success()),
         Err(e) => {
             writeln!(

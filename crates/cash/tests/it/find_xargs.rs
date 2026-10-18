@@ -720,6 +720,36 @@ fn find_h_follows_the_starting_points_links_only() {
     assert_eq!(out.stdout, "1\nstart/inner/f\nstart/back", "{}", out.stderr);
 }
 
+/// `-execdir` runs its command in each file's directory, `{}` the file as `./name`, and
+/// with `+` once a directory; `-ok` asks as GNU's find asks, by the command's name, and
+/// runs it on a `y`. `find --help` listed them, and they were refused as unknown.
+#[test]
+fn execdir_runs_in_the_files_directory_and_ok_asks_first() {
+    let sandbox = Sandbox::new("execdir");
+    let out = sandbox
+        .run(r#"find sub -name '*.txt' -execdir sh -c 'echo "$(basename "$PWD") $1"' _ {} \;"#);
+    assert_eq!(
+        lines(&out.stdout),
+        ["deep ./c.txt", "sub ./b.txt"],
+        "{}",
+        out.stderr
+    );
+    let out = sandbox.run(r"find sub -name '*.txt' -execdir echo {} +");
+    assert_eq!(lines(&out.stdout), ["./b.txt", "./c.txt"], "{}", out.stderr);
+
+    let out = sandbox.run(r#"printf 'y\nn\n' | find . -maxdepth 1 -name '*.txt' ! -name 'has*' -ok echo hit {} \;; echo "rc=$?""#);
+    assert_eq!(out.stdout, "hit ./a.txt\nrc=0", "{}", out.stderr);
+    assert_eq!(
+        out.stderr, "< echo ... ./a.txt > ? < echo ... ./zero.txt > ?",
+        "{}",
+        out.stdout
+    );
+    // After -ok a + is a word of the command, which then has no `;`.
+    let out = sandbox.run(r#"find . -ok echo {} +; echo "rc=$?""#);
+    assert_eq!(out.stdout, "rc=1");
+    assert_eq!(out.stderr, "find: missing argument to `-ok'");
+}
+
 /// A starting point that is not there is named in quotes, as GNU's find names it.
 #[test]
 fn a_name_find_cannot_read_is_quoted() {
