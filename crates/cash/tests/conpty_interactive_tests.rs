@@ -606,6 +606,44 @@ fn conpty_interactive_multiline_block() {
 }
 
 #[test]
+fn conpty_interactive_an_alias_runs_its_operators_and_applies_from_the_next_line() {
+    // As in Bash at the prompt: an alias's `&&` is an operator, a pipe after it takes its
+    // last command, and an alias defined on a line applies from the next line on.
+    let mut session = start_interactive_cash();
+
+    session
+        .expect("cash", Duration::from_secs(5))
+        .or_else(|_| session.expect("$", Duration::from_secs(2)))
+        .expect("prompt displayed");
+
+    session
+        .send_line("alias both='echo ali_one && echo ali_two'")
+        .unwrap();
+    session.send_line("both | tr a-z A-Z").unwrap();
+    session.expect("ALI_TWO", Duration::from_secs(5)).unwrap();
+    session
+        .send_line("alias same='echo SAME_ALIAS_RAN'; same; echo \"after:$?\"")
+        .unwrap();
+    session.expect("after:127", Duration::from_secs(5)).unwrap();
+    session.send_line("same").unwrap();
+    let (ran, screen) = session
+        .wait_for_screen(
+            |screen| screen.lines().any(|line| line.trim_end() == "SAME_ALIAS_RAN"),
+            Duration::from_secs(5),
+        )
+        .unwrap();
+    assert!(ran, "the alias did not run on the next line:\n{screen}");
+    assert!(
+        screen.lines().any(|line| line.trim_end() == "ali_one"),
+        "the first command of the alias ran outside the pipe:\n{screen}"
+    );
+
+    session.send_line("exit 0").unwrap();
+    let code = session.wait().expect("process did not exit");
+    assert_eq!(code, 0);
+}
+
+#[test]
 fn conpty_interactive_history_expansion_bang_dollar() {
     let mut session = start_interactive_cash();
 
