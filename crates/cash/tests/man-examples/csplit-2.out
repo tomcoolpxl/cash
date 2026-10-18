@@ -1,0 +1,23 @@
+==> sec00 <==
+intro
+
+==> sec01 <==
+## one
+
+==> sec02 <==
+## two
+--- status 0
+--- file doc.md
+intro
+## one
+a
+## two
+b
+--- file sec00
+intro
+--- file sec01
+## one
+a
+--- file sec02
+## two
+b

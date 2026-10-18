@@ -2414,3 +2414,11 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `ls`, whose modes are not cash's (`-rwxrwxrwx` for every file); they are cash's `ls`
   with GNU's `-C -b` and `-l -b`. `split --filter` is refused by uutils on Windows: in
   TODO.md.
+- **The manual's seventh twenty pages written in full** (2026-10-19, batch 7): column,
+  fmt, expand, unexpand, cksum, sum, hexdump, dos2unix (with unix2dos), iconv, install,
+  mkfifo, link, unlink, uuidgen, watch, factor, numfmt, pathchk, csplit and dd. Every
+  option was run in cash and in Git Bash; the examples of tools Git Bash lacks
+  (hexdump, uuidgen, watch) are only parsed. `install` refused every GNU option it did
+  not have, so a Makefile's `install -c -o root -m 755 prog DIR` failed: it takes `-c`,
+  `-p`, `-b`, `--backup`, `-S`, `-T`, and `-o`/`-g` said once, as chown says it; and the
+  copy gets the time it is made, as GNU gives it, unless `-p`.

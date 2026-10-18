@@ -3,15 +3,27 @@ name: watch
 summary: Run a command every few seconds and show its output full screen.
 kind: Terminal and clipboard
 see: top keys
-draft: yes
 ---
+
+## Syntax
+
+    watch [OPTION]... COMMAND
+
+    watch COMMAND          COMMAND every 2 seconds, full screen
+    watch -n 1 COMMAND     every second
+    watch -d COMMAND       what changed highlighted
+    watch -g COMMAND       until its output changes
 
 ## Examples
 
-    watch -n 1 'ls | wc -l'            # how many files, every second
-    watch -d ls -l                     # highlight what changes
-    watch -n 0.5 -g 'cat status.txt'   # return as soon as the file changes
-    watch -e 'curl -fsS localhost/health'   # freeze when the check fails
+A count, every second; what changes, highlighted; until a file changes:
+
+<!-- parse only: draws on the reader's screen until q -->
+
+    watch -n 1 'ls | wc -l'
+    watch -d ls -l
+    watch -n 0.5 -g 'cat status.txt'
+    watch -e 'curl -fsS localhost/health'
 
 ## How it works
 
@@ -28,7 +40,29 @@ start of each run, `-r` does not rerun the command when the window is resized, a
 `-x` runs the words as one command rather than as shell source.
 
 `q` and Ctrl-C leave, with status 0. Space runs the command at once. `s` saves the
-screen as text into `watch_DATE-TIME` in the working directory, or the directory `-s` names.
+screen as text into `watch_DATE-TIME` in the working directory, or the directory `-s`
+names.
+
+## Options
+
+    -n, --interval=SECONDS     How often: 2 without, 0.1 at least.
+    -d, --differences[=permanent]  Highlight what changed.
+    -g, --chgexit              End when the output changes.
+    -q, --equexit=N            End when it stayed the same N times.
+    -e, --errexit              Freeze on a failing command.
+    -b, --beep                 Beep on a failing command.
+    -t, --no-title             No header lines.
+    -c, --color                Keep the command's colours.
+    -C, --no-color             Drop them: the default.
+    -w, --no-wrap              Cut long lines, do not wrap them.
+    -f, --follow               Scroll on instead of redrawing.
+    -p, --precise              Count the interval from each start.
+    -r, --no-rerun             Do not rerun on a resize.
+    -x, --exec                 Run the words, not shell source.
+    -s, --shotsdir=DIR         Where `s` saves the screen.
+
+Exit status: 0 on leaving; with `-e`, the failing command's; 1 when the output is not
+a terminal.
 
 ## Different in cash
 

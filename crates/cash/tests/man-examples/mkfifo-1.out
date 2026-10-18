@@ -1,0 +1,11 @@
+2c2
+< b
+---
+> c
+--- status 1
+--- file one.txt
+b
+a
+--- file two.txt
+a
+c

@@ -1,0 +1,6 @@
+prog
+--- status 0
+--- file out/bin/prog
+echo hi
+--- file prog
+echo hi

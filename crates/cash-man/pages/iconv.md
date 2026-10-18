@@ -3,17 +3,33 @@ name: iconv
 summary: Convert text between character sets, through Windows' code pages.
 kind: Text and file tools
 see: dos2unix crlf
-draft: yes
 ---
+
+## Syntax
+
+    iconv [-c] -f FROM -t TO [FILE]...
+    iconv -l
+
+    iconv -f CP1252 -t UTF-8 F      an old Windows file to UTF-8
+    iconv -f UTF-8 -t UTF-16LE F    for a program that wants UTF-16
+    iconv -c -f UTF-8 -t ASCII F    drop what ASCII lacks
+    iconv -l                        the names it knows
 
 ## Examples
 
-    iconv -f CP1252 -t UTF-8 old.txt > new.txt
-    # a BOM picks the byte order
-    iconv -f UTF-16 -t UTF-8 export.csv | head
-    iconv -c -f UTF-8 -t ASCII names.txt         # drop what ASCII lacks
-    iconv -f UTF-8 -t ASCII//TRANSLIT names.txt  # approximate it instead
-    iconv -l | sed -n '/^CP/p'                   # the code pages by name
+UTF-8 to Latin-1 and back:
+
+    printf 'caf\xc3\xa9\n' | iconv -f UTF-8 -t LATIN1 | od -An -c
+    printf 'caf\xe9\n' | iconv -f LATIN1 -t UTF-8
+
+UTF-16, two bytes a character:
+
+    printf 'hi\n' | iconv -f UTF-8 -t UTF-16LE | od -An -tx1
+
+Dropping what cannot be converted, and stopping at it:
+
+    printf 'a\xffb\n' | iconv -c -f UTF-8 -t UTF-8
+    printf '\xff\n' | iconv -f UTF-8 -t ASCII 2>/dev/null || echo "stopped"
 
 ## How it works
 
@@ -23,6 +39,17 @@ there, `-l` lists the names, and `//TRANSLIT` or `//IGNORE` on the target name
 approximates or drops instead of stopping. Both sets default to UTF-8. Standard input is
 read when there is no file, or for `-`. A byte that is not a character stops the
 conversion with its position in the file, and the output up to it is still written.
+
+## Options
+
+    -f, --from-code=SET    The character set of the input: UTF-8 without.
+    -t, --to-code=SET      The character set to write: UTF-8 without.
+    -c                     Drop what cannot be converted.
+    -o, --output=FILE      Write to FILE.
+    -s, --silent           Say nothing of what was dropped.
+    -l, --list             List the character sets by name.
+
+Exit status: 0; 1 when something could not be converted, or with `-c` was dropped.
 
 ## Different in cash
 

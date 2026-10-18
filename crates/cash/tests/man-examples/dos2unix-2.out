@@ -1,0 +1,8 @@
+back as it was
+--- status 0
+--- file unix.txt
+x\r
+y\r
+--- file win.txt
+x\r
+y\r
