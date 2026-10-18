@@ -115,13 +115,17 @@ impl Sid {
     pub fn rid(&self) -> u32 {
         use windows_sys::Win32::Security::{GetSidSubAuthority, GetSidSubAuthorityCount};
 
-        // SAFETY: the SID is valid, so its count of sub-authorities can be read.
-        let count = unsafe { *GetSidSubAuthorityCount(self.as_psid()) };
+        // SAFETY: the SID is valid, so the call returns a pointer to its count.
+        let count = unsafe { GetSidSubAuthorityCount(self.as_psid()) };
+        // SAFETY: the pointer lies in the SID, which `self` holds.
+        let count = unsafe { *count };
         let Some(last) = u32::from(count).checked_sub(1) else {
             return 0;
         };
         // SAFETY: `last` is below the SID's count of sub-authorities.
-        unsafe { *GetSidSubAuthority(self.as_psid(), last) }
+        let rid = unsafe { GetSidSubAuthority(self.as_psid(), last) };
+        // SAFETY: the pointer lies in the SID, which `self` holds.
+        unsafe { *rid }
     }
 }
 
@@ -302,9 +306,11 @@ pub fn is_administrator() -> Option<bool> {
     )
 }
 
-/// The groups this process works with, in its token's order: every enabled group but the
-/// logon session's and the integrity level. An unelevated administrator's Administrators
-/// group is there for denying only, so it is not among them; elevated, it is.
+/// The groups this process works with, in its token's order.
+///
+/// Every enabled group but the logon session's and the integrity level. An unelevated
+/// administrator's Administrators group is there for denying only, so it is not among
+/// them; elevated, it is.
 #[must_use]
 pub fn current_groups() -> Vec<Sid> {
     // `SE_GROUP_*` in winnt.h, which windows-sys keeps in a module cash does not build.
