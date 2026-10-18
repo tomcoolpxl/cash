@@ -96,6 +96,14 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **`split --filter` is refused** (2026-10-19, found checking split's options for its
+  man page): uutils' `split` answers `--filter is currently not supported in this
+  platform` on Windows, where GNU's pipes each piece into the command, `$FILE` naming
+  it (`split -l 1000 --filter='gzip > $FILE.gz' big.log`). It would mean taking
+  uutils' split in as cash's own (`crates/cash-uutils`), and running the filter with
+  cash (`cash -c FILTER`, the piece on its standard input). Medium; the rest of split
+  works.
+
 - **`set -o history` in a script keeps no history** (2026-10-18, found writing
   history's man page): Bash keeps the script's commands once it is on, and `history`
   lists them; cash's `history` exits 1 with nothing. Small; rare in scripts.
