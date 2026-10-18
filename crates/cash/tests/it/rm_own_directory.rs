@@ -47,3 +47,18 @@ fn rm_out_of_its_directory_still_refuses_dot_dot_and_finds_no_relative_name_afte
         out.stderr
     );
 }
+
+/// `rm -i` asks in GNU's words, `remove regular file`, as the prompts beside it do;
+/// uutils asked `remove file`.
+#[test]
+fn rm_i_asks_about_a_regular_file_in_gnu_s_words() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.txt"), "x").unwrap();
+    std::fs::write(dir.path().join("empty.txt"), "").unwrap();
+    let out = run_in(dir.path(), "printf 'n\nn\n' | rm -i a.txt empty.txt; ls");
+    assert_eq!(
+        out.stderr,
+        "rm: remove regular file 'a.txt'? rm: remove regular empty file 'empty.txt'?"
+    );
+    assert_eq!(out.stdout, "a.txt\nempty.txt");
+}

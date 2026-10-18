@@ -88,5 +88,8 @@ as it registers the uutils tools it uses unchanged.
 - **`--version` names uutils' 0.12.0** (2026-10-17), as the bundled tools do: uucore's
   `crate_version!` gave this crate's version, `sort (uutils coreutils) 1.19.0`, a uutils
   release there never was.
+- **`rm -i` asks in GNU's words** (2026-10-18, found writing rm's man page): `remove
+  regular file 'a.txt'?`, as GNU's `rm` asks and the prompts beside it did; uutils
+  asked `remove file`. Marked `// cash:`.
 - **Style.** The workspace's style lints that uutils was not written to are allowed in
   `src/lib.rs`, as for `cash-sed`; the lints for code that can panic apply in full.

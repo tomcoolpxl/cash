@@ -962,7 +962,9 @@ fn prompt_file(path: &Path, options: &Options) -> bool {
         return if metadata.len() == 0 {
             prompt_yes!("remove regular empty file {}?", path.quote())
         } else {
-            prompt_yes!("remove file {}?", path.quote())
+            // cash: GNU's words, as the prompts beside it have them; uutils asked
+            // "remove file".
+            prompt_yes!("remove regular file {}?", path.quote())
         };
     }
 
