@@ -10,7 +10,7 @@ pub struct Colours {
     pub selected: String,
     /// The letters a filter matched.
     pub matched: String,
-    /// The header and the folder path in it.
+    /// The header and the directory path in it.
     pub frame: String,
     /// The status and key hints at the bottom.
     pub status: String,
@@ -66,11 +66,11 @@ impl Colours {
 
     /// The SGR parameters for an entry, as `ls` would colour it.
     #[must_use]
-    pub fn entry(&self, name: &str, folder: bool) -> String {
+    pub fn entry(&self, name: &str, directory: bool) -> String {
         let Some(ls) = &self.ls else {
             return String::new();
         };
-        let style = if folder {
+        let style = if directory {
             ls.style_for_indicator(Indicator::Directory)
         } else {
             ls.style_for_str(name).or_else(|| {
@@ -125,7 +125,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn folders_and_files_take_ls_colours() {
+    fn directories_and_files_take_ls_colours() {
         let colours = Colours::new(Some("di=01;34:*.zip=01;31:ex=01;32"), None);
         assert_eq!(colours.entry("src", true), "1;34");
         assert_eq!(colours.entry("x.zip", false), "1;31");

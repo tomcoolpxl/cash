@@ -7,7 +7,7 @@ see: sudo elevation id
 root account and no root password, so `su`, `su -` and `su root` give this account,
 elevated; `su USER` gives that account, at its usual level, after its password.
 
-- `-`, `-l`, `--login`: a login shell, started in the account's home folder.
+- `-`, `-l`, `--login`: a login shell, started in the account's home directory.
 - `-c COMMAND`: run a command instead of a shell.
 - `-s SHELL`: that shell instead of cash, found as the shell would run it
   (`su -s pwsh`).
@@ -31,7 +31,7 @@ elevated; `su USER` gives that account, at its usual level, after its password.
 
 ```
 su                      # an elevated cash
-su -                    # an elevated login shell, in your home folder
+su -                    # an elevated login shell, in your home directory
 su -c 'net stop spooler'
 su alice                # a cash as alice
 ```

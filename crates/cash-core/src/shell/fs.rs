@@ -29,14 +29,14 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             self.absolute_path(accepted.as_path())
         };
 
-        // A folder told without opening it; a link or a junction, or a name the cheap
+        // A directory told without opening it; a link or a junction, or a name the cheap
         // call cannot answer for, through `metadata`, which follows the link and says why
         // a name is not there.
-        let is_folder = match cash_win32::fs::is_folder_unopened(&abs_path) {
-            Some(is_folder) => is_folder,
+        let is_directory = match cash_win32::fs::is_directory_unopened(&abs_path) {
+            Some(is_directory) => is_directory,
             None => std::fs::metadata(&abs_path)?.is_dir(),
         };
-        if !is_folder {
+        if !is_directory {
             return Err(error::ErrorKind::NotADirectory(abs_path).into());
         }
 
@@ -64,7 +64,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         )?;
         let oldpwd = std::mem::replace(self.working_dir_mut(), cleaned_path);
 
-        // cash (D62): fish's folder history, for `prevd`, `nextd`, `cdh` and Alt-←/→.
+        // cash (D62): fish's directory history, for `prevd`, `nextd`, `cdh` and Alt-←/→.
         if oldpwd != *self.working_dir() {
             self.directory_history.left(oldpwd.clone());
         }
@@ -83,8 +83,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Ok(())
     }
 
-    /// Moves `steps` places through the folder history (D62): back when negative, forward
-    /// when positive, as `prevd` and `nextd` do. Returns the folder moved to, or `None`
+    /// Moves `steps` places through the directory history (D62): back when negative, forward
+    /// when positive, as `prevd` and `nextd` do. Returns the directory moved to, or `None`
     /// when the history does not reach that far; the history itself is only walked, not
     /// added to.
     ///
@@ -106,22 +106,22 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Ok(Some(target))
     }
 
-    /// Returns the folders the shell has been in (D62).
+    /// Returns the directories the shell has been in (D62).
     pub const fn directory_history(&self) -> &crate::dirhistory::DirectoryHistory {
         &self.directory_history
     }
 
-    /// The folders a picker's Alt-H offers (D80): those recorded across sessions, best
-    /// first, without the current one; the folders this session has been in, newest
+    /// The directories a picker's Alt-H offers (D80): those recorded across sessions, best
+    /// first, without the current one; the directories this session has been in, newest
     /// first, while none are recorded.
-    pub fn folders_to_offer(&self) -> Vec<PathBuf> {
+    pub fn directories_to_offer(&self) -> Vec<PathBuf> {
         let here = cash_win32::path::render(self.working_dir());
         let recorded: Vec<PathBuf> = self
-            .folder_record()
+            .directory_record()
             .map(|record| {
-                crate::kept::folders::find(&record, &[], crate::kept::now(), Some(&here))
+                crate::kept::directories::find(&record, &[], crate::kept::now(), Some(&here))
                     .into_iter()
-                    .map(|(folder, _)| PathBuf::from(folder.path))
+                    .map(|(directory, _)| PathBuf::from(directory.path))
                     .collect()
             })
             .unwrap_or_default();
@@ -349,7 +349,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// (D81): as [`Self::resolve_command_in_path_using_cache`] will find it to run it, but
     /// counting no hit. A miss is remembered ([`MissingCommand`]), so that the lookup that
     /// runs the command does not walk PATH again for a name that is not there: a missing
-    /// command given arguments probed every folder twice.
+    /// command given arguments probed every directory twice.
     pub(crate) fn find_command_for_decision(&mut self, name: &str) -> Option<PathBuf> {
         if let Some(cached_path) = self.program_location_cache.get(name) {
             return Some(cached_path);
@@ -524,7 +524,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         //
         // cash (D7): the name is told as `absolute_path` leaves it, `C:/dev/stderr`, and
         // one whose descriptor is not open is no file, in Bash's words. Going on to look
-        // for it would find a file of that name in a folder of the user's own called
+        // for it would find a file of that name in a directory of the user's own called
         // `C:\dev`, or with `>` make one.
         if let Some(fd_num) = crate::sys::fs::named_descriptor(&path_to_open) {
             return params.try_fd(self, fd_num).ok_or_else(|| {
@@ -532,9 +532,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             });
         }
 
-        // Windows refuses a folder opened as a file with "Access is denied"; Bash's word for
+        // Windows refuses a directory opened as a file with "Access is denied"; Bash's word for
         // it is the system's, "Is a directory", for `< dir`, `> dir` and `source dir`.
-        let folder_or = |error: std::io::Error| {
+        let directory_or = |error: std::io::Error| {
             if error.kind() == std::io::ErrorKind::PermissionDenied && path_to_open.is_dir() {
                 std::io::Error::from(std::io::ErrorKind::IsADirectory)
             } else {
@@ -544,10 +544,10 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // A process substitution's pipe cannot be created or truncated (D17).
         if !matches!(access, crate::sys::fs::Access::Read) {
             return Ok(cash_win32::pipe::open_output(options, &path_to_open)
-                .map_err(folder_or)?
+                .map_err(directory_or)?
                 .into());
         }
-        Ok(options.open(&path_to_open).map_err(folder_or)?.into())
+        Ok(options.open(&path_to_open).map_err(directory_or)?.into())
     }
 
     /// Replaces the shell's currently configured open files with the given set.
@@ -569,7 +569,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
 }
 
 /// A name a PATH search did not find, with what that answer depends on: `PATH` and
-/// `PATHEXT` (by their stamps), the working folder (for a relative `PATH` entry), and how
+/// `PATHEXT` (by their stamps), the working directory (for a relative `PATH` entry), and how
 /// many exit statuses have been set, which changes whenever a command runs, and so with
 /// anything a command could have done to make the name found (`cmd x $(make cmd)`).
 #[derive(Clone, PartialEq, Eq)]

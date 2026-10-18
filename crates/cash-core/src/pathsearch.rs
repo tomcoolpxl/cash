@@ -26,9 +26,9 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(dir) = self.paths.pop_front() {
             let dir = dir.as_ref();
-            // The name's spellings that are in the folder, from one look at it, as
+            // The name's spellings that are in the directory, from one look at it, as
             // `resolve_command` has them: a file check for each PATHEXT extension in each
-            // folder made `type -a cmd` 43 ms over 79 folders.
+            // directory made `type -a cmd` 43 ms over 79 directories.
             let listed = listed_names(dir, self.filename.as_ref());
             if listed.as_ref().is_some_and(Vec::is_empty) {
                 continue;
@@ -42,7 +42,7 @@ where
 
             // Resolve the path to an actual executable file, which may append a PATHEXT
             // extension. A directory is never a command: the *resolved* path is checked,
-            // so a `prog` directory does not stop `prog.exe` in the same folder from being
+            // so a `prog` directory does not stop `prog.exe` in the same directory from being
             // found.
             if let Some(resolved) =
                 sys::fs::resolve_executable_among(path, &self.extensions, present)
@@ -60,20 +60,20 @@ pub(crate) struct ExecutablePathPrefixSearch<PI> {
     paths: VecDeque<PI>,
     queued_items: VecDeque<PathBuf>,
     filename_prefix: String,
-    /// The prefix as typed, which each folder is asked for.
+    /// The prefix as typed, which each directory is asked for.
     typed_prefix: String,
     case_insensitive: bool,
     /// The shell's `PATHEXT`.
     extensions: Vec<String>,
 }
 
-/// The entries of `dir` that may begin with `prefix`, each with whether it is a folder.
+/// The entries of `dir` that may begin with `prefix`, each with whether it is a directory.
 ///
-/// The folder is asked for them (`FindFirstFileExW` with `prefix*`), where it was listed
-/// whole: a completion menu asked this of every `PATH` folder on each keystroke, 25 ms
+/// The directory is asked for them (`FindFirstFileExW` with `prefix*`), where it was listed
+/// whole: a completion menu asked this of every `PATH` directory on each keystroke, 25 ms
 /// with System32 among them. Windows matches an 8.3 alias too, so the caller still
 /// compares the long names; a prefix with a character the pattern would read as a
-/// wildcard lists the folder whole, as before.
+/// wildcard lists the directory whole, as before.
 fn entries_beginning(dir: &Path, prefix: &str) -> Vec<(std::ffi::OsString, bool)> {
     if !prefix.contains(['*', '?', '<', '>', '"']) {
         return cash_win32::fs::names_beginning(dir, prefix.as_ref()).unwrap_or_default();
@@ -116,7 +116,7 @@ where
                     }
                 }
 
-                // A folder is never a command; a file, or a link to one, is when it runs.
+                // A directory is never a command; a file, or a link to one, is when it runs.
                 let entry_path = path.join(&name);
                 if !is_dir && entry_path.executable(&self.extensions) {
                     self.queued_items.push_back(entry_path);
@@ -162,7 +162,7 @@ where
 /// other shells and cash does not pretend to be them.
 ///
 /// `cash` matches too, so `cash doctor` and `cash -c` work inside cash whether or not its
-/// folder is on `PATH`: a terminal profile usually starts it by full path. Another cash on
+/// directory is on `PATH`: a terminal profile usually starts it by full path. Another cash on
 /// `PATH` is then reached by its path, as a real bash is.
 fn cash_as_shell(name: &Path) -> Option<PathBuf> {
     let stem = name.file_stem()?.to_str()?.to_ascii_lowercase();
@@ -213,10 +213,10 @@ where
 
     for dir in paths {
         let dir = dir.as_ref();
-        // The command's names that are in the folder, from one look at it: a look for each
+        // The command's names that are in the directory, from one look at it: a look for each
         // name it could have, two for the name and one for every PATHEXT extension, cost
-        // about fifteen calls a folder, `type -P cmd` 3 ms over a long PATH. What is found
-        // is still checked as before, so a folder that tells case apart answers as it did.
+        // about fifteen calls a directory, `type -P cmd` 3 ms over a long PATH. What is found
+        // is still checked as before, so a directory that tells case apart answers as it did.
         let listed = listed_names(dir, filename.as_ref());
         if listed.as_ref().is_some_and(Vec::is_empty) {
             continue;
@@ -247,10 +247,10 @@ where
     first_non_executable
 }
 
-/// The names in the folder `dir` that begin with `name`, folded, from one look at it; none
+/// The names in the directory `dir` that begin with `name`, folded, from one look at it; none
 /// where that look cannot stand for a look for each name `name` could have. Windows reads
-/// some names otherwise: a wildcard, a folder part, a stream, an 8.3 alias's `~`, a
-/// trailing dot or space; an empty folder is the working one; a folder that cannot be
+/// some names otherwise: a wildcard, a directory part, a stream, an 8.3 alias's `~`, a
+/// trailing dot or space; an empty directory is the working one; a directory that cannot be
 /// read is looked in as before.
 fn listed_names(dir: &Path, name: &Path) -> Option<Vec<String>> {
     let text = name.to_str()?;
@@ -303,9 +303,9 @@ mod tests {
 
     use super::*;
 
-    /// Each folder is asked for the names beginning with the prefix: programs that begin
-    /// with it are found, in either case when asked to ignore case, and a folder or a
-    /// file that is no program is not; a prefix with a wildcard in it lists the folder whole
+    /// Each directory is asked for the names beginning with the prefix: programs that begin
+    /// with it are found, in either case when asked to ignore case, and a directory or a
+    /// file that is no program is not; a prefix with a wildcard in it lists the directory whole
     /// and finds nothing, as no name holds one.
     #[test]
     fn a_prefix_finds_the_programs_that_begin_with_it() -> Result<()> {
@@ -329,7 +329,7 @@ mod tests {
         };
         assert_eq!(names("ab", true), ["ABD.cmd", "abc.exe"]);
         assert_eq!(names("ab", false), ["abc.exe"]);
-        // No file can have one: the folder is listed whole, and nothing begins with it.
+        // No file can have one: the directory is listed whole, and nothing begins with it.
         assert_eq!(names("a*", true), Vec::<String>::new());
         assert_eq!(names("", true), ["ABD.cmd", "abc.exe", "xyz.exe"]);
         Ok(())

@@ -419,9 +419,9 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
     }
 
     /// One name given and, unless `--no-recursion`, what is below it, on the shared walker:
-    /// GNU tar's `dump_file`. Through links with `-h`, where a link back to a folder above
+    /// GNU tar's `dump_file`. Through links with `-h`, where a link back to a directory above
     /// is said and not gone round: GNU's tar recurses until its stack overflows. With
-    /// `--remove-files` a folder is removed once the walk has left it.
+    /// `--remove-files` a directory is removed once the walk has left it.
     fn dump(
         &mut self,
         output: &mut Output,
@@ -448,7 +448,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             ..walker::WalkOptions::default()
         };
         let mut tree = walker::Walk::new(name, path, &options, self.context.stop_token());
-        // The folders to remove, deepest last, each once the walk is out of it.
+        // The directories to remove, deepest last, each once the walk is out of it.
         let mut leaving: Vec<(usize, String, PathBuf)> = Vec::new();
         while let Some(next) = tree.next() {
             let entry = match next {
@@ -477,9 +477,9 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             };
             self.remove_left(&mut leaving, entry.depth)?;
             let next = self.dump_entry(output, walk, &entry.shown, &entry.path)?;
-            if entry.kind == walker::Kind::Folder {
+            if entry.kind == walker::Kind::Directory {
                 if next.skip {
-                    tree.skip_folder();
+                    tree.skip_directory();
                 }
                 if let Some(tag) = next.tag {
                     let slash = if entry.shown.ends_with(['/', '\\']) {
@@ -498,7 +498,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         self.remove_left(&mut leaving, 0)
     }
 
-    /// `--remove-files`: the folders the walk is out of, once it is at `depth`, deepest
+    /// `--remove-files`: the directories the walk is out of, once it is at `depth`, deepest
     /// first.
     fn remove_left(
         &mut self,
@@ -517,7 +517,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         Ok(())
     }
 
-    /// One file or folder: GNU tar's `dump_file0`, without the folder's contents, which
+    /// One file or directory: GNU tar's `dump_file0`, without the directory's contents, which
     /// [`Self::dump`] walks; what it does with them.
     #[expect(
         clippy::too_many_lines,
@@ -722,7 +722,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         })
     }
 
-    /// The tag that keeps a folder's contents out, the last given first, as GNU's
+    /// The tag that keeps a directory's contents out, the last given first, as GNU's
     /// `check_exclusion_tags` looks.
     fn exclusion_tag(&self, dir: &Path) -> Option<(String, TagWhat)> {
         const SIGNATURE: &[u8] = b"Signature: 8a477f597d28d172789f06886806bc55";
@@ -853,12 +853,12 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
 
 /// What [`Tar::dump`] does after one entry with what is below it.
 struct Next {
-    /// A folder's contents are left out: it was excluded, not dumped, or has an exclusion
+    /// A directory's contents are left out: it was excluded, not dumped, or has an exclusion
     /// tag.
     skip: bool,
     /// The exclusion tag to store in their place.
     tag: Option<String>,
-    /// The folder is removed once the walk has left it (`--remove-files`).
+    /// The directory is removed once the walk has left it (`--remove-files`).
     remove: bool,
 }
 

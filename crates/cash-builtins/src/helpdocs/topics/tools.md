@@ -30,7 +30,7 @@ manager has no package for it.
 | lsd | lsd-rs.lsd | lsd | ls with icons |
 | zoxide | ajeetdsouza.zoxide | zoxide | a smarter cd |
 | starship | Starship.Starship | starship | cross-shell prompt |
-| direnv | direnv.direnv | direnv | per-folder environment variables |
+| direnv | direnv.direnv | direnv | per-directory environment variables |
 | gh | GitHub.cli | gh | GitHub's command line |
 | git | Git.Git | git | Git for Windows |
 | lazygit | JesseDuffield.lazygit | extras/lazygit | terminal UI for git |

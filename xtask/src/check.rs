@@ -204,7 +204,7 @@ fn check_build(sh: &Shell, build_args: &BuildArgs, verbose: bool) -> Result<()> 
 /// cash keeps its working directory and exported variables in the shell (D10) and never
 /// moves the process's, so in the shell's crates each of these is a bug unless the line,
 /// or the one before it, says why it is not (`// process state: <reason>`): `cd sub &&
-/// ./tool.exe` ran the start folder's `tool.exe`, `xargs` lost `export`, `PATHEXT` and
+/// ./tool.exe` ran the start directory's `tool.exe`, `xargs` lost `export`, `PATHEXT` and
 /// `umask` were the process's (`REVIEW_REPORT.md` §4.1).
 const PROCESS_STATE_CALLS: [&str; 5] = [
     "Command::new(",

@@ -467,7 +467,7 @@ pub(super) struct Options {
     /// `-sns-`.
     pub(super) alt_streams: Option<bool>,
     pub(super) nt_security: bool,
-    /// `-spe`: the output folder's name taken off items that all begin with it.
+    /// `-spe`: the output directory's name taken off items that all begin with it.
     pub(super) elim_dup: bool,
     /// `-bt`: the time and memory used, at the end.
     pub(super) show_time: bool,
@@ -498,7 +498,7 @@ fn stoi(s: &str) -> Option<u32> {
 /// switches that need the command to mean something.
 #[expect(clippy::too_many_lines, reason = "7-Zip's Parse2, switch by switch")]
 /// `resolve` gives a list file's path as the shell reads a path: under the shell's
-/// folder, where the process's is another (D10).
+/// directory, where the process's is another (D10).
 pub(super) fn parse_command(
     parsed: &Parsed,
     resolve: &dyn Fn(&str) -> PathBuf,
@@ -844,7 +844,7 @@ pub(super) struct Update {
     /// The other archives `-u…!name` writes, each with its actions.
     pub(super) others: Vec<(String, ActionSet)>,
     /// `-w`: where the new archive is written before it replaces the old one; empty
-    /// for the system's temporary folder.
+    /// for the system's temporary directory.
     pub(super) working_dir: Option<String>,
     /// `-v`: the sizes of the volumes.
     pub(super) volumes: Vec<u64>,

@@ -1,11 +1,11 @@
-//! `croot`, the file and folder picker cash opens below the command line on Alt-E, and
+//! `croot`, the file and directory picker cash opens below the command line on Alt-E, and
 //! as the `croot` command (spec D73); and the list drawn the same way for Ctrl-R's
-//! history (D79) and `z -i`'s folders (D80).
+//! history (D79) and `z -i`'s directories (D80).
 //!
 //! - [`context`]: what the command line says: the command, the word under the cursor,
 //!   and so what the picker lists and what a pick does.
 //! - [`pick`]: where the picker starts, and how a pick is written on the line.
-//! - [`tree`]: a folder's entries, hidden and `.gitignore`d ones left out, and broot's
+//! - [`tree`]: a directory's entries, hidden and `.gitignore`d ones left out, and broot's
 //!   layout of several levels trimmed to fit.
 //! - [`filter`]: the fuzzy filter typing sets.
 //! - [`search`]: the background search that finds entries below the shown levels.

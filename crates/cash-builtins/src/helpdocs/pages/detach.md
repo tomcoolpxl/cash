@@ -10,7 +10,7 @@ with no console, and not waited for. It prints the new process's id and returns.
 
 Everything else cash starts lives in its job object and ends when cash does; `&`,
 `disown` and `nohup` do not change that. `detach` is the one way out. The command runs
-in the shell's folder with its exported variables, and is found as the shell would find
+in the shell's directory with its exported variables, and is found as the shell would find
 it. It gets none of the shell's streams, so its output is lost; a redirection on the
 `detach` line applies to `detach`'s own message. To keep the output, detach a cash that
 redirects it, as in the second example.

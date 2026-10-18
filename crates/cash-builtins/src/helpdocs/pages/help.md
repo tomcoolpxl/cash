@@ -22,7 +22,7 @@ In a terminal, what is taller than the window opens in cash's `less`, colours an
 leave them out.
 
 From PowerShell or cmd, `cash help ...` says the same, unless a file named `help` is in
-the current folder, which then runs as a script.
+the current directory, which then runs as a script.
 
 ## Windows notes
 

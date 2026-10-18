@@ -500,7 +500,7 @@ rc=0
   Attributes: ..A....
         Name: top/junc
         Type: NTFS junction point
-      Target: /??/(this folder)/real
+      Target: /??/(this directory)/real
   Attributes: ...D...
         Name: top
         Type: Directory
@@ -516,7 +516,7 @@ Done
 rc=0
         Name: top/junc
         Type: NTFS junction point
-      Target: /??/(this folder)/real
+      Target: /??/(this directory)/real
   Attributes: ...D...
 -- -ol top/*
 
@@ -533,7 +533,7 @@ rc=0
   Attributes: ..A....
         Name: top/junc
         Type: NTFS junction point
-      Target: /??/(this folder)/real
+      Target: /??/(this directory)/real
   Attributes: ...D...
 -- -ola top
 
@@ -551,7 +551,7 @@ rc=0
   Attributes: ..A....
         Name: top/junc
         Type: NTFS junction point
-      Target: /??/(this folder)/real
+      Target: /??/(this directory)/real
   Attributes: ...D...
         Name: top
         Type: Directory
@@ -567,7 +567,7 @@ Done
 rc=0
         Name: top/junc
         Type: NTFS junction point
-      Target: /??/(this folder)/real
+      Target: /??/(this directory)/real
   Attributes: ...D...
 -- -ola top/*
 
@@ -584,7 +584,7 @@ rc=0
   Attributes: ..A....
         Name: top/junc
         Type: NTFS junction point
-      Target: /??/(this folder)/real
+      Target: /??/(this directory)/real
   Attributes: ...D...
 --  top
 

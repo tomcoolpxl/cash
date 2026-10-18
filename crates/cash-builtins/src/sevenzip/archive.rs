@@ -181,7 +181,7 @@ pub(super) enum Prop {
     Method,
     Block,
     HostOs,
-    Folder,
+    Directory,
     Mode,
     User,
     Group,
@@ -222,7 +222,7 @@ impl Prop {
             Self::Method => "Method",
             Self::Block => "Block",
             Self::HostOs => "Host OS",
-            Self::Folder => "Folder",
+            Self::Directory => "Directory",
             Self::Mode => "Mode",
             Self::User => "User",
             Self::Group => "Group",
@@ -306,13 +306,13 @@ impl Item {
         if !self.alt_stream {
             return None;
         }
-        let (folder, name) = match self.path.rsplit_once('/') {
-            Some((folder, name)) => (Some(folder), name),
+        let (directory, name) = match self.path.rsplit_once('/') {
+            Some((directory, name)) => (Some(directory), name),
             None => (None, self.path.as_str()),
         };
         let (file, stream) = name.split_once(':')?;
         Some((
-            folder.map_or_else(|| file.to_owned(), |f| format!("{f}/{file}")),
+            directory.map_or_else(|| file.to_owned(), |f| format!("{f}/{file}")),
             stream,
         ))
     }
@@ -323,8 +323,8 @@ impl Item {
 pub(super) struct Link {
     /// A hard link, its path from the archive's root; else a symbolic link.
     pub(super) hard: bool,
-    /// A symbolic link whose path is from its own folder (a tar's, a Unix one, a
-    /// Windows one so flagged); else from the output folder.
+    /// A symbolic link whose path is from its own directory (a tar's, a Unix one, a
+    /// Windows one so flagged); else from the output directory.
     pub(super) relative: bool,
     /// A junction rather than a symbolic link (Windows reparse data).
     pub(super) junction: bool,

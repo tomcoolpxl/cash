@@ -25,7 +25,7 @@ pub(super) enum Command {
     Change,
     CommentWrite,
     Delete,
-    /// `e`: names without their folders.
+    /// `e`: names without their directories.
     Extract,
     Freshen,
     /// `i`: what to look for, and how.
@@ -52,7 +52,7 @@ pub(super) enum Command {
     Sfx(Option<String>),
     Test,
     Update,
-    /// `x`: names with their folders.
+    /// `x`: names with their directories.
     ExtractFull,
 }
 

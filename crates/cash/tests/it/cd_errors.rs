@@ -69,8 +69,8 @@ fn a_path_that_lost_its_backslashes_gets_a_hint() {
     assert_eq!(status, 1);
 }
 
-/// `CDPATH` is searched as Bash searches it: a non-empty entry's folder is printed, an
-/// empty entry is the current folder, and `./name` is not looked up; it was ignored.
+/// `CDPATH` is searched as Bash searches it: a non-empty entry's directory is printed, an
+/// empty entry is the current directory, and `./name` is not looked up; it was ignored.
 #[test]
 fn cdpath_is_searched_as_bash_searches_it() {
     let scratch = crate::common::Scratch::new("cdpath");

@@ -20,11 +20,43 @@ use crate::common::{
 const STORED: &[u8] = include_bytes!("../../../cash-archive/tests/fixtures/7z/stored.7z");
 const AES: &[u8] = include_bytes!("../../../cash-archive/tests/fixtures/7z/aes.7z");
 
+/// `golden` in cash's words: cash's 7z says directory where 7-Zip says folder, in
+/// its totals, `-slt`'s `Folder = ` and its help. Names of files stay as they are, and
+/// no other "folder" may be left, so none can hide.
+fn in_cash_words(golden: &str) -> String {
+    let mut out = String::with_capacity(golden.len());
+    for line in golden.split_inclusive('\n') {
+        let line = if let Some(rest) = line.strip_prefix("Folder = ") {
+            format!("Directory = {rest}")
+        } else if let Some(rest) = line.strip_prefix("Folders: ") {
+            format!("Directories: {rest}")
+        } else if let Some(head) = line.strip_suffix(" folders\n") {
+            format!("{head} directories\n")
+        } else {
+            line.replace(" folders, ", " directories, ")
+                .replace(" folder, ", " directory, ")
+                .replace("files and folders:", "files and directories:")
+                .replace("root folder for", "root directory for")
+                .replace("anti-folders", "anti-directories")
+                .replace("anti-folder", "anti-directory")
+                .replace("is a folder with", "is a directory with")
+        };
+        out.push_str(&line);
+    }
+    assert!(
+        !out.replace("d/folder", "")
+            .to_lowercase()
+            .contains("folder"),
+        "7-Zip's word left untranslated"
+    );
+    out
+}
+
 #[test]
 fn seven_z_matches_7_zip_26_03() {
     // cash's own banner, in 7-Zip's place.
     let expected = with_divergence(
-        &golden("7z_cases"),
+        &in_cash_words(&golden("7z_cases")),
         "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
         179,
@@ -36,7 +68,7 @@ fn seven_z_matches_7_zip_26_03() {
 fn seven_z_reads_and_writes_the_other_formats_as_7_zip_26_03_does() {
     // cash's own banner, in 7-Zip's place.
     let expected = with_divergence(
-        &golden("7z_formats"),
+        &in_cash_words(&golden("7z_formats")),
         "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
         153,
@@ -48,7 +80,7 @@ fn seven_z_reads_and_writes_the_other_formats_as_7_zip_26_03_does() {
 fn seven_z_reads_rar_as_7_zip_26_03_does() {
     // cash's own banner, in 7-Zip's place.
     let expected = with_divergence(
-        &golden("7z_rar"),
+        &in_cash_words(&golden("7z_rar")),
         "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
         216,
@@ -60,7 +92,7 @@ fn seven_z_reads_rar_as_7_zip_26_03_does() {
 fn seven_z_reads_rar_1_5_to_4_as_7_zip_26_03_does() {
     // cash's own banner, in 7-Zip's place.
     let expected = with_divergence(
-        &golden("7z_rar4"),
+        &in_cash_words(&golden("7z_rar4")),
         "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
         211,
@@ -122,7 +154,7 @@ fn bt_reports_the_times_and_the_memory_used() {
 }
 
 #[test]
-fn extraction_keeps_times_and_folders() {
+fn extraction_keeps_times_and_directories() {
     let dir = Scratch::new("7z-times");
     std::fs::write(dir.join("stored.7z"), STORED).expect("write the archive");
     let out = run_in(
@@ -242,14 +274,14 @@ fn a_password_is_asked_for_and_given_on_standard_input() {
     );
 }
 
-/// A junction is gone through, and one back to a folder above is said as 7-Zip 26.03 says
+/// A junction is gone through, and one back to a directory above is said as 7-Zip 26.03 says
 /// the path it went round to, status 1: at the junction, so each file is stored once.
 #[test]
 fn a_junction_loop_is_said_at_the_junction_and_each_file_stored_once() {
     let scratch = Scratch::new("7z-walk");
     let d = scratch.path().join("d");
-    std::fs::create_dir_all(d.join("sub")).expect("folders");
-    std::fs::create_dir_all(scratch.path().join("other")).expect("a folder");
+    std::fs::create_dir_all(d.join("sub")).expect("directories");
+    std::fs::create_dir_all(scratch.path().join("other")).expect("a directory");
     std::fs::write(d.join("a.txt"), "a").expect("a file");
     std::fs::write(d.join("sub").join("b.txt"), "b").expect("a file");
     std::fs::write(scratch.path().join("other").join("o.txt"), "o").expect("a file");

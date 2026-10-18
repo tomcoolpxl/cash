@@ -740,7 +740,7 @@ fn here_document_body_end(
 
 /// Characters a Windows file name can start with that a backslash before them in bash
 /// only removes, never gives meaning: letters, digits and `. _ - $ @ + % , = ^ ~ # [ ] { }`.
-/// (`{` and `}` so that a `{GUID}` folder stays one literal name.)
+/// (`{` and `}` so that a `{GUID}` directory stays one literal name.)
 fn starts_a_path_component(c: char) -> bool {
     c.is_alphanumeric()
         || matches!(

@@ -49,7 +49,7 @@ impl Sandbox {
         run_in(self.root.path(), script)
     }
 
-    /// The sandbox folder's own name, as `basename "$PWD"` prints it there.
+    /// The sandbox directory's own name, as `basename "$PWD"` prints it there.
     fn name(&self) -> String {
         self.root
             .path()

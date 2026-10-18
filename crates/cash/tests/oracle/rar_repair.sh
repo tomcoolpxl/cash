@@ -5,7 +5,7 @@
 #
 # As in rar_write.sh, `z` keeps standard output and standard error apart, turns CRLF and
 # `\` into LF and `/`, and drops the percentages rar writes with backspaces. A rebuilt
-# archive is listed by name only: rar gives a folder it rebuilds the time of the rebuild.
+# archive is listed by name only: rar gives a directory it rebuilds the time of the rebuild.
 #
 # Regenerate the golden file on Windows, with Scoop's WinRAR and a cash without the
 # builtins, such as 1.10.0, in Brussels' zone:
@@ -56,7 +56,7 @@ ls *.rar
 z rar t -idc fixed.bad1.rar
 cmp rr.rar fixed.bad1.rar && echo "fixed.bad1.rar is the archive before its damage"
 
-echo "== damaged in two places, into a folder"
+echo "== damaged in two places, into a directory"
 mkdir out
 cp rr.rar bad3.rar
 damage bad3.rar 3000 10

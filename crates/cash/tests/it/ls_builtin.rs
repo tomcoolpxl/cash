@@ -126,8 +126,8 @@ fn ls_long_format_shows_accurate_link_counts() {
         "hard-linked file line should show link count 2: {orig_line}"
     );
 
-    // A folder shows 1, as Git Bash shows it, however many subfolders it has: Linux's
-    // 2 + subfolders took reading every folder listed, and `..` of a temporary folder
+    // A directory shows 1, as Git Bash shows it, however many subdirectories it has: Linux's
+    // 2 + subdirectories took reading every directory listed, and `..` of a temporary directory
     // held 160,000 of them.
     let sub_line = out
         .stdout
@@ -136,7 +136,7 @@ fn ls_long_format_shows_accurate_link_counts() {
         .expect("subdir line");
     assert!(
         sub_line.contains(" 1 "),
-        "a folder should show link count 1: {sub_line}"
+        "a directory should show link count 1: {sub_line}"
     );
 }
 
@@ -230,7 +230,7 @@ fn ls_sorting_flags() {
 #[test]
 fn ls_directory_flag_lists_dir_itself() {
     let scratch = Scratch::new("dir-flag");
-    let sub = scratch.path().join("folder");
+    let sub = scratch.path().join("directory");
     std::fs::create_dir(&sub).unwrap();
     std::fs::write(sub.join("file.txt"), b"inside").unwrap();
 
@@ -265,7 +265,7 @@ fn ls_nonexistent_path_returns_error() {
     assert!(out.stderr.contains("No such file or directory"));
 }
 
-/// A folder of files to sort, colour and draw (D67).
+/// A directory of files to sort, colour and draw (D67).
 fn lsd_fixture(name: &str) -> (Scratch, String) {
     let scratch = Scratch::new(name);
     let root = scratch.path();
@@ -296,7 +296,7 @@ fn ls_icons_show_when_asked_and_stay_out_of_pipes() {
         "cd '{dir}'; ls -1 --icons=always --icons-theme=fancy c.rs run.exe docs .bashrc"
     ));
     assert_eq!(out.code, 0, "{}", out.stderr);
-    // lsd's glyphs: by extension, executable, folder (listed, so its contents), name.
+    // lsd's glyphs: by extension, executable, directory (listed, so its contents), name.
     assert!(out.stdout.contains("\u{e68b} c.rs"), "{}", out.stdout);
     assert!(out.stdout.contains("\u{f17a} run.exe"), "{}", out.stdout);
     assert!(out.stdout.contains("\u{f1183} .bashrc"), "{}", out.stdout);
@@ -401,7 +401,7 @@ fn ls_icons_are_nerd_glyphs_only_where_terminal_draws_a_nerd_font() {
 #[test]
 fn ls_colours_by_kind_and_extension_from_dircolors_or_ls_colors() {
     let (_scratch, dir) = lsd_fixture("colours");
-    // dircolors' defaults: archives red, folders bold blue, plain files uncoloured.
+    // dircolors' defaults: archives red, directories bold blue, plain files uncoloured.
     let out = cash(&format!(
         "cd '{dir}'; ls -1 -d --color=always a.zip docs b.txt"
     ));
@@ -550,13 +550,13 @@ fn ls_long_w_is_the_access_list_answer_not_just_read_only() {
         .output();
     assert!(out.stdout.starts_with("-r--r--r--"), "{}", out.stdout);
 
-    // A read-only folder is only a customised one: it still takes new files.
-    let folder = scratch.path().join("custom");
-    std::fs::create_dir(&folder).unwrap();
-    set_attributes(&folder, &["+r"]);
+    // A read-only directory is only a customised one: it still takes new files.
+    let directory = scratch.path().join("custom");
+    std::fs::create_dir(&directory).unwrap();
+    set_attributes(&directory, &["+r"]);
     let out = cash(&format!("ls -ld '{dir}/custom'"));
     assert!(out.stdout.starts_with("drwxrwxr-x"), "{}", out.stdout);
-    set_attributes(&folder, &["-r"]);
+    set_attributes(&directory, &["-r"]);
 }
 
 #[test]
@@ -607,12 +607,12 @@ fn ls_ends_with_141_when_its_reader_goes() {
     assert!(out.stderr.is_empty(), "{}", out.stderr);
 }
 
-/// Files named beside a folder are listed first, then one blank line and the folder's
+/// Files named beside a directory are listed first, then one blank line and the directory's
 /// heading, as GNU `ls` does. cash printed two blank lines there, with `-l`, `-R` and
 /// `--tree` too, and after an operand that does not exist.
 #[test]
-fn files_and_then_a_folder_are_one_blank_line_apart() {
-    let scratch = Scratch::new("ls-files-then-folder");
+fn files_and_then_a_directory_are_one_blank_line_apart() {
+    let scratch = Scratch::new("ls-files-then-directory");
     std::fs::write(scratch.join("s1"), "").unwrap();
     std::fs::create_dir(scratch.join("sub")).unwrap();
     std::fs::write(scratch.join("sub").join("inner"), "").unwrap();
@@ -637,7 +637,7 @@ fn files_and_then_a_folder_are_one_blank_line_apart() {
         Some(&["", "sub:", "total 0"][..]),
         "{long}"
     );
-    // Folders alone were right already: one blank line between them.
+    // Directories alone were right already: one blank line between them.
     std::fs::create_dir(scratch.join("sub2")).unwrap();
     assert_eq!(ls("sub sub2").stdout, "sub:\ninner\n\nsub2:");
 }
@@ -693,8 +693,8 @@ fn ls_r_joins_names_below_a_trailing_slash_once() {
     assert_eq!(out.code, 0, "{}", out.stderr);
 }
 
-/// `ls --tree` says a folder below it that it cannot open, as `-R` says it, status 1: it
-/// drew the folder with nothing under it, said nothing and exited 0.
+/// `ls --tree` says a directory below it that it cannot open, as `-R` says it, status 1: it
+/// drew the directory with nothing under it, said nothing and exited 0.
 #[test]
 fn ls_tree_reports_a_directory_it_cannot_open() {
     let scratch = Scratch::new("ls-tree-shut");
@@ -761,7 +761,7 @@ fn ls_in(dir: &Path, script: &str) -> Output {
 }
 
 /// `-x`, `-C` and `-m` lay names out as GNU ls does in Git Bash, each column as wide as
-/// its widest name (spaces where GNU writes tabs), and `-p` marks folders.
+/// its widest name (spaces where GNU writes tabs), and `-p` marks directories.
 #[test]
 fn ls_layouts_fill_the_width_as_gnu_ls_does() {
     let scratch = layout_fixture("ls-layouts");
@@ -932,7 +932,7 @@ fn ls_refuses_a_bad_value_as_gnu_ls_does() {
 }
 
 /// `-L` shows what a junction names, and with `-R` goes into it, but not round a junction
-/// back to a folder above: said as GNU ls says it, status 2.
+/// back to a directory above: said as GNU ls says it, status 2.
 #[test]
 fn ls_l_shows_and_walks_what_a_link_names() {
     let scratch = Scratch::new("ls-dereference");
@@ -1001,14 +1001,14 @@ fn sizes_and_times_fixture(name: &str) -> Scratch {
     scratch
 }
 
-/// Makes the fixture's `plain` writable again, so that the scratch folder can go.
+/// Makes the fixture's `plain` writable again, so that the scratch directory can go.
 fn writable_again(scratch: &Scratch) {
     let mut writable = std::fs::metadata(scratch.join("plain"))
         .unwrap()
         .permissions();
     #[expect(
         clippy::permissions_set_readonly_false,
-        reason = "the scratch folder is removed after the test, its files with it"
+        reason = "the scratch directory is removed after the test, its files with it"
     )]
     writable.set_readonly(false);
     std::fs::set_permissions(scratch.join("plain"), writable).unwrap();
@@ -1124,7 +1124,7 @@ fn ls_times_as_gnu_ls_has_them() {
 }
 
 /// Names to quote: a space, a quote, DEL (a control character Windows allows in a
-/// name), a folder with a space, and a link to it.
+/// name), a directory with a space, and a link to it.
 fn quoting_fixture(name: &str) -> Scratch {
     let scratch = Scratch::new(name);
     for name in ["plain", "a b", "it's", "c\u{7f}d"] {
@@ -1265,7 +1265,7 @@ fn ls_lines_up_quoted_names_as_gnu_ls_does() {
     );
 }
 
-/// A file, a name with a space, a folder, and a junction to it, for the script helpers.
+/// A file, a name with a space, a directory, and a junction to it, for the script helpers.
 fn helpers_fixture(name: &str) -> Scratch {
     let scratch = Scratch::new(name);
     std::fs::write(scratch.join("plain"), "").unwrap();
@@ -1278,7 +1278,7 @@ fn helpers_fixture(name: &str) -> Scratch {
 
 /// `--zero`, `-i`, `-H`, `--dereference-command-line-symlink-to-dir` and `-T` as GNU ls
 /// 9.10 has them: NUL after each line of entries, never after a header or between
-/// folders; the file index Git Bash's `ls -i` and `stat` show; links named on the command
+/// directories; the file index Git Bash's `ls -i` and `stat` show; links named on the command
 /// line followed; a tab size checked.
 #[test]
 fn ls_script_helpers_as_gnu_ls_has_them() {
@@ -1385,7 +1385,7 @@ fn ls_hyperlinks_names_as_gnu_ls_does() {
         "{lines:?}"
     );
     assert!(starts(6, &format!(" {url}"), &link("plain")), "{lines:?}");
-    // The junction's name and target both go to the folder it names.
+    // The junction's name and target both go to the directory it names.
     assert!(
         lines.get(7).is_some_and(|line| line
             .split(" -> ")
@@ -1436,7 +1436,7 @@ fn ls_numbers_contexts_and_authors_as_gnu_ls_has_them() {
 }
 
 /// `-D` writes what Emacs' dired reads, as GNU ls 9.10 does: the long format indented by
-/// two spaces, then where each name and each folder header's name are, in bytes from
+/// two spaces, then where each name and each directory header's name are, in bytes from
 /// the start, and the quoting style; not with `-C` or `--hyperlink`, and never with
 /// `--zero`.
 #[test]

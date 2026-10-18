@@ -375,7 +375,7 @@ fn checksum_short(item: &Item) -> String {
             bytes[1],
             bytes[bytes.len() - 1]
         ),
-        // RAR 1.3 keeps no checksum rar shows: a file's is unknown, a folder has none.
+        // RAR 1.3 keeps no checksum rar shows: a file's is unknown, a directory has none.
         _ if item.kind == Kind::Directory => " ".repeat(8),
         _ => "????????".to_owned(),
     }
@@ -418,7 +418,7 @@ fn technical(text: &mut String, item: &Item) {
     if let Some(target) = &item.target {
         field(text, "Target", target);
     }
-    if !item.folder {
+    if !item.directory {
         field(text, "Size", &item.size.to_string());
         field(text, "Packed size", &item.packed.to_string());
         field(text, "Ratio", &item_ratio(item));
@@ -517,7 +517,7 @@ impl Masks {
         }
     }
 
-    /// The folders masks name before their last part, wildcard-free: `SUBDIR` of
+    /// The directories masks name before their last part, wildcard-free: `SUBDIR` of
     /// `SUBDIR\*`, what `-ep1` takes off the names it matches.
     pub(super) fn bases(&self) -> impl Iterator<Item = &str> {
         self.include.iter().filter_map(|mask| {
@@ -581,8 +581,8 @@ pub(super) fn read_list<SE: cash_core::ShellExtensions>(
         .collect())
 }
 
-/// rar's match of a mask with an archived name: a mask with no folder and a wildcard
-/// matches the name's last part anywhere; a plain one, the name or a folder of it.
+/// rar's match of a mask with an archived name: a mask with no directory and a wildcard
+/// matches the name's last part anywhere; a plain one, the name or a directory of it.
 fn matches(mask: &str, name: &str) -> bool {
     let mask = mask.trim_end_matches('/');
     if !open::has_wildcard(mask) {
@@ -609,7 +609,7 @@ mod tests {
     }
 
     #[test]
-    fn masks_without_a_folder_match_anywhere() {
+    fn masks_without_a_directory_match_anywhere() {
         assert!(matches("*.txt", "dir/a.txt"));
         assert!(matches("dir", "dir/a.txt"));
         assert!(!matches("a.txt", "dir/a.txt"));

@@ -1,4 +1,4 @@
-//! `rm -r` and folder links: a junction inside the folder being removed is taken away
+//! `rm -r` and directory links: a junction inside the directory being removed is taken away
 //! as the link it is, never followed, whether its target is still there or not. uutils'
 //! `rm` 0.12.0 removed it as a file, which Windows refuses ("Permission denied"); cash's
 //! own `rm` (`crates/cash-uutils`) does not. Junctions need no privilege,
@@ -30,7 +30,7 @@ fn run_in(dir: &Scratch, script: &str) -> (String, i32) {
 }
 
 #[test]
-fn rm_r_removes_a_junction_inside_a_folder_and_keeps_its_target() {
+fn rm_r_removes_a_junction_inside_a_directory_and_keeps_its_target() {
     let dir = Scratch::new("rm-junction");
     let (out, code) = run_in(
         &dir,

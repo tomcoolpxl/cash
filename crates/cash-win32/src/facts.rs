@@ -8,7 +8,7 @@
 //! - an account's name by its SID: never, asked of LSA once per SID, where `ps` asked once
 //!   per process and `ls -l` once per file whose owner it could not read;
 //! - what Windows Terminal draws a profile in, its font and the shape of its cells: while
-//!   Terminal's settings files keep their modification times and sizes, their folders
+//!   Terminal's settings files keep their modification times and sizes, their directories
 //!   listed again at most every two seconds for a file that came or went.
 //!
 //! The functions callers know (`process::current_process_account`, `fs::current_user`,
@@ -142,7 +142,7 @@ pub fn profile_cell_ratio(
     })
 }
 
-/// How long a listing of Terminal's settings folders is trusted to still hold the same
+/// How long a listing of Terminal's settings directories is trusted to still hold the same
 /// files; the files found are looked at every time.
 const LISTING_LIFE: Duration = Duration::from_secs(2);
 

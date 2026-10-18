@@ -62,7 +62,7 @@ struct Entry {
 pub enum Kind {
     /// A file on a disk.
     File,
-    /// A folder on a disk.
+    /// A directory on a disk.
     Directory,
     /// A pipe, named or anonymous.
     Pipe,
@@ -74,7 +74,7 @@ pub enum Kind {
     Device,
 }
 
-/// A file or folder a process holds open, or a standard handle on whatever it is.
+/// A file or directory a process holds open, or a standard handle on whatever it is.
 #[derive(Debug)]
 pub struct OpenFile {
     /// The process holding it.
@@ -85,14 +85,14 @@ pub struct OpenFile {
     pub std: Option<u8>,
     /// What it is open on.
     pub kind: Kind,
-    /// The file or folder; empty for a pipe or a device, which are not named (asking
+    /// The file or directory; empty for a pipe or a device, which are not named (asking
     /// their name can wait for as long as a read on them lasts).
     pub path: PathBuf,
-    /// Opened to read (or, for a folder, to list).
+    /// Opened to read (or, for a directory, to list).
     pub read: bool,
     /// Opened to write or append.
     pub write: bool,
-    /// The file's size; `None` for a folder, a device or where Windows would not say.
+    /// The file's size; `None` for a directory, a device or where Windows would not say.
     pub size: Option<u64>,
 }
 

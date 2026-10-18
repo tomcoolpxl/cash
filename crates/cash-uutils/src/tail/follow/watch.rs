@@ -40,7 +40,7 @@ impl WatcherRx {
     }
 
     /// Wrapper for `notify::Watcher::watch` to also add the parent directory of `path` if necessary.
-    /// cash: on Linux alone uutils watches a file's folder instead.
+    /// cash: on Linux alone uutils watches a file's directory instead.
     fn watch_with_parent(&mut self, path: &Path) -> UResult<()> {
         let mut path = path.to_owned();
         if path.is_relative() {

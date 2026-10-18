@@ -37,7 +37,7 @@ impl builtins::Command for PwdCommand {
             cwd = cwd.canonicalize()?.into();
         }
 
-        // The resolved folder comes back as `\\?\C:\…`; cash prints `C:/…` (D3).
+        // The resolved directory comes back as `\\?\C:\…`; cash prints `C:/…` (D3).
         writeln!(context.stdout(), "{}", cash_win32::path::render(&cwd))?;
 
         Ok(ExecutionResult::success())

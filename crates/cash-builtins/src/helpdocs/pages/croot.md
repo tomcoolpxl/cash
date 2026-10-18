@@ -3,23 +3,23 @@ see: cd cdh prevd z keys
 ---
 ## Description
 
-croot is a file and folder picker. Alt-E opens it below the command line, which stays
+croot is a file and directory picker. Alt-E opens it below the command line, which stays
 on screen; `croot` opens it from a script and prints what you pick.
 
-It shows a tree of the folder it starts in, several levels deep, trimmed to fit with
+It shows a tree of the directory it starts in, several levels deep, trimmed to fit with
 `… N more` lines.
 
 ## Keys
 
 - `Up`, `Down`, `PgUp`, `PgDn`, `Home`, `End`: move.
-- `Right`: make the selected folder the top of the tree. `Left`: go up to the parent;
-  at a drive's top, the list of drives and your home folder.
-- Typing: filter by name, fuzzily (`crt` finds `crates`), searching folders below
+- `Right`: make the selected directory the top of the tree. `Left`: go up to the parent;
+  at a drive's top, the list of drives and your home directory.
+- Typing: filter by name, fuzzily (`crt` finds `crates`), searching directories below
   the ones shown too. `Backspace` edits the filter.
 - `Enter`: pick. `Ctrl-Enter`: pick and close.
 - `Esc`: clear the filter; on an empty filter, close without a pick.
-- `Alt-F`: folders only, or files too. `Alt-H`: the folders you go to most, best first,
-  from the record `z` uses (see `help z`); while none are recorded, the folders this
+- `Alt-F`: directories only, or files too. `Alt-H`: the directories you go to most, best first,
+  from the record `z` uses (see `help z`); while none are recorded, the directories this
   session was in, most recent first.
 - `Alt-S`: newest first, with each entry's age (`3h`, `2d`), or back to names.
 - `Alt-.`: show hidden entries. `Alt-I`: show entries a `.gitignore` leaves out.
@@ -28,17 +28,17 @@ It shows a tree of the folder it starts in, several levels deep, trimmed to fit 
 
 What is on the line decides what the picker shows and what a pick does:
 
-- an empty line, `cd` or `pushd`: folders only, and the pick runs at once (`cd PICK`);
-- `rmdir` or `mkdir`: folders only;
-- any other command: files and folders. The pick is inserted with a space after it, and
+- an empty line, `cd` or `pushd`: directories only, and the pick runs at once (`cd PICK`);
+- `rmdir` or `mkdir`: directories only;
+- any other command: files and directories. The pick is inserted with a space after it, and
   the picker stays open for the next one, with each pick showing on the command line
   as you make it; `source` and `.` close it after one.
-- a path already typed under the cursor: the picker starts in its folder, filtered by
+- a path already typed under the cursor: the picker starts in its directory, filtered by
   its last part (`cd ~/src/fo` starts in `~/src`, filtered by `fo`), and the pick
   replaces it.
 
-A pick is written relative to the current folder when it is below it, as `~/…` under
-your home folder, and as `C:/…` otherwise; it is quoted only when it needs quoting.
+A pick is written relative to the current directory when it is below it, as `~/…` under
+your home directory, and as `C:/…` otherwise; it is quoted only when it needs quoting.
 
 `bind '"\ec": cash-picker'` puts the picker on another key as well.
 
@@ -55,7 +55,7 @@ your home folder, and as `C:/…` otherwise; it is quoted only when it needs quo
 
 ## The command
 
-`croot [-d|-f] [DIR]` opens the picker on the terminal, in DIR or the current folder,
-showing folders only (`-d`, the default) or files and folders too (`-f`). It prints
+`croot [-d|-f] [DIR]` opens the picker on the terminal, in DIR or the current directory,
+showing directories only (`-d`, the default) or files and directories too (`-f`). It prints
 what you pick on standard output, so `cd "$(croot)"` and `vim "$(croot -f)"` work. It
 exits 1 when closed without a pick.

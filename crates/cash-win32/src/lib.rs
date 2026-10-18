@@ -56,7 +56,7 @@ mod imports;
 pub mod install_layout;
 pub mod job;
 pub mod jobreg;
-/// Directory junctions, for the installer's `current` folder.
+/// Directory junctions, for the installer's `current` directory.
 pub mod junction;
 pub mod locale;
 // Physical memory, the commit charge and the page files, for `free`.

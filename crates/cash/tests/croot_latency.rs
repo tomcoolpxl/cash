@@ -52,19 +52,19 @@ fn time_to(session: &mut ConPtySession, keys: &str, needle: &str) -> f64 {
     panic!("{needle:?} did not appear after {keys:?}");
 }
 
-fn measure(folder: &Path, label: &str) {
+fn measure(directory: &Path, label: &str) {
     let mut session = ConPtySession::start_in(
         &cash(),
         &["--noprofile", "--norc", "--no-config", "-i"],
         Some(&[("HISTFILE", ""), ("PS1", "PROMPT$ ")]),
-        Some(folder),
+        Some(directory),
     )
     .unwrap();
     session.expect("PROMPT$", Duration::from_secs(20)).unwrap();
     let mut picker = Vec::new();
     let mut plain = Vec::new();
     for _ in 0..RUNS {
-        picker.push(time_to(&mut session, "\x1be", "[folders]"));
+        picker.push(time_to(&mut session, "\x1be", "[directories]"));
         // Esc closes the picker; the prompt is drawn again.
         session.send("\x1b").unwrap();
         session
@@ -92,13 +92,13 @@ fn measure(folder: &Path, label: &str) {
 #[ignore = "a measurement, run by hand with the dist profile and --nocapture; see the file's doc"]
 fn alt_e_first_frame() {
     let scratch = tempfile::tempdir().unwrap();
-    // A home folder's worth of folders, as the user's has.
+    // A home directory's worth of directories, as the user's has.
     let home_like = scratch.path().join("home");
     for i in 0..44 {
-        std::fs::create_dir_all(home_like.join(format!("folder{i:02}")).join("sub")).unwrap();
+        std::fs::create_dir_all(home_like.join(format!("directory{i:02}")).join("sub")).unwrap();
     }
-    measure(&home_like, "44 folders");
-    // A large folder: 2,000 entries.
+    measure(&home_like, "44 directories");
+    // A large directory: 2,000 entries.
     let large = scratch.path().join("large");
     for i in 0..1000 {
         std::fs::create_dir_all(large.join(format!("d{i:04}"))).unwrap();

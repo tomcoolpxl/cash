@@ -298,7 +298,7 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
 }
 
 /// The shell's view of the world 7-Zip needs: paths made absolute against the shell's
-/// folder, times shown in its zone.
+/// directory, times shown in its zone.
 struct Env<'a, SE: cash_core::ShellExtensions> {
     context: &'a cash_core::ExecutionContext<'a, SE>,
     zone: Zone,

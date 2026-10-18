@@ -122,7 +122,7 @@ impl TestCase {
         test_cmd.env("HOME", working_dir.to_string_lossy().to_string());
 
         // Set up any env vars needed for collecting coverage data: the workspace's target
-        // folder, two above this crate's; one above was `crates/target`.
+        // directory, two above this crate's; one above was `crates/target`.
         let harness_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let default_target_dir = || harness_dir.join("..").join("..").join("target");
         let coverage_target_dir = std::env::var("CARGO_TARGET_DIR")

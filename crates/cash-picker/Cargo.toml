@@ -1,6 +1,6 @@
 [package]
 name = "cash-picker"
-description = "croot: the file and folder picker cash opens on Alt-E (spec D73)"
+description = "croot: the file and directory picker cash opens on Alt-E (spec D73)"
 version.workspace = true
 authors.workspace = true
 categories.workspace = true

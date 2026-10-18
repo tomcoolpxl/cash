@@ -1127,7 +1127,7 @@ pub fn host_names(addresses: &[IpAddr], limit: Duration) -> HashMap<IpAddr, Stri
 }
 
 /// Windows' own `services` file, the equivalent of `/etc/services`: `drivers\etc\services`
-/// in the system folder, which is asked of Windows (`GetSystemDirectoryW`), not assumed.
+/// in the system directory, which is asked of Windows (`GetSystemDirectoryW`), not assumed.
 #[must_use]
 pub fn services_file() -> Option<std::path::PathBuf> {
     use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;

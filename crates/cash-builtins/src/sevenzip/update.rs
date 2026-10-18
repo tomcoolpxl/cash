@@ -175,7 +175,7 @@ impl Item {
     }
 }
 
-/// Counts of folders, files and bytes, and of anti-items (`CDirItemsStat2`).
+/// Counts of directories, files and bytes, and of anti-items (`CDirItemsStat2`).
 #[derive(Default, Clone, Copy)]
 struct Stat2 {
     dirs: u64,
@@ -207,7 +207,7 @@ impl Stat2 {
         let mut s = stat_text(self.dirs, self.files, self.size);
         let mut first = true;
         for (n, one, many) in [
-            (self.anti_dirs, "anti-folder", "anti-folders"),
+            (self.anti_dirs, "anti-directory", "anti-directories"),
             (self.anti_files, "anti-file", "anti-files"),
         ] {
             if n != 0 {
@@ -220,11 +220,11 @@ impl Stat2 {
     }
 }
 
-/// `Print_DirItemsStat`: "N folders, N files, N bytes (N KiB)".
+/// `Print_DirItemsStat`: "N directories, N files, N bytes (N KiB)".
 pub(super) fn stat_text(dirs: u64, files: u64, size: u64) -> String {
     let mut s = String::new();
     if dirs != 0 {
-        s.push_str(&text::count(dirs, "folder", "folders"));
+        s.push_str(&text::count(dirs, "directory", "directories"));
         s.push_str(", ");
     }
     s.push_str(&text::count(files, "file", "files"));
@@ -276,7 +276,7 @@ fn progress<SE: cash_core::ShellExtensions>(
     console.progress_item(mark, name, logged);
 }
 
-/// `ScanProgress`: the items and bytes found so far, and the folder being looked in.
+/// `ScanProgress`: the items and bytes found so far, and the directory being looked in.
 pub(super) fn scan_progress<SE: cash_core::ShellExtensions>(
     console: &Console<'_, SE>,
     stat: &Stat,
@@ -492,7 +492,7 @@ fn produce(
 }
 
 /// `CRenamePair::GetNewPath`: the new name `old` → `new` gives `name`, if it speaks of
-/// it: the item itself, or what is under the folder it names.
+/// it: the item itself, or what is under the directory it names.
 fn renamed(old: &str, new: &str, name: &str, is_dir: bool, case: bool) -> Option<String> {
     let old_chars: Vec<char> = old.chars().collect();
     let name_chars: Vec<char> = name.chars().collect();
@@ -830,7 +830,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
     let update = options.update.as_ref();
     if meta.is_dir() {
         return Ok(Err(ErrorInfo {
-            message: "There is a folder with the name of archive".to_owned(),
+            message: "There is a directory with the name of archive".to_owned(),
             files: vec![arc_name.to_owned()],
             code: win::ACCESS_DENIED,
             system: true,
@@ -961,7 +961,7 @@ fn report_scan_warnings<SE: cash_core::ShellExtensions>(
     if warnings.scan.is_empty() {
         return;
     }
-    let mut s = String::from("\nScan WARNINGS for files and folders:\n\n");
+    let mut s = String::from("\nScan WARNINGS for files and directories:\n\n");
     for (path, error) in &warnings.scan {
         let _ = writeln!(s, "{path} : {}", text::system_message(error));
     }
@@ -1002,7 +1002,7 @@ pub(super) fn warnings_check<SE: cash_core::ShellExtensions>(
 }
 
 /// Where the new archive is written before it replaces the old: beside it, or in
-/// `-w`'s folder, as `name.tmp`, `name.tmp1` and on.
+/// `-w`'s directory, as `name.tmp`, `name.tmp1` and on.
 fn temp_name<SE: cash_core::ShellExtensions>(
     env: &Env<'_, SE>,
     working_dir: Option<&str>,
@@ -1046,7 +1046,7 @@ fn set_latest_mtime(path: &Path, dir_items: &[DirItem], arc_items: &[ArcItem], p
     }
 }
 
-/// `-sdel`: the files taken in, then their folders when empty, deepest first.
+/// `-sdel`: the files taken in, then their directories when empty, deepest first.
 fn delete_after<SE: cash_core::ShellExtensions>(
     options: &Options,
     console: &Console<'_, SE>,
@@ -1270,7 +1270,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
             accessed: true,
         });
 
-        // Items without data first: folders, empty files, anti-items.
+        // Items without data first: directories, empty files, anti-items.
         let mut empty: Vec<usize> = (0..items.len())
             .filter(|&i| {
                 let item = &items[i];
@@ -1670,8 +1670,8 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         item
     }
 
-    /// `CompareEmptyItems`: folders, then files, then anti-files, then anti-folders,
-    /// by name (anti-folders the other way round).
+    /// `CompareEmptyItems`: directories, then files, then anti-files, then anti-directories,
+    /// by name (anti-directories the other way round).
     fn compare_empty(&self, a: &Item, b: &Item) -> Ordering {
         if a.is_anti != b.is_anti {
             return if a.is_anti {
@@ -2204,16 +2204,19 @@ mod tests {
     }
 
     #[test]
-    fn renaming_takes_a_folder_and_what_is_under_it() {
+    fn renaming_takes_a_directory_and_what_is_under_it() {
         assert_eq!(
-            renamed("d/sub", "d/folder", "d/sub", true, false).as_deref(),
-            Some("d/folder")
+            renamed("d/sub", "d/directory", "d/sub", true, false).as_deref(),
+            Some("d/directory")
         );
         assert_eq!(
-            renamed("d/sub", "d/folder", "d/sub/b.txt", false, false).as_deref(),
-            Some("d/folder/b.txt")
+            renamed("d/sub", "d/directory", "d/sub/b.txt", false, false).as_deref(),
+            Some("d/directory/b.txt")
         );
-        assert_eq!(renamed("d/sub", "d/folder", "d/subway", false, false), None);
+        assert_eq!(
+            renamed("d/sub", "d/directory", "d/subway", false, false),
+            None
+        );
         assert_eq!(
             renamed("D\\A.TXT", "x", "d/a.txt", false, false).as_deref(),
             Some("x")

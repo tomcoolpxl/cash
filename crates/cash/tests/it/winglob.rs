@@ -2,7 +2,7 @@
 //!
 //! cmd never expands a wildcard, so every program in `System32` reads `*` and `?` itself
 //! when it wants them, or means something else by them: `net user NAME *` asks for the
-//! password, and bash's globbing hands `net` the folder's file names instead. With
+//! password, and bash's globbing hands `net` the directory's file names instead. With
 //! `winglob`, the words after such a program are not pathname-expanded. It is on by
 //! default at the interactive prompt and off in scripts, which keep bash's globbing.
 
@@ -17,7 +17,7 @@ use std::process::Stdio;
 
 use crate::common::{Scratch, cash_command, git_for_windows};
 
-/// What `cash -c script` prints, run in a folder of its own holding `a.txt` and `b.txt`;
+/// What `cash -c script` prints, run in a directory of its own holding `a.txt` and `b.txt`;
 /// `interactive` makes it the shell of a prompt (`-i`), reading no startup file. cmd's
 /// `echo` ends its line with CRLF; the lines are joined with LF here.
 fn among_two_files(interactive: bool, script: &str) -> String {

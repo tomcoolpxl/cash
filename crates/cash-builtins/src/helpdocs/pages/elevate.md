@@ -9,7 +9,7 @@ in this terminal, and the command's status, use `sudo`.
 
 ## Windows notes
 
-- The command starts in the shell's folder and is found as the shell would run it (a
+- The command starts in the shell's directory and is found as the shell would run it (a
   script runs through cash), but from your own environment: UAC passes on none of the
   shell's variables.
 - It is not waited for, so `elevate`'s status says only that the command started, not

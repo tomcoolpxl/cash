@@ -75,13 +75,13 @@ an entry or page names no builtin.
 - `abbr`: Manage fish-style abbreviations, expanded as you type.
 - `cashctl`: Inspect and configure the running shell.
 - `cashinfo`: Inspect and configure the running shell (the same as `cashctl`).
-- `cdh`: Choose a recent folder to go to.
-- `croot`: Pick a file or folder in a tree, and print it (Alt-E opens it on the command line).
+- `cdh`: Choose a recent directory to go to.
+- `croot`: Pick a file or directory in a tree, and print it (Alt-E opens it on the command line).
 - `coolfetch`: Show a banner about this machine and cash.
-- `nextd`: Go forward through the folder history.
-- `prevd`: Go back through the folder history.
+- `nextd`: Go forward through the directory history.
+- `prevd`: Go back through the directory history.
 - `which`: Say what cash would run for a name, as a runnable path.
-- `z`: Jump to a folder you often go to, from a word of its path.
+- `z`: Jump to a directory you often go to, from a word of its path.
 
 ## Terminal and clipboard
 
@@ -97,13 +97,13 @@ an entry or page names no builtin.
 
 - `detach`: Start a command that outlives the shell.
 - `elevate`: Run a command elevated, in a new window, through UAC.
-- `start`: Open a file, folder or URL with its default program.
+- `start`: Open a file, directory or URL with its default program.
 - `su`: Start a shell or run a command as another user, or elevated.
 - `sudo`: Run a command elevated, or as another user, in this terminal.
 - `sudoedit`: Edit files you may not write: your editor on copies, written back elevated.
-- `where`: Find files by pattern on `PATH` or in folders, as Windows' `where.exe` does.
+- `where`: Find files by pattern on `PATH` or in directories, as Windows' `where.exe` does.
 - `winpath`: Convert a path between Windows and Unix spellings.
-- `xdg-open`: Open a file, folder or URL with its default program (`start`, under the name scripts try first).
+- `xdg-open`: Open a file, directory or URL with its default program (`start`, under the name scripts try first).
 
 ## Processes and network
 
@@ -137,11 +137,11 @@ an entry or page names no builtin.
 - `bzip2`: Compress files to `.bz2` in place, or uncompress them, with bzip2's flags.
 - `cmp`: Compare two files byte by byte, and say where they first differ.
 - `column`: Lay a list out in columns, or align a table on a separator.
-- `diff`: Compare two files line by line, or two folders file by file.
+- `diff`: Compare two files line by line, or two directories file by file.
 - `dos2unix`: Convert CRLF line endings to LF.
 - `egrep`: Print the lines that match an extended regular expression: `grep -E`.
 - `fgrep`: Print the lines that contain a fixed string: `grep -F`.
-- `find`: Search a folder tree for files that match an expression.
+- `find`: Search a directory tree for files that match an expression.
 - `getopt`: Parse command options for a script, util-linux style.
 - `grep`: Print the lines of files that match a pattern, with GNU grep's options.
 - `gunzip`: Uncompress `.gz` files in place: `gzip -d`.
@@ -156,7 +156,7 @@ an entry or page names no builtin.
 - `rev`: Reverse the characters of each line.
 - `sed`: Edit a stream of text with a script: substitute, delete, insert.
 - `tar`: Pack files into an archive, or list or unpack one, with GNU tar's options.
-- `tree`: Show a folder hierarchy as a tree.
+- `tree`: Show a directory hierarchy as a tree.
 - `unix2dos`: Convert LF line endings to CRLF.
 - `unlzma`: Uncompress `.lzma` files in place: `xz --format=lzma -d`.
 - `unrar`: List, test or extract a RAR archive, with unrar's commands and switches.
@@ -187,7 +187,7 @@ an entry or page names no builtin.
 - `install`: Copy files and set their attributes.
 - `locale`: Show the locale: the `LANG` and `LC_*` view, and the locales by name.
 - `logname`: Print the user's login name.
-- `ls`: List folder contents, with colours, icons and a tree.
+- `ls`: List directory contents, with colours, icons and a tree.
 - `mkfifo`: Make a named pipe; refused, with the way to a pipe in cash.
 - `pinky`: Show brief information about users.
 - `stat`: Show a file's status: size, times, links, attributes.
@@ -202,18 +202,18 @@ an entry or page names no builtin.
 - `b2sum`: Print or check BLAKE2b checksums.
 - `base32`: Encode or decode base32 data.
 - `base64`: Encode or decode base64 data.
-- `basename`: Strip the folder part, and optionally a suffix, from a path.
+- `basename`: Strip the directory part, and optionally a suffix, from a path.
 - `basenc`: Encode or decode data in one of several bases.
 - `cat`: Concatenate files to standard output.
 - `cksum`: Print the CRC checksum and size of files.
 - `comm`: Compare two sorted files line by line.
-- `cp`: Copy files and folders.
+- `cp`: Copy files and directories.
 - `csplit`: Split a file into sections at context lines.
 - `cut`: Print selected parts of each line.
 - `date`: Print or set the date and time.
 - `dd`: Copy a file, converting and formatting it.
 - `df`: Show free disk space on file systems.
-- `dir`: List folder contents (`ls -C -b`).
+- `dir`: List directory contents (`ls -C -b`).
 - `dircolors`: Print commands that set `LS_COLORS`.
 - `dirname`: Strip the last component from a path.
 - `du`: Estimate file space usage.
@@ -228,8 +228,8 @@ an entry or page names no builtin.
 - `link`: Make a hard link to a file.
 - `ln`: Make links between files: symbolic links, junctions or hard links.
 - `md5sum`: Print or check MD5 checksums.
-- `mkdir`: Make folders.
-- `mktemp`: Make a temporary file or folder and print its name.
+- `mkdir`: Make directories.
+- `mktemp`: Make a temporary file or directory and print its name.
 - `mv`: Move or rename files.
 - `nl`: Number the lines of files.
 - `nproc`: Print the number of processors available.
@@ -242,8 +242,8 @@ an entry or page names no builtin.
 - `ptx`: Produce a permuted index of file contents.
 - `readlink`: Print a link's target, or a canonical file name.
 - `realpath`: Print the resolved, absolute path.
-- `rm`: Remove files or folders.
-- `rmdir`: Remove empty folders.
+- `rm`: Remove files or directories.
+- `rmdir`: Remove empty directories.
 - `seq`: Print a sequence of numbers.
 - `sha1sum`: Print or check SHA-1 checksums.
 - `sha224sum`: Print or check SHA-224 checksums.
@@ -270,7 +270,7 @@ an entry or page names no builtin.
 - `uniq`: Report or omit repeated adjacent lines.
 - `unlink`: Remove one file.
 - `uptime`: Show how long the system has been running.
-- `vdir`: List folder contents in long form (`ls -l -b`).
+- `vdir`: List directory contents in long form (`ls -l -b`).
 - `wc`: Count lines, words and bytes.
 - `whoami`: Print the current user's name.
 - `yes`: Print a line over and over until killed.

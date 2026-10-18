@@ -182,7 +182,7 @@ crossterm = { workspace = true }
 lscolors = "0.21.0"
 nu-ansi-term = { workspace = true }
 unicode-width = { workspace = true }
-# The folder walks the builtins share (`walk.rs`): loops found by file identity, links
+# The directory walks the builtins share (`walk.rs`): loops found by file identity, links
 # followed or not, order, depth, one file system. Already in the tree, through `ignore`.
 walkdir = "2.5.0"
 # `uuidgen`: every version util-linux's makes (v1, v3, v4, v5, v6, v7).

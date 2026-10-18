@@ -365,7 +365,7 @@ mod tests {
             "\n PATHS\n   cash prints paths as C:/Users/me, and every program understands them.",
             "\n   cd C:/Users/me/src             forward slashes need no quotes",
             "\n   cd /c/Users/me                 the /c/ form works too\n",
-            "\n\n KEYS\n   Alt-E                          pick a file or folder",
+            "\n\n KEYS\n   Alt-E                          pick a file or directory",
             "\n   Ctrl-X Ctrl-E                  edit the line in $EDITOR\n",
             "\n\n MORE\n   Bash scripts run as they are; ls, awk, sed, find and 200 tools are built in.",
             "\n   help NAME                      help for one command\n",

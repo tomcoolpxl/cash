@@ -8,7 +8,7 @@
 //!
 //! * files come from the Restart Manager; a directory from the handle walk and the
 //!   module lists (`fileuse::held_below`): `fuser DIR` reports the holders of the files
-//!   below it, as a folder that is only a working directory cannot be told apart;
+//!   below it, as a directory that is only a working directory cannot be told apart;
 //! * whether a file is open for writing is not reported, so `f` is never `F` for files
 //!   and `-w` is refused; `-m`/`-c`/`-M` (mount points) are refused too;
 //! * `e` (executable) and `m` (loaded module) come from each process's image and module

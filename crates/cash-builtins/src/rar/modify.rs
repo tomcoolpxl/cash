@@ -244,13 +244,13 @@ fn restore_metadata<SE: cash_core::ShellExtensions>(
         return Ok(());
     }
     let target = found.path.with_file_name(&saved);
-    // The folder the archive was named in, as it was named.
-    let folder = found
+    // The directory the archive was named in, as it was named.
+    let directory = found
         .display
         .rfind('/')
         .and_then(|slash| found.display.get(..=slash))
         .unwrap_or_default();
-    let shown = format!("{folder}{saved}");
+    let shown = format!("{directory}{saved}");
     if std::fs::symlink_metadata(&target).is_ok() {
         let switches = &rar.switches;
         let replace = if switches.yes {
@@ -268,7 +268,7 @@ fn restore_metadata<SE: cash_core::ShellExtensions>(
                     rar.console.err(&format!(
                         "\nCannot rename {} to {}{stem}(1){extension}\nThe system cannot find the file specified.",
                         found.display,
-                        folder
+                        directory
                     ));
                     false
                 }
@@ -379,7 +379,7 @@ fn comment_write<SE: cash_core::ShellExtensions>(
 }
 
 /// `rn`'s pairs as the archive's renames, each shown as rar shows it: the name typed,
-/// then the new one. A folder renamed takes what it holds with it.
+/// then the new one. A directory renamed takes what it holds with it.
 fn renames<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     opened: &open::Opened,
@@ -391,7 +391,7 @@ fn renames<SE: cash_core::ShellExtensions>(
         let name = add::member_name(&member);
         for (from, to) in pairs {
             if let Some(new) = renamed(from, to, &name) {
-                // rar names what the mask matched: the file a wildcard does, the folder
+                // rar names what the mask matched: the file a wildcard does, the directory
                 // named for what is in it.
                 let old = if open::has_wildcard(from) {
                     &name
@@ -434,7 +434,7 @@ fn stored(name: &str, legacy: bool) -> Vec<u8> {
     }
 }
 
-/// The name `name` takes from `rn FROM TO`: a plain FROM the name itself or a folder of
+/// The name `name` takes from `rn FROM TO`: a plain FROM the name itself or a directory of
 /// it, a wildcard FROM matched a part at a time, each `*` and `?` of TO filled with
 /// what FROM's matched.
 fn renamed(from: &str, to: &str, name: &str) -> Option<String> {
@@ -607,7 +607,7 @@ mod tests {
     use super::renamed;
 
     #[test]
-    fn rn_renames_by_name_folder_and_wildcard() {
+    fn rn_renames_by_name_directory_and_wildcard() {
         assert_eq!(
             renamed("src/a.txt", "src/z.txt", "src/a.txt").as_deref(),
             Some("src/z.txt")

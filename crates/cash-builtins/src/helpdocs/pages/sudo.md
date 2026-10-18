@@ -7,8 +7,8 @@ see: su sudoedit elevate elevation id
 `sudo winget upgrade --all`, `echo '127.0.0.1 dev' | sudo tee -a
 C:/Windows/System32/drivers/etc/hosts`.
 
-- `-i`: a login shell in the account's home folder, or COMMAND run by one. `-s`: a shell
-  in this folder, or COMMAND run by one. The shell is always a new cash: Windows raises
+- `-i`: a login shell in the account's home directory, or COMMAND run by one. `-s`: a shell
+  in this directory, or COMMAND run by one. The shell is always a new cash: Windows raises
   no process that is already running.
 - `-u USER`: as that account, at its usual level, not elevated; its password is asked
   for. `-u root` is plain elevation.
@@ -43,8 +43,8 @@ that is already elevated, the command simply runs here.
   files and ~ are theirs`.
 - Declining UAC's prompt, or leaving it until it gives up, runs nothing: `sudo: not
   run: the request to run it as an administrator was declined`, status 1.
-- In a folder on a mapped network drive, the elevated command still finds it, by the
-  folder's network path. An elevated process, or another account's, has none of your
+- In a directory on a mapped network drive, the elevated command still finds it, by the
+  directory's network path. An elevated process, or another account's, has none of your
   drive letters.
 - `sudo -u USER` is refused before any password is asked when that account cannot read
   the program: cash installed under `~/scoop` is readable only by you and the

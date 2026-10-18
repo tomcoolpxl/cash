@@ -55,7 +55,7 @@ pub fn accept(input: &str) -> Target {
 /// The `/dev/*` mappings that D7 keeps always on.
 ///
 /// A device is named by the spelling alone, so the name has to be rooted at `/`:
-/// `dev/null` is a file in a folder called `dev`, and so is `C:/dev/null`. What a
+/// `dev/null` is a file in a directory called `dev`, and so is `C:/dev/null`. What a
 /// filesystem would read as the same name is accepted as that name — `/dev//null`,
 /// `/dev/./null`, either separator (D3) — because `"$dir/null"` with `dir=/dev/` writes
 /// the first. `//dev/null` is not: two leading slashes are a UNC path.
@@ -207,12 +207,12 @@ pub fn reentry_command(tool: &str) -> std::process::Command {
 /// (`SetCurrentDirectoryW`). Long-path support does not lift it for a new process.
 pub const MAX_PROCESS_DIRECTORY: usize = 258;
 
-/// The folder to start a program in for the shell's working directory `dir`.
+/// The directory to start a program in for the shell's working directory `dir`.
 ///
-/// Windows starts no process in a folder whose path is longer than
+/// Windows starts no process in a directory whose path is longer than
 /// [`MAX_PROCESS_DIRECTORY`], long-path support or not, and says only "The directory name is
 /// invalid", which reached the user as `C:\…\cash.exe: Not a directory` for every
-/// program, cash's bundled tools included. Such a folder is given by its 8.3 short name
+/// program, cash's bundled tools included. Such a directory is given by its 8.3 short name
 /// (`C:\…\CASH-L~2\AAAAAA~1`), which Windows keeps on most volumes and which usually
 /// fits; the program sees that spelling as its working directory, and relative paths
 /// mean what they meant. Where there is none short enough, the error says why (the user,
@@ -220,7 +220,7 @@ pub const MAX_PROCESS_DIRECTORY: usize = 258;
 ///
 /// # Errors
 ///
-/// The folder is too long and has no short name that fits.
+/// The directory is too long and has no short name that fits.
 pub fn process_directory(dir: &Path) -> std::io::Result<PathBuf> {
     let text = dir.to_string_lossy();
     let plain = text
@@ -243,7 +243,7 @@ pub fn process_directory(dir: &Path) -> std::io::Result<PathBuf> {
     )))
 }
 
-/// The 8.3 short form of the folder `plain` (backslashes, no `\\?\`), without `\\?\`.
+/// The 8.3 short form of the directory `plain` (backslashes, no `\\?\`), without `\\?\`.
 #[must_use]
 pub fn short_name(plain: &str) -> Option<String> {
     use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;

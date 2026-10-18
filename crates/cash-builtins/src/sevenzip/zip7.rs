@@ -46,7 +46,7 @@ pub(super) struct Zip {
 /// The properties a technical listing shows for a zip item, in 7-Zip's order.
 pub(super) const ITEM_PROPS: [Prop; 17] = [
     Prop::Path,
-    Prop::Folder,
+    Prop::Directory,
     Prop::Size,
     Prop::PackedSize,
     Prop::Modified,
@@ -208,7 +208,7 @@ fn host_name(host: u8) -> String {
 }
 
 /// `CItem::IsDir`: a name ending in `/`, a FAT name ending in `\` with nothing in it,
-/// or the host's folder attribute.
+/// or the host's directory attribute.
 fn is_dir(entry: &Entry) -> bool {
     if entry.name.last() == Some(&b'/') {
         return true;
@@ -228,7 +228,7 @@ fn is_dir(entry: &Entry) -> bool {
 }
 
 /// `CItem::GetWinAttrib`: FAT's and NTFS's attributes, Unix's mode with 7-Zip's
-/// marker, and the folder bit.
+/// marker, and the directory bit.
 fn win_attrib(entry: &Entry) -> u32 {
     let mut attrib = match entry.host() {
         0 | 11 => entry.external_attributes,
@@ -366,7 +366,7 @@ fn characteristics(entry: &Entry, local: bool) -> String {
     s.join(" ")
 }
 
-/// Whether the item has a CRC to show (`IsThereCrc`): AES's AE-2 has none; a folder's
+/// Whether the item has a CRC to show (`IsThereCrc`): AES's AE-2 has none; a directory's
 /// zero is none.
 fn has_crc(entry: &Entry) -> bool {
     if entry.method == 99
@@ -834,7 +834,10 @@ fn listed_item(
         characts.push_str(" Descriptor_ERROR");
     }
     item.extra = vec![
-        (Prop::Folder, if item.is_dir { "+" } else { "-" }.to_owned()),
+        (
+            Prop::Directory,
+            if item.is_dir { "+" } else { "-" }.to_owned(),
+        ),
         (
             Prop::Comment,
             String::from_utf8_lossy(&entry.comment).replace(['\n', '\r'], "_"),

@@ -1,5 +1,5 @@
 //! What the builtins that read GNU's options share beside cash-getopt (decisions.md,
-//! "Builtins share their option parsing, input opening and folder walks"): when the
+//! "Builtins share their option parsing, input opening and directory walks"): when the
 //! options end, and the line a usage error is said with.
 
 use std::fmt::Display;

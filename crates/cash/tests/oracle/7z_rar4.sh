@@ -184,7 +184,7 @@ for a in rar15_40/encrypted/rar4_junrar_password.rar; do
   z t -pjunrar "$a"
 done
 
-# `x` into a folder of its own, then each file it holds and its CRC.
+# `x` into a directory of its own, then each file it holds and its CRC.
 xt() {
   rm -rf out
   z x -y -oout "$@"

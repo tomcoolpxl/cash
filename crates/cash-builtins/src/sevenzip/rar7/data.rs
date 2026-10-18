@@ -293,7 +293,7 @@ pub(super) fn plan5(rar: &rar5::Rar5, wanted: &dyn Fn(usize) -> bool, testing: b
         }
     }
     // Extracting, an item not wanted is decoded when the next file's stream goes on
-    // from it (`needCallback`); a folder is always shown.
+    // from it (`needCallback`); a directory is always shown.
     let next_solid = |index: usize| {
         (index + 1..count)
             .map(item)

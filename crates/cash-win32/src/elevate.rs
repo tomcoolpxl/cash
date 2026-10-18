@@ -84,9 +84,9 @@ fn handle_word(handle: HANDLE) -> String {
     }
 }
 
-/// The folder to start in: this process's, a mapped drive's by its network path, as the
+/// The directory to start in: this process's, a mapped drive's by its network path, as the
 /// started cash has none of the user's drive letters.
-fn start_folder() -> PathBuf {
+fn start_directory() -> PathBuf {
     let dir = std::env::current_dir().unwrap_or_default();
     if crate::path::is_on_network(&dir) {
         crate::path::universal_name(&dir).map_or(dir, PathBuf::from)
@@ -95,7 +95,7 @@ fn start_folder() -> PathBuf {
     }
 }
 
-/// Folders any account may start in, when USER cannot use the shell's, best first: the
+/// Directories any account may start in, when USER cannot use the shell's, best first: the
 /// system temp (`%SystemRoot%\Temp`, where every account may create and traverse), then the
 /// system drive's root as a last resort. Tried in turn, as the temp's access may be
 /// tightened on some machines.
@@ -187,7 +187,7 @@ pub fn run_elevated_here(own: &Path, command: &[OsString]) -> i32 {
     // SAFETY: `ignore` is a valid handler for the life of the process and touches nothing.
     unsafe { SetConsoleCtrlHandler(Some(ignore), TRUE) };
 
-    let dir = start_folder();
+    let dir = start_directory();
     let parameters = attach_parameters(&dir, command);
     let process =
         match crate::shellopen::start_elevated_hidden(&own.to_string_lossy(), &parameters, &dir) {
@@ -233,7 +233,7 @@ pub fn run_as_user_here(own: &Path, who: &str, user: &str, command: &[OsString])
     // another account may not do. A redirected standard handle is handed over by inheritance
     // (`start_as`); a console handle becomes a pipe that this process relays to and from the
     // real console, since another account cannot attach to it.
-    let dir = start_folder();
+    let dir = start_directory();
     let own_text = own.to_string_lossy();
     let (handles, mask) = std_handles_and_mask();
     let mut words = vec![own_text.clone().into_owned(), "--invoke-bundled".to_owned()];
@@ -254,8 +254,8 @@ pub fn run_as_user_here(own: &Path, who: &str, user: &str, command: &[OsString])
         );
         return 1;
     }
-    // The shell's folder is often under the caller's profile, which USER cannot enter, and
-    // `CreateProcessWithLogonW` then fails with ERROR_DIRECTORY. Fall back to a folder every
+    // The shell's directory is often under the caller's profile, which USER cannot enter, and
+    // `CreateProcessWithLogonW` then fails with ERROR_DIRECTORY. Fall back to a directory every
     // account may use, and say which, rather than refuse the command.
     let mut started = start_as(
         &own_text,
@@ -279,7 +279,7 @@ pub fn run_as_user_here(own: &Path, who: &str, user: &str, command: &[OsString])
             );
             if started.is_ok() {
                 eprintln!(
-                    "{who}: {user} cannot use {} as the folder; running in {}",
+                    "{who}: {user} cannot use {} as the directory; running in {}",
                     crate::path::render(&dir),
                     crate::path::render(&fallback)
                 );
@@ -611,13 +611,13 @@ pub struct Caller<'a> {
     pub attach: &'a OsString,
     /// Its standard handles: `c` for the console, `-` for none, else a value in the caller.
     pub handles: [&'a OsString; 3],
-    /// Its folder.
+    /// Its directory.
     pub dir: &'a OsString,
 }
 
 /// The elevated side: takes the caller's console and handles as this process's own.
 ///
-/// It also changes to the caller's folder, and ends this process when the caller ends.
+/// It also changes to the caller's directory, and ends this process when the caller ends.
 /// On failure, the status to end with, which the caller turns into a message.
 ///
 /// # Errors

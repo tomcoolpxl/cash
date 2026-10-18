@@ -27,7 +27,7 @@ miniz_oxide, about fifteen percent larger than GNU gzip's `-1`.
   unchanged without `-f`, as GNU gzip leaves it; cash's own tool links are hard links.
 - Windows has no mode bits: a read-only input gives a read-only output, and that is
   all. The header's OS byte says Unix, as Git for Windows' gzip writes it.
-- `-r` reads a folder in name order. `-l -v` shows dates in the zone `TZ` names, else
+- `-r` reads a directory in name order. `-l -v` shows dates in the zone `TZ` names, else
   Windows' own.
 - compress (`.Z`), pack, lzh and zip data is refused by name, not uncompressed: cash
   carries deflate only. `tar.exe` reads a `.tar.Z`.

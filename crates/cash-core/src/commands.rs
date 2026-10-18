@@ -406,7 +406,7 @@ impl<SE: extensions::ShellExtensions> std::ops::DerefMut for ShellForCommand<'_,
     }
 }
 
-/// Writes the PowerShell runner script to the temp folder if it is not there yet, and
+/// Writes the PowerShell runner script to the temp directory if it is not there yet, and
 /// returns its path.
 fn ensure_ps_runner() -> Result<PathBuf, error::Error> {
     let runner_path = std::env::temp_dir().join("cash_ps_runner.ps1");
@@ -427,13 +427,13 @@ if ($LASTEXITCODE -ne $null) {\r\n\
     Ok(runner_path)
 }
 
-/// The PowerShell found for the `PATH` and folder last asked about, with them: each `.ps1`
+/// The PowerShell found for the `PATH` and directory last asked about, with them: each `.ps1`
 /// run walked `PATH` for `pwsh`, then `powershell`, again.
 static POWERSHELL_FOUND: std::sync::Mutex<Option<(String, PathBuf, PathBuf)>> =
     std::sync::Mutex::new(None);
 
 /// The PowerShell a script is run by: `pwsh`, else Windows' `powershell`, on `PATH`; found
-/// again only when `PATH` or the folder has changed, or the one found has gone.
+/// again only when `PATH` or the directory has changed, or the one found has gone.
 fn find_powershell_binary<SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
 ) -> PathBuf {
@@ -442,11 +442,11 @@ fn find_powershell_binary<SE: extensions::ShellExtensions>(
         .env()
         .get_str("PATH", context.shell)
         .unwrap_or_default();
-    let folder = context.shell.working_dir();
+    let directory = context.shell.working_dir();
     if let Ok(found) = POWERSHELL_FOUND.lock()
         && let Some((path, dir, exe)) = found.as_ref()
         && **path == *path_var
-        && dir == folder
+        && dir == directory
         && exe.is_file()
     {
         return exe.clone();
@@ -457,14 +457,14 @@ fn find_powershell_binary<SE: extensions::ShellExtensions>(
         .map(|s| (*s).to_string())
         .collect();
     let found = ["pwsh", "powershell"].into_iter().find_map(|name| {
-        cash_win32::resolve::resolve(name, &path_entries, &pathext, folder)
+        cash_win32::resolve::resolve(name, &path_entries, &pathext, directory)
             .map(|d| d.target().to_path_buf())
     });
     let Some(exe) = found else {
         return PathBuf::from("powershell.exe");
     };
     if let Ok(mut remembered) = POWERSHELL_FOUND.lock() {
-        *remembered = Some((path_var.into_owned(), folder.to_path_buf(), exe.clone()));
+        *remembered = Some((path_var.into_owned(), directory.to_path_buf(), exe.clone()));
     }
     exe
 }
@@ -474,7 +474,7 @@ fn find_powershell_binary<SE: extensions::ShellExtensions>(
 struct Extras {
     /// The script a PowerShell runner starts, passed as `CASH_PS_SCRIPT`.
     ps_script: Option<String>,
-    /// What a `#!/usr/bin/env` line changes in the environment and folder (W32-08).
+    /// What a `#!/usr/bin/env` line changes in the environment and directory (W32-08).
     env: crate::shebang_env::EnvChanges,
 }
 
@@ -485,7 +485,7 @@ fn build_powershell_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     args: &[S],
 ) -> Result<(std::process::Command, Extras), error::Error> {
     let pwsh_bin = find_powershell_binary(context);
-    // process state: the shell's spawn layer, which sets the folder and environment.
+    // process state: the shell's spawn layer, which sets the directory and environment.
     let mut c = std::process::Command::new(pwsh_bin);
     c.arg("-NoProfile")
         .arg("-NonInteractive")
@@ -544,7 +544,7 @@ fn build_batch_command<S: AsRef<OsStr>>(
 ) -> std::process::Command {
     use std::os::windows::process::CommandExt as _;
 
-    // process state: the shell's spawn layer, which sets the folder and environment.
+    // process state: the shell's spawn layer, which sets the directory and environment.
     let mut c = std::process::Command::new(comspec);
     c.arg0(argv0);
     c.arg("/d").arg("/s").arg("/c");
@@ -575,7 +575,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 ) -> Result<(std::process::Command, Extras), error::Error> {
     // The interpreter is handed the script as it was typed, as the kernel hands
     // it: `./s` stays `./s` for `$0` and `sys.argv[0]`, and the interpreter starts
-    // in the shell's folder. The shell has made it absolute by now (D10), and a
+    // in the shell's directory. The shell has made it absolute by now (D10), and a
     // path spelled whole or found on `PATH` is given in cash's spelling (D3);
     // `PATH`'s join left a `\` in it.
     let typed = context.command_name.as_str();
@@ -629,7 +629,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     let (command, extras) = match dispatch {
         cash_win32::resolve::Dispatch::Exit(code) => {
             let own = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
-            // process state: cash re-entering itself, in the shell's folder and environment.
+            // process state: cash re-entering itself, in the shell's directory and environment.
             let mut c = std::process::Command::new(own);
             c.arg("-c").arg(format!("exit {code}"));
             Ok((c, Extras::default()))
@@ -640,7 +640,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         cash_win32::resolve::Dispatch::Batch(ref batch_target) => {
             use std::os::windows::process::CommandExt as _;
 
-            // process state: the shell's spawn layer, which sets the folder and environment.
+            // process state: the shell's spawn layer, which sets the directory and environment.
             let mut c = std::process::Command::new(comspec(context.shell));
             c.arg0(argv0);
             c.arg("/d").arg("/s").arg("/c");
@@ -657,7 +657,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             Ok((c, Extras::default()))
         }
         cash_win32::resolve::Dispatch::Native(ref target) => {
-            // process state: the shell's spawn layer, which sets the folder and environment.
+            // process state: the shell's spawn layer, which sets the directory and environment.
             let mut c = std::process::Command::new(target);
             c.arg0(argv0);
             // `#!/bin/sh` runs cash in POSIX mode, as it runs Bash (the user, 2026-10-04).
@@ -674,7 +674,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             Ok((c, Extras::default()))
         }
         cash_win32::resolve::Dispatch::Shebang { .. } => {
-            // process state: the shell's spawn layer, which sets the folder and environment.
+            // process state: the shell's spawn layer, which sets the directory and environment.
             let mut c = std::process::Command::new(script);
             c.arg0(argv0);
             c.args(args);
@@ -746,7 +746,7 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             &context.shell.pathext(),
             context.shell.working_dir(),
         );
-        // process state: the shell's spawn layer, which sets the folder and environment.
+        // process state: the shell's spawn layer, which sets the directory and environment.
         let mut c = std::process::Command::new(command_name);
         c.arg0(argv0);
         cash_win32::msys::add_args(&mut c, target.as_deref(), args);
@@ -758,7 +758,7 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         // begins with it, and `cmd.exe` reads a `/` there as a switch, so
         // `C:/Windows/System32/cmd.exe /c …` failed with "cannot be created".
         cash_win32::resolve::Dispatch::Native(_) => {
-            // process state: the shell's spawn layer, which sets the folder and environment.
+            // process state: the shell's spawn layer, which sets the directory and environment.
             let mut c = std::process::Command::new(cash_win32::path::to_backslash(&candidate));
             c.arg0(argv0);
             push_native_args(&mut c, &candidate, args);
@@ -787,7 +787,7 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         ),
         cash_win32::resolve::Dispatch::Exit(code) => {
             let own = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
-            // process state: cash re-entering itself, in the shell's folder and environment.
+            // process state: cash re-entering itself, in the shell's directory and environment.
             let mut c = std::process::Command::new(own);
             c.arg("-c").arg(format!("exit {code}"));
             Ok((c, Extras::default()))
@@ -1053,7 +1053,7 @@ pub struct SimpleCommand<'a, SE: extensions::ShellExtensions> {
 /// (D5), contained in a job (D6).
 ///
 /// Before this, each such builtin started its programs through the standard library with
-/// the process's folder, environment and `PATH`, so `export` and `cd` did not reach them
+/// the process's directory, environment and `PATH`, so `export` and `cd` did not reach them
 /// and `npm` (a `.cmd`) was not found (`REVIEW_REPORT.md` XC-1).
 ///
 /// A command that cannot be found or started is an error, as it is to the shell; the
@@ -1524,7 +1524,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         // cash (D10): a relative path — `./build.exe`, `sub/tool`, a relative `PATH`
         // entry — is the shell's working directory's, which is not the process's: cash
         // never changes its own. Windows resolves a relative program name against the
-        // process's folder, so `cd sub && ./tool.exe` ran the `tool.exe` of the folder cash
+        // process's directory, so `cd sub && ./tool.exe` ran the `tool.exe` of the directory cash
         // started in, or found none.
         let path = if path.is_relative() {
             shell.absolute_path(path)
@@ -1821,7 +1821,7 @@ pub(crate) fn execute_external_command(
                     Err(error::ErrorKind::CommandNotFound(context.command_name).into())
                 }
             } else {
-                // Windows refuses to start a folder as access denied; Bash says what it is.
+                // Windows refuses to start a directory as access denied; Bash says what it is.
                 let spawn_err = if Path::new(executable_path).is_dir() {
                     std::io::Error::from(std::io::ErrorKind::IsADirectory)
                 } else {

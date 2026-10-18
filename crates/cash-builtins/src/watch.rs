@@ -1051,8 +1051,8 @@ impl<'a> Watcher<'a> {
         Ok(None)
     }
 
-    /// `s`: the body as text into `watch_YYYYmmdd-HHMMSS` in the screenshots folder (`-s`)
-    /// or the working folder, numbered when the second already has one.
+    /// `s`: the body as text into `watch_YYYYmmdd-HHMMSS` in the screenshots directory (`-s`)
+    /// or the working directory, numbered when the second already has one.
     fn screenshot<SE: cash_core::ShellExtensions>(
         &mut self,
         shell: &cash_core::Shell<SE>,

@@ -84,8 +84,8 @@ pub(super) struct Entry {
     pub(super) name: String,
     pub(super) directory: bool,
     pub(super) link: Option<Link>,
-    /// Whether a symbolic link's target is a folder.
-    pub(super) link_to_folder: bool,
+    /// Whether a symbolic link's target is a directory.
+    pub(super) link_to_directory: bool,
     /// The unpacked size; `None` when the archive does not know it.
     pub(super) size: Option<u64>,
     pub(super) parts: Vec<Part>,
@@ -243,7 +243,7 @@ fn rar5(archive: &rar50::Archive, volume: usize, entries: &mut Vec<Entry>) {
             name,
             directory: header.is_directory(),
             link,
-            link_to_folder: header
+            link_to_directory: header
                 .redirection
                 .as_ref()
                 .is_some_and(|r| r.flags & 1 != 0),
@@ -320,7 +320,7 @@ fn rar4(archive: &rar15_40::Archive, volume: usize, entries: &mut Vec<Entry>) {
             name,
             directory: header.is_directory(),
             link: unix_link.then(|| Link::Unix(String::new())),
-            link_to_folder: false,
+            link_to_directory: false,
             size: Some(header.unp_size),
             parts: vec![part],
             method,
@@ -385,7 +385,7 @@ fn rar1(archive: &rar13::Archive, volume: usize, entries: &mut Vec<Entry>) {
             name,
             directory: header.file_attr & 0x10 != 0,
             link: None,
-            link_to_folder: false,
+            link_to_directory: false,
             size: Some(u64::from(header.unp_size)),
             parts: vec![part],
             method: if header.method == 0 {

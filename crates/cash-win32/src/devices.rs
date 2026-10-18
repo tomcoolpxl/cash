@@ -25,7 +25,7 @@
 //!
 //! A name is one where the shell's redirections take it (`names_under_dev` in cash-core):
 //! at `\dev` at the root, with or without a drive, so as written or as resolving it
-//! against a folder leaves it. The standard library hands `CreateFileW` `/dev/stdin` made
+//! against a directory leaves it. The standard library hands `CreateFileW` `/dev/stdin` made
 //! absolute, `\\?\C:\dev\stdin`. Deeper down (`C:/src/dev/null`) it is a file like any
 //! other.
 
@@ -201,10 +201,10 @@ impl DevName {
 ///
 /// `\dev` at the root, after any prefix (a drive, `\\?\C:`, a share), either separator,
 /// and one name under it, or `fd` and a number: as a script writes it, `/dev/null`, or as
-/// resolving it against a folder leaves it, `C:/dev/null`, or as the standard library
+/// resolving it against a directory leaves it, `C:/dev/null`, or as the standard library
 /// hands it to `CreateFileW`, `\\?\C:\dev\null`. Anywhere else (`C:/src/dev/null`), or
 /// deeper, it is a file like any other. With a separator after it, `/dev/null/`, it names
-/// a folder, which none of them is, as in Bash. The names are as Bash's own redirections
+/// a directory, which none of them is, as in Bash. The names are as Bash's own redirections
 /// take them, case and all.
 #[must_use]
 pub fn dev_name(path: &std::path::Path) -> Option<DevName> {
@@ -265,7 +265,7 @@ pub struct SocketName {
 /// The socket `path` names, if it names one: `/dev/tcp/HOST/PORT` or `/dev/udp/HOST/PORT`.
 ///
 /// The prefixes are the ones [`dev_name`] takes (`C:/dev/tcp/...` after resolving against
-/// a folder). Only a redirection asks, as in Bash: handed to a program as an argument the
+/// a directory). Only a redirection asks, as in Bash: handed to a program as an argument the
 /// name is a file that does not exist. `/dev/tcp/HOST` alone, with no port, is no socket
 /// either, and `/dev/tcp/HOST/` names port `0`, as Bash passes the empty port on.
 #[must_use]
@@ -339,7 +339,7 @@ enum Device {
 
 /// The device `name`, a path as `CreateFileW` is given it, is, if it is one. A socket
 /// name (`/dev/tcp/HOST/PORT`) is one only to a redirection; to a tool it is a file
-/// that does not exist, as in Bash, whether or not the machine has a `\dev` folder.
+/// that does not exist, as in Bash, whether or not the machine has a `\dev` directory.
 fn device(name: &str) -> Option<Device> {
     if socket_name(std::path::Path::new(name)).is_some() {
         return Some(Device::Missing);
@@ -516,7 +516,7 @@ fn duplicate_std(which: STD_HANDLE) -> HANDLE {
     }
 }
 
-/// `GetFileAttributesW`, with the `/dev` names answered: each is there, and no folder.
+/// `GetFileAttributesW`, with the `/dev` names answered: each is there, and no directory.
 unsafe extern "system" fn get_file_attributes(name: PCWSTR) -> u32 {
     // SAFETY: the caller passes a valid name, as `GetFileAttributesW` requires.
     match unsafe { device_at(name) } {
@@ -559,7 +559,7 @@ fn count(time: FILETIME) -> i64 {
 
 /// `GetFileInformationByHandle`, answering for a pipe or a device as for an empty file.
 ///
-/// A tool asks before it reads (`cat` whether its input is a folder, `cp` what kind of
+/// A tool asks before it reads (`cat` whether its input is a directory, `cp` what kind of
 /// file to copy), and failed on `/dev/stdin` and `/dev/null` as uutils does on `NUL`. The
 /// file index is the handle, so that two of them are not taken for the same file.
 unsafe extern "system" fn get_information(

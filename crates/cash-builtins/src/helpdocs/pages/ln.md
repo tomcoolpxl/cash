@@ -11,11 +11,11 @@ Windows lets an account make symbolic links only with Developer Mode on, or elev
 So `ln -s`:
 
 - makes a real symbolic link when Windows allows it;
-- for a folder, makes a junction otherwise, which needs no privilege and which `test -L`
+- for a directory, makes a junction otherwise, which needs no privilege and which `test -L`
   reports as a link;
 - for a file, fails otherwise, and says that Developer Mode is the fix. It never falls
   back to a hard link, which would answer `test -L` wrongly.
 
-cash follows symbolic links and junctions as Windows does. `rm -r` on a folder that
+cash follows symbolic links and junctions as Windows does. `rm -r` on a directory that
 holds one takes the link away, never what it points to, whether that is still there or
 not.

@@ -149,7 +149,7 @@ pub enum FileKind {
     },
     /// A character device: the console, the null device.
     Device,
-    /// A file or folder on a disk.
+    /// A file or directory on a disk.
     File(std::fs::Metadata),
     /// A socket, as `/dev/tcp` and `/dev/udp` open one.
     Socket,

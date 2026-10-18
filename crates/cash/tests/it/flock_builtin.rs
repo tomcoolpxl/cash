@@ -163,7 +163,7 @@ fn a_timeout_waits_no_longer_than_asked() {
 }
 
 #[test]
-fn the_command_runs_in_the_shell_with_its_folder_and_variables() {
+fn the_command_runs_in_the_shell_with_its_directory_and_variables() {
     let scratch = Scratch::new("flock-shell");
     let out = run_in(
         scratch.path(),

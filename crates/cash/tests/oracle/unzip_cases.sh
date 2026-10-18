@@ -56,7 +56,7 @@ unzip nosuch; rc; unzip -l nosuch.zip; rc; zipinfo nosuch; rc
 echo "== extra bytes"; { printf '#!/bin/sh\nexit\n'; cat a.zip; } > sfx.zip; unzip -l sfx.zip; rc; zipinfo -1 sfx.zip; rc; unzip -tq sfx.zip; rc; unzip -p sfx.zip src/a.txt; rc
 echo "== bad CRC"; { head -c 129 a.zip; printf 'J'; tail -c +131 a.zip; } > bad.zip; unzip -t bad.zip; rc; mkdir bc; unzip -d bc bad.zip src/a.txt; rc; cat bc/src/a.txt; unzip -p bad.zip src/a.txt; rc
 # A wildcard in the archive's name, expanded by unzip itself; one archive each, since
-# the order of several is the folder's.
+# the order of several is the directory's.
 echo "== wildcard archives"; unzip -l 'a*.zip'; rc; unzip -tq 'jun*.zip'; rc; unzip -tq 'nosuch*.zip'; rc; zipinfo -1 'bz*.zip'; rc
 unzip -t a.zip src/a.txt; rc; unzip -tq a.zip 'src/*.txt'; rc
 echo "== options"; unzip -Y a.zip > u.txt; rc; tail -3 u.txt; unzip > u.txt; rc; tail -3 u.txt; zipinfo -Y a.zip > u.txt; rc; tail -2 u.txt

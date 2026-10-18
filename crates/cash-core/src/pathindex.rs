@@ -381,7 +381,7 @@ mod tests {
     #[test]
     fn a_prefixs_executables_are_the_scans_from_the_listing() {
         // The completion menu's names come from the listing once it is ready, the same
-        // names the scan of each folder finds, as each folder spells them.
+        // names the scan of each directory finds, as each directory spells them.
         let dir = tempfile::tempdir().unwrap();
         write_program(&dir.path().join("Tool.exe"));
         std::fs::write(dir.path().join("tool-script"), "#!/bin/sh\n").unwrap();

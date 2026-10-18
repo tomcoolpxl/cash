@@ -22,7 +22,7 @@ as it registers the uutils tools it uses unchanged.
 - **Windows only.** Code for Unix, Linux, Redox and WASI is gone (`rm`'s safe
   traversal, `tee`'s splicing and raw writes, `sort`'s resource limits, file
   descriptor counts, permissions and single-threaded path, `head`'s and `tail`'s
-  splicing, `tail`'s non-blocking FIFO open and its watch of a file's folder on Linux),
+  splicing, `tail`'s non-blocking FIFO open and its watch of a file's directory on Linux),
   with the tests of it, and so are the binaries' `main.rs` files. `sort` always had
   uucore's `i18n-collator`; its feature switch went, the collator kept. `tail`'s one
   rstest table is a loop over the same cases.
@@ -31,8 +31,8 @@ as it registers the uutils tools it uses unchanged.
   be created, truncated or appended to: `echo x | tee >(cat)` failed with "The parameter
   is incorrect". Each opens its output through `cash_win32::pipe::open_output`, and
   `sort` leaves such a pipe alone when it would truncate its output. Marked `// cash:`.
-- **`rm -r` removes a folder link inside a folder as one** (2026-10-10, then a patch): a
-  junction or a symbolic link to a folder is taken away with `RemoveDirectoryW`, never
+- **`rm -r` removes a directory link inside a directory as one** (2026-10-10, then a patch): a
+  junction or a symbolic link to a directory is taken away with `RemoveDirectoryW`, never
   followed, whether its target is there or not; `DeleteFileW` refused it ("Permission
   denied").
 - **What uutils asks of Unix alone, asked of Windows** (2026-10-10): `sort` sizes its
@@ -45,13 +45,13 @@ as it registers the uutils tools it uses unchanged.
   on a broken pipe: cash's relay of a bundled tool's output ends it with 141.
 - **`rm`'s trailing separators**: `d/../////` is trimmed to `d/../` with either
   separator; uutils looked for `\` alone on Windows.
-- **`rm` removes the folder it runs in** (2026-10-17): the bundled `rm` runs in the
-  shell's folder, and Windows will not remove a folder a process sits in, so
+- **`rm` removes the directory it runs in** (2026-10-17): the bundled `rm` runs in the
+  shell's directory, and Windows will not remove a directory a process sits in, so
   `d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"` left `$d` behind (spec §4 #13).
-  Before it removes a folder that holds its own, `rm` moves to the volume's root, and a
+  Before it removes a directory that holds its own, `rm` moves to the volume's root, and a
   relative operand goes on as its full path; a relative operand after that names
-  nothing, as on Linux once the working folder is gone. An operand ending in `.` or
-  `..` is still refused. Marked `// cash:` (`leave_folder_for`).
+  nothing, as on Linux once the working directory is gone. An operand ending in `.` or
+  `..` is still refused. Marked `// cash:` (`leave_directory_for`).
 - **`head` leaves a file under its standard input just after what it printed**
   (2026-10-17), as GNU head does: `{ head -n1; cat; } < file` lost what head had read
   ahead, as uutils seeks back on Unix alone. A head that comes to the file under way

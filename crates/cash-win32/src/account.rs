@@ -478,7 +478,7 @@ pub fn owner_plan(requested: Option<&Sid>, running: Option<&Sid>) -> OwnerPlan {
 
 /// The elevated side of `sudo`: `cash --invoke-bundled --sudo-owner SID PROGRAM [ARGS]...`.
 ///
-/// Runs `program` with `args`, its standard handles, folder and environment this
+/// Runs `program` with `args`, its standard handles, directory and environment this
 /// process's, waits for it and gives its status. First, when it runs as the user `sid`
 /// names, it makes that user the default owner of what it and its children create;
 /// when it runs as another account (an administrator approved for a standard user), it

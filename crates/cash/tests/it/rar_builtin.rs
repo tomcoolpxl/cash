@@ -236,15 +236,15 @@ fn rar_and_unrar_name_themselves_as_cash() {
     );
 }
 
-/// A folder named alone is walked through its junctions, as Rar.exe 7.23 walks it, and a
-/// junction back to a folder above is passed by, where Rar.exe goes round it until the
+/// A directory named alone is walked through its junctions, as Rar.exe 7.23 walks it, and a
+/// junction back to a directory above is passed by, where Rar.exe goes round it until the
 /// path is too long (512 names of a four-file tree): each file is stored once.
 #[test]
-fn a_folder_is_walked_through_junctions_storing_each_file_once() {
+fn a_directory_is_walked_through_junctions_storing_each_file_once() {
     let scratch = Scratch::new("rar-walk");
     let d = scratch.path().join("d");
-    std::fs::create_dir_all(d.join("sub")).expect("folders");
-    std::fs::create_dir_all(scratch.path().join("other")).expect("a folder");
+    std::fs::create_dir_all(d.join("sub")).expect("directories");
+    std::fs::create_dir_all(scratch.path().join("other")).expect("a directory");
     std::fs::write(d.join("a.txt"), "a").expect("a file");
     std::fs::write(d.join("sub").join("b.txt"), "b").expect("a file");
     std::fs::write(scratch.path().join("other").join("o.txt"), "o").expect("a file");
@@ -264,12 +264,12 @@ fn a_folder_is_walked_through_junctions_storing_each_file_once() {
     );
 }
 
-/// A folder that cannot be listed is stored, then said by its whole path in Windows'
+/// A directory that cannot be listed is stored, then said by its whole path in Windows'
 /// words, status 6, as Rar.exe 7.23 says it.
 #[test]
-fn a_folder_that_cannot_be_listed_is_said_as_rar_says_it() {
+fn a_directory_that_cannot_be_listed_is_said_as_rar_says_it() {
     let scratch = Scratch::new("rar-shut");
-    std::fs::create_dir_all(scratch.join("d").join("shut")).expect("folders");
+    std::fs::create_dir_all(scratch.join("d").join("shut")).expect("directories");
     std::fs::write(scratch.join("d").join("a.txt"), "a").expect("a file");
     std::fs::write(scratch.join("d").join("shut").join("s.txt"), "s").expect("a file");
     let shut = scratch.join("d").join("shut");
@@ -280,7 +280,7 @@ fn a_folder_that_cannot_be_listed_is_said_as_rar_says_it() {
         )
     });
     assert_eq!(out.stdout, "rc=6\nd\nd/a.txt\nd/shut");
-    // As the shell's folder spells it: on CI, %TEMP% is the short name `RUNNER~1`.
+    // As the shell's directory spells it: on CI, %TEMP% is the short name `RUNNER~1`.
     let whole = shut.display().to_string();
     assert_eq!(
         out.stderr,
@@ -288,12 +288,12 @@ fn a_folder_that_cannot_be_listed_is_said_as_rar_says_it() {
     );
 }
 
-/// Denies the user reading `folder` while `body` runs, as a folder of another account's is.
-fn while_unreadable<T>(folder: &std::path::Path, body: impl FnOnce() -> T) -> T {
+/// Denies the user reading `directory` while `body` runs, as a directory of another account's is.
+fn while_unreadable<T>(directory: &std::path::Path, body: impl FnOnce() -> T) -> T {
     let user = std::env::var("USERNAME").expect("a user name");
     let icacls = |args: &[&str]| {
         let status = std::process::Command::new("icacls")
-            .arg(folder)
+            .arg(directory)
             .args(args)
             .stdout(std::process::Stdio::null())
             .status()
@@ -306,17 +306,17 @@ fn while_unreadable<T>(folder: &std::path::Path, body: impl FnOnce() -> T) -> T 
     result
 }
 
-/// The archives a mask names with `-r` are taken in the order their folders list them,
-/// each folder gone into where it is met and through a junction, as Rar.exe 7.23 takes
-/// them; cash took a folder's own first, by lowercase name, and no junction.
+/// The archives a mask names with `-r` are taken in the order their directories list them,
+/// each directory gone into where it is met and through a junction, as Rar.exe 7.23 takes
+/// them; cash took a directory's own first, by lowercase name, and no junction.
 #[test]
 fn a_masks_archives_are_taken_in_listing_order_through_junctions() {
     let scratch = Scratch::new("rar-mask-order");
     let w = scratch.path().join("w");
-    for folder in ["b_sub", "A", "_u"] {
-        std::fs::create_dir_all(w.join(folder)).expect("a folder");
+    for directory in ["b_sub", "A", "_u"] {
+        std::fs::create_dir_all(w.join(directory)).expect("a directory");
     }
-    std::fs::create_dir_all(scratch.path().join("other")).expect("a folder");
+    std::fs::create_dir_all(scratch.path().join("other")).expect("a directory");
     cash_win32::junction::point(&w.join("j"), &scratch.path().join("other")).expect("a junction");
     let out = run_in(
         scratch.path(),

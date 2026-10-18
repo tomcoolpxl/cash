@@ -20,28 +20,28 @@ use std::process::Command;
 
 use crate::common::{CASH, Scratch, git_for_windows_prefix, isolate};
 
-/// A scratch folder whose git sees neither the user's nor the system's configuration and
+/// A scratch directory whose git sees neither the user's nor the system's configuration and
 /// makes the same commits every run.
 struct GitScratch {
-    folder: Scratch,
+    directory: Scratch,
 }
 
 impl GitScratch {
     fn new(name: &str) -> Self {
         Self {
-            folder: Scratch::new(&format!("git-prompt-{name}")),
+            directory: Scratch::new(&format!("git-prompt-{name}")),
         }
     }
 
     fn dir(&self) -> &Path {
-        self.folder.path()
+        self.directory.path()
     }
 
     fn command(&self, program: &str, cwd: &Path) -> Command {
         let mut command = Command::new(program);
         command
             .current_dir(cwd)
-            .env("GIT_CONFIG_GLOBAL", self.folder.join("gitconfig"))
+            .env("GIT_CONFIG_GLOBAL", self.directory.join("gitconfig"))
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_AUTHOR_NAME", "T")
             .env("GIT_AUTHOR_EMAIL", "t@example.com")

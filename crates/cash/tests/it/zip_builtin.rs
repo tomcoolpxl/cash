@@ -315,7 +315,7 @@ fn a_split_archive_is_read_from_its_parts() {
 }
 
 /// A wildcard in the archive's name names several archives: each processed in the
-/// folder's order, `UnZip`'s tally after them, and the last one that is no archive reported
+/// directory's order, `UnZip`'s tally after them, and the last one that is no archive reported
 /// in full.
 #[test]
 fn a_wildcard_names_several_archives() {
@@ -346,15 +346,15 @@ fn a_wildcard_names_several_archives() {
     );
 }
 
-/// `zip -r` goes through a junction, and past one back to a folder above, storing each
+/// `zip -r` goes through a junction, and past one back to a directory above, storing each
 /// file once, where Info-ZIP's zip 3.0 goes round until the system refuses the path; with
 /// `-y` both are stored as links.
 #[test]
 fn r_goes_through_junctions_and_stores_each_file_once() {
     let scratch = Scratch::new("zip-walk");
     let d = scratch.path().join("d");
-    std::fs::create_dir_all(d.join("sub")).expect("folders");
-    std::fs::create_dir_all(scratch.path().join("other")).expect("a folder");
+    std::fs::create_dir_all(d.join("sub")).expect("directories");
+    std::fs::create_dir_all(scratch.path().join("other")).expect("a directory");
     std::fs::write(d.join("a.txt"), "a").expect("a file");
     std::fs::write(d.join("sub").join("b.txt"), "b").expect("a file");
     std::fs::write(scratch.path().join("other").join("o.txt"), "o").expect("a file");

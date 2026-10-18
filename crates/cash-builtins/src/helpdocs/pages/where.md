@@ -3,10 +3,10 @@ see: which type find paths
 ---
 ## Description
 
-`where PATTERN...` finds files as Windows' `where.exe` does: in the current folder and
+`where PATTERN...` finds files as Windows' `where.exe` does: in the current directory and
 along `PATH`, trying the `PATHEXT` extensions on a name without one, with `*` and `?`
-wildcards, in any case. `-r DIR` searches a folder tree instead, and `$VAR:PATTERN` or
-`DIR:PATTERN` searches the folders a variable or a path names.
+wildcards, in any case. `-r DIR` searches a directory tree instead, and `$VAR:PATTERN` or
+`DIR:PATTERN` searches the directories a variable or a path names.
 
 ## Differences from where.exe
 

@@ -185,11 +185,11 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Abbreviations defined with `abbr`, expanded by the line editor.
     abbreviations: crate::abbreviations::Abbreviations,
 
-    /// The folders the shell has been in, for `prevd`, `nextd` and `cdh`.
+    /// The directories the shell has been in, for `prevd`, `nextd` and `cdh`.
     directory_history: crate::dirhistory::DirectoryHistory,
 
-    /// What an interactive shell keeps across sessions: the folder each command ran in,
-    /// and the folders visited (D79, D80).
+    /// What an interactive shell keeps across sessions: the directory each command ran in,
+    /// and the directories visited (D79, D80).
     #[cfg_attr(feature = "serde", serde(skip))]
     records: crate::kept::Records,
 

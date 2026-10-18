@@ -79,7 +79,7 @@ fn cash_with_path(script: &str, path: &str) -> Output {
     }
 }
 
-/// What these tests do in a scratch folder: write a file, read one back, run cash there.
+/// What these tests do in a scratch directory: write a file, read one back, run cash there.
 trait Fixture {
     fn write(&self, name: &str, bytes: &[u8]);
     fn read(&self, name: &str) -> Vec<u8>;

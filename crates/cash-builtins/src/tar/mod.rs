@@ -16,7 +16,7 @@
 //! - A member's name Windows cannot hold (`:`, `\`, a trailing dot, `CON`) is refused by
 //!   name, not changed; a symbolic link is made where Windows allows it (Developer
 //!   Mode, or an elevated shell), and refused as GNU tar refuses one otherwise.
-//! - `--sort=none` reads a folder in the order Windows gives, which on NTFS is by name.
+//! - `--sort=none` reads a directory in the order Windows gives, which on NTFS is by name.
 
 mod create;
 mod edit;
@@ -124,7 +124,7 @@ struct Tar<'a, SE: cash_core::ShellExtensions> {
     ugs_width: usize,
     /// Bytes of the archive read or written, for `--totals`.
     bytes: u64,
-    /// The folder `--one-top-level` puts every member under.
+    /// The directory `--one-top-level` puts every member under.
     top_level: Option<Vec<u8>>,
 }
 
@@ -325,7 +325,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
     }
 
     /// What stops the run before it starts: options cash's tar does not do, and the
-    /// folder of `--one-top-level`, given or from the archive's name.
+    /// directory of `--one-top-level`, given or from the archive's name.
     fn refusals(&mut self) -> Result<(), Fatal> {
         if let Some(name) = self.options.unsupported.clone() {
             writeln!(
@@ -364,7 +364,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         Ok(())
     }
 
-    /// How member names are matched: GNU's defaults, literal and anchored, a folder
+    /// How member names are matched: GNU's defaults, literal and anchored, a directory
     /// naming what is under it.
     fn member_flags(matching: Matching) -> Flags {
         Flags {
@@ -505,7 +505,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
 
     /// The bytes of a file a name list or a pattern list is read from: `-` is standard
     /// input, and a device's name (`/dev/stdin`, `/dev/null`, `/dev/fd/3`) the shell's,
-    /// as its `<` opens them; another name is under the folder `-C` left in force.
+    /// as its `<` opens them; another name is under the directory `-C` left in force.
     fn read_named(&self, base: &Path, name: &str) -> io::Result<Vec<u8>> {
         if name == "-" || cash_win32::devices::dev_name(Path::new(name)).is_some() {
             return self.context.open_input(name, Dash::Stdin)?.read_all();
@@ -513,7 +513,7 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
         fs::read(resolve(base, name))
     }
 
-    /// The folder `-C` leaves in force at the end: where members are extracted when no
+    /// The directory `-C` leaves in force at the end: where members are extracted when no
     /// name selects them.
     fn last_base(&self) -> PathBuf {
         let mut base = self.path(".");
@@ -657,7 +657,7 @@ fn system_time(time: Timestamp) -> Option<std::time::SystemTime> {
 }
 
 /// `name` as cash reads a path, `/c/x` and `//srv/share` among the spellings, under
-/// `base`, the folder `-C` left in force, when it is relative.
+/// `base`, the directory `-C` left in force, when it is relative.
 pub(super) fn resolve(base: &Path, name: &str) -> PathBuf {
     let accepted = cash_win32::path::accept_path(name);
     if accepted.is_absolute() {
@@ -667,7 +667,7 @@ pub(super) fn resolve(base: &Path, name: &str) -> PathBuf {
     }
 }
 
-/// Whether `path` names a folder, without opening a pipe.
+/// Whether `path` names a directory, without opening a pipe.
 fn is_dir(path: &Path) -> bool {
     fs::metadata(path).is_ok_and(|m| m.is_dir())
 }

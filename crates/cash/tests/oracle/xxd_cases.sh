@@ -194,7 +194,7 @@ echo "== -i dash"; printf 'x' | xxd -i -
 echo "== outfile"; xxd f out.txt; cat out.txt
 echo "== outfile truncates"; printf 'ABCDEFGHIJ' > trunc; xxd h trunc; cat trunc
 echo "== outfile dash is stdout"; xxd h -
-echo "== outfile in a missing folder"; xxd h nodir/out; echo "rc=$?"
+echo "== outfile in a missing directory"; xxd h nodir/out; echo "rc=$?"
 echo "== missing infile"; xxd nosuch; echo "rc=$?"
 echo "== -- ends the options"; xxd -- h
 echo "== three file arguments"; xxd f out.txt extra 2>&1 | head -1; xxd f out.txt extra 2>/dev/null; echo "rc=$?"

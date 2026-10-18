@@ -28,7 +28,7 @@ and in the fewest places it can.
   builtin has no file, and scripts run what `which` prints.
 - `uname -s` is `Windows_NT` and `$OSTYPE` is `windows`, not `MINGW*` or `msys`: cash is
   not MSYS.
-- In a folder whose path is over 258 characters, programs start in its 8.3 short name.
+- In a directory whose path is over 258 characters, programs start in its 8.3 short name.
 
 ## Line endings
 
@@ -50,8 +50,8 @@ and in the fewest places it can.
 - Descriptors above 2 reach builtins and cash's own tools, not Windows programs. `/dev/stdout` and `/dev/fd/N` share the descriptor rather than reopen the
   file.
 - `[ -s file ]` is false for App Execution Aliases, which are empty files.
-- A bundled tool cannot delete the shell's current folder: it runs as a process in that
-  folder, and Windows keeps a process's folder.
+- A bundled tool cannot delete the shell's current directory: it runs as a process in that
+  directory, and Windows keeps a process's directory.
 
 ## Processes, jobs and signals
 
@@ -87,10 +87,12 @@ and in the fewest places it can.
 - `ping` is Linux's, not `ping.exe`; `find`, `sort`, `timeout`, `more`
   and others also hide Windows programs of the same name (`help` marks them).
 - `fuser`, `lsof` and `ss` show what Windows' tables hold: no queue sizes or working
-  folders, and `lsof`'s FD is 0 to 2 for the standard handles and a handle value, not a
+  directories, and `lsof`'s FD is 0 to 2 for the standard handles and a handle value, not a
   descriptor, for the rest. Unelevated, `lsof` lists the files of your own processes; `sudo lsof` lists all.
 - `ls` colours when it writes to a terminal, with no alias needed. `stat` is
   cash's own, and `which` knows about builtins.
+- `7z` says directory where 7-Zip says folder: `Directories: 2`, `Directory = +`
+  with `-slt`; a script that reads 7-Zip's words looks for both.
 - `clear` and `reset` ignore terminfo; `getopt -s csh` is refused.
 - `awk`'s `system()` and pipes, and sed's `e`, run cash, not `/bin/sh`.
 - A bundled tool is a process of its own: a crash cannot take the shell with it, at

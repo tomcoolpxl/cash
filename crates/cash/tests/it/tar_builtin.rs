@@ -216,10 +216,10 @@ fn a_compressor_cash_does_not_carry_is_refused() {
     );
 }
 
-/// `--one-top-level`: everything under a folder named for the archive, or given; a name
-/// already under it is left as it is. Without an archive's name there is no folder.
+/// `--one-top-level`: everything under a directory named for the archive, or given; a name
+/// already under it is left as it is. Without an archive's name there is no directory.
 #[test]
-fn one_top_level_puts_everything_under_one_folder() {
+fn one_top_level_puts_everything_under_one_directory() {
     let scratch = Scratch::new("tar-top-level");
     let out = run_in(
         scratch.path(),
@@ -291,16 +291,16 @@ fn tar_reads_cashs_path_spellings_and_device_names() {
     assert_eq!(out.stdout, "member.txt\nmember.txt", "{}", out.stderr);
 }
 
-/// The walk: `-h` goes through a junction, and says a junction back to a folder above and
+/// The walk: `-h` goes through a junction, and says a junction back to a directory above and
 /// stores each file once, where GNU's tar recurses until its stack overflows;
-/// `--no-recursion` stores the folder alone; `--remove-files` removes a folder after what
+/// `--no-recursion` stores the directory alone; `--remove-files` removes a directory after what
 /// is in it, as GNU's tar 1.35 does in WSL.
 #[test]
-fn the_walk_goes_through_links_with_h_and_removes_folders_last() {
+fn the_walk_goes_through_links_with_h_and_removes_directories_last() {
     let scratch = Scratch::new("tar-walk");
     let d = scratch.path().join("d");
-    std::fs::create_dir_all(d.join("sub")).expect("folders");
-    std::fs::create_dir_all(scratch.path().join("other")).expect("a folder");
+    std::fs::create_dir_all(d.join("sub")).expect("directories");
+    std::fs::create_dir_all(scratch.path().join("other")).expect("a directory");
     std::fs::write(d.join("a.txt"), "a").expect("a file");
     std::fs::write(d.join("sub").join("b.txt"), "b").expect("a file");
     std::fs::write(scratch.path().join("other").join("o.txt"), "o").expect("a file");
@@ -325,13 +325,13 @@ fn the_walk_goes_through_links_with_h_and_removes_folders_last() {
     );
 }
 
-/// A folder that cannot be listed is stored, then said, "Cannot open", with status 2, as
+/// A directory that cannot be listed is stored, then said, "Cannot open", with status 2, as
 /// GNU's tar 1.35 says it in WSL; the walk goes on to the next.
 #[test]
-fn a_folder_that_cannot_be_listed_is_said_after_its_member() {
+fn a_directory_that_cannot_be_listed_is_said_after_its_member() {
     let scratch = Scratch::new("tar-shut");
     for dir in ["shut", "zopen"] {
-        std::fs::create_dir_all(scratch.join("l").join(dir)).expect("a folder");
+        std::fs::create_dir_all(scratch.join("l").join(dir)).expect("a directory");
         std::fs::write(scratch.join("l").join(dir).join("f"), "x").expect("a file");
     }
     let user = std::env::var("USERNAME").expect("a user name");

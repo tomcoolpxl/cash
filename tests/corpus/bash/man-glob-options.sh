@@ -1,5 +1,5 @@
 # source: https://www.gnu.org/software/bash/manual/bash.html#The-Shopt-Builtin (glob options; cash's own case)
-# desc: nullglob, failglob, dotglob, nocaseglob, extglob patterns, globstar, GLOBIGNORE and character classes, in a folder of their own
+# desc: nullglob, failglob, dotglob, nocaseglob, extglob patterns, globstar, GLOBIGNORE and character classes, in a directory of their own
 mkdir -p g/sub/deep && cd g || exit
 : >a.txt; : >B.txt; : >.hidden; : >c.log; : >sub/d.txt; : >sub/deep/e.txt; : >'with space.txt'
 echo *

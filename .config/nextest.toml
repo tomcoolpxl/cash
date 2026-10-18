@@ -36,7 +36,7 @@ path = "test-results.xml"
 # nextest runs each test in a process of its own, so a lock inside a test process
 # serializes nothing; these groups are how tests take turns.
 [test-groups]
-# Each links folder gives the test's cash.exe 126 more names, and NTFS allows a file
+# Each links directory gives the test's cash.exe 126 more names, and NTFS allows a file
 # 1023 (link_tools.rs).
 link-tools = { max-threads = 1 }
 # Each runs a cash on a pseudo console of its own and types at it. A console host paints
@@ -165,7 +165,7 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 # cash does need, Git for Windows (spec D35) and Windows' own programs, fails a test
 # instead. completion_scripts' tool tests do the same, above.
 [[profile.default.overrides]]
-filter = 'binary(it) and test(/^(acceptance::starship_initialises_and_renders_a_prompt|ping::an_interrupt_prints_the_statistics|link_tools::a_folder_on_another_drive_is_an_error|kill_term::a_program_(with_a_window_is_asked_to_close|that_will_not_close_is_terminated_after_the_grace_period)|ping::an_unanswered_ping_reports_total_loss)$/)'
+filter = 'binary(it) and test(/^(acceptance::starship_initialises_and_renders_a_prompt|ping::an_interrupt_prints_the_statistics|link_tools::a_directory_on_another_drive_is_an_error|kill_term::a_program_(with_a_window_is_asked_to_close|that_will_not_close_is_terminated_after_the_grace_period)|ping::an_unanswered_ping_reports_total_loss)$/)'
 success-output = "final"
 
 # The clipboard is one per desktop; another program (a clipboard manager, a remote session)

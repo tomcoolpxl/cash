@@ -155,7 +155,7 @@ mod tests {
 
     use super::{Range, try_lock, unlock};
 
-    /// A folder with a file `lock` in it, and two handles on that file.
+    /// A directory with a file `lock` in it, and two handles on that file.
     struct Two {
         dir: tempfile::TempDir,
         a: std::fs::File,

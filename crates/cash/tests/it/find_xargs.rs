@@ -427,7 +427,7 @@ fn junction_loop(sandbox: &Sandbox) {
 
 #[test]
 fn following_links_a_loop_is_said_and_left() {
-    // `find -L` went round a junction to a folder above without end (BI-13).
+    // `find -L` went round a junction to a directory above without end (BI-13).
     let sandbox = Sandbox::new("loop");
     junction_loop(&sandbox);
     let out = sandbox.run(r#"find -L sub; echo "rc $?""#);
@@ -729,10 +729,10 @@ fn a_name_find_cannot_read_is_quoted() {
     assert_eq!(out.stderr, "find: 'nosuch': No such file or directory");
 }
 
-/// With `-L`, a folder that cannot be listed is shown, then said, as GNU's find shows and
+/// With `-L`, a directory that cannot be listed is shown, then said, as GNU's find shows and
 /// says it: walkdir's own following lost it, opening it to read for its loop check.
 #[test]
-fn l_shows_a_folder_it_cannot_list_then_says_so() {
+fn l_shows_a_directory_it_cannot_list_then_says_so() {
     let scratch = Scratch::new("find-l-shut");
     for dir in ["open", "shut"] {
         std::fs::create_dir_all(scratch.path().join("l").join(dir)).unwrap();

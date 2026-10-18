@@ -18,9 +18,9 @@ ITERATIONS = {
 }
 
 means = {}
-for folder in sys.argv[1:]:
+for directory in sys.argv[1:]:
     for name in ITERATIONS:
-        path = pathlib.Path(folder) / f"{name}.json"
+        path = pathlib.Path(directory) / f"{name}.json"
         if not path.exists():
             continue
         for result in json.loads(path.read_text(encoding="utf-8"))["results"]:

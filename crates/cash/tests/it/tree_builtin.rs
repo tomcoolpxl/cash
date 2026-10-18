@@ -9,7 +9,7 @@
 
 use crate::common::{Scratch, cash_command};
 
-/// A scratch folder holding a small tree to draw.
+/// A scratch directory holding a small tree to draw.
 fn tree(name: &str) -> Scratch {
     let scratch = Scratch::new(name);
     std::fs::create_dir_all(scratch.join("beta/deep")).expect("create directory tree");
@@ -76,8 +76,8 @@ fn common_filters_are_supported() {
 
 #[test]
 fn a_linked_root_is_listed_through_and_a_link_inside_is_not_gone_into() {
-    // tree refused a folder it was given through a junction ("0 directories, 1 file"),
-    // where GNU's lists the folder the link names; a junction inside is shown and not
+    // tree refused a directory it was given through a junction ("0 directories, 1 file"),
+    // where GNU's lists the directory the link names; a junction inside is shown and not
     // gone into. Links are told by the walker's one answer (a name surrogate).
     let scratch = tree("tree-links");
     let base = scratch.as_script_path();

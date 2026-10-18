@@ -13,7 +13,7 @@
 //!   into files and pipes unless told `-scfr`.
 //! - Times are shown in the zone the shell's `TZ` names, else Windows' own.
 //! - `rar.ini` is read from `%APPDATA%\WinRAR`, one of the two places rar reads it from;
-//!   the other, rar's own folder, cash has not.
+//!   the other, rar's own directory, cash has not.
 
 mod add;
 mod agname;
@@ -297,7 +297,7 @@ impl<'a, SE: cash_core::ShellExtensions> Rar<'a, SE> {
         }
     }
 
-    /// A path made absolute against the shell's folder.
+    /// A path made absolute against the shell's directory.
     fn path(&self, name: &str) -> PathBuf {
         self.context.shell.absolute_path(Path::new(name))
     }

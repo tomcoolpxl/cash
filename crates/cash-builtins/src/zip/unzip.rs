@@ -770,7 +770,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
         let mut tested = 0;
         let mut bad_passwords = 0;
         for &index in selected {
-            // Asked between members too: folders and links read no data.
+            // Asked between members too: directories and links read no data.
             if self.context.stop_token().requested() {
                 return Err(cash_core::Stopped::error());
             }
@@ -999,12 +999,12 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
                 }
             }
         }
-        let mut folders: Vec<(PathBuf, i64)> = Vec::new();
+        let mut directories: Vec<(PathBuf, i64)> = Vec::new();
         let mut links: Vec<Link> = Vec::new();
         let mut bad_passwords = 0;
         let mut done = 0;
         for &index in selected {
-            // Asked between members too: folders and links read no data.
+            // Asked between members too: directories and links read no data.
             if self.context.stop_token().requested() {
                 return Err(cash_core::Stopped::error());
             }
@@ -1075,7 +1075,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
                         self.say.out(&format!("   creating: {shown}\n"))?;
                     }
                 }
-                folders.push((path, time));
+                directories.push((path, time));
                 done += 1;
                 continue;
             }
@@ -1188,7 +1188,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
             }
         }
         if self.options.no_times == 0 {
-            for (path, time) in folders.iter().rev() {
+            for (path, time) in directories.iter().rev() {
                 let modified = system_time(*time);
                 let _ = unix::set_times(
                     path,

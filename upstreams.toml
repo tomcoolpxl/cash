@@ -8,12 +8,12 @@
 # When a crate is brought up to a newer upstream, or a fix is ported, its entry here moves
 # in the same commit.
 #
-#   crate       the folder in this repository
+#   crate       the directory in this repository
 #   name        upstream's crate on crates.io, for its releases and its advisories
 #   version     the release it was taken from
 #   repository  for one taken from git: the repository ...
 #   revision    ... the commit it was taken at ...
-#   path        ... and the folder in it whose commits count, for a repository of many
+#   path        ... and the directory in it whose commits count, for a repository of many
 #   reviewed    how far upstream was looked through with nothing to port: a release, or
 #               a commit; the check counts from there
 

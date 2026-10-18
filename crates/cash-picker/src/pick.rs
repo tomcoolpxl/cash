@@ -3,10 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
-/// The folder to start in and the filter to start with, from the word under the cursor.
+/// The directory to start in and the filter to start with, from the word under the cursor.
 ///
 /// `~/src/fo` starts in `~/src` filtered by `fo`, `D:/x/` in `D:/x`, and a word that
-/// names no folder in the current folder, filtered by its last part.
+/// names no directory in the current directory, filtered by its last part.
 #[must_use]
 pub fn start(word: &str, cwd: &Path, home: Option<&Path>) -> (PathBuf, String) {
     if word.is_empty() {
@@ -26,25 +26,25 @@ pub fn start(word: &str, cwd: &Path, home: Option<&Path>) -> (PathBuf, String) {
             cwd.join(path)
         }
     };
-    let (folder, last) = match expanded.rfind(['/', '\\']) {
+    let (directory, last) = match expanded.rfind(['/', '\\']) {
         Some(at) => (
             expanded.get(..=at).unwrap_or_default(),
             expanded.get(at + 1..).unwrap_or_default(),
         ),
         None => ("", expanded.as_str()),
     };
-    if folder.is_empty() {
+    if directory.is_empty() {
         return (cwd.to_path_buf(), last.to_owned());
     }
     // `C:/x//` is `C:/x`; a drive's root keeps its `/`.
-    let trimmed = folder.trim_end_matches(['/', '\\']);
-    let folder = if trimmed.is_empty() || trimmed.ends_with(':') {
+    let trimmed = directory.trim_end_matches(['/', '\\']);
+    let directory = if trimmed.is_empty() || trimmed.ends_with(':') {
         absolute(&format!("{trimmed}/"))
     } else {
         absolute(trimmed)
     };
-    if folder.is_dir() {
-        (folder, last.to_owned())
+    if directory.is_dir() {
+        (directory, last.to_owned())
     } else {
         (cwd.to_path_buf(), last.to_owned())
     }
@@ -52,11 +52,11 @@ pub fn start(word: &str, cwd: &Path, home: Option<&Path>) -> (PathBuf, String) {
 
 /// How `pick` is written on the line: relative when it is below `cwd` (`src/lib/`), `~/…`
 /// under `home`, else in cash's `C:/…` spelling; quoted only where it needs quoting; a
-/// folder ends in `/`.
+/// directory ends in `/`.
 #[must_use]
-pub fn written(pick: &Path, folder: bool, cwd: &Path, home: Option<&Path>) -> String {
+pub fn written(pick: &Path, directory: bool, cwd: &Path, home: Option<&Path>) -> String {
     let pick_text = cash_win32::path::render(pick);
-    let trailing = if folder { "/" } else { "" };
+    let trailing = if directory { "/" } else { "" };
     if let Some(rest) = below(&pick_text, &cash_win32::path::render(cwd)) {
         let rest = if rest.is_empty() { "." } else { rest };
         return format!("{}{trailing}", quoted(rest));
@@ -73,15 +73,15 @@ pub fn written(pick: &Path, folder: bool, cwd: &Path, home: Option<&Path>) -> St
     format!("{}{trailing}", quoted(&pick_text))
 }
 
-/// The part of `path` below `folder`, compared as Windows compares names (case aside);
-/// `Some("")` for the folder itself.
-fn below<'a>(path: &'a str, folder: &str) -> Option<&'a str> {
-    let folder = folder.trim_end_matches('/');
-    let head = path.get(..folder.len())?;
-    if !head.eq_ignore_ascii_case(folder) && !cash_win32::fold::same_name(head, folder) {
+/// The part of `path` below `directory`, compared as Windows compares names (case aside);
+/// `Some("")` for the directory itself.
+fn below<'a>(path: &'a str, directory: &str) -> Option<&'a str> {
+    let directory = directory.trim_end_matches('/');
+    let head = path.get(..directory.len())?;
+    if !head.eq_ignore_ascii_case(directory) && !cash_win32::fold::same_name(head, directory) {
         return None;
     }
-    let rest = path.get(folder.len()..)?;
+    let rest = path.get(directory.len()..)?;
     if rest.is_empty() {
         Some("")
     } else {
@@ -114,7 +114,7 @@ mod tests {
     }
 
     #[test]
-    fn a_pick_below_the_current_folder_is_relative() {
+    fn a_pick_below_the_current_directory_is_relative() {
         let cwd = home().join("github");
         let pick = cwd.join("cash").join("crates");
         assert_eq!(written(&pick, true, &cwd, Some(&home())), "cash/crates/");
@@ -156,29 +156,29 @@ mod tests {
     }
 
     #[test]
-    fn the_start_comes_from_the_typed_folder() {
+    fn the_start_comes_from_the_typed_directory() {
         let dir = std::env::temp_dir();
         let typed = format!("{}/zz", cash_win32::path::render(&dir));
-        let (folder, filter) = start(&typed, Path::new(r"C:\"), None);
+        let (directory, filter) = start(&typed, Path::new(r"C:\"), None);
         let rendered = |path: &Path| {
             cash_win32::path::render(path)
                 .trim_end_matches('/')
                 .to_owned()
         };
         assert!(
-            cash_win32::fold::same_name(&rendered(&folder), &rendered(&dir)),
-            "{folder:?} is not {dir:?}"
+            cash_win32::fold::same_name(&rendered(&directory), &rendered(&dir)),
+            "{directory:?} is not {dir:?}"
         );
         assert_eq!(filter, "zz");
 
-        let (folder, filter) = start("fo", &home(), Some(&home()));
-        assert_eq!((folder, filter.as_str()), (home(), "fo"));
-        let (folder, filter) = start("no/such/place/x", &home(), Some(&home()));
-        assert_eq!((folder, filter.as_str()), (home(), "x"));
+        let (directory, filter) = start("fo", &home(), Some(&home()));
+        assert_eq!((directory, filter.as_str()), (home(), "fo"));
+        let (directory, filter) = start("no/such/place/x", &home(), Some(&home()));
+        assert_eq!((directory, filter.as_str()), (home(), "x"));
     }
 
     #[test]
-    fn every_spelling_of_a_folder_starts_the_picker_in_it() {
+    fn every_spelling_of_a_directory_starts_the_picker_in_it() {
         let parent = tempfile::tempdir().unwrap();
         let dir = parent.path().join("spell dir");
         std::fs::create_dir(&dir).unwrap();
@@ -199,10 +199,10 @@ mod tests {
             format!("\\\\localhost\\{letter}${}\\in", rest.replace('/', "\\")),
         ];
         for typed in spellings {
-            let (folder, filter) = start(&typed, parent.path(), Some(parent.path()));
-            let shown = cash_win32::path::render(&folder);
+            let (directory, filter) = start(&typed, parent.path(), Some(parent.path()));
+            let shown = cash_win32::path::render(&directory);
             assert!(
-                folder.is_dir() && shown.trim_end_matches('/').ends_with("spell dir"),
+                directory.is_dir() && shown.trim_end_matches('/').ends_with("spell dir"),
                 "{typed}: {shown}"
             );
             assert_eq!(filter, "in", "{typed}");

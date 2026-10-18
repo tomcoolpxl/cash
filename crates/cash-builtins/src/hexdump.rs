@@ -1320,7 +1320,7 @@ impl builtins::Command for HexdumpCommand {
                         opened += 1;
                         inputs.push(input.read_all()?);
                     }
-                    // util-linux opens a folder and fails reading it: said, yet opened.
+                    // util-linux opens a directory and fails reading it: said, yet opened.
                     Err(InputError::IsADirectory(_)) => {
                         opened += 1;
                         writeln!(context.stderr(), "hexdump: {name}: Is a directory")?;

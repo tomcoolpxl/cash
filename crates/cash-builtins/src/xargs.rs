@@ -851,7 +851,7 @@ async fn run<SE: cash_core::ShellExtensions>(
 
     // The shell runs it, as it runs a command that names no function: a builtin by
     // its name (`enable -n` honoured), or a program found on the shell's PATH and
-    // started in the shell's folder with its exported variables (D5, D8, D10). A copy
+    // started in the shell's directory with its exported variables (D5, D8, D10). A copy
     // of the shell keeps builtins and control flow from changing xargs's caller, and
     // the arguments are already parsed data, never turned back into shell source.
     let mut params = context.params.clone();

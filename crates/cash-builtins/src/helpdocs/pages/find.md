@@ -3,7 +3,7 @@ see: xargs where ls tree paths
 ---
 ## Description
 
-`find [PATH...] [EXPRESSION]` walks folder trees and acts on the files the expression
+`find [PATH...] [EXPRESSION]` walks directory trees and acts on the files the expression
 selects: `-name`, `-iname`, `-path`, `-type f|d|l`, `-size`, `-mtime`, `-newer`,
 `-empty`, `-maxdepth`, `-mindepth`, `-prune`, with `-a`, `-o`, `!` and parentheses; and
 `-print`, `-print0`, `-delete`, `-exec`, `-execdir`, `-ok`, `-quit` as actions.

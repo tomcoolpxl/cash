@@ -263,7 +263,7 @@ pub enum ErrorKind {
     #[error("{0}: read error: Bad file descriptor")]
     ClosedDescriptorRead(ShellFd),
 
-    /// A file or folder a builtin could not use, as Bash's `file_error` names it:
+    /// A file or directory a builtin could not use, as Bash's `file_error` names it:
     /// `/no/such: No such file or directory`.
     #[error("{}: {}", .0, os_error_text(.1))]
     FileError(String, std::io::Error),
@@ -707,7 +707,7 @@ impl Error {
             .map_or_else(|| self.to_string(), os_error_text)
     }
 
-    /// `error` as one about the file or folder `name`, where it is an I/O error:
+    /// `error` as one about the file or directory `name`, where it is an I/O error:
     /// `/no/such: No such file or directory`.
     #[must_use]
     pub fn file_error(name: &str, error: Self) -> Self {

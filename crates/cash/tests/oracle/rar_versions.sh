@@ -26,7 +26,7 @@ z() {
   fi
   echo "rc=$r"
 }
-# Each file below a folder and what it holds.
+# Each file below a directory and what it holds.
 show() { (cd "$1" && find . -type f | sort | while read -r f; do echo "$f: $(cat "$f")"; done); }
 mkdir src
 printf 'v1\n' > src/f.txt

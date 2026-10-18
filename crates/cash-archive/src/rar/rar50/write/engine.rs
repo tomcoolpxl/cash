@@ -991,7 +991,7 @@ fn prepare_member(
         None => (plain.into(), plain_len, member.crc32, member.hash),
     };
     // A link has no file payload to hash; its target is protected by the header CRC.
-    // WinRAR gives a folder no checksum at all.
+    // WinRAR gives a directory no checksum at all.
     let checksums = plan.layout.checksums;
     let checked = !(winrar && entry.is_directory);
     if entry.redirection.is_none() && checked && checksums.blake2() {

@@ -1,10 +1,10 @@
-//! Directory junctions, as `mklink /J` makes them: the installer's `current` folder.
+//! Directory junctions, as `mklink /J` makes them: the installer's `current` directory.
 //!
-//! A junction is a folder whose reparse point names another folder. Unlike a symbolic
+//! A junction is a directory whose reparse point names another directory. Unlike a symbolic
 //! link it needs no privilege, and unlike a copy of the files it changes in one step:
 //! setting a junction's reparse data in place is one call, so a `current` that is being
 //! pointed at a new version is never missing or half-written. A running `cash.exe` under
-//! the old version folder keeps running; the file itself is not touched.
+//! the old version directory keeps running; the file itself is not touched.
 
 use std::io;
 use std::os::windows::io::AsRawHandle as _;
@@ -23,19 +23,19 @@ use windows_sys::Win32::System::Ioctl::FSCTL_SET_REPARSE_POINT;
 /// The reparse tag of a junction (`IO_REPARSE_TAG_MOUNT_POINT`).
 const MOUNT_POINT: u32 = 0xA000_0003;
 
-/// Point the junction `link` at the folder `target`: made when there is none, repointed
-/// in place when there is one, and an empty folder at `link` becomes the junction.
+/// Point the junction `link` at the directory `target`: made when there is none, repointed
+/// in place when there is one, and an empty directory at `link` becomes the junction.
 ///
 /// # Errors
 ///
-/// `target` is not a folder; `link` is a file, or a folder with something in it; or
+/// `target` is not a directory; `link` is a file, or a directory with something in it; or
 /// Windows refused.
 pub fn point(link: &Path, target: &Path) -> io::Result<()> {
     let target = std::fs::canonicalize(target)?;
     if !target.is_dir() {
         return Err(io::Error::new(
             io::ErrorKind::NotADirectory,
-            format!("{} is not a folder", crate::path::render(&target)),
+            format!("{} is not a directory", crate::path::render(&target)),
         ));
     }
     match std::fs::symlink_metadata(link) {
@@ -44,7 +44,7 @@ pub fn point(link: &Path, target: &Path) -> io::Result<()> {
         Ok(_) => {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
-                format!("{} is a file, not a folder", crate::path::render(link)),
+                format!("{} is a file, not a directory", crate::path::render(link)),
             ));
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => std::fs::create_dir(link)?,
@@ -60,7 +60,7 @@ pub fn point(link: &Path, target: &Path) -> io::Result<()> {
         Err(e) if e.raw_os_error() == Some(raw(ERROR_DIR_NOT_EMPTY)) => Err(io::Error::new(
             io::ErrorKind::DirectoryNotEmpty,
             format!(
-                "{} is a folder with files in it, where the junction should be",
+                "{} is a directory with files in it, where the junction should be",
                 crate::path::render(link)
             ),
         )),
@@ -68,7 +68,7 @@ pub fn point(link: &Path, target: &Path) -> io::Result<()> {
     }
 }
 
-/// The folder a junction (or a symbolic link to a folder) names, without the `\\?\`
+/// The directory a junction (or a symbolic link to a directory) names, without the `\\?\`
 /// prefix the reparse data carries; `None` for anything else.
 #[must_use]
 pub fn target(link: &Path) -> Option<PathBuf> {
@@ -76,14 +76,14 @@ pub fn target(link: &Path) -> Option<PathBuf> {
     Some(PathBuf::from(plain(&raw)))
 }
 
-/// Whether `path` is a junction or a symbolic link to a folder.
+/// Whether `path` is a junction or a symbolic link to a directory.
 #[must_use]
 pub fn is_junction(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
         && std::fs::read_link(path).is_ok()
 }
 
-/// Whether the junction `link` names the folder `target`, spelled any way.
+/// Whether the junction `link` names the directory `target`, spelled any way.
 #[must_use]
 pub fn points_at(link: &Path, target: &Path) -> bool {
     let Some(named) = self::target(link) else {
@@ -122,7 +122,7 @@ fn reparse_data(target: &Path) -> io::Result<Vec<u8>> {
     let data_length = 8 + substitute_bytes + 2 + print_bytes + 2;
     let field = |n: usize| {
         u16::try_from(n)
-            .map_err(|_| io::Error::other("the folder's path is too long for a junction"))
+            .map_err(|_| io::Error::other("the directory's path is too long for a junction"))
     };
     let mut buffer = Vec::with_capacity(8 + data_length);
     buffer.extend(MOUNT_POINT.to_le_bytes());
@@ -139,21 +139,21 @@ fn reparse_data(target: &Path) -> io::Result<Vec<u8>> {
     Ok(buffer)
 }
 
-/// Set `link`'s reparse point to a junction naming `target`. `link` is a folder: empty,
+/// Set `link`'s reparse point to a junction naming `target`. `link` is a directory: empty,
 /// or a junction already, whose data this replaces.
 fn set_reparse_point(link: &Path, target: &Path) -> io::Result<()> {
     use std::os::windows::fs::OpenOptionsExt as _;
 
     let data = reparse_data(target)?;
-    let folder = std::fs::OpenOptions::new()
+    let directory = std::fs::OpenOptions::new()
         .access_mode(GENERIC_WRITE)
         .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
         .open(link)?;
-    let handle = folder.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+    let handle = directory.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
     let size = u32::try_from(data.len()).map_err(|_| io::Error::other("reparse data too long"))?;
     let mut returned = 0u32;
-    // SAFETY: `handle` is open on the folder for writing; `data` is a complete
+    // SAFETY: `handle` is open on the directory for writing; `data` is a complete
     // REPARSE_DATA_BUFFER of `size` bytes, which the call only reads (the kernel copies a
     // buffered FSCTL's input, so its alignment does not matter); no output buffer is
     // asked for, and `returned` receives the count.
@@ -209,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_with_files_in_it_and_a_file_are_refused() {
+    fn a_directory_with_files_in_it_and_a_file_are_refused() {
         let dir = tempfile::tempdir().unwrap();
         let target_dir = dir.path().join("v");
         std::fs::create_dir(&target_dir).unwrap();
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn the_reparse_data_names_the_folder_twice() {
+    fn the_reparse_data_names_the_directory_twice() {
         let data = reparse_data(Path::new(r"\\?\C:\x\y")).unwrap();
         assert_eq!(&data[..4], &MOUNT_POINT.to_le_bytes());
         let text = |from: usize, len: usize| {

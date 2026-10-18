@@ -230,7 +230,7 @@ fn env_and_timeout_run_cash_for_sh_and_bash() {
 
 #[test]
 fn cash_resolves_to_the_running_cash() {
-    // A terminal profile starts cash by full path, so its folder is usually not on PATH;
+    // A terminal profile starts cash by full path, so its directory is usually not on PATH;
     // `cash doctor` must work anyway.
     let out = cash_bare("which cash; cash --no-config -c 'echo nested-cash-ran'");
     let lines: Vec<&str> = out.stdout.lines().collect();

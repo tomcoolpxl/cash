@@ -11,7 +11,7 @@ pub struct Flags {
     pub pathname: bool,
     /// A backslash is an ordinary character (`FNM_NOESCAPE`).
     pub noescape: bool,
-    /// The pattern also matches what is under the folder it names
+    /// The pattern also matches what is under the directory it names
     /// (`FNM_LEADING_DIR`).
     pub leading_dir: bool,
     /// Upper and lower case are the same (`FNM_CASEFOLD`).
@@ -159,7 +159,7 @@ pub fn fnmatch(pattern: &[u8], name: &[u8], flags: Flags) -> bool {
     }
 }
 
-/// A literal name against a member's: the same, or a folder above it when
+/// A literal name against a member's: the same, or a directory above it when
 /// `leading_dir`.
 fn literal(pattern: &[u8], name: &[u8], flags: Flags) -> bool {
     let pattern = pattern.strip_suffix(b"/").unwrap_or(pattern);

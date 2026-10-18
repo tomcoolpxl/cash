@@ -1,10 +1,10 @@
-//! `cash --add-to-path` and `cash --remove-from-path`: the folder that stands for this
+//! `cash --add-to-path` and `cash --remove-from-path`: the directory that stands for this
 //! `cash.exe`, on the user PATH or off it, and what `cash doctor` says about it.
 //!
-//! Which folder that is depends on how cash was put on the machine
-//! (`cash_win32::install_layout`): a portable copy is found by its own folder; the
-//! installer's by `current`, the junction beside the version folder, so that an upgrade
-//! moves the junction and PATH stays as it is; Scoop's by its shims folder, which Scoop's
+//! Which directory that is depends on how cash was put on the machine
+//! (`cash_win32::install_layout`): a portable copy is found by its own directory; the
+//! installer's by `current`, the junction beside the version directory, so that an upgrade
+//! moves the junction and PATH stays as it is; Scoop's by its shims directory, which Scoop's
 //! own installer put on PATH and which serves every Scoop app, so cash never adds or
 //! removes it. The user PATH is written the way `--install-finish` and `--link-tools
 //! --add-to-path` write it (`cash_win32::userpath`): at the front, the stored value's
@@ -12,7 +12,7 @@
 //! portable offer's first question runs `cash --add-to-path`, so it says what the command
 //! says.
 //!
-//! `cash doctor`'s line about PATH asks the same question read-only: whether that folder is
+//! `cash doctor`'s line about PATH asks the same question read-only: whether that directory is
 //! on the user PATH, on the machine's (which an administrator set up), or on neither, in
 //! which case new windows will not find `cash` and the fix is named.
 
@@ -22,7 +22,7 @@ use cash_win32::install_layout::{installed_by_scoop, layout};
 use cash_win32::userpath::{self, Added};
 
 const USAGE: &str = "usage: cash --add-to-path\n       cash --remove-from-path\n\
-                     Puts the folder of this cash.exe on your user PATH, or takes it off.";
+                     Puts the directory of this cash.exe on your user PATH, or takes it off.";
 
 /// `cash --add-to-path` or `cash --remove-from-path`: the process exit status, or `None`
 /// when the command line is neither.
@@ -55,28 +55,30 @@ pub fn command(args: &[String]) -> Option<u8> {
     Some(if adding { add(&place) } else { remove(&place) })
 }
 
-/// Where this cash is, and so which folder stands for it on PATH.
+/// Where this cash is, and so which directory stands for it on PATH.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Place {
-    /// Scoop's install: its shims folder, Scoop's to keep on PATH.
+    /// Scoop's install: its shims directory, Scoop's to keep on PATH.
     Scoop(PathBuf),
     /// The installer's: `current`, which follows the upgrades.
     Installed(PathBuf),
-    /// A portable copy: the folder the exe is in.
+    /// A portable copy: the directory the exe is in.
     Portable(PathBuf),
 }
 
 impl Place {
-    /// The folder that stands for cash on PATH.
-    pub fn folder(&self) -> &Path {
+    /// The directory that stands for cash on PATH.
+    pub fn directory(&self) -> &Path {
         match self {
-            Self::Scoop(folder) | Self::Installed(folder) | Self::Portable(folder) => folder,
+            Self::Scoop(directory) | Self::Installed(directory) | Self::Portable(directory) => {
+                directory
+            }
         }
     }
 
-    /// The folder, as Windows shows it.
+    /// The directory, as Windows shows it.
     fn shown(&self) -> String {
-        cash_win32::path::to_backslash(self.folder())
+        cash_win32::path::to_backslash(self.directory())
     }
 }
 
@@ -90,10 +92,10 @@ pub fn place(exe: &Path, is_junction: impl Fn(&Path) -> bool) -> Option<Place> {
         return Some(Place::Installed(layout.current));
     }
     exe.parent()
-        .map(|folder| Place::Portable(folder.to_path_buf()))
+        .map(|directory| Place::Portable(directory.to_path_buf()))
 }
 
-/// Scoop's shims folder for an exe under `scoop\apps\`: `shims` beside `apps`.
+/// Scoop's shims directory for an exe under `scoop\apps\`: `shims` beside `apps`.
 fn scoop_shims(exe: &Path) -> Option<PathBuf> {
     exe.ancestors().find_map(|dir| {
         let is_apps = dir
@@ -113,55 +115,59 @@ fn own_place() -> Result<Place, String> {
         .and_then(std::fs::canonicalize)
         .map_err(|e| format!("cannot find cash.exe: {e}"))?;
     place(&exe, cash_win32::junction::is_junction)
-        .ok_or_else(|| "cash.exe has no folder".to_owned())
+        .ok_or_else(|| "cash.exe has no directory".to_owned())
 }
 
-/// Which PATH lists a folder.
+/// Which PATH lists a directory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Listed {
     /// The user's own PATH.
     User,
     /// The machine's, which Windows puts before the user's.
     Machine,
-    /// Neither: a new window will not find what is in the folder.
+    /// Neither: a new window will not find what is in the directory.
     Nowhere,
 }
 
-/// Where `folder` is listed, the user PATH first.
-fn listed(folder: &Path) -> Listed {
-    if userpath::contains(folder) {
+/// Where `directory` is listed, the user PATH first.
+fn listed(directory: &Path) -> Listed {
+    if userpath::contains(directory) {
         Listed::User
-    } else if userpath::machine_contains(folder) {
+    } else if userpath::machine_contains(directory) {
         Listed::Machine
     } else {
         Listed::Nowhere
     }
 }
 
-/// `cash --add-to-path`: the place's folder first on the user PATH, with one line
-/// saying what happened. Scoop's shims folder is left to Scoop, and only reported on.
+/// `cash --add-to-path`: the place's directory first on the user PATH, with one line
+/// saying what happened. Scoop's shims directory is left to Scoop, and only reported on.
 fn add(place: &Place) -> u8 {
     let shown = place.shown();
     match place {
         Place::Scoop(shims) => {
             if listed(shims) == Listed::Nowhere {
-                eprintln!("cash: installed by Scoop, but its shims folder {shown} is on no PATH");
+                eprintln!(
+                    "cash: installed by Scoop, but its shims directory {shown} is on no PATH"
+                );
                 1
             } else {
-                println!("cash: installed by Scoop: its shims folder is already on PATH");
+                println!("cash: installed by Scoop: its shims directory is already on PATH");
                 0
             }
         }
-        Place::Installed(folder) | Place::Portable(folder) => match userpath::add_first(folder) {
-            Ok(outcome) => {
-                println!("cash: {}", added_message(&shown, outcome));
-                0
+        Place::Installed(directory) | Place::Portable(directory) => {
+            match userpath::add_first(directory) {
+                Ok(outcome) => {
+                    println!("cash: {}", added_message(&shown, outcome));
+                    0
+                }
+                Err(e) => {
+                    eprintln!("cash: cannot change the user PATH: {e}");
+                    1
+                }
             }
-            Err(e) => {
-                eprintln!("cash: cannot change the user PATH: {e}");
-                1
-            }
-        },
+        }
     }
 }
 
@@ -175,31 +181,33 @@ fn added_message(shown: &str, outcome: Added) -> String {
     }
 }
 
-/// `cash --remove-from-path`: every entry naming the place's folder off the user PATH.
+/// `cash --remove-from-path`: every entry naming the place's directory off the user PATH.
 fn remove(place: &Place) -> u8 {
     let shown = place.shown();
     match place {
         Place::Scoop(_) => {
             eprintln!(
-                "cash: installed by Scoop: its shims folder {shown} serves every Scoop app and \
+                "cash: installed by Scoop: its shims directory {shown} serves every Scoop app and \
                  stays on PATH; scoop uninstall cash removes cash"
             );
             2
         }
-        Place::Installed(folder) | Place::Portable(folder) => match userpath::remove(folder) {
-            Ok(true) => {
-                println!("cash: {shown} removed from your user PATH");
-                0
+        Place::Installed(directory) | Place::Portable(directory) => {
+            match userpath::remove(directory) {
+                Ok(true) => {
+                    println!("cash: {shown} removed from your user PATH");
+                    0
+                }
+                Ok(false) => {
+                    println!("cash: {shown} was not on your user PATH");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("cash: cannot change the user PATH: {e}");
+                    1
+                }
             }
-            Ok(false) => {
-                println!("cash: {shown} was not on your user PATH");
-                0
-            }
-            Err(e) => {
-                eprintln!("cash: cannot change the user PATH: {e}");
-                1
-            }
-        },
+        }
     }
 }
 
@@ -216,13 +224,13 @@ pub struct Report {
 /// The line about PATH for the running `cash.exe`, or `None` when it cannot be found.
 pub fn doctor_report() -> Option<Report> {
     let place = own_place().ok()?;
-    Some(report(&place, listed(place.folder())))
+    Some(report(&place, listed(place.directory())))
 }
 
-/// The line about PATH for a cash at `place` whose folder is `listed` as said; the
-/// folder as `cash doctor` writes paths.
+/// The line about PATH for a cash at `place` whose directory is `listed` as said; the
+/// directory as `cash doctor` writes paths.
 fn report(place: &Place, listed: Listed) -> Report {
-    let shown = crate::doctor::shown(place.folder());
+    let shown = crate::doctor::shown(place.directory());
     match listed {
         Listed::User => Report {
             ok: true,
@@ -295,7 +303,7 @@ mod tests {
     }
 
     #[test]
-    fn the_doctor_line_names_the_folder_and_the_fix_for_the_layout() {
+    fn the_doctor_line_names_the_directory_and_the_fix_for_the_layout() {
         let portable = Place::Portable(PathBuf::from(r"D:\tools\unpacked"));
         let installed = Place::Installed(PathBuf::from(r"C:\Programs\cash\current"));
         let scoop = Place::Scoop(PathBuf::from(r"C:\Users\me\scoop\shims"));

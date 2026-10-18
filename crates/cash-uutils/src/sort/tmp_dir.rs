@@ -102,7 +102,7 @@ impl TmpDirWrapper {
         }
     }
 
-    /// Makes the temporary folder; `next_file` calls it once, while there is none.
+    /// Makes the temporary directory; `next_file` calls it once, while there is none.
     fn init_tmp_dir(&mut self) -> UResult<()> {
         let mut builder = tempfile::Builder::new();
         builder.prefix("uutils_sort");

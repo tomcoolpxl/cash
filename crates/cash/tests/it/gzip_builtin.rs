@@ -191,7 +191,7 @@ fn the_overwrite_question_answered_no_keeps_both_files() {
 
 #[test]
 fn r_goes_through_no_link_and_says_a_loop() {
-    // gzip -r and zstd -r followed every link, so a junction back to a folder above sent
+    // gzip -r and zstd -r followed every link, so a junction back to a directory above sent
     // them round until Windows refused the path. On the shared walker: GNU's gzip goes
     // through no link without -f and says so as ELOOP, and with -f a loop is said the
     // same way; zstd warns of a link and passes it, as zstd does.

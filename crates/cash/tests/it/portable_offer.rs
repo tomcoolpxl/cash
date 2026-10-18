@@ -1,7 +1,7 @@
 //! The offer a portable cash makes once, at its first interactive prompt: to put cash on
 //! the user PATH, add the Windows Terminal profile, and put its tools on PATH for other
-//! programs. The test's `cash.exe` is copied into a scratch folder, which makes it
-//! portable (neither Scoop's `scoop\apps\` nor the installer's version folder with a
+//! programs. The test's `cash.exe` is copied into a scratch directory, which makes it
+//! portable (neither Scoop's `scoop\apps\` nor the installer's version directory with a
 //! `current` junction beside it), and started on a pseudo console. Each test has a home,
 //! a `LOCALAPPDATA` and a user `Path` key of its own, so nothing of the developer's is
 //! read or written.
@@ -41,7 +41,7 @@ const ASK_LINKS: &str = "on your PATH for other programs";
 
 const PROMPT: &str = "PROMPT$";
 
-/// `name` with this process's id and a count after it, so that no two folders, in this
+/// `name` with this process's id and a count after it, so that no two directories, in this
 /// run or another one at the same time, share a name.
 fn unique(name: &str) -> String {
     static COUNT: AtomicU32 = AtomicU32::new(0);
@@ -63,7 +63,7 @@ fn plain(path: &Path) -> String {
     text.trim_end_matches('\\').to_lowercase()
 }
 
-/// A portable cash: the test's `cash.exe` copied into a folder of its own, with a home,
+/// A portable cash: the test's `cash.exe` copied into a directory of its own, with a home,
 /// a `LOCALAPPDATA` and a registry key standing in for the user's `Environment`; all
 /// deleted when dropped. On the build's drive, as the tool links are hard links.
 struct Portable {
@@ -81,20 +81,20 @@ impl Portable {
         Self::under(name, &["unpacked"])
     }
 
-    /// The exe in `<dir>\<folders...>\cash.exe`.
-    fn under(name: &str, folders: &[&str]) -> Self {
+    /// The exe in `<dir>\<directories...>\cash.exe`.
+    fn under(name: &str, directories: &[&str]) -> Self {
         let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
             .join("portable-offer")
             .join(unique(name));
         let _ = std::fs::remove_dir_all(&dir);
         let mut exe_dir = dir.clone();
-        for folder in folders {
-            exe_dir.push(folder);
+        for directory in directories {
+            exe_dir.push(directory);
         }
         let home = dir.join("home");
         let local = dir.join("local");
-        for folder in [&exe_dir, &home, &local] {
-            std::fs::create_dir_all(folder).unwrap();
+        for directory in [&exe_dir, &home, &local] {
+            std::fs::create_dir_all(directory).unwrap();
         }
         let exe = exe_dir.join("cash.exe");
         std::fs::copy(CASH, &exe).unwrap();
@@ -183,7 +183,7 @@ impl Portable {
             .join("cash.json")
     }
 
-    /// The links folder, `bin` beside the exe.
+    /// The links directory, `bin` beside the exe.
     fn bin(&self) -> PathBuf {
         self.exe.parent().unwrap().join("bin")
     }
@@ -283,7 +283,7 @@ fn the_offer_is_made_once_and_enter_means_no() {
     portable.assert_untouched();
 }
 
-/// The report: a yes to each question puts the exe's folder on the user PATH, writes
+/// The report: a yes to each question puts the exe's directory on the user PATH, writes
 /// the Terminal profile naming this exe, and links the tools into `bin` beside it, first
 /// on the user PATH; the commands say what they did, and the marker keeps the three yeses.
 #[test]

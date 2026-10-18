@@ -3,7 +3,7 @@
 //!
 //! Each file's data goes through every hash `-scrc` names (CRC32 unless it names
 //! some); its digests are summed "for data", and a hash of a 16-byte prefix (1 first
-//! for a folder), the digest and the name in UTF-16 is summed "for data and names".
+//! for a directory), the digest and the name in UTF-16 is summed "for data and names".
 //! The sums are added as little-endian numbers, what overflows counted after them.
 
 use std::fmt::Write as _;
@@ -326,7 +326,7 @@ impl Bundle {
     }
 
     /// `PrintHashStat`: each hash's sum for the data, and for the names when there was
-    /// more than one file or a folder.
+    /// more than one file or a directory.
     pub(super) fn stat(&self) -> String {
         let mut s = String::new();
         for h in &self.hashers {
@@ -400,7 +400,7 @@ impl Bundle {
 }
 
 /// `h`: 7-Zip's `HashCalc` with its console: "Scanning", the counts, a line for each
-/// file and folder, the sums.
+/// file and directory, the sums.
 #[expect(
     clippy::too_many_lines,
     reason = "7-Zip's HashCalc and its console, step by step"
@@ -458,7 +458,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let mut buf = vec![0u8; 1 << 15];
     let mut done = 0u64;
     for item in &items {
-        // A link -snl keeps is hashed as a file of its reparse data, a folder's too.
+        // A link -snl keeps is hashed as a file of its reparse data, a directory's too.
         let is_dir = item.is_dir && item.reparse.is_none();
         let mut input: Box<dyn Read> = if item.path.as_os_str().is_empty() {
             Box::new(env.context.stdin())
@@ -525,7 +525,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         );
         if bundle.num_files != 1 || bundle.num_dirs != 0 {
             if bundle.num_dirs != 0 {
-                let _ = writeln!(s, "Folders: {}", bundle.num_dirs);
+                let _ = writeln!(s, "Directories: {}", bundle.num_dirs);
             }
             let _ = writeln!(s, "Files: {}", bundle.num_files);
         }
@@ -586,7 +586,7 @@ mod tests {
         bundle.finish(true, "d");
         bundle.start();
         bundle.finish(true, "d/sub");
-        // `7z h d`: the same files and folders, in another order, which sums ignore.
+        // `7z h d`: the same files and directories, in another order, which sums ignore.
         assert_eq!(bundle.hashers[0].text(DATA_SUM), "86441661-00000001");
         assert_eq!(bundle.hashers[0].text(NAMES_SUM), "7040DABF-00000002");
     }

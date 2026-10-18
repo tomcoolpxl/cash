@@ -174,7 +174,7 @@ impl RarItem {
         self.size != u64::MAX
     }
 
-    /// `IsDir`: the folder's dictionary value, else the host's folder attribute.
+    /// `IsDir`: the directory's dictionary value, else the host's directory attribute.
     pub(super) const fn is_dir(&self) -> bool {
         if self.dict_size() == 7 {
             return true;
@@ -1001,7 +1001,7 @@ impl Rar4 {
             ..Item::default()
         };
         listed.extra = vec![
-            (Prop::Folder, plus(item.is_dir())),
+            (Prop::Directory, plus(item.is_dir())),
             (Prop::Solid, plus(self.is_solid(index))),
             (Prop::Commented, plus(item.is_commented())),
             (Prop::SplitBefore, plus(item.is_split_before())),
@@ -1016,7 +1016,7 @@ impl Rar4 {
 /// The properties a technical listing shows for a RAR 1.5 to 4 item, in 7-Zip's order.
 pub(super) const ITEM_PROPS: [Prop; 18] = [
     Prop::Path,
-    Prop::Folder,
+    Prop::Directory,
     Prop::Size,
     Prop::PackedSize,
     Prop::Modified,

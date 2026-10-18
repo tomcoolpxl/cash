@@ -50,7 +50,7 @@ pub(crate) fn final_key(path: &Path) -> String {
 /// The processes among `wanted` holding any of `files`, each with a file it holds.
 ///
 /// The Restart Manager answers for a set of files at once, so the set is halved only
-/// where a wanted process holds something: a few holders in a large folder cost a few
+/// where a wanted process holds something: a few holders in a large directory cost a few
 /// questions per holder, not one per file.
 pub(crate) fn wanted_holders(
     files: &[&Path],
@@ -171,9 +171,9 @@ fn module_holders(
 }
 
 /// The regular files at or below `dir` (directly in it unless `recursive`), going through
-/// no folder link or junction below it; `None` once more than `limit` entries (files and
-/// folders) have been seen: a folder such as `TEMP` can hold tens of thousands of folders.
-/// A stopped walk finds nothing.
+/// no directory link or junction below it; `None` once more than `limit` entries (files
+/// and directories) have been seen: a directory such as `TEMP` can hold tens of
+/// thousands of them. A stopped walk finds nothing.
 fn files_below_within(
     dir: &Path,
     recursive: bool,
@@ -202,11 +202,11 @@ fn files_below_within(
     Some(files)
 }
 
-/// Folders of up to this many entries have the processes the handle walk could not open
+/// Directories of up to this many entries have the processes the handle walk could not open
 /// looked for with the Restart Manager; it opens every file, so a larger one is not.
-pub(crate) const RESTART_MANAGER_FOLDER_LIMIT: usize = 20_000;
+pub(crate) const RESTART_MANAGER_DIRECTORY_LIMIT: usize = 20_000;
 
-/// One thing held at or below a folder.
+/// One thing held at or below a directory.
 pub(crate) enum Held<'w> {
     /// An open handle, from the handle walk.
     Handle(&'w OpenFile),
@@ -217,11 +217,11 @@ pub(crate) enum Held<'w> {
 /// What [`held_below`] found.
 pub(crate) struct HeldBelow<'w> {
     pub held: Vec<Held<'w>>,
-    /// Processes not looked for, because the folder is too large for the Restart Manager.
+    /// Processes not looked for, because the directory is too large for the Restart Manager.
     pub unasked: usize,
 }
 
-/// What processes hold at or below the folder `root` (directly in it unless `recursive`):
+/// What processes hold at or below the directory `root` (directly in it unless `recursive`):
 /// open files from the handle walk, executables and modules from every process, and for
 /// the processes the walk could not open (every process without a walk), the Restart
 /// Manager over the files below, asked in halves. A stop ends the looking.
@@ -279,7 +279,7 @@ pub(crate) fn held_below<'w>(
     if wanted.is_empty() {
         return HeldBelow { held, unasked: 0 };
     }
-    let Some(files) = files_below_within(root, recursive, RESTART_MANAGER_FOLDER_LIMIT, stop)
+    let Some(files) = files_below_within(root, recursive, RESTART_MANAGER_DIRECTORY_LIMIT, stop)
     else {
         return HeldBelow {
             held,
@@ -421,7 +421,7 @@ mod tests {
 
     #[test]
     fn a_loaded_dll_is_mapped() {
-        // process state: a test, reading the system's folder.
+        // process state: a test, reading the system's directory.
         let root = std::env::var_os("SystemRoot").unwrap();
         let kernel32 = Path::new(&root).join(r"System32\kernel32.dll");
         // Asked of this process alone. The Restart Manager cannot answer for a system

@@ -1,4 +1,4 @@
-//! The tree the picker shows: a folder's entries, read on demand, and broot's layout of
+//! The tree the picker shows: a directory's entries, read on demand, and broot's layout of
 //! several levels trimmed to fit with `… N more` lines (spec D73).
 
 use std::collections::HashMap;
@@ -6,15 +6,15 @@ use std::path::{Path, PathBuf};
 
 use crate::context::Shows;
 
-/// One file or folder.
+/// One file or directory.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     /// Where it is.
     pub path: PathBuf,
     /// Its name, as listed.
     pub name: String,
-    /// A folder rather than a file.
-    pub folder: bool,
+    /// A directory rather than a file.
+    pub directory: bool,
     /// A name starting with `.`, or the hidden attribute.
     pub hidden: bool,
     /// When it was last changed, where Windows says.
@@ -24,7 +24,7 @@ pub struct Entry {
 /// Which entries are listed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Filter {
-    /// Folders only, or files too.
+    /// Directories only, or files too.
     pub shows: Shows,
     /// Hidden entries too (Alt-.).
     pub hidden: bool,
@@ -34,11 +34,11 @@ pub struct Filter {
     pub by_date: bool,
 }
 
-/// The entries of a folder that `filter` lists, folders first, then by name as Windows
-/// orders them (case aside), or newest first. An unreadable folder has none.
+/// The entries of a directory that `filter` lists, directories first, then by name as Windows
+/// orders them (case aside), or newest first. An unreadable directory has none.
 #[must_use]
-pub fn read(folder: &Path, filter: Filter, ignores: &mut Ignores) -> Vec<Entry> {
-    let Ok(listing) = std::fs::read_dir(folder) else {
+pub fn read(directory: &Path, filter: Filter, ignores: &mut Ignores) -> Vec<Entry> {
+    let Ok(listing) = std::fs::read_dir(directory) else {
         return Vec::new();
     };
     let mut entries: Vec<Entry> = listing
@@ -48,18 +48,18 @@ pub fn read(folder: &Path, filter: Filter, ignores: &mut Ignores) -> Vec<Entry> 
             // On Windows the listing carries each entry's attributes, so this reads no
             // more of the disk.
             let metadata = item.metadata().ok()?;
-            let folder = metadata.is_dir();
+            let directory = metadata.is_dir();
             let hidden = name.starts_with('.') || attributes_hidden(&metadata);
             let entry = Entry {
                 path: item.path(),
                 name,
-                folder,
+                directory,
                 hidden,
                 modified: metadata.modified().ok(),
             };
-            let listed = (folder || filter.shows == Shows::Everything)
+            let listed = (directory || filter.shows == Shows::Everything)
                 && (filter.hidden || !entry.hidden)
-                && (filter.ignored || !ignores.ignored(&entry.path, folder));
+                && (filter.ignored || !ignores.ignored(&entry.path, directory));
             listed.then_some(entry)
         })
         .collect();
@@ -70,7 +70,7 @@ pub fn read(folder: &Path, filter: Filter, ignores: &mut Ignores) -> Vec<Entry> 
         } else {
             by_name()
         };
-        b.folder.cmp(&a.folder).then(order)
+        b.directory.cmp(&a.directory).then(order)
     });
     entries
 }
@@ -81,19 +81,19 @@ fn attributes_hidden(metadata: &std::fs::Metadata) -> bool {
     metadata.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
 }
 
-/// `.gitignore` rules, read once per folder: an entry is ignored as `git status` would
-/// ignore it, by the `.gitignore` files from its repository's root down to its folder.
+/// `.gitignore` rules, read once per directory: an entry is ignored as `git status` would
+/// ignore it, by the `.gitignore` files from its repository's root down to its directory.
 #[derive(Default)]
 pub struct Ignores {
-    /// Each folder's own rules, `None` when it has no `.gitignore`.
+    /// Each directory's own rules, `None` when it has no `.gitignore`.
     rules: HashMap<PathBuf, Option<ignore::gitignore::Gitignore>>,
-    /// Each folder's repository root, `None` outside a repository.
+    /// Each directory's repository root, `None` outside a repository.
     roots: HashMap<PathBuf, Option<PathBuf>>,
 }
 
 impl Ignores {
     /// Whether a `.gitignore` excludes `path`.
-    pub fn ignored(&mut self, path: &Path, folder: bool) -> bool {
+    pub fn ignored(&mut self, path: &Path, directory: bool) -> bool {
         if path.file_name().is_some_and(|name| name == ".git") {
             return true;
         }
@@ -104,10 +104,10 @@ impl Ignores {
             return false;
         };
         // The deepest rule decides; a rule nearer the file overrides one above it.
-        let mut folder_at = Some(parent);
-        while let Some(at) = folder_at {
+        let mut directory_at = Some(parent);
+        while let Some(at) = directory_at {
             if let Some(rules) = self.rules_of(at) {
-                match rules.matched(path, folder) {
+                match rules.matched(path, directory) {
                     ignore::Match::Ignore(_) => return true,
                     ignore::Match::Whitelist(_) => return false,
                     ignore::Match::None => {}
@@ -116,21 +116,21 @@ impl Ignores {
             if at == root {
                 break;
             }
-            folder_at = at.parent();
+            directory_at = at.parent();
         }
-        // Inside an ignored folder, everything is ignored.
+        // Inside an ignored directory, everything is ignored.
         path.parent()
             .filter(|parent| *parent != root)
             .is_some_and(|parent| self.ignored(parent, true))
     }
 
-    fn rules_of(&mut self, folder: &Path) -> Option<&ignore::gitignore::Gitignore> {
+    fn rules_of(&mut self, directory: &Path) -> Option<&ignore::gitignore::Gitignore> {
         self.rules
-            .entry(folder.to_path_buf())
+            .entry(directory.to_path_buf())
             .or_insert_with(|| {
-                let file = folder.join(".gitignore");
+                let file = directory.join(".gitignore");
                 file.is_file().then(|| {
-                    let mut builder = ignore::gitignore::GitignoreBuilder::new(folder);
+                    let mut builder = ignore::gitignore::GitignoreBuilder::new(directory);
                     builder.add(&file);
                     builder.build().ok()
                 })?
@@ -138,15 +138,15 @@ impl Ignores {
             .as_ref()
     }
 
-    fn root(&mut self, folder: &Path) -> Option<PathBuf> {
-        if let Some(known) = self.roots.get(folder) {
+    fn root(&mut self, directory: &Path) -> Option<PathBuf> {
+        if let Some(known) = self.roots.get(directory) {
             return known.clone();
         }
-        let found = folder
+        let found = directory
             .ancestors()
             .find(|at| at.join(".git").exists())
             .map(Path::to_path_buf);
-        self.roots.insert(folder.to_path_buf(), found.clone());
+        self.roots.insert(directory.to_path_buf(), found.clone());
         found
     }
 }
@@ -161,7 +161,7 @@ pub enum Line {
         entry: Entry,
         /// 1 for the root's own entries, 2 for theirs, and so on.
         depth: usize,
-        /// Whether it is its folder's last line, so its branch ends here (`└─`).
+        /// Whether it is its directory's last line, so its branch ends here (`└─`).
         last: bool,
         /// For each level above it, whether that level's branch goes on below it (`│`).
         rails: Vec<bool>,
@@ -177,7 +177,7 @@ pub enum Line {
     },
 }
 
-/// A folder in the layout, with the entries shown and how many are not.
+/// A directory in the layout, with the entries shown and how many are not.
 struct Node {
     entry: Entry,
     children: Option<Vec<Self>>,
@@ -187,9 +187,9 @@ struct Node {
 /// broot's layout of `top`, the root's entries, in `rows` rows.
 ///
 /// The root's own entries are all listed, however many, and the list scrolls through
-/// them. While rows remain, the entries of each shown folder are added, level by level,
+/// them. While rows remain, the entries of each shown directory are added, level by level,
 /// as many as fit, the rest counted in a `… N more` line. `rows` is the room below the
-/// root's own line. `children` reads a folder (cached by the caller), so a deeper level
+/// root's own line. `children` reads a directory (cached by the caller), so a deeper level
 /// costs a read only when there is room to show it.
 pub fn layout(
     top: Vec<Entry>,
@@ -199,11 +199,11 @@ pub fn layout(
     let mut nodes: Vec<Node> = Vec::new();
     let top_total = top.len();
     let mut used = fit(top, top_total, &mut nodes);
-    // `frontier`: index paths of the shown folders at the level being opened.
+    // `frontier`: index paths of the shown directories at the level being opened.
     let mut frontier: Vec<Vec<usize>> = nodes
         .iter()
         .enumerate()
-        .filter(|(_, n)| n.entry.folder)
+        .filter(|(_, n)| n.entry.directory)
         .map(|(i, _)| vec![i])
         .collect();
     while used < rows && !frontier.is_empty() {
@@ -227,7 +227,7 @@ pub fn layout(
             };
             node.more = more - shown.len();
             for (i, child) in shown.iter().enumerate() {
-                if child.entry.folder {
+                if child.entry.directory {
                     let mut path = at.clone();
                     path.push(i);
                     next.push(path);
@@ -297,12 +297,12 @@ fn draw(nodes: &[Node], depth: usize, rails: &mut Vec<bool>, lines: &mut Vec<Lin
 mod tests {
     use super::*;
 
-    fn entry(path: &str, folder: bool) -> Entry {
+    fn entry(path: &str, directory: bool) -> Entry {
         let path = PathBuf::from(path);
         Entry {
             name: path.file_name().unwrap().to_string_lossy().into_owned(),
             path,
-            folder,
+            directory,
             hidden: false,
             modified: None,
         }
@@ -370,13 +370,13 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_lists_folders_first_and_leaves_out_hidden_and_ignored() {
+    fn a_directory_lists_directories_first_and_leaves_out_hidden_and_ignored() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         std::fs::create_dir(root.join(".git")).unwrap();
         std::fs::write(root.join(".gitignore"), "target/\n*.log\n").unwrap();
-        for folder in ["target", "src", "Docs"] {
-            std::fs::create_dir(root.join(folder)).unwrap();
+        for directory in ["target", "src", "Docs"] {
+            std::fs::create_dir(root.join(directory)).unwrap();
         }
         for file in ["b.txt", "a.log", ".env"] {
             std::fs::write(root.join(file), "").unwrap();
@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(listed(filter), ["Docs", "src", "b.txt"]);
         assert_eq!(
             listed(Filter {
-                shows: Shows::Folders,
+                shows: Shows::Directories,
                 ..filter
             }),
             ["Docs", "src"]

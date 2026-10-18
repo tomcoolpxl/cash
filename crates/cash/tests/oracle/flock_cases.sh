@@ -27,7 +27,7 @@ echo "== bad timeout"; flock -w abc f true; echo "rc=$?"; flock -w -1 f true; ec
 echo "== bad exit code"; flock -E abc f true; echo "rc=$?"; flock -E 256 f true; echo "rc=$?"
 echo "== bad range"; flock --start x f true; echo "rc=$?"; flock --length -1 f true; echo "rc=$?"
 echo "== -c wants exactly one argument"; flock f -c "echo a" extra; echo "rc=$?"
-echo "== missing folder"; flock nosuch/dir/f true; echo "rc=$?"
+echo "== missing directory"; flock nosuch/dir/f true; echo "rc=$?"
 echo "== command not found"; flock f nosuchcmd-xyz; echo "rc=$?"
 echo "== the command's status"; flock f sh -c 'exit 5'; echo "rc=$?"
 echo "== the command keeps its options"; flock f echo -n hi; echo; echo "rc=$?"

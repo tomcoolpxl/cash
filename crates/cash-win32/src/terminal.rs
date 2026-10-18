@@ -49,7 +49,7 @@ pub fn settings_files(local_app_data: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// The fragment files Terminal reads: each application's folder under
+/// The fragment files Terminal reads: each application's directory under
 /// `Fragments`, for this user and for all users.
 pub fn fragment_files(local_app_data: &Path, program_data: Option<&Path>) -> Vec<PathBuf> {
     let mut roots = vec![local_app_data.join("Microsoft").join("Windows Terminal")];

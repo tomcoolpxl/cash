@@ -1,4 +1,4 @@
-//! Opening a file, folder or URL with its default handler: what a double-click in
+//! Opening a file, directory or URL with its default handler: what a double-click in
 //! Explorer does, and what the `start` builtin does without a command processor between.
 //!
 //! `start` used to run `cmd.exe /d /s /c start "" <target>`. The standard library quotes
@@ -50,7 +50,7 @@ pub fn open(target: &str, directory: &Path) -> io::Result<()> {
 ///
 /// * `program` - The program, best given by full path.
 /// * `parameters` - Its arguments, already quoted as the program parses them.
-/// * `directory` - The folder it starts in.
+/// * `directory` - The directory it starts in.
 pub fn run_elevated(program: &str, parameters: &str, directory: &Path) -> io::Result<()> {
     execute(Some("runas"), program, Some(parameters), directory, false).map(drop)
 }

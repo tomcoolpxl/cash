@@ -276,7 +276,7 @@ impl builtins::Command for FindCommand {
                     // GNU's `find -L` lists a link whose target is not there as the link.
                     Err(walker::WalkError::Dangling(entry)) => entry,
                     Err(walker::WalkError::Stopped) => break 'walking,
-                    // Following links, a folder can be its own ancestor; it is said and
+                    // Following links, a directory can be its own ancestor; it is said and
                     // left, as GNU `find` does. The walk went round it without end (BI-13).
                     Err(walker::WalkError::Loop { shown, ancestor }) => {
                         writeln!(
@@ -318,10 +318,10 @@ impl builtins::Command for FindCommand {
                 if visit.quit {
                     break 'walking;
                 }
-                // `-prune` keeps the walk out of a folder; after its contents, as under
+                // `-prune` keeps the walk out of a directory; after its contents, as under
                 // `-depth`, there is nothing left to keep out of.
-                if visit.prune && !walk.contents_first && entry.kind == walker::Kind::Folder {
-                    entries.skip_folder();
+                if visit.prune && !walk.contents_first && entry.kind == walker::Kind::Directory {
+                    entries.skip_directory();
                 }
             }
         }

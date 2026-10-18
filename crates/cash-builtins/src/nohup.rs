@@ -2,12 +2,12 @@
 //!
 //! What GNU `nohup` does with the streams, it does: input from a terminal is replaced by
 //! an empty one, output to a terminal goes to `nohup.out` in the shell's working directory
-//! (or the home folder's), and standard error to a terminal follows standard output.
+//! (or the home directory's), and standard error to a terminal follows standard output.
 //!
 //! The command is run as the shell runs a command that names no function
 //! (`run_for_builtin`): a builtin, or a program found on the shell's `PATH`, in the shell's
-//! folder and with its exported variables. It used to start a second cash through the
-//! standard library, with the process's folder, environment and standard output, so
+//! directory and with its exported variables. It used to start a second cash through the
+//! standard library, with the process's directory, environment and standard output, so
 //! `cd build && nohup ./run.sh > log` ran the wrong path and wrote to the terminal
 //! (`REVIEW_REPORT.md` BI-02).
 //!
@@ -104,7 +104,7 @@ impl builtins::Command for NohupCommand {
     }
 }
 
-/// `nohup.out` in the shell's working directory, or in the home folder when that cannot
+/// `nohup.out` in the shell's working directory, or in the home directory when that cannot
 /// be written, opened to append.
 fn open_nohup_out<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,

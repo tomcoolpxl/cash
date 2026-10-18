@@ -22,8 +22,8 @@ The cost: `$Foo` and `$FOO` cannot be two variables.
 - `CASH_MAX_SUBSHELLS`: how many background jobs and subshells may run at once, read at
   startup; default 256.
 - `CASH_NO_RECORDS`: when set and not empty, an interactive cash keeps no records in
-  `%LOCALAPPDATA%\cash`: not the folder each command ran in (Ctrl-R's list of this
-  folder's commands), nor the folders you go to.
+  `%LOCALAPPDATA%\cash`: not the directory each command ran in (Ctrl-R's list of this
+  directory's commands), nor the directories you go to.
 - `CASH_DEBUG_SESSION`: when set, cash says at startup whether its session job object
   and UTF-8 console are in place.
 - `PID`: cash's process id, read-only; the same as `BASHPID`.
@@ -33,7 +33,7 @@ The cost: `$Foo` and `$FOO` cannot be two variables.
 - `PATH`: reads Unix-style, `/c/Windows:/c/tools`; programs get the Windows form (see
   `help paths`).
 - `HOME`: from `USERPROFILE` when not set, spelled `C:/Users/me`.
-- `TMPDIR`: from `TEMP` when not set. `/tmp` is that folder.
+- `TMPDIR`: from `TEMP` when not set. `/tmp` is that directory.
 - `SHELL` and `BASH`: cash's own path. `BASH_VERSION` is `5.3.15(1)-release`, the Bash
   cash follows.
 - `OSTYPE` is `windows`; `MACHTYPE` is like `x86_64-pc-windows`; `HOSTNAME` is the

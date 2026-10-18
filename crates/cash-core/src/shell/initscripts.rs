@@ -93,9 +93,9 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         Ok(())
     }
 
-    /// Keeps the records of `%LOCALAPPDATA%\cash` from now on (`crate::kept`): the folder
+    /// Keeps the records of `%LOCALAPPDATA%\cash` from now on (`crate::kept`): the directory
     /// each command runs in, cut to `HISTFILESIZE` lines as the history file is, and the
-    /// folders visited. `CASH_NO_RECORDS`, set to anything, keeps none.
+    /// directories visited. `CASH_NO_RECORDS`, set to anything, keeps none.
     fn keep_records(&mut self) {
         if self
             .env_str("CASH_NO_RECORDS")
@@ -105,11 +105,11 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         }
         let localappdata = self.env_str("LOCALAPPDATA").map(|value| value.into_owned());
         self.records = crate::kept::Records::at(localappdata.as_deref());
-        if let Some(path) = self.records.history_folders_file()
+        if let Some(path) = self.records.history_directories_file()
             && let Some(keep) = self.history_size_limit("HISTFILESIZE")
             && let Err(error) = crate::kept::commands::trim(path, keep)
         {
-            tracing::debug!("couldn't cut the command folders: {error}");
+            tracing::debug!("couldn't cut the command directories: {error}");
         }
     }
 

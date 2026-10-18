@@ -45,7 +45,7 @@ All OK
 rc=0
 ./src/
 ./src/a.txt 3015617425 6
-== a -m0, a folder: its files, then its folders, deepest first
+== a -m0, a directory: its files, then its directories, deepest first
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
 Trial version             Type 'rar -?' for help

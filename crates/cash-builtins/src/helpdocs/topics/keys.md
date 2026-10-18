@@ -18,7 +18,7 @@ work as in Bash.
 - `Ctrl-R`: pick a command from the history, in a list below the line. Each command
   shows once, newest first, with its age; typing filters it, and what was on the line
   is the filter it opens with. `Enter` puts the command on the line to edit, `Tab` runs
-  it. `Ctrl-R` in the list switches to what ran in this folder and back. `Esc` clears
+  it. `Ctrl-R` in the list switches to what ran in this directory and back. `Esc` clears
   the filter, then closes the list. Reedline's search as you type is the Readline
   function `reverse-search-history`: `bind '"\C-r": reverse-search-history'` puts it
   back on `Ctrl-R`.
@@ -48,15 +48,15 @@ work as in Bash.
   quote, `if` without `fi`) continues on Enter by itself.
 - `Shift` with an arrow, `Home` or `End` selects; `Ctrl-Shift-A` selects all.
 
-## Folders
+## Directories
 
-`Alt-E` opens croot, a file and folder picker, below the line: on an empty line or after
-`cd` it goes to the folder you pick, after any other command it inserts the path (see
-`help croot`). In it, `Alt-H` lists the folders you go to most, across sessions, best
+`Alt-E` opens croot, a file and directory picker, below the line: on an empty line or after
+`cd` it goes to the directory you pick, after any other command it inserts the path (see
+`help croot`). In it, `Alt-H` lists the directories you go to most, across sessions, best
 first: the ones `z` jumps to (see `help z`), and Tab after `z WORDS` offers them too.
 
 On an empty line, `Alt-Left` runs `prevd` and `Alt-Right` runs `nextd`: back and
-forward through the folders you were in, and the prompt redraws. On a line with
+forward through the directories you were in, and the prompt redraws. On a line with
 text they move a word. Windows Terminal uses Alt-arrows for split panes, so they reach
 cash only in a tab that is not split.
 

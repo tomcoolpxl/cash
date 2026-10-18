@@ -6,7 +6,7 @@ see: sudo elevation
 `sudoedit FILE...` (also `sudo -e FILE...`) edits files you may not write, as Unix's
 `sudoedit` does.
 
-- Each file is copied to your temporary folder, under its own name, and opened there in
+- Each file is copied to your temporary directory, under its own name, and opened there in
   `$SUDO_EDITOR`, `$VISUAL` or `$EDITOR`, the first that is set (Notepad without one).
   The editor runs as you, not elevated, and is waited for.
 - When it ends, each copy you changed is written back into its file by an elevated cash,

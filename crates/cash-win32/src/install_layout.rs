@@ -4,13 +4,13 @@
 //! from the release zip, are told apart by their paths alone, so that the installer and the
 //! shell agree. Scoop keeps every app under `scoop\apps\<name>\`, and only Scoop should
 //! upgrade or remove what it put there. The installer copies a release into
-//! `<root>\<version>\` and points a `current` junction beside the version folder at it;
+//! `<root>\<version>\` and points a `current` junction beside the version directory at it;
 //! `cash --update` moves the junction on. A `cash.exe` in neither layout is portable: the
-//! zip's, or a build in a `target` folder.
+//! zip's, or a build in a `target` directory.
 
 use std::path::{Path, PathBuf};
 
-/// Whether `exe` is under a `scoop\apps\` folder: Scoop's install, which only Scoop
+/// Whether `exe` is under a `scoop\apps\` directory: Scoop's install, which only Scoop
 /// should upgrade or remove.
 #[must_use]
 pub fn installed_by_scoop(exe: &Path) -> bool {
@@ -21,11 +21,11 @@ pub fn installed_by_scoop(exe: &Path) -> bool {
 }
 
 /// The installer's layout around an exe: `<root>\<version>\cash.exe` with a `current`
-/// junction beside the version folder.
+/// junction beside the version directory.
 pub struct Layout {
-    /// The install folder.
+    /// The install directory.
     pub root: PathBuf,
-    /// The folder the exe is in.
+    /// The directory the exe is in.
     pub version_dir: PathBuf,
     /// The `current` junction.
     pub current: PathBuf,
@@ -57,7 +57,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_layout_needs_a_current_junction_beside_the_version_folder() {
+    fn the_layout_needs_a_current_junction_beside_the_version_directory() {
         let junction = Path::new(r"C:\Users\me\AppData\Local\Programs\cash\current");
         let is_junction = |path: &Path| path == junction;
         let found = layout(
@@ -93,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn a_copy_in_a_plain_folder_is_portable_and_one_beside_a_junction_is_not() {
+    fn a_copy_in_a_plain_directory_is_portable_and_one_beside_a_junction_is_not() {
         let dir = tempfile::tempdir().unwrap();
         let plain = dir.path().join("unpacked").join("cash.exe");
         std::fs::create_dir_all(plain.parent().unwrap()).unwrap();

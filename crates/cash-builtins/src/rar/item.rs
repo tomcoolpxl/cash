@@ -109,8 +109,8 @@ impl Stamp {
 pub(super) struct Item {
     pub(super) name: String,
     pub(super) kind: Kind,
-    /// A folder, or a link standing for one: listed without sizes.
-    pub(super) folder: bool,
+    /// A directory, or a link standing for one: listed without sizes.
+    pub(super) directory: bool,
     /// Its header failed its checksum and was read as it stands.
     pub(super) damaged: bool,
     pub(super) target: Option<String>,
@@ -400,7 +400,7 @@ fn rar5_item(header: &rar50::FileHeader, service: bool, zone: &Zone) -> Item {
     Item {
         name,
         kind,
-        folder: directory,
+        directory,
         damaged: header.block.damaged,
         target: header
             .redirection
@@ -524,7 +524,7 @@ fn rar4_item(header: &rar15_40::FileHeader, service: bool) -> Item {
     Item {
         name: String::from_utf8_lossy(&header.name).into_owned(),
         kind,
-        folder: directory,
+        directory,
         damaged: false,
         target: None,
         size: header.unp_size,
@@ -576,7 +576,7 @@ pub(super) fn rar13_items(archive: &rar13::Archive) -> Vec<Item> {
             }
             Item {
                 name: String::from_utf8_lossy(&entry.name).into_owned(),
-                folder: directory,
+                directory,
                 damaged: false,
                 kind: if directory {
                     Kind::Directory

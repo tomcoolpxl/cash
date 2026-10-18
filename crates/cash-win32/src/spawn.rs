@@ -40,7 +40,7 @@ pub fn in_any_job() -> bool {
 }
 
 /// Start a process that deliberately leaves cash's job object (D45's `detach`), in the
-/// folder `cwd` and with the environment `env` (the shell's, which are not the process's:
+/// directory `cwd` and with the environment `env` (the shell's, which are not the process's:
 /// D5, D10).
 ///
 /// `CREATE_BREAKAWAY_FROM_JOB` only succeeds if the enclosing job permits it, which is
@@ -73,7 +73,7 @@ pub fn spawn_detached(command_line: &str, cwd: &Path, env: &[(String, String)]) 
     // in; all-zero is a valid starting state.
     let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
 
-    // SAFETY: command is a live, writable UTF-16 buffer; the folder and the environment
+    // SAFETY: command is a live, writable UTF-16 buffer; the directory and the environment
     // block are NUL-terminated (the block doubly) and outlive the call; every other
     // pointer is null or points at a correctly-sized local that outlives the call.
     let created = unsafe {

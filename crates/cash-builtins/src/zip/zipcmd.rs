@@ -429,10 +429,10 @@ fn parse(args: &[String], clock: &Clock) -> Result<Options, String> {
     Ok(o)
 }
 
-/// A file or folder to add.
+/// A file or directory to add.
 #[derive(Debug)]
 struct Source {
-    /// The name as given or found under a given folder.
+    /// The name as given or found under a given directory.
     given: String,
     /// Where it is; `None` for standard input.
     path: Option<PathBuf>,
@@ -467,7 +467,7 @@ fn now() -> i64 {
 }
 
 /// zip's `ex2in`: the archive's name for a file's: `/` between its parts, no drive, no
-/// leading `/` or `./`, only the last part with `-j`, a folder's ending in `/`.
+/// leading `/` or `./`, only the last part with `-j`, a directory's ending in `/`.
 fn internal_name(given: &str, is_dir: bool, junk: bool) -> String {
     let mut name = given.replace('\\', "/");
     let bytes = name.as_bytes();
@@ -1020,7 +1020,7 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
         (dos.date, dos.time)
     }
 
-    /// The names on the command line, folders walked with `-r`, filtered.
+    /// The names on the command line, directories walked with `-r`, filtered.
     fn collect(&self) -> io::Result<Result<Vec<Source>, ExecutionResult>> {
         let mut out = Vec::new();
         for given in self.options.files.clone() {
@@ -1055,9 +1055,9 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
     }
 
     /// `given`, whose `view` is known, and with `-r` what is below it, on the shared walker:
-    /// through links unless `-y`, as zip goes through them. A link back to a folder above
+    /// through links unless `-y`, as zip goes through them. A link back to a directory above
     /// is passed by, where Info-ZIP's zip 3.0 goes round until the system refuses the path,
-    /// so each file is stored once; a folder that cannot be listed is passed over in
+    /// so each file is stored once; a directory that cannot be listed is passed over in
     /// silence, as zip passes it. A stop fails the run, in silence: an archive of what was
     /// walked would look whole.
     fn walk(

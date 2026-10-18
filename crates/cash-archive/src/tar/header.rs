@@ -69,7 +69,7 @@ pub mod field {
     pub const DEVMAJOR: (usize, usize) = (329, 8);
     /// A device's minor number.
     pub const DEVMINOR: (usize, usize) = (337, 8);
-    /// ustar's prefix: the folders before the name.
+    /// ustar's prefix: the directories before the name.
     pub const PREFIX: (usize, usize) = (345, 155);
     /// GNU's: the access time, after the device numbers.
     pub const ATIME: (usize, usize) = (345, 12);

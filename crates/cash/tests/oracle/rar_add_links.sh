@@ -78,7 +78,7 @@ for f in vol/*; do echo "$f $(cksum < "$f")"; done
 z rar t -idc vol/o.part1.rar
 
 echo "== hard links, -oh"
-# Each name touched: a folder's entry for a name not used since the file changed keeps
+# Each name touched: a directory's entry for a name not used since the file changed keeps
 # its old times, which rar stores for a hard link, and they would not be the same twice.
 mkdir h
 printf 'hard\n' > h/a
@@ -99,8 +99,8 @@ done
 
 echo "== junctions, -ol"
 # A junction is followed without -ol, left out with -ol-, and stored as the link with
-# -ol, inside a folder, named, or taken by a mask without -r. Its own time is when it
-# was made and its target this run's folder, so the archives are shown by what they hold.
+# -ol, inside a directory, named, or taken by a mask without -r. Its own time is when it
+# was made and its target this run's directory, so the archives are shown by what they hold.
 mkdir real top
 printf 'inside\n' > real/in.txt
 printf 'beside\n' > top/f.txt
@@ -111,7 +111,7 @@ for sw in -ol -ola "" -ol-; do
     echo "-- $sw $what"
     z rar a -m0 $sw -idc o.rar "$what"
     [ -e o.rar ] && rar lt -idc o.rar | tr -d '\r' | grep "Name:\|Type:\|Target:\|Attributes:" |
-      sed -e 's#\\#/#g' -e 's#Target: /??/.*/real$#Target: /??/(this folder)/real#'
+      sed -e 's#\\#/#g' -e 's#Target: /??/.*/real$#Target: /??/(this directory)/real#'
   done
 done
 # cash's rm (uutils') cannot remove a junction yet: cmd's rmdir takes it away.

@@ -166,7 +166,7 @@ fn every_corpus_case_gives_the_oracles_output() {
     );
 }
 
-/// Runs one case in a scratch folder of its own, beside the fixtures. What differs from
+/// Runs one case in a scratch directory of its own, beside the fixtures. What differs from
 /// the oracle, if anything.
 fn check_case(name: &str, case: &Path, fixtures: &Path) -> Option<String> {
     let file = case.file_name()?.to_string_lossy();

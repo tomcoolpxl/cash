@@ -130,7 +130,7 @@ fn linked_path<SE: cash_core::ShellExtensions>(
     }
     let exe = std::env::current_exe().ok()?;
     // The first match that is this cash ends the search: every match of PATH was gathered
-    // before any was compared. Each folder is looked at once (`pathsearch`), so without a
+    // before any was compared. Each directory is looked at once (`pathsearch`), so without a
     // link the whole of PATH costs a look each.
     shell
         .find_executables_in_path(name)

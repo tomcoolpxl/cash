@@ -1,9 +1,9 @@
 //! 7-Zip's censor (`Wildcard.cpp`): the masks a command's names and `-i`/`-x` switches
-//! give, kept as a tree of folders, and whether an item's path is in or out.
+//! give, kept as a tree of directories, and whether an item's path is in or out.
 //!
 //! Names are compared without case, as 7-Zip on Windows compares them, unless `-ssc`.
 
-/// Whether a mask reaches into subfolders (`-r`, `-r-`, `-r0`).
+/// Whether a mask reaches into subdirectories (`-r`, `-r-`, `-r0`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Recursion {
     None,
@@ -12,7 +12,7 @@ pub(super) enum Recursion {
     Always,
 }
 
-/// Whether a mask names files, folders or both (`-spm`, `-im`, `-xm`).
+/// Whether a mask names files, directories or both (`-spm`, `-im`, `-xm`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum MarkMode {
     FileOrDir,
@@ -20,7 +20,7 @@ pub(super) enum MarkMode {
     StrictFileIfWildcard,
 }
 
-/// How a name's leading folders are taken: kept whole (extraction and listing, which
+/// How a name's leading directories are taken: kept whole (extraction and listing, which
 /// match against names inside an archive), or split into a prefix on disk.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum PathMode {
@@ -100,7 +100,7 @@ impl Item {
     }
 }
 
-/// A folder of the censor: its masks, and those of the folders under it.
+/// A directory of the censor: its masks, and those of the directories under it.
 #[derive(Clone, Debug, Default)]
 pub(super) struct Node {
     name: String,
@@ -171,7 +171,7 @@ impl Node {
         items.iter().any(|item| item.check(path, is_file, case))
     }
 
-    /// `CCensorNode::NeedCheckSubDirs`: a mask here reaches below this folder.
+    /// `CCensorNode::NeedCheckSubDirs`: a mask here reaches below this directory.
     pub(super) fn need_check_sub_dirs(&self) -> bool {
         self.includes
             .iter()
@@ -191,7 +191,7 @@ impl Node {
     }
 
     /// `CanUseFsDirect`: when every mask here is one plain name, those names, each with
-    /// whether it may be a file and a folder; the folder need not be listed.
+    /// whether it may be a file and a directory; the directory need not be listed.
     pub(super) fn direct_names(&self) -> Option<Vec<(String, bool, bool)>> {
         self.includes
             .iter()
@@ -229,12 +229,12 @@ impl Node {
         }
     }
 
-    /// The folders under this one that masks name.
+    /// The directories under this one that masks name.
     pub(super) fn children(&self) -> &[Self] {
         &self.children
     }
 
-    /// This folder's name.
+    /// This directory's name.
     pub(super) fn name(&self) -> &str {
         &self.name
     }
@@ -419,8 +419,8 @@ impl Censor {
     }
 }
 
-/// `CCensorNode::CheckPathToRoot`: whether a mask of the last folder of `stack`, or of
-/// a folder above it (the path growing by each folder's name), speaks of `path`.
+/// `CCensorNode::CheckPathToRoot`: whether a mask of the last directory of `stack`, or of
+/// a directory above it (the path growing by each directory's name), speaks of `path`.
 pub(super) fn check_to_root(
     stack: &[&Node],
     include: bool,
@@ -572,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_name_takes_what_is_under_it() {
+    fn a_directory_name_takes_what_is_under_it() {
         let c = censor(&["d"], &[], Recursion::None);
         assert!(c.wants("d", true));
         assert!(c.wants("d/a.txt", false));

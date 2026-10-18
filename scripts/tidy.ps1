@@ -3,21 +3,21 @@
 Deletes the build output nothing needs any more, and warns when the drive runs low.
 
 .DESCRIPTION
-Every checkout of cash, the main one and each worktree, has a target\ folder of its own,
+Every checkout of cash, the main one and each worktree, has a target\ directory of its own,
 and each can grow to tens of gigabytes. Cargo never deletes them (rust-lang/cargo#13136).
 This script does, for this repository only. It deletes:
 
-- the folders under each checkout's target\ (debug, release, dist, and any made with
+- the directories under each checkout's target\ (debug, release, dist, and any made with
   --target-dir) that have not been built in -Days days, or all of them with -All;
-- folders under .claude\worktrees that git no longer knows as worktrees, when they hold
+- directories under .claude\worktrees that git no longer knows as worktrees, when they hold
   nothing but build output (what a half-finished worktree removal leaves behind);
 - old copies of cash.exe set aside in target\release (cash.exe.old-*), once nothing runs
   them.
 
-A folder is left alone while it is in use: while a program inside it runs, or while a
+A directory is left alone while it is in use: while a program inside it runs, or while a
 cargo build holds its lock. Anything else is renamed with a .cash-trash- suffix, which
 is instant, and then deleted by a background process, so the script returns at once.
-The shell in use is a released one Scoop installed, so every target\ folder is safe to
+The shell in use is a released one Scoop installed, so every target\ directory is safe to
 delete.
 
 Claude Code runs this at the start of every session (.claude\settings.json), with -Hook.
@@ -28,13 +28,13 @@ Shows what would be deleted, and how big each checkout's build output is.
 
 .EXAMPLE
 powershell -File scripts\tidy.ps1 -All
-Deletes every build folder that is not in use, whatever its age.
+Deletes every build directory that is not in use, whatever its age.
 #>
 [CmdletBinding()]
 param(
-    # Build folders not built for this many days are deleted.
+    # Build directories not built for this many days are deleted.
     [int]$Days = 7,
-    # Delete every build folder that is not in use, whatever its age.
+    # Delete every build directory that is not in use, whatever its age.
     [switch]$All,
     # Warn when the drive holding the repository has less free space than this.
     [int]$MinFreeGB = 30,
@@ -52,7 +52,7 @@ $ErrorActionPreference = 'Stop'
 $trashMarker = '.cash-trash-'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 
-# Folders renamed for deletion, and one line per deletion for the summary.
+# Directories renamed for deletion, and one line per deletion for the summary.
 $doomed = New-Object System.Collections.Generic.List[string]
 $deleted = New-Object System.Collections.Generic.List[string]
 
@@ -65,12 +65,12 @@ function Get-NormalPath([string]$Path) {
     [IO.Path]::GetFullPath($Path).TrimEnd('\').ToLowerInvariant()
 }
 
-# The newest time cargo wrote into a build folder. Cargo adds files to deps\ and
-# .fingerprint\ on every compile, which updates those folders' own modification times,
+# The newest time cargo wrote into a build directory. Cargo adds files to deps\ and
+# .fingerprint\ on every compile, which updates those directories' own modification times,
 # so a handful of stat calls is enough; no need to read the thousands of files inside.
 function Get-LastBuild([string]$Dir) {
     $candidates = @($Dir) + @('deps', '.fingerprint', 'build', 'incremental' | ForEach-Object { Join-Path $Dir $_ })
-    # A folder made with --target-dir holds profile folders of its own (swap\release\deps).
+    # A directory made with --target-dir holds profile directories of its own (swap\release\deps).
     $candidates += @(Get-ChildItem -LiteralPath $Dir -Directory -Force -ErrorAction SilentlyContinue |
             ForEach-Object { Join-Path $_.FullName 'deps'; Join-Path $_.FullName '.fingerprint' })
     $times = @($candidates | Where-Object { Test-Path -LiteralPath $_ } |
@@ -78,14 +78,14 @@ function Get-LastBuild([string]$Dir) {
     ($times | Measure-Object -Maximum).Maximum
 }
 
-# The paths of every running program, to leave alone a folder one of them runs from.
+# The paths of every running program, to leave alone a directory one of them runs from.
 $runningPaths = @(Get-Process | ForEach-Object {
         try { $_.Path } catch { $null }
     } | Where-Object { $_ } | ForEach-Object { $_.ToLowerInvariant() })
 
 # Cargo holds a lock on .cargo-lock (and, since 1.9x, .cargo-build-lock and
 # .cargo-artifact-lock) for as long as it builds. It opens the file sharing delete
-# access, so renaming the folder would still succeed; the lock itself has to be tried.
+# access, so renaming the directory would still succeed; the lock itself has to be tried.
 function Test-CargoLocked([string]$LockFile) {
     try {
         $stream = [IO.File]::Open($LockFile, 'Open', 'ReadWrite', 'ReadWrite, Delete')
@@ -108,7 +108,7 @@ function Test-InUse([string]$Dir) {
     foreach ($path in $runningPaths) {
         if ($path.StartsWith($prefix)) { return $true }
     }
-    # The lock is in the profile folder (debug\), or one level down in a folder made
+    # The lock is in the profile directory (debug\), or one level down in a directory made
     # with --target-dir, or two levels down when $Dir is a whole worktree's target\.
     $patterns = @('.cargo*lock', '*\.cargo*lock', 'target\*\.cargo*lock', 'target\*\*\.cargo*lock')
     foreach ($pattern in $patterns) {
@@ -145,7 +145,7 @@ function Invoke-Tidy {
     if ($LASTEXITCODE -ne 0) { throw "not a git checkout: $repo" }
     $main = Split-Path -Parent ($commonDir -replace '/', '\')
 
-    # Forget worktrees whose folders are gone, so the list below is the real one.
+    # Forget worktrees whose directories are gone, so the list below is the real one.
     if (-not $DryRun) {
         git -C $main worktree prune
     }
@@ -155,7 +155,7 @@ function Invoke-Tidy {
             Where-Object { Test-Path -LiteralPath $_ })
     $registered = @($checkouts | ForEach-Object { Get-NormalPath $_ })
 
-    # Leftovers under .claude\worktrees: folders git does not know, holding nothing but
+    # Leftovers under .claude\worktrees: directories git does not know, holding nothing but
     # build output, and anything an earlier run renamed but did not finish deleting.
     $worktreeRoot = Join-Path $main '.claude\worktrees'
     if (Test-Path -LiteralPath $worktreeRoot) {
@@ -174,7 +174,7 @@ function Invoke-Tidy {
         }
     }
 
-    # Build folders.
+    # Build directories.
     $cutoff = (Get-Date).AddDays(-$Days)
     foreach ($checkout in $checkouts) {
         $target = Join-Path $checkout 'target'
@@ -215,15 +215,15 @@ function Invoke-Tidy {
         }
     }
 
-    # Delete in the background: a target\ folder can take minutes to delete. If this
-    # process is stopped first, the .cash-trash- folders are picked up by the next run.
+    # Delete in the background: a target\ directory can take minutes to delete. If this
+    # process is stopped first, the .cash-trash- directories are picked up by the next run.
     if ($doomed.Count -gt 0) {
         $commands = @($doomed | ForEach-Object { "rd /s /q `"$_`"" }) -join ' & '
         Start-Process -FilePath $env:ComSpec -ArgumentList '/d', '/c', $commands -WindowStyle Hidden
     }
 
     if ($deleted.Count -gt 0) {
-        Write-Output "tidy.ps1 deleted $($deleted.Count) unused build folder(s) or old cash.exe copies:"
+        Write-Output "tidy.ps1 deleted $($deleted.Count) unused build directory(s) or old cash.exe copies:"
         $deleted | ForEach-Object { Write-Output "  $_" }
     } elseif (-not $DryRun) {
         Write-Detail 'Nothing to delete.'
@@ -243,8 +243,8 @@ function Invoke-Tidy {
     $freeGB = [math]::Floor($drive.AvailableFreeSpace / 1GB)
     if ($freeGB -lt $MinFreeGB) {
         Write-Output (("Drive {0} has only {1} GB free (warning below {2} GB). A cash build can take " +
-                "10 GB or more. Run scripts\tidy.ps1 -All to delete every build folder not in use, " +
-                "and avoid extra --target-dir folders and feature sets.") -f $drive.Name, $freeGB, $MinFreeGB)
+                "10 GB or more. Run scripts\tidy.ps1 -All to delete every build directory not in use, " +
+                "and avoid extra --target-dir directories and feature sets.") -f $drive.Name, $freeGB, $MinFreeGB)
     } else {
         Write-Detail "Drive $($drive.Name) has $freeGB GB free."
     }

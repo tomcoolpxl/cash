@@ -1,13 +1,13 @@
 //! What builtins read the files they are named through (decisions.md, "Builtins share their
-//! option parsing, input opening and folder walks"; `research/central-components-design.md`).
+//! option parsing, input opening and directory walks"; `research/central-components-design.md`).
 //!
-//! A name is opened as the shell's own `<` opens it: against the shell's folder, which the
+//! A name is opened as the shell's own `<` opens it: against the shell's directory, which the
 //! process's is not (D10); `/dev/null`, `/dev/tty`, `/dev/zero` and the random devices as
 //! devices; `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` as the descriptors
 //! the shell has under those numbers. Before this each builtin opened a path itself, so
 //! none could read `/dev/stdin` (the hook that serves the names lives only in bundled
-//! tools' processes), and a folder read as "Permission denied", which is what Windows says
-//! to a folder opened as a file.
+//! tools' processes), and a directory read as "Permission denied", which is what Windows says
+//! to a directory opened as a file.
 //!
 //! What is read goes through the stop token ([`crate::StopToken::reader`]): a Ctrl-C, or
 //! `kill` of a background job, fails the read at the next block instead of ending it, so a
@@ -139,7 +139,7 @@ pub enum InputError {
     NotFound,
     /// The file may not be read.
     PermissionDenied,
-    /// A folder, at this absolute path: a tool that walks folders goes on with it.
+    /// A directory, at this absolute path: a tool that walks directories goes on with it.
     IsADirectory(PathBuf),
     /// Anything else Windows said.
     Other(std::io::Error),
@@ -191,7 +191,7 @@ impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
     ///
     /// # Errors
     ///
-    /// When the name cannot be opened: not found, not readable, a folder, or what else
+    /// When the name cannot be opened: not found, not readable, a directory, or what else
     /// Windows says.
     pub fn open_input(&self, name: &str, dash: Dash) -> Result<Input, InputError> {
         let stop = self.stop_token();
@@ -225,7 +225,7 @@ impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
                     ..input(Source::File { path, metadata }, Box::new(file))
                 })
             }
-            // Windows refuses a folder opened as a file with "Access is denied": one look
+            // Windows refuses a directory opened as a file with "Access is denied": one look
             // at what the name is tells the two apart, and only when the open failed.
             Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
                 if std::fs::metadata(&path).is_ok_and(|metadata| metadata.is_dir()) {

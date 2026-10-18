@@ -21,7 +21,7 @@ use crate::common::{
     CASH, Output, Scratch, cash_command, git_for_windows, output_of, with_isolated_environment,
 };
 
-/// Runs `script` with `PATH` set to an empty folder, so that nothing is found.
+/// Runs `script` with `PATH` set to an empty directory, so that nothing is found.
 fn cash_without_path(dir: &Scratch, script: &str) -> Output {
     output_of(
         cash_command()

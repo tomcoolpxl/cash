@@ -169,7 +169,7 @@ fn dev_paths_are_matched_exactly() {
 
 #[test]
 fn a_device_is_named_from_the_root_only() {
-    // The name is all there is to go on, so a folder called `dev` must not be enough:
+    // The name is all there is to go on, so a directory called `dev` must not be enough:
     // `cd ~/dev; echo x > null` writes a file, and so does naming that file in full.
     for file in [
         "dev/null",
@@ -327,8 +327,8 @@ fn the_tmp_spelling_is_also_diagnosable() {
 // A program's working directory (process_directory)
 // ---------------------------------------------------------------------------
 
-/// A folder under `%TEMP%` whose path is longer than Windows will start a program in.
-fn long_folder(name: &str) -> PathBuf {
+/// A directory under `%TEMP%` whose path is longer than Windows will start a program in.
+fn long_directory(name: &str) -> PathBuf {
     let mut dir = std::env::temp_dir().join(format!("cash-long-{name}-{}", std::process::id()));
     for i in 0..6 {
         dir.push(format!("{}{i}", "a".repeat(50)));
@@ -338,14 +338,14 @@ fn long_folder(name: &str) -> PathBuf {
 }
 
 #[test]
-fn a_folder_that_fits_is_left_as_it_is() {
+fn a_directory_that_fits_is_left_as_it_is() {
     let dir = Path::new("C:/Users/someone/project");
     assert_eq!(process_directory(dir).unwrap(), dir);
 }
 
 #[test]
-fn a_folder_too_long_is_given_by_its_short_name() {
-    let dir = long_folder("short");
+fn a_directory_too_long_is_given_by_its_short_name() {
+    let dir = long_directory("short");
     std::fs::create_dir_all(&dir).unwrap();
     let short = process_directory(&dir);
     let top = dir.ancestors().nth(6).unwrap().to_path_buf();
@@ -361,13 +361,13 @@ fn a_folder_too_long_is_given_by_its_short_name() {
         "{}",
         short.display()
     );
-    assert_eq!(same, Some(true), "{} is another folder", short.display());
+    assert_eq!(same, Some(true), "{} is another directory", short.display());
 }
 
 #[test]
-fn a_folder_too_long_without_a_short_name_says_why() {
-    // A folder that does not exist has no short name either.
-    let error = process_directory(&long_folder("missing")).unwrap_err();
+fn a_directory_too_long_without_a_short_name_says_why() {
+    // A directory that does not exist has no short name either.
+    let error = process_directory(&long_directory("missing")).unwrap_err();
     assert!(
         error
             .to_string()

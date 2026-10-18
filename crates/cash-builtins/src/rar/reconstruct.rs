@@ -29,11 +29,11 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
 
 /// A volume set's names: its base, a number as wide as the one named, `.rar`.
 struct Set {
-    /// Up to the number, as shown, its folder and all.
+    /// Up to the number, as shown, its directory and all.
     base: String,
     width: usize,
     /// Where the set is, and its base's file name, for the recovery volumes beside it.
-    folder: PathBuf,
+    directory: PathBuf,
     file_base: String,
 }
 
@@ -46,7 +46,7 @@ impl Set {
         }
         let base = stem.get(..stem.len() - width)?.to_owned();
         let file_base = base.rsplit('/').next().unwrap_or(&base).to_lowercase();
-        let folder = found
+        let directory = found
             .path
             .parent()
             .map(Path::to_path_buf)
@@ -54,7 +54,7 @@ impl Set {
         Some(Self {
             base,
             width,
-            folder,
+            directory,
             file_base,
         })
     }
@@ -63,7 +63,7 @@ impl Set {
         format!("{}{number:0width$}.rar", self.base, width = self.width)
     }
 
-    /// A file of the set's folder, as shown.
+    /// A file of the set's directory, as shown.
     fn shown(&self, file: &str) -> String {
         match self.base.rfind('/') {
             Some(at) => format!("{}{file}", self.base.get(..=at).unwrap_or_default()),
@@ -73,7 +73,7 @@ impl Set {
 
     /// The recovery volumes beside the set, in their order.
     fn revs(&self) -> Vec<Rev> {
-        let mut revs: Vec<Rev> = std::fs::read_dir(&self.folder)
+        let mut revs: Vec<Rev> = std::fs::read_dir(&self.directory)
             .into_iter()
             .flatten()
             .flatten()

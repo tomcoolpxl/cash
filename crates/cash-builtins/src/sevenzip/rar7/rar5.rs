@@ -1827,7 +1827,7 @@ impl Rar5 {
             }
         }
         // `ReadLink`: a hard link's path is from the archive's root, a symbolic link's
-        // (of Unix or Windows, or a junction) from its own folder.
+        // (of Unix or Windows, or a junction) from its own directory.
         let hard = item.link_target(link_type::HARD_LINK);
         let symbolic = item.link_target(link_type::UNIX_SYMLINK);
         listed.link = if !hard.is_empty() {
@@ -1848,7 +1848,7 @@ impl Rar5 {
             None
         };
         listed.extra = vec![
-            (Prop::Folder, plus(item.is_dir())),
+            (Prop::Directory, plus(item.is_dir())),
             (Prop::AltStream, plus(item.is_stm())),
             (Prop::Solid, plus(item.is_solid())),
             (Prop::SplitBefore, plus(item.is_split_before())),
@@ -1874,7 +1874,7 @@ impl Rar5 {
 /// The properties a technical listing shows for a RAR 5 item, in 7-Zip's order.
 pub(super) const ITEM_PROPS: [Prop; 23] = [
     Prop::Path,
-    Prop::Folder,
+    Prop::Directory,
     Prop::Size,
     Prop::PackedSize,
     Prop::Modified,

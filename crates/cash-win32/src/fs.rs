@@ -64,7 +64,7 @@ pub fn get_file_owner_info(path: &Path) -> Option<FileOwner> {
 }
 
 /// What `ls -l` shows of a file's security: its owner and group, and whether this
-/// process may write to it (for a folder, create files in it) by its access list.
+/// process may write to it (for a directory, create files in it) by its access list.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FileSecurity {
     /// The owner's account name.
@@ -142,15 +142,15 @@ pub struct FileFacts {
     pub allocation: u64,
 }
 
-/// The [`FileFacts`] of every entry of the folder `dir`, by name, from one query.
+/// The [`FileFacts`] of every entry of the directory `dir`, by name, from one query.
 ///
 /// `GetFileInformationByHandleEx` with `FileIdBothDirectoryInfo`, a buffer of entries at
-/// a time, as Cygwin reads a folder for them; empty where the folder cannot be read so.
+/// a time, as Cygwin reads a directory for them; empty where the directory cannot be read so.
 ///
 /// `ls` asked each file for them: two calls more in `-l`'s open of it, a query by name or
 /// an open of its own for `-s`, `-c` and `-i`, 7% of `ls -la`.
 #[must_use]
-pub fn folder_facts(dir: &Path) -> std::collections::HashMap<std::ffi::OsString, FileFacts> {
+pub fn directory_facts(dir: &Path) -> std::collections::HashMap<std::ffi::OsString, FileFacts> {
     use std::os::windows::ffi::OsStringExt as _;
     use std::os::windows::fs::OpenOptionsExt as _;
     use windows_sys::Win32::Storage::FileSystem::{
@@ -160,7 +160,7 @@ pub fn folder_facts(dir: &Path) -> std::collections::HashMap<std::ffi::OsString,
     };
 
     let mut found = std::collections::HashMap::new();
-    let Ok(folder) = std::fs::OpenOptions::new()
+    let Ok(directory) = std::fs::OpenOptions::new()
         .access_mode(FILE_LIST_DIRECTORY)
         .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
@@ -168,14 +168,14 @@ pub fn folder_facts(dir: &Path) -> std::collections::HashMap<std::ffi::OsString,
     else {
         return found;
     };
-    let handle = folder.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+    let handle = directory.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
     // 64 KiB, in `u64`s so that the records Windows writes in it are aligned.
     let mut buffer = vec![0u64; 8192];
     let bytes = buffer.len() * size_of::<u64>();
     let name_at = std::mem::offset_of!(FILE_ID_BOTH_DIR_INFO, FileName);
     let mut class = FileIdBothDirectoryRestartInfo;
     loop {
-        // SAFETY: the handle is the folder's, open to list it, and the buffer holds the
+        // SAFETY: the handle is the directory's, open to list it, and the buffer holds the
         // length given; the call fails once no entry is left.
         let ok = unsafe {
             GetFileInformationByHandleEx(
@@ -385,8 +385,8 @@ pub fn listing_facts(path: &Path, read_start: bool, with_facts: bool) -> Option<
     } else {
         (1, 0)
     };
-    // The change time and allocation cost two more calls, which the folder's listing
-    // spares where it gave them ([`folder_facts`]).
+    // The change time and allocation cost two more calls, which the directory's listing
+    // spares where it gave them ([`directory_facts`]).
     let facts = if with_facts {
         facts_of_handle(handle, index)
     } else {
@@ -408,8 +408,8 @@ pub fn listing_facts(path: &Path, read_start: bool, with_facts: bool) -> Option<
     })
 }
 
-/// The folder in which a handle that keeps the access time was last refused, so that
-/// the rest of its files are not asked for one: a folder's files share its access list,
+/// The directory in which a handle that keeps the access time was last refused, so that
+/// the rest of its files are not asked for one: a directory's files share its access list,
 /// and in `C:/Windows/System32`, where none is lent, asking each of a listing's files
 /// made it 40% slower.
 static ACCESS_TIME_REFUSED_IN: std::sync::Mutex<Option<std::path::PathBuf>> =
@@ -417,7 +417,7 @@ static ACCESS_TIME_REFUSED_IN: std::sync::Mutex<Option<std::path::PathBuf>> =
 
 /// `path` opened by `open` with `access`, and with `FILE_WRITE_ATTRIBUTES` to keep its
 /// access time as it was ([`hold_access_time`]) where its access list allows that and
-/// its folder did not refuse it before; else with `access` alone.
+/// its directory did not refuse it before; else with `access` alone.
 pub(crate) fn open_keeping_access_time(
     path: &Path,
     access: u32,
@@ -425,17 +425,17 @@ pub(crate) fn open_keeping_access_time(
 ) -> std::io::Result<std::fs::File> {
     use windows_sys::Win32::Storage::FileSystem::FILE_WRITE_ATTRIBUTES;
 
-    let folder = path.parent();
+    let directory = path.parent();
     let refused = ACCESS_TIME_REFUSED_IN
         .lock()
-        .is_ok_and(|refused| refused.as_deref() == folder);
+        .is_ok_and(|refused| refused.as_deref() == directory);
     if !refused {
         if let Ok(file) = open(access | FILE_WRITE_ATTRIBUTES) {
             hold_access_time(&file);
             return Ok(file);
         }
         if let Ok(mut refused) = ACCESS_TIME_REFUSED_IN.lock() {
-            *refused = folder.map(Path::to_path_buf);
+            *refused = directory.map(Path::to_path_buf);
         }
     }
     open(access)
@@ -533,7 +533,7 @@ fn impersonation_token() -> Option<windows_sys::Win32::Foundation::HANDLE> {
 }
 
 /// Whether the descriptor's access list lets this process write the file's data, which
-/// for a folder is the right to create a file in it.
+/// for a directory is the right to create a file in it.
 fn may_write(descriptor: &mut [u8]) -> Option<bool> {
     use windows_sys::Win32::Storage::FileSystem::{
         FILE_ALL_ACCESS, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
@@ -735,26 +735,26 @@ const fn file_info_of(info: &FileStatBasicInformation) -> Option<FileInfo> {
     })
 }
 
-/// A folder's link count counted, as Linux has it.
+/// A directory's link count counted, as Linux has it.
 ///
-/// 2 (its name, and its own `.`) and one for each folder in it (its `..`). Reads the
-/// whole folder, so it is for questions about one folder (`stat`, `ls --count-links`); a
+/// 2 (its name, and its own `.`) and one for each directory in it (its `..`). Reads the
+/// whole directory, so it is for questions about one directory (`stat`, `ls --count-links`); a
 /// listing shows [`file_link_count`]'s 1.
 #[must_use]
-pub fn folder_link_count(path: &Path) -> u32 {
-    let subfolders = std::fs::read_dir(path).map_or(0, |entries| {
+pub fn directory_link_count(path: &Path) -> u32 {
+    let subdirectories = std::fs::read_dir(path).map_or(0, |entries| {
         entries
             .flatten()
             .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
             .count()
     });
-    2 + u32::try_from(subfolders).unwrap_or(u32::MAX - 2)
+    2 + u32::try_from(subdirectories).unwrap_or(u32::MAX - 2)
 }
 
 /// Compute the POSIX-equivalent link count for a file or directory.
 ///
-/// A folder's is 1, as Git Bash shows it: Linux's 2 + its subfolders took reading the
-/// whole folder, which for a temporary folder's `..` was 160,000 entries. A file's is its
+/// A directory's is 1, as Git Bash shows it: Linux's 2 + its subdirectories took reading the
+/// whole directory, which for a temporary directory's `..` was 160,000 entries. A file's is its
 /// NTFS hard links, asked by name where Windows can (11 24H2 and later), else through
 /// `GetFileInformationByHandle`.
 #[must_use]
@@ -788,14 +788,14 @@ pub fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
-/// Whether `path` is a folder, told without opening it.
+/// Whether `path` is a directory, told without opening it.
 ///
 /// `GetFileAttributesW` answers where `std::fs::metadata` opens a handle: `cd` spent most
 /// of its 62 µs there. `None` when that cannot tell: the call failed, or `path` is a link
 /// or a junction, whose own attributes are not those of what it names. The caller then
 /// asks `metadata`.
 #[must_use]
-pub fn is_folder_unopened(path: &Path) -> Option<bool> {
+pub fn is_directory_unopened(path: &Path) -> Option<bool> {
     use windows_sys::Win32::Storage::FileSystem::{
         FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, GetFileAttributesW,
         INVALID_FILE_ATTRIBUTES,
@@ -812,7 +812,7 @@ pub fn is_folder_unopened(path: &Path) -> Option<bool> {
 /// What an open handle is open on, as Windows tells it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HandleKind {
-    /// A file or folder on a disk.
+    /// A file or directory on a disk.
     Disk,
     /// A pipe, anonymous or named.
     Pipe,
@@ -867,16 +867,16 @@ pub fn move_position(
     Ok(())
 }
 
-/// The entries of the folder `dir` whose names begin with `prefix`, each with whether it
-/// is a folder.
+/// The entries of the directory `dir` whose names begin with `prefix`, each with whether it
+/// is a directory.
 ///
-/// One call, where a look for each name it might be is a call each; none for a folder
-/// that is not there. The folder compares the names as it compares them, and Windows
+/// One call, where a look for each name it might be is a call each; none for a directory
+/// that is not there. The directory compares the names as it compares them, and Windows
 /// matches a name's 8.3 alias too, giving back the long name.
 ///
 /// # Errors
 ///
-/// When the folder cannot be read for any other reason.
+/// When the directory cannot be read for any other reason.
 pub fn names_beginning(
     dir: &Path,
     prefix: &std::ffi::OsStr,
@@ -946,8 +946,8 @@ pub fn names_beginning(
 
 /// A Windows program by its full path in System32 (`quser.exe`), for cash to start.
 ///
-/// By a bare name, Windows looks first in the folder of the exe that asks, and in a
-/// folder of `cash --link-tools` links a tool of that name is cash: started that way, cash
+/// By a bare name, Windows looks first in the directory of the exe that asks, and in a
+/// directory of `cash --link-tools` links a tool of that name is cash: started that way, cash
 /// would start itself again as it came up, without end (D65).
 #[must_use]
 pub fn system_program(name: &str) -> std::path::PathBuf {
@@ -961,26 +961,26 @@ pub fn system_program(name: &str) -> std::path::PathBuf {
 }
 
 /// Whether `path` is a program of Windows' own: one under `System32` or `SysWOW64` in
-/// the Windows folder, in any spelling (`C:/WINDOWS/system32/net.exe`, as `type` prints it).
+/// the Windows directory, in any spelling (`C:/WINDOWS/system32/net.exe`, as `type` prints it).
 ///
 /// cmd never expands a wildcard, so every such program reads `*` and `?` itself when it
 /// wants them (D81). `explorer.exe`, and the Python launcher's `py.exe`, which live in
-/// the Windows folder itself, are not counted.
+/// the Windows directory itself, are not counted.
 #[must_use]
 pub fn is_system_program(path: &Path) -> bool {
     let root = std::env::var_os("SystemRoot").map_or_else(
         || std::path::PathBuf::from(r"C:\Windows"),
         std::path::PathBuf::from,
     );
-    is_under_system_folders(&root, path)
+    is_under_system_directories(&root, path)
 }
 
-/// [`is_system_program`] with the Windows folder given.
-fn is_under_system_folders(root: &Path, path: &Path) -> bool {
+/// [`is_system_program`] with the Windows directory given.
+fn is_under_system_directories(root: &Path, path: &Path) -> bool {
     let spelled = |path: &Path| path.to_string_lossy().replace('/', "\\").to_lowercase();
     let path = spelled(path);
-    ["System32", "SysWOW64"].into_iter().any(|folder| {
-        let mut prefix = spelled(&root.join(folder));
+    ["System32", "SysWOW64"].into_iter().any(|directory| {
+        let mut prefix = spelled(&root.join(directory));
         prefix.push('\\');
         path.starts_with(&prefix)
     })
@@ -997,11 +997,11 @@ pub struct FileInfo {
     pub links: u32,
 }
 
-/// A file's or folder's [`FileInfo`].
+/// A file's or directory's [`FileInfo`].
 ///
 /// Asked by name where Windows can (`GetFileInformationByName`): the identity behind `stat`,
 /// `same_file` and the archivers' hard links, without an open per file. Else opened with
-/// backup semantics, without which a folder cannot be opened at all: `stat` gave a folder
+/// backup semantics, without which a directory cannot be opened at all: `stat` gave a directory
 /// inode 0 and `[ d -ef d ]` was "not supported" (XC-3, ARCH-06). It asks only to read
 /// attributes, and shares everything.
 ///
@@ -1049,7 +1049,7 @@ fn file_identity(path: &Path) -> Option<(u32, u64)> {
     file_info(path).ok().map(|info| (info.volume, info.index))
 }
 
-/// Moves a file or folder to the Recycle Bin, as Explorer's Delete does, asking nothing
+/// Moves a file or directory to the Recycle Bin, as Explorer's Delete does, asking nothing
 /// and showing nothing. The path is made whole first: the bin keeps where it came from.
 ///
 /// # Errors
@@ -1117,18 +1117,18 @@ mod by_name_tests {
         assert_eq!(file_info(&path).unwrap(), by_handle);
         let meta = std::fs::metadata(&path).unwrap();
         assert_eq!(file_link_count(&path, &meta), 2);
-        // A folder's is 1, as Git Bash shows it, however many subfolders it has.
+        // A directory's is 1, as Git Bash shows it, however many subdirectories it has.
         std::fs::create_dir(dir.path().join("sub")).unwrap();
         let meta = std::fs::metadata(dir.path()).unwrap();
         assert_eq!(file_link_count(dir.path(), &meta), 1);
-        let folder: FileInfo = file_info(dir.path()).unwrap();
-        assert_eq!(folder, file_info_by_handle(dir.path()).unwrap());
+        let directory: FileInfo = file_info(dir.path()).unwrap();
+        assert_eq!(directory, file_info_by_handle(dir.path()).unwrap());
     }
 }
 
 #[cfg(test)]
 mod system_program_tests {
-    use super::is_under_system_folders;
+    use super::is_under_system_directories;
     use std::path::Path;
 
     #[test]
@@ -1141,14 +1141,14 @@ mod system_program_tests {
             r"C:\WINDOWS/System32/cmd.exe",
         ] {
             assert!(
-                is_under_system_folders(root, Path::new(program)),
+                is_under_system_directories(root, Path::new(program)),
                 "{program}"
             );
         }
     }
 
     #[test]
-    fn the_windows_folder_itself_and_other_folders_are_not() {
+    fn the_windows_directory_itself_and_other_directories_are_not() {
         let root = Path::new(r"C:\Windows");
         for program in [
             r"C:\Windows\explorer.exe",
@@ -1159,7 +1159,7 @@ mod system_program_tests {
             "net.exe",
         ] {
             assert!(
-                !is_under_system_folders(root, Path::new(program)),
+                !is_under_system_directories(root, Path::new(program)),
                 "{program}"
             );
         }

@@ -1,8 +1,8 @@
-//! `rm` and the folder it runs in. The bundled `rm` runs as a child in the shell's
-//! folder, and Windows will not remove a folder a process sits in, so the cleanup idiom
+//! `rm` and the directory it runs in. The bundled `rm` runs as a child in the shell's
+//! directory, and Windows will not remove a directory a process sits in, so the cleanup idiom
 //! `d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"` left `$d` behind ("The process
 //! cannot access the file because it is being used by another process"). cash's own
-//! `rm` (`crates/cash-uutils`) moves out of a folder it is to remove first.
+//! `rm` (`crates/cash-uutils`) moves out of a directory it is to remove first.
 
 #![allow(
     clippy::tests_outside_test_module,
@@ -12,12 +12,12 @@
 use crate::common::{cash_command, output_of, run_in};
 
 #[test]
-fn a_trap_removes_the_folder_the_shell_is_in() {
+fn a_trap_removes_the_directory_the_shell_is_in() {
     let out = output_of(cash_command().args([
         "-c",
         r#"d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"; mkdir -p sub/deeper; cd sub; : > x; echo "$d""#,
     ]));
-    assert!(!out.stdout.is_empty(), "no folder made: {}", out.stderr);
+    assert!(!out.stdout.is_empty(), "no directory made: {}", out.stderr);
     assert!(
         !std::path::Path::new(&out.stdout).exists(),
         "{} was left: {}",
@@ -28,8 +28,8 @@ fn a_trap_removes_the_folder_the_shell_is_in() {
 }
 
 #[test]
-fn rm_out_of_its_folder_still_refuses_dot_dot_and_finds_no_relative_name_after() {
-    // As on Linux: once the folder rm sits in is gone, a relative name names nothing
+fn rm_out_of_its_directory_still_refuses_dot_dot_and_finds_no_relative_name_after() {
+    // As on Linux: once the directory rm sits in is gone, a relative name names nothing
     // (`-f` says nothing of it), and it is never looked for from where rm moved to.
     let dir = tempfile::tempdir().unwrap();
     let out = run_in(

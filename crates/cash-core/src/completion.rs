@@ -330,7 +330,7 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    /// The word file and folder names are completed from, and whether it is the word
+    /// The word file and directory names are completed from, and whether it is the word
     /// `compgen` was given, as it was given (see `get_file_completions`); at the prompt it
     /// is the word as typed.
     fn file_word(&self) -> (&'a str, bool) {
@@ -1685,11 +1685,11 @@ const fn completion_piece(text: String, is_glob: bool) -> patterns::PatternPiece
     }
 }
 
-/// The file and folder names `token_to_complete` completes to. `from_compgen` is for the
+/// The file and directory names `token_to_complete` completes to. `from_compgen` is for the
 /// word `compgen -f` or `-d` was given, which Bash takes as it is: its quotes and
 /// backslashes are part of the name, where at the prompt they are the typed ones to
-/// remove, and the names keep the spelling of its folder (`~/`, `$HOME/`). Cash took
-/// them out a second time and gave the expanded folder.
+/// remove, and the names keep the spelling of its directory (`~/`, `$HOME/`). Cash took
+/// them out a second time and gave the expanded directory.
 async fn get_file_completions(
     shell: &Shell<impl extensions::ShellExtensions>,
     token_to_complete: &str,
@@ -1718,12 +1718,12 @@ async fn get_file_completions(
     .await
     .unwrap_or_else(|_err| token_to_complete.to_owned());
 
-    // The folder as typed, when it was typed with backslashes (`C:\x\`, `\\server\share\`),
+    // The directory as typed, when it was typed with backslashes (`C:\x\`, `\\server\share\`),
     // to put back on the names found: a path completes in the spelling it was typed in.
-    let backslashed_folder = expanded_token
+    let backslashed_directory = expanded_token
         .rfind(['/', '\\'])
         .and_then(|at| expanded_token.get(..=at))
-        .filter(|folder| folder.contains('\\'))
+        .filter(|directory| directory.contains('\\'))
         .map(str::to_owned);
 
     // Normalize path separators before building the glob pattern, because backslash
@@ -1775,7 +1775,7 @@ async fn get_file_completions(
             }
         }
     }
-    if let Some(typed) = backslashed_folder.as_deref() {
+    if let Some(typed) = backslashed_directory.as_deref() {
         for completion in &mut completions {
             if let Some(rest) = completion.get(typed.len()..) {
                 *completion = std::format!("{typed}{rest}");
@@ -1783,15 +1783,16 @@ async fn get_file_completions(
         }
     }
 
-    // `compgen` gives the names in the spelling of the folder it was given, and Tab keeps
-    // a typed `~/` as Bash does; it put the home folder in its place. A folder then gets
+    // `compgen` gives the names in the spelling of the directory it was given, and Tab keeps
+    // a typed `~/` as Bash does; it put the home directory in its place. A directory then gets
     // its `/` here, where it can still be looked up.
     let keeps_tilde = !from_compgen && token_to_complete.starts_with('~');
     if from_compgen || keeps_tilde {
-        let folder = |word: &str| word.rfind('/').map(|slash| slash + 1);
-        let typed_folder = folder(&to_expand).and_then(|end| to_expand.get(..end));
-        let expanded_folder = folder(&expanded_token).and_then(|end| expanded_token.get(..end));
-        if let (Some(typed), Some(expanded)) = (typed_folder, expanded_folder)
+        let directory = |word: &str| word.rfind('/').map(|slash| slash + 1);
+        let typed_directory = directory(&to_expand).and_then(|end| to_expand.get(..end));
+        let expanded_directory =
+            directory(&expanded_token).and_then(|end| expanded_token.get(..end));
+        if let (Some(typed), Some(expanded)) = (typed_directory, expanded_directory)
             && typed != expanded
         {
             for completion in &mut completions {
@@ -1827,7 +1828,7 @@ fn get_external_command_completions(
 ) -> Vec<String> {
     let case_insensitive = shell.options().case_insensitive_pathname_expansion;
     // From the background listing of PATH once it is ready: the menu asks on every
-    // keystroke, and asking each PATH folder took 17.7 ms over 80.
+    // keystroke, and asking each PATH directory took 17.7 ms over 80.
     if let Some(names) = shell.executables_with_prefix_if_known(prefix, case_insensitive) {
         return names;
     }
@@ -2034,10 +2035,10 @@ pub fn completes_itself(shell: &Shell<impl extensions::ShellExtensions>, command
         && shell.completion_config().get("z").is_none()
 }
 
-/// Completions for the words after `z` (D80): the recorded folders those typed so far
-/// match, best first, each replacing all of them, since a folder's path is not a word
+/// Completions for the words after `z` (D80): the recorded directories those typed so far
+/// match, best first, each replacing all of them, since a directory's path is not a word
 /// `z` would match in turn. `None` for a line that is not `z`'s, a word that is a path
-/// being typed (which completes as any path does), or no folder found.
+/// being typed (which completes as any path does), or no directory found.
 fn z_completions(
     shell: &Shell<impl extensions::ShellExtensions>,
     input: &str,
@@ -2066,10 +2067,10 @@ fn z_completions(
         return None;
     }
     let start = typed.first().map_or(position, |(start, _)| *start);
-    let record = shell.folder_record()?;
+    let record = shell.directory_record()?;
     let here = cash_win32::path::render(shell.working_dir());
     let words: Vec<&str> = typed.iter().map(|(_, word)| *word).collect();
-    let found = crate::kept::folders::find(&record, &words, crate::kept::now(), Some(&here));
+    let found = crate::kept::directories::find(&record, &words, crate::kept::now(), Some(&here));
     if found.is_empty() {
         return None;
     }
@@ -2078,7 +2079,10 @@ fn z_completions(
         ..ProcessingOptions::default()
     };
     let candidates = autoquote_candidates(
-        found.into_iter().map(|(folder, _)| folder.path).collect(),
+        found
+            .into_iter()
+            .map(|(directory, _)| directory.path)
+            .collect(),
         before.get(start..).unwrap_or_default(),
         &options,
         false,

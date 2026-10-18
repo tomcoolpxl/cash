@@ -1,6 +1,6 @@
 //! A `TEMP` in 8.3 form. Windows gives `TEMP` and `TMP` as `C:\Users\RUNNER~1\…` for a
-//! long user name, while `HOME` is `C:/Users/runneradmin`: a folder under `TEMP` was then
-//! never shown under `~`, and one folder had two spellings in cash's records. cash takes
+//! long user name, while `HOME` is `C:/Users/runneradmin`: a directory under `TEMP` was then
+//! never shown under `~`, and one directory had two spellings in cash's records. cash takes
 //! both to their long form as it starts, for itself and for what it starts.
 
 #![allow(
@@ -14,11 +14,11 @@ use crate::common::{Scratch, cash_command, output_of};
 #[test]
 fn a_short_temp_is_taken_to_its_long_form() {
     let scratch = Scratch::new("long-temp");
-    // The test's own temp folder may be in 8.3 form itself, as on CI.
+    // The test's own temp directory may be in 8.3 form itself, as on CI.
     let home = cash_win32::path::long_form(scratch.path().as_os_str())
         .map_or_else(|| scratch.path().to_path_buf(), std::path::PathBuf::from);
-    let long = home.join("a long temporary folder");
-    std::fs::create_dir(&long).expect("make the folder");
+    let long = home.join("a long temporary directory");
+    std::fs::create_dir(&long).expect("make the directory");
     let long_text = long.to_string_lossy().into_owned();
     let Some(short) = cash_win32::path::short_name(&long_text).filter(|s| *s != long_text) else {
         eprintln!("no 8.3 names on this volume: nothing to test");
@@ -45,7 +45,7 @@ cd /tmp && dirs"#,
             &long_text,
             &long_text,
             &long_text,
-            "~/a long temporary folder"
+            "~/a long temporary directory"
         ],
         "TEMP given as {short}; stderr: {}",
         out.stderr

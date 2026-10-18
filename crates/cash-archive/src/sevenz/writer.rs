@@ -130,7 +130,7 @@ impl<W: Write + Seek> ArchiveWriter<W> {
         &self.files
     }
 
-    /// Adds an entry without data: a folder, an empty file, an anti-item.
+    /// Adds an entry without data: a directory, an empty file, an anti-item.
     pub fn push_empty(&mut self, mut entry: ArchiveEntry) {
         entry.has_stream = false;
         entry.size = 0;

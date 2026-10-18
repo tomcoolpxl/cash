@@ -1,6 +1,6 @@
 # Reedline internal developer documentation
 
-**Attention** The README files in the source folders are primarily intended to document the current implementation details and quirks as well as requirements we currently strive towards.
+**Attention** The README files in the source directories are primarily intended to document the current implementation details and quirks as well as requirements we currently strive towards.
 It is not intended as the public documentation for library users!
 While we try to take care that the primary documentation also shared on <https://docs.rs/reedline> stays current with the behavior of the implementation and is doctested accordingly.
 The internal documents may get out of sync more easily and require good will by contributors to stay up to date if systems are refactored.

@@ -5,7 +5,7 @@
 # 7z_cases.out is 7-Zip's output.
 #
 # The links section makes hard links with PowerShell and junctions with `mklink /J`,
-# whose target is resolved against the folder as the shell names it (PowerShell's
+# whose target is resolved against the directory as the shell names it (PowerShell's
 # `Resolve-Path` would expand a short name such as CI's RUNNER~1, and the link's target
 # would no longer be relative); danger.tgz holds a tar of links, symbolic ones only of
 # the kind 7-Zip refuses to make, since making one takes a right some machines give and
@@ -32,7 +32,7 @@ z() { 7z "$@" > "$dir/o.txt" 2>&1; r=$?; tr -d '\r' < "$dir/o.txt" | sed 's#\\#/
 zl() {
   z l -slt "$@" | grep -E '^(Path|Size|Modified|Attributes|CRC|Method|Solid|Blocks|Block|Encrypted) = |^rc='
 }
-zt() { z t "$@" | grep -E '^(Testing archive|Folders|Files|Size): |^(Method|Solid|Blocks) = |^Everything|^rc='; }
+zt() { z t "$@" | grep -E '^(Testing archive|Folders|Directories|Files|Size): |^(Method|Solid|Blocks) = |^Everything|^rc='; }
 zs() { z "$@" | grep -vE '^(Archive size: |Physical Size = |Headers Size = )'; }
 unhex() { printf "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
 unhex 377abcaf271c0004018aa5cd1100000000000000d2000000000000008382ed4168656c6c6f0a776f726c6420776964650a010406000209060b00070b02000101000101000c060b00080a0120303a36500b6b07000005050e01e00f0120190f0000000000000000000000000000001149006400000064002f00730075006200000064002f0065006d00700074007900000064002f0061002e00740078007400000064002f007300750062002f0062002e00740078007400000019020000142a01000080e4d93156dd010080e4d93156dd010080e4d93156dd010080e4d93156dd010080e4d93156dd011516010010000000100000002000000020000000200000000000 > stored.7z
@@ -404,7 +404,7 @@ printf 'alpha\n' > d/a.txt
 printf 'beta\n' > d/sub/b.txt
 powershell -NoProfile -Command "New-Item -ItemType HardLink -Path d\\h.txt -Target d\\a.txt | Out-Null; New-Item -ItemType HardLink -Path d\\sub\\h2.txt -Target d\\a.txt | Out-Null"
 cmd /c "mklink /J d\\jn d\\sub" > /dev/null
-# Whole-second folder times: a tar keeps seconds, and a folder made a fraction before a
+# Whole-second directory times: a tar keeps seconds, and a directory made a fraction before a
 # second's end could be taken as changed by the update below, or not.
 touch -d '2026-01-01 12:00:00' d d/sub
 links() { grep -E '^(Path|Size|Mode|Attributes|Symbolic Link|Hard Link) = |^rc='; }

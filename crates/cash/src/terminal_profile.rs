@@ -5,7 +5,7 @@
 //! Windows Terminal reads fragments from `%LOCALAPPDATA%\Microsoft\Windows
 //! Terminal\Fragments\<app>\` and lists each profile in them. The profile runs the
 //! `cash.exe` this command ran as, spelled as it was started: under Scoop that is
-//! `apps\cash\current\cash.exe`, which follows upgrades, not the version folder behind
+//! `apps\cash\current\cash.exe`, which follows upgrades, not the version directory behind
 //! it. Where the user laid out Terminal's + menu profile by profile, cash adds itself to it
 //! ([`crate::terminal_menu`]), or the profile could not be opened from there.
 
@@ -13,7 +13,7 @@ use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-/// The fragment's folder name, which Windows Terminal takes as the application's.
+/// The fragment's directory name, which Windows Terminal takes as the application's.
 const APP: &str = "cash";
 
 /// The profile's GUID: the one Terminal derives for a profile named `cash` from the
@@ -24,7 +24,7 @@ const PROFILE_GUID: &str = "{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}";
 const ICON: &[u8] = include_bytes!("../../../assets/cash_logo_small.png");
 
 /// The profile's `icon`. Windows Terminal 1.24 and later loads a fragment's image from
-/// the fragment's own folder, under this address's file name; earlier versions take
+/// the fragment's own directory, under this address's file name; earlier versions take
 /// only a web address for a fragment's icon, and download it. With the logo written
 /// beside the fragment under that name ([`ICON_FILE`]), every version shows it.
 const ICON_URL: &str =
@@ -137,7 +137,7 @@ fn local_app_data() -> Result<PathBuf, String> {
 }
 
 /// Where the fragment goes.
-fn folder(local: &Path) -> PathBuf {
+fn directory(local: &Path) -> PathBuf {
     local
         .join("Microsoft")
         .join("Windows Terminal")
@@ -157,7 +157,7 @@ pub struct Written {
 
 /// Write the profile, running `exe`, and add it to Terminal's + menu where that is laid
 /// out profile by profile. The installer gives the `current\cash.exe` that follows its
-/// upgrades, not the version folder's exe this runs as.
+/// upgrades, not the version directory's exe this runs as.
 ///
 /// # Errors
 ///
@@ -165,7 +165,7 @@ pub struct Written {
 pub fn write_for(exe: &Path) -> Result<Written, String> {
     let exe = cash_win32::path::to_backslash(exe);
     let local = local_app_data()?;
-    let dir = folder(&local);
+    let dir = directory(&local);
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", render(&dir)))?;
 
     let icon = dir.join(ICON_FILE);
@@ -222,12 +222,12 @@ fn write_profile() -> Result<(), String> {
 }
 
 /// Remove the profile and its + menu entries: whether there was a profile, and the
-/// settings files changed. The menu entry goes whether or not the folder does: a folder
+/// settings files changed. The menu entry goes whether or not the directory does: a directory
 /// that would not go returned before the menus were looked at, and left the entry
 /// (BIN-11).
 fn remove() -> Result<(Result<bool, String>, Vec<PathBuf>), String> {
     let local = local_app_data()?;
-    let dir = folder(&local);
+    let dir = directory(&local);
     let removed = if dir.exists() {
         std::fs::remove_dir_all(&dir)
             .map(|()| true)
@@ -246,7 +246,7 @@ fn remove() -> Result<(Result<bool, String>, Vec<PathBuf>), String> {
 ///
 /// # Errors
 ///
-/// `LOCALAPPDATA` unset, or the fragment folder would not go.
+/// `LOCALAPPDATA` unset, or the fragment directory would not go.
 pub fn remove_quietly() -> Result<bool, String> {
     remove()?.0
 }
@@ -259,7 +259,7 @@ fn remove_profile() -> Result<(), String> {
             let _ = writeln!(
                 out,
                 "cash --remove-terminal-profile: {} removed",
-                render(&folder(&local_app_data()?))
+                render(&directory(&local_app_data()?))
             );
         }
         Ok(false) => {
@@ -310,9 +310,9 @@ fn replace_file(path: &Path, text: &str) -> std::io::Result<()> {
     })
 }
 
-/// The fragment: one profile, named `cash`, running `exe` in the user's home folder with
+/// The fragment: one profile, named `cash`, running `exe` in the user's home directory with
 /// the logo as its icon, and with command marks on. Without `startingDirectory`, Windows
-/// Terminal starts a fragment's profile in its own folder, `C:\WINDOWS\system32` when it
+/// Terminal starts a fragment's profile in its own directory, `C:\WINDOWS\system32` when it
 /// was started from the Start menu (seen 2026-09-28). `autoMarkPrompts` marks the line
 /// where each Enter was pressed, even when the prompt sends no `OSC 133`, and
 /// `showMarksOnScrollbar` shows the marks, which `scrollToMark` then jumps between

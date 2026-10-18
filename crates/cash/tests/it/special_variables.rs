@@ -54,7 +54,7 @@ fn an_element_of_dirstack_and_bash_aliases_takes_effect() {
 }
 
 #[test]
-fn dirstack_starts_with_the_working_folder() {
+fn dirstack_starts_with_the_working_directory() {
     // It was the stack alone, first one pushed first; `dirs` was right.
     check(&[(
         "cd /c/Windows; pushd /c/Users >/dev/null; echo ${#DIRSTACK[@]}; [[ ${DIRSTACK[0]} == \"$PWD\" ]] && echo first; [[ ${DIRSTACK[1]} == */Windows ]] && echo second",

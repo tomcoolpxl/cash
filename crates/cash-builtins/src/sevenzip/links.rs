@@ -19,7 +19,7 @@ const LEVEL_MAX_FOR_LINK_OVER_LINK: u32 = 9;
 pub(super) struct PostLink {
     /// The item's path in the archive, as the messages name it.
     pub(super) item_path: String,
-    /// The parts of its path under the output folder.
+    /// The parts of its path under the output directory.
     pub(super) parts: Vec<String>,
     pub(super) is_dir: bool,
     pub(super) link: Link,
@@ -31,10 +31,10 @@ pub(super) struct PostLink {
 }
 
 /// What a link names, as `ReadLink` and `Normalize_to_RelativeSafe` leave it: `\`
-/// between the parts; an absolute path taken from the output folder.
+/// between the parts; an absolute path taken from the output directory.
 struct LinkInfo {
     hard: bool,
-    /// A symbolic link relative to its own folder; else from the output folder.
+    /// A symbolic link relative to its own directory; else from the output directory.
     relative: bool,
     junction: bool,
     path: String,
@@ -242,7 +242,7 @@ fn make_one(post: &PostLink, out_dir: &Path, level: u32) -> Result<(), String> {
             true
         } else {
             if link.relative {
-                // The link's folder: its parts less the last named one.
+                // The link's directory: its parts less the last named one.
                 let mut parts: Vec<&str> = post.parts.iter().map(String::as_str).collect();
                 while let Some(last) = parts.pop() {
                     if !last.is_empty() {
@@ -313,7 +313,7 @@ fn make_one(post: &PostLink, out_dir: &Path, level: u32) -> Result<(), String> {
     })
 }
 
-/// `CheckLinkPath_in_FS`: neither the item's own path under the output folder nor the
+/// `CheckLinkPath_in_FS`: neither the item's own path under the output directory nor the
 /// one its link names goes through a link already on the disk.
 fn checked_in_fs(post: &PostLink, out_dir: &Path, link: &LinkInfo, prefix: &str) -> bool {
     if post.parts.is_empty() {
@@ -336,7 +336,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn levels_tell_paths_that_leave_their_folder() {
+    fn levels_tell_paths_that_leave_their_directory() {
         assert!(Levels::safe(r"d\a.txt"));
         assert!(!Levels::safe(r"d\..\..\x"));
         assert!(!Levels::safe(r"d\.."));
@@ -347,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    fn absolute_links_are_taken_from_the_output_folder() {
+    fn absolute_links_are_taken_from_the_output_directory() {
         let of = |hard, path: &str| {
             let info = LinkInfo::of(&Link {
                 hard,

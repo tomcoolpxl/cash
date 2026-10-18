@@ -1331,13 +1331,13 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 .map(|p| p.to_string_lossy().replace('\\', "/"))
                 .unwrap_or_default();
             let parent = parent.trim_start_matches("./").trim_start_matches('/');
-            let folder = if parent.is_empty() {
+            let directory = if parent.is_empty() {
                 dir.trim_end_matches(['/', '\\']).to_owned()
             } else {
                 format!("{}/{parent}", dir.trim_end_matches(['/', '\\']))
             };
-            let _ = fs::create_dir_all(self.path(&folder));
-            return format!("{folder}/{base}");
+            let _ = fs::create_dir_all(self.path(&directory));
+            return format!("{directory}/{base}");
         }
         name.to_owned()
     }
@@ -2119,7 +2119,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             into.push(name.to_owned());
             return Ok(());
         }
-        // zstd goes through no link inside a folder, and says so; a folder it cannot list
+        // zstd goes through no link inside a directory, and says so; a directory it cannot list
         // is said too, where cash passed it over in silence.
         let root = name.trim_end_matches(['/', '\\']);
         let options = WalkOptions {
@@ -2131,7 +2131,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         for next in Walk::new(root, &path, &options, self.context.stop_token()) {
             match next {
                 Ok(entry) => match entry.kind {
-                    walker::Kind::Folder => {}
+                    walker::Kind::Directory => {}
                     walker::Kind::Link => {
                         self.say(
                             2,

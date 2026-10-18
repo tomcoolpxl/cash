@@ -708,7 +708,7 @@ impl<R: Read> Reader<R> {
                 u32::try_from(read_number(header.field(field::DEVMINOR)).unwrap_or(0)).unwrap_or(0),
             ),
         };
-        // GNU tar passes over a member's size worth of data for every kind but a folder.
+        // GNU tar passes over a member's size worth of data for every kind but a directory.
         let data_size = if kind == Kind::Dir { 0 } else { size };
         Entry {
             member,

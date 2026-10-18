@@ -18,8 +18,8 @@ with gsudo installed unless a step says otherwise. `sudo -l` says which tool ele
       `sudo cat C:/Windows/Temp/try-sudo.txt | wc -c` counts 2: pipes reach in and out.
 - [ ] `sudo ping -t 127.0.0.1`, then Ctrl-C: the ping stops, cash stays, the prompt comes
       back.
-- [ ] `sudo -i` starts an elevated cash in your home folder as a login shell; `sudo -s` one
-      in this folder. `exit` returns.
+- [ ] `sudo -i` starts an elevated cash in your home directory as a login shell; `sudo -s` one
+      in this directory. `exit` returns.
 - [ ] `export FOO=1; sudo -E printenv FOO` prints 1, with gsudo and with Windows' sudo.
 
 ## Who owns what an elevated command makes
@@ -32,7 +32,7 @@ with gsudo installed unless a step says otherwise. `sudo -l` says which tool ele
 
 ## Windows' sudo and UAC (uninstall or rename gsudo for these)
 
-- [ ] Windows' sudo in new-window mode: `sudo cmd /c cd` opens a window showing this folder,
+- [ ] Windows' sudo in new-window mode: `sudo cmd /c cd` opens a window showing this directory,
       not `C:\Windows\System32`, and cash says the status is not the command's.
 - [ ] `sudo config --enable normal` in an elevated shell; then `sudo whoami` runs here.
 - [ ] Windows' sudo turned off: `sudo whoami` asks UAC, opens a new window, and cash says it
@@ -40,9 +40,9 @@ with gsudo installed unless a step says otherwise. `sudo -l` says which tool ele
 
 ## A mapped network drive
 
-- [ ] `net use Z: \\server\share`, `cd Z:/`, then `sudo cmd /c cd`: with gsudo the folder is
+- [ ] `net use Z: \\server\share`, `cd Z:/`, then `sudo cmd /c cd`: with gsudo the directory is
       `Z:\` (gsudo maps it, `--copyns`); with Windows' sudo cash says it uses
-      `\\server\share` and the command shows that folder.
+      `\\server\share` and the command shows that directory.
 
 ## Another account
 
@@ -50,7 +50,7 @@ with gsudo installed unless a step says otherwise. `sudo -l` says which tool ele
       naming cash.exe and `scoop install -g cash`, before any password.
 - [ ] After `scoop install -g cash` (or with cash under Program Files), `sudo -u alice
       whoami` asks alice's password and prints `alice`; `su alice` gives a cash as alice,
-      `su - alice` one in her home folder.
+      `su - alice` one in her home directory.
 - [ ] Without gsudo, `su alice` says runas opens a new window, and runas asks the password
       there.
 

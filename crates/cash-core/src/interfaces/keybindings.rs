@@ -72,7 +72,7 @@ pub enum InputFunction {
     CashHelp,
     /// cash: the history picker on Ctrl-R (spec D79).
     CashHistory,
-    /// cash: the file and folder picker, croot (spec D73).
+    /// cash: the file and directory picker, croot (spec D73).
     CashPicker,
     CharacterSearch,
     CharacterSearchBackward,

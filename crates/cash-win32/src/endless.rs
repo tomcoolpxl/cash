@@ -7,7 +7,7 @@
 //!
 //! - `/dev/zero` is a temp file a tebibyte long and all hole: sparse, so it takes no
 //!   space, and read in full blocks of zeros. Windows deletes it when it is closed. Where
-//!   the temp folder cannot hold a sparse file, it is the pipe below.
+//!   the temp directory cannot hold a sparse file, it is the pipe below.
 //! - `/dev/random` and `/dev/urandom` are the read end of a pipe that a thread of the
 //!   process keeps full of the system's random bytes, a mebibyte at a time, until the
 //!   reader closes it; the thread then ends. A read of more than the pipe holds can come

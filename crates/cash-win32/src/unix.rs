@@ -5,8 +5,8 @@
 //! has numbers, and no execute bit at all. The answers here:
 //!
 //! - **The mode**: `r` always; `w` when this process may write by the access list and,
-//!   for a file, the read-only attribute is not set (a folder's only marks it as
-//!   customised); `x` for every folder, a program by its extension (`exe`, `com`, `cmd`,
+//!   for a file, the read-only attribute is not set (a directory's only marks it as
+//!   customised); `x` for every directory, a program by its extension (`exe`, `com`, `cmd`,
 //!   `bat`, `ps1`) or a file that starts with `#!`. The group positions carry the
 //!   owner's answer, others read and run only. A symbolic link is `0o777`.
 //! - **The owner and the group**: the accounts the security descriptor names, each with
@@ -15,7 +15,7 @@
 //! - **The times**: to the 100 nanoseconds Windows keeps.
 //!
 //! To make files: [`Replacement`] (written beside its target, renamed over it at the
-//! end), [`symlink`], [`hard_link`], [`set_times`] (folders too), [`set_attributes`],
+//! end), [`symlink`], [`hard_link`], [`set_times`] (directories too), [`set_attributes`],
 //! and [`check_name`] for the names Windows cannot hold.
 
 use std::fs;
@@ -49,7 +49,7 @@ impl From<FileOwner> for Account {
 pub enum Kind {
     /// A regular file.
     File,
-    /// A folder.
+    /// A directory.
     Dir,
     /// A symbolic link or a junction, when it is not followed.
     Symlink,
@@ -99,7 +99,7 @@ pub struct UnixView {
     pub owner: Account,
     /// Its primary group.
     pub group: Account,
-    /// Its hard links; a folder counts two and one for each folder in it, as on Unix.
+    /// Its hard links; a directory counts two and one for each directory in it, as on Unix.
     pub links: u32,
     /// Its times.
     pub times: Times,
@@ -324,7 +324,7 @@ impl Replacement {
     ///
     /// # Errors
     ///
-    /// When no such file can be made in the folder.
+    /// When no such file can be made in the directory.
     pub fn create(path: PathBuf) -> io::Result<Self> {
         let directory = path
             .parent()
@@ -424,7 +424,7 @@ impl Write for Replacement {
 }
 
 /// Removes `path`, clearing its read-only bit first: Windows refuses to delete a
-/// read-only file, where Unix deletes by the folder's permissions.
+/// read-only file, where Unix deletes by the directory's permissions.
 ///
 /// # Errors
 ///
@@ -454,7 +454,7 @@ pub fn remove_even_read_only(path: &Path) -> io::Result<()> {
 pub enum LinkKind {
     /// A file.
     File,
-    /// A folder.
+    /// A directory.
     Dir,
 }
 
@@ -481,7 +481,7 @@ pub fn hard_link(existing: &Path, new: &Path) -> io::Result<()> {
     fs::hard_link(existing, new)
 }
 
-/// Sets a file's or a folder's times; a time left out stays as it is.
+/// Sets a file's or a directory's times; a time left out stays as it is.
 ///
 /// # Errors
 ///
@@ -587,7 +587,7 @@ mod tests {
         assert_eq!(permissions(Kind::File, Some(true), true, false), 0o444);
         assert_eq!(permissions(Kind::File, Some(false), false, true), 0o555);
         assert_eq!(permissions(Kind::File, None, false, true), 0o775);
-        // A folder's read-only attribute does not stop writing in it.
+        // A directory's read-only attribute does not stop writing in it.
         assert_eq!(permissions(Kind::Dir, Some(true), true, false), 0o775);
         assert_eq!(permissions(Kind::Symlink, Some(false), true, false), 0o777);
         assert_eq!(Kind::Dir.type_bits() | 0o755, 0o40_755);

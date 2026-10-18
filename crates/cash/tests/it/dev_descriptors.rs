@@ -5,7 +5,7 @@
 //! one of these failed with `failed to redirect to C:/dev/stderr: The system cannot find
 //! the path specified`: a redirection resolves its word against the working directory
 //! before the file is opened, and the names were only known as they are written. With a
-//! folder `C:\dev` on the machine the same line made a file `C:\dev\stderr` instead.
+//! directory `C:\dev` on the machine the same line made a file `C:\dev\stderr` instead.
 //!
 //! What Git Bash 5.3 does with each script here was measured; where cash differs (it
 //! duplicates the descriptor, Git Bash opens the file again and empties it) the test
@@ -314,7 +314,7 @@ echo gone | tee /dev/null; echo "rc=$?""#,
 
 #[test]
 fn a_bundled_tool_empties_a_file_from_the_null_device() {
-    let dir = tempfile::tempdir().expect("a scratch folder");
+    let dir = tempfile::tempdir().expect("a scratch directory");
     std::fs::write(dir.path().join("a"), "old\n").expect("a file to empty");
     std::fs::write(dir.path().join("b"), "old\n").expect("a file to empty");
     let left = cash_in(
@@ -357,8 +357,8 @@ fn a_bundled_tool_finds_no_descriptor_above_two() {
 #[test]
 fn a_bundled_tool_knows_the_names_where_a_redirection_does() {
     // At the root of a drive, as resolving `/dev/null` leaves it; deeper down, a file.
-    let dir = tempfile::tempdir().expect("a scratch folder");
-    std::fs::create_dir(dir.path().join("dev")).expect("a folder called dev");
+    let dir = tempfile::tempdir().expect("a scratch directory");
+    std::fs::create_dir(dir.path().join("dev")).expect("a directory called dev");
     std::fs::write(dir.path().join("dev").join("null"), "a file\n").expect("a file");
     let left = cash_in(
         dir.path(),
@@ -375,7 +375,7 @@ fn a_bundled_tool_knows_the_names_where_a_redirection_does() {
 /// asked the filesystem, where Windows has no `/dev` (TODO 4.2).
 #[test]
 fn the_file_tests_answer_for_the_names_as_git_bash_does() {
-    let dir = tempfile::tempdir().expect("a scratch folder");
+    let dir = tempfile::tempdir().expect("a scratch directory");
     std::fs::write(dir.path().join("f"), "contents\n").expect("a file");
     let left = cash_in(
         dir.path(),
@@ -424,7 +424,7 @@ fn standard_output_is_not_read_as_input() {
 /// redirection, as a bundled tool's argument, and to the file tests (TODO 4.6).
 #[test]
 fn the_endless_devices_are_read_and_written_as_in_git_bash() {
-    let dir = tempfile::tempdir().expect("a scratch folder");
+    let dir = tempfile::tempdir().expect("a scratch directory");
     let left = cash_in(
         dir.path(),
         "",
@@ -445,7 +445,7 @@ echo gone > /dev/zero; echo "write: $?"
 /// `/dev/zero` first was, `bs=1M count=8` made 512 KiB.
 #[test]
 fn dd_reads_whole_blocks_of_zeros() {
-    let dir = tempfile::tempdir().expect("a scratch folder");
+    let dir = tempfile::tempdir().expect("a scratch directory");
     let left = cash_in(
         dir.path(),
         "",
@@ -458,7 +458,7 @@ fn dd_reads_whole_blocks_of_zeros() {
     assert!(zeros.iter().all(|&byte| byte == 0));
 }
 
-/// With a separator after it a name is a folder, which no device is: Bash says "Not a
+/// With a separator after it a name is a directory, which no device is: Bash says "Not a
 /// directory". cash took `/dev/null/` for the null device.
 #[test]
 fn a_name_with_a_separator_after_it_is_no_device() {
@@ -476,7 +476,7 @@ fn a_name_with_a_separator_after_it_is_no_device() {
 /// or directory" for `/dev/null` (TODO 4.7). Git Bash 5.3.15's answers, the date aside.
 #[test]
 fn ls_and_stat_show_the_names_as_git_bash_does() {
-    let dir = tempfile::tempdir().expect("a scratch folder");
+    let dir = tempfile::tempdir().expect("a scratch directory");
     std::fs::write(dir.path().join("f"), "contents\n").expect("a file");
     let left = cash_in(
         dir.path(),

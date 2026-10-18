@@ -43,7 +43,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
 }
 
 /// 7-Zip's scan for archives (`EnumerateDirItemsAndSort`): the files the archive's name,
-/// `-ai` and `-ax` give, folders entered as `a` enters them, sorted by their full paths;
+/// `-ai` and `-ax` give, directories entered as `a` enters them, sorted by their full paths;
 /// "Scanning the drive for archives:" and what was found, else "Cannot find archive".
 fn scan<SE: cash_core::ShellExtensions>(
     options: &Options,
@@ -326,7 +326,7 @@ struct Totals {
     open_warnings: u64,
     open_errors: u64,
     file_errors: u64,
-    folders: u64,
+    directories: u64,
     files: u64,
     size: u64,
     packed: u64,
@@ -403,10 +403,10 @@ fn extract_all<SE: cash_core::ShellExtensions>(
     outcome?;
     let code = if error { code::FATAL } else { 0 };
     if !failed {
-        if totals.folders != 0 {
-            console.so(&format!("Folders: {}\n", totals.folders));
+        if totals.directories != 0 {
+            console.so(&format!("Directories: {}\n", totals.directories));
         }
-        if totals.files != 1 || totals.folders != 0 || totals.alt_streams != 0 {
+        if totals.files != 1 || totals.directories != 0 || totals.alt_streams != 0 {
             console.so(&format!("Files: {}\n", totals.files));
         }
         if totals.alt_streams != 0 {
@@ -637,7 +637,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         None => (env.path("."), "./".to_owned()),
     };
     // Made before anything is looked for in the archive, as 7-Zip makes it: a run that
-    // extracts nothing still leaves the folder.
+    // extracts nothing still leaves the directory.
     if !test && !options.stdout && options.output_dir.is_some() {
         fs::create_dir_all(&out_dir).map_err(|e| {
             Stop::Message(format!(
@@ -666,7 +666,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
     let target = |item: &Item, keep| target(&out_dir, item, keep, elim.as_deref());
     let mut overwrite = options.overwrite;
     let mut errors = 0u64;
-    let mut folder_times: Vec<(PathBuf, u64)> = Vec::new();
+    let mut directory_times: Vec<(PathBuf, u64)> = Vec::new();
     let mut post_links: Vec<links::PostLink> = Vec::new();
     let mut stop: Option<Stop> = None;
     let mut hash = totals.hash.take();
@@ -695,7 +695,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             return Ok(false);
         }
         let skip = !wanted[index];
-        // -scrc hashes what is tested, folders too, and the files extracted.
+        // -scrc hashes what is tested, directories too, and the files extracted.
         let hashing = !skip && (test || !item.is_dir);
         // A link extracted is a placeholder now, the link at the end; the tar handler
         // asks no stream for a file one, so it is neither shown nor counted, unless
@@ -816,7 +816,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         }
         console.progress_item(mark, &item.path, logged);
         if item.is_dir {
-            totals.folders += 1;
+            totals.directories += 1;
         } else if item.alt_stream {
             totals.alt_streams += 1;
         } else {
@@ -892,7 +892,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             if made.is_ok()
                 && let Some(time) = item.modified
             {
-                folder_times.push((path, time));
+                directory_times.push((path, time));
             }
             made
         };
@@ -903,7 +903,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         }
         let finished = data.finish();
         // What a file or the hashes took, as 7-Zip counts its streams' bytes; else the
-        // size known before decoding, else the one the format reports after. A folder's
+        // size known before decoding, else the one the format reports after. A directory's
         // is a link's name.
         if !item.is_dir || item.link.is_some() {
             let size = if written || through_hash {
@@ -960,7 +960,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         totals.file_errors += errors;
         return Err(stop);
     }
-    for (path, time) in folder_times.into_iter().rev() {
+    for (path, time) in directory_times.into_iter().rev() {
         let _ = cash_win32::unix::set_times(
             &path,
             &cash_win32::unix::Times {
@@ -1131,8 +1131,8 @@ const fn problem_words(problem: Problem, encrypted: bool) -> &'static str {
     }
 }
 
-/// `-spe`: the output folder's own name when every item (those -x leaves out by kind
-/// aside) is that folder or under it, to be taken off them all.
+/// `-spe`: the output directory's own name when every item (those -x leaves out by kind
+/// aside) is that directory or under it, to be taken off them all.
 fn elim_prefix(options: &Options, items: &[Item]) -> Option<String> {
     if !options.elim_dup || options.path_keep == PathKeep::Absolute {
         return None;
@@ -1164,9 +1164,9 @@ fn elim_prefix(options: &Options, items: &[Item]) -> Option<String> {
     all.then(|| name.to_owned())
 }
 
-/// Where an item goes on disk: the output folder, then its path (`x`) or its name
-/// (`e`), less `-spe`'s folder, each part made one Windows can hold (`Correct_FsPath`);
-/// and that path as shown, relative to the output folder.
+/// Where an item goes on disk: the output directory, then its path (`x`) or its name
+/// (`e`), less `-spe`'s directory, each part made one Windows can hold (`Correct_FsPath`);
+/// and that path as shown, relative to the output directory.
 fn target(out_dir: &Path, item: &Item, keep: PathKeep, elim: Option<&str>) -> (PathBuf, String) {
     // An alternate stream goes into its file's stream of that name.
     if let Some((file, stream)) = item.stream_parts() {
@@ -1181,7 +1181,7 @@ fn target(out_dir: &Path, item: &Item, keep: PathKeep, elim: Option<&str>) -> (P
         return (path, shown);
     }
     let mut parts = split_path(&item.path);
-    // -spe's folder comes off with paths kept; `e` keeps names alone anyway.
+    // -spe's directory comes off with paths kept; `e` keeps names alone anyway.
     if elim.is_some() && keep != PathKeep::None && !parts.is_empty() {
         parts.remove(0);
     }

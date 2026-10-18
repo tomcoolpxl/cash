@@ -25,8 +25,8 @@ pub struct Found {
     pub path: PathBuf,
     /// Its path below the root, with `/` between names.
     pub relative: String,
-    /// A folder rather than a file.
-    pub folder: bool,
+    /// A directory rather than a file.
+    pub directory: bool,
 }
 
 /// How far a search got.
@@ -118,16 +118,16 @@ fn walk(root: &Path, filter: Filter, found: &Mutex<Vec<Found>>, stop: &AtomicBoo
     let mut pending: VecDeque<(PathBuf, String)> =
         VecDeque::from([(root.to_path_buf(), String::new())]);
     let mut count = 0usize;
-    while let Some((folder, prefix)) = pending.pop_front() {
+    while let Some((directory, prefix)) = pending.pop_front() {
         if stop.load(Ordering::Acquire) {
             return Status::Cut;
         }
         if count >= MAX_ENTRIES || started.elapsed() >= MAX_TIME {
             return Status::Cut;
         }
-        // Folders are walked whatever the picker lists, to find the files below them.
+        // Directories are walked whatever the picker lists, to find the files below them.
         let entries = tree::read(
-            &folder,
+            &directory,
             Filter {
                 shows: crate::context::Shows::Everything,
                 ..filter
@@ -141,14 +141,14 @@ fn walk(root: &Path, filter: Filter, found: &Mutex<Vec<Found>>, stop: &AtomicBoo
             } else {
                 format!("{prefix}/{}", entry.name)
             };
-            if entry.folder {
+            if entry.directory {
                 pending.push_back((entry.path.clone(), relative.clone()));
             }
-            if entry.folder || filter.shows == crate::context::Shows::Everything {
+            if entry.directory || filter.shows == crate::context::Shows::Everything {
                 batch.push(Found {
                     path: entry.path,
                     relative,
-                    folder: entry.folder,
+                    directory: entry.directory,
                 });
             }
         }
@@ -187,18 +187,18 @@ mod tests {
             search.with_found(|f| f.iter().map(|f| f.relative.clone()).collect());
         assert_eq!(found, ["a", "top.txt", "a/deep", "a/deep/x.txt"]);
 
-        let folders = Search::start(
+        let directories = Search::start(
             dir.path(),
             Filter {
-                shows: Shows::Folders,
+                shows: Shows::Directories,
                 ..filter
             },
         );
-        while folders.status() == Status::Running && Instant::now() < deadline {
+        while directories.status() == Status::Running && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(5));
         }
         let found: Vec<String> =
-            folders.with_found(|f| f.iter().map(|f| f.relative.clone()).collect());
+            directories.with_found(|f| f.iter().map(|f| f.relative.clone()).collect());
         assert_eq!(found, ["a", "a/deep"]);
     }
 }

@@ -159,7 +159,7 @@ jobs:
       # The per-user installer (packaging/inno/cash.iss): the same files, in Scoop's
       # layout under %LOCALAPPDATA%\Programs\cash, finished by `cash --install-finish`.
       # Inno Setup is preinstalled on the Windows runner; ISCC takes the version and the
-      # dist folder as defines. Unsigned, so a browser download shows SmartScreen once.
+      # dist directory as defines. Unsigned, so a browser download shows SmartScreen once.
       - name: Build the installer
         shell: pwsh
         env:
@@ -178,7 +178,7 @@ jobs:
           Write-Host "SHA256:    $hash"
 
       # The installer on a machine that never had cash: a silent install into the
-      # runner's temp folder, a command through the installed cash, doctor, the update
+      # runner's temp directory, a command through the installed cash, doctor, the update
       # check against the real releases page, then a silent uninstall that leaves
       # nothing. What the winget submission needs to have seen once per release. The
       # update check sends the job's token: GitHub refuses (403) anonymous API calls

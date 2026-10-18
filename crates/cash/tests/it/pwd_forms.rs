@@ -1,6 +1,6 @@
-//! `pwd`'s three options. `-W` is MSYS2 Bash's (the folder in Windows form), which the
+//! `pwd`'s three options. `-W` is MSYS2 Bash's (the directory in Windows form), which the
 //! usage offered and cash refused as invalid; cash's paths are in Windows form already, so
-//! it prints what `pwd` prints. `-P` printed the folder as the standard library resolves
+//! it prints what `pwd` prints. `-P` printed the directory as the standard library resolves
 //! it, `\\?\C:\…`, where every other path cash prints is `C:/…`.
 
 #![allow(
@@ -12,7 +12,7 @@
 use crate::common::{Scratch, run_in};
 
 #[test]
-fn pwd_w_prints_the_folder_as_pwd_does() {
+fn pwd_w_prints_the_directory_as_pwd_does() {
     let dir = Scratch::new("pwd-w");
     let out = run_in(
         dir.path(),
@@ -25,7 +25,7 @@ fn pwd_w_prints_the_folder_as_pwd_does() {
 }
 
 #[test]
-fn pwd_p_prints_the_resolved_folder_in_cashs_spelling() {
+fn pwd_p_prints_the_resolved_directory_in_cashs_spelling() {
     let dir = Scratch::new("pwd-p");
     let out = run_in(
         dir.path(),

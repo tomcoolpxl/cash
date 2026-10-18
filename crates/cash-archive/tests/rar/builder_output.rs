@@ -137,8 +137,8 @@ fn volume_builder_refuses_quick_open_before_source_io() {
 #[test]
 fn legacy_entry_paths_keep_relative_components_and_reject_escape() {
     assert_eq!(
-        entry_relative_path(b"folder\\subdir/file.txt").unwrap(),
-        std::path::Path::new("folder/subdir/file.txt")
+        entry_relative_path(b"directory\\subdir/file.txt").unwrap(),
+        std::path::Path::new("directory/subdir/file.txt")
     );
     assert_eq!(
         entry_relative_path(b"./file.txt").unwrap(),
@@ -147,7 +147,7 @@ fn legacy_entry_paths_keep_relative_components_and_reject_escape() {
     for name in [
         b"../escape".as_slice(),
         b"/absolute",
-        b"folder/../../escape",
+        b"directory/../../escape",
         b"",
         b".",
     ] {
@@ -160,8 +160,8 @@ fn legacy_entry_paths_keep_relative_components_and_reject_escape() {
 fn legacy_entry_paths_preserve_non_utf8_bytes_on_unix() {
     use std::os::unix::ffi::OsStrExt;
 
-    let path = entry_relative_path(b"folder/\xff.bin").unwrap();
-    assert_eq!(path.as_os_str().as_bytes(), b"folder/\xff.bin");
+    let path = entry_relative_path(b"directory/\xff.bin").unwrap();
+    assert_eq!(path.as_os_str().as_bytes(), b"directory/\xff.bin");
 }
 
 #[test]

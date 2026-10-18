@@ -2,7 +2,7 @@
 # (the oracle: Scoop's extras/winrar on Windows) and under cash's builtin: the members
 # kept packed again ("Repacking archived files:"), the old members dropped or replaced
 # decoded on the way ("Analyzing archived files:"), for a, u, f and d on two solid
-# archives, one with folders and an empty file.
+# archives, one with directories and an empty file.
 #
 # `zr` keeps standard output and standard error apart and turns CRLF and `\` into LF
 # and `/`, as rar_write.sh's `z` does; it keeps the counters' backspaces, shown as `<`,

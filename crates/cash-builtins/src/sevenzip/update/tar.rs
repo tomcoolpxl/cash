@@ -816,7 +816,7 @@ fn new_props_header<SE: cash_core::ShellExtensions>(
 }
 
 /// `kpidSymLink` of a link `-snl` kept: the path its reparse data names, made relative to
-/// the link's folder when it is absolute (`GetRelativePath`), `/` between its parts.
+/// the link's directory when it is absolute (`GetRelativePath`), `/` between its parts.
 fn symlink_name(link: &Path, data: &[u8]) -> Option<String> {
     let mut path = cash_win32::reparse::target(data)?.path;
     if path.is_empty() {
@@ -851,7 +851,7 @@ fn is_drive_root(path: &str) -> bool {
     is_drive(path) && matches!(path.as_bytes().get(2), Some(b'\\' | b'/'))
 }
 
-/// `GetRelativePath`: `to` as seen from the folder `from` is in, `..\\` up to what they
+/// `GetRelativePath`: `to` as seen from the directory `from` is in, `..\\` up to what they
 /// share; `to` itself when they share not even their drive.
 fn relative_path(to: &str, from: &str) -> String {
     let to_parts: Vec<&str> = to.split(['\\', '/']).collect();

@@ -7,13 +7,13 @@
 #   bash tests/shell-bench/run.sh [CASH] [OUTDIR]
 #
 # CASH defaults to Scoop's cash.exe (by its real path: Scoop's shim would add a process);
-# OUTDIR to a new temporary folder.
+# OUTDIR to a new temporary directory.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 cash=${1:-$(cygpath -m "$USERPROFILE")/scoop/apps/cash/current/cash.exe}
 out=${2:-$(mktemp -d)}
 mkdir -p "$out"
-# Windows' own spelling of the folders: hyperfine and python are given them unconverted,
+# Windows' own spelling of the directories: hyperfine and python are given them unconverted,
 # as the commands they run must be (`MSYS_NO_PATHCONV`).
 here=$(cygpath -m "$here")
 out=$(cygpath -m "$out")

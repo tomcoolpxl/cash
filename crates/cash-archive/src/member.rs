@@ -9,7 +9,7 @@
 pub enum Kind {
     /// A regular file.
     File,
-    /// A folder.
+    /// A directory.
     Dir,
     /// A symbolic link to `Member::link`.
     Symlink,

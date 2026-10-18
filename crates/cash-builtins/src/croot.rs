@@ -1,4 +1,4 @@
-//! `croot [-d|-f] [DIR]`: the file and folder picker Alt-E opens, for scripts (spec D73).
+//! `croot [-d|-f] [DIR]`: the file and directory picker Alt-E opens, for scripts (spec D73).
 //!
 //! It draws on the console itself (`CONOUT$`), not on standard output, so that
 //! `cd "$(croot)"` shows the picker while the pick is captured.
@@ -12,18 +12,18 @@ use cash_picker::context::{Shows, Then};
 use cash_picker::{term, ui};
 use clap::Parser;
 
-/// Pick a file or folder in a tree, and print it.
+/// Pick a file or directory in a tree, and print it.
 #[derive(Parser)]
 pub(crate) struct CrootCommand {
-    /// Folders only (the default).
+    /// Directories only (the default).
     #[arg(short = 'd', conflicts_with = "files")]
-    folders: bool,
+    directories: bool,
 
-    /// Files and folders.
+    /// Files and directories.
     #[arg(short = 'f')]
     files: bool,
 
-    /// The folder to start in; the current folder without one.
+    /// The directory to start in; the current directory without one.
     dir: Option<String>,
 }
 
@@ -42,7 +42,7 @@ impl builtins::Command for CrootCommand {
             Some(dir) => {
                 let path = context.shell.absolute_path(dir);
                 if !path.is_dir() {
-                    writeln!(context.stderr(), "croot: {dir}: not a folder")?;
+                    writeln!(context.stderr(), "croot: {dir}: not a directory")?;
                     return Ok(ExecutionResult::general_error());
                 }
                 path
@@ -60,10 +60,10 @@ impl builtins::Command for CrootCommand {
             shows: if self.files {
                 Shows::Everything
             } else {
-                Shows::Folders
+                Shows::Directories
             },
             then: Then::Close,
-            history: context.shell.folders_to_offer(),
+            history: context.shell.directories_to_offer(),
             home,
             colours: if colour {
                 Colours::new(

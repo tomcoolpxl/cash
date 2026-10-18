@@ -16,7 +16,7 @@
 //! The report fits the window, up to 100 columns: a line for each check that passed, then
 //! each warning and note with what to do about it, one way to fix it to a line, what to
 //! type in a column. A path in what was found is written as cash prints it, the home
-//! folder as `~`; a path in a fix is written out in full, to be pasted. On a terminal,
+//! directory as `~`; a path in a fix is written out in full, to be pasted. On a terminal,
 //! and unless `NO_COLOR` is set, `ok` is green, `note` cyan, `WARN` yellow, and what to
 //! type bold.
 
@@ -336,7 +336,7 @@ fn join_and(items: &[String]) -> String {
     }
 }
 
-/// `path` as cash prints it, with the home folder (`$HOME`, else `%USERPROFILE%`) as `~`,
+/// `path` as cash prints it, with the home directory (`$HOME`, else `%USERPROFILE%`) as `~`,
 /// and its spaces [`unbroken`], for a finding's text.
 pub(crate) fn shown(path: &Path) -> String {
     unbroken(&shown_from(path, crate::init_rc::home().as_deref()))
@@ -363,7 +363,7 @@ fn shown_from(path: &Path, home: Option<&Path>) -> String {
 }
 
 /// The report's first line: this cash's version and where it is. An installed cash is
-/// in `current`, the junction beside its version folder; a window open since before an
+/// in `current`, the junction beside its version directory; a window open since before an
 /// upgrade runs the version it started with, which a note says, with the one `current`
 /// names now.
 fn install_header(findings: &mut Vec<Finding>) -> String {
@@ -371,10 +371,10 @@ fn install_header(findings: &mut Vec<Finding>) -> String {
     let Ok(exe) = std::env::current_exe().and_then(std::fs::canonicalize) else {
         return version;
     };
-    let folder = exe.parent().map(shown).unwrap_or_default();
+    let directory = exe.parent().map(shown).unwrap_or_default();
     let Some(layout) = cash_win32::install_layout::layout(&exe, cash_win32::junction::is_junction)
     else {
-        return format!("{version} in {folder}");
+        return format!("{version} in {directory}");
     };
     let current = shown(&layout.current);
     if cash_win32::junction::points_at(&layout.current, &layout.version_dir) {
@@ -399,7 +399,7 @@ fn install_header(findings: &mut Vec<Finding>) -> String {
             Some(format!("windows opened from now on start {named}")),
         )
     });
-    format!("{version} in {folder}")
+    format!("{version} in {directory}")
 }
 
 fn check_session(findings: &mut Vec<Finding>) {
@@ -443,7 +443,7 @@ pub(crate) fn builtin_names() -> std::collections::HashSet<String> {
     names
 }
 
-/// The commands cash answers itself, confirmed to still be its own, and the folders of
+/// The commands cash answers itself, confirmed to still be its own, and the directories of
 /// `cash --link-tools` links on PATH (D65) with whether each link is still this
 /// `cash.exe`. An upgrade replaces `cash.exe` with a new file, and the links keep the old
 /// one: they go on running the old cash until `cash --link-tools` refreshes them.
@@ -539,8 +539,8 @@ fn check_shells(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[Str
 }
 
 /// Whether a new window finds `cash`: the shells' line reports in-shell resolution,
-/// which is always cash, so a portable cash whose folder is on no PATH still passes
-/// there. This line asks whether the folder that stands for this `cash.exe` (`current`
+/// which is always cash, so a portable cash whose directory is on no PATH still passes
+/// there. This line asks whether the directory that stands for this `cash.exe` (`current`
 /// for an installed one, Scoop's shims for Scoop's, its own for a portable one) is on the
 /// user or the machine PATH.
 fn check_own_path(findings: &mut Vec<Finding>) {
@@ -592,9 +592,9 @@ fn check_sudo_accounts(findings: &mut Vec<Finding>) {
 }
 
 /// The command that lets every account read and run this cash: the Users group granted
-/// read and execute on the folder that holds every version (the one with `current` in it,
+/// read and execute on the directory that holds every version (the one with `current` in it,
 /// Scoop's or the installer's), inherited, so a version installed later has it too. It
-/// needs no administrator, as the folder is the user's own.
+/// needs no administrator, as the directory is the user's own.
 fn grant_to_every_account(exe: &Path) -> String {
     let exe = std::fs::canonicalize(exe).unwrap_or_else(|_| exe.to_path_buf());
     let root = cash_win32::install_layout::layout(&exe, cash_win32::junction::is_junction)
@@ -602,10 +602,10 @@ fn grant_to_every_account(exe: &Path) -> String {
         .or_else(|| Some(exe.parent()?.to_path_buf()))
         .unwrap_or_default();
     // Breakable between its arguments, a narrow window being no wider than the command.
-    let folder = unbroken(&format!("'{}'", cash_win32::path::render(&root)));
+    let directory = unbroken(&format!("'{}'", cash_win32::path::render(&root)));
     format!(
         "let every account run it, and each version after, as you:\t\
-         {BOLD}icacls {folder} /grant '*S-1-5-32-545:(OI)(CI)RX'{UNBOLD}"
+         {BOLD}icacls {directory} /grant '*S-1-5-32-545:(OI)(CI)RX'{UNBOLD}"
     )
 }
 
@@ -1216,9 +1216,9 @@ mod tests {
     }
 
     #[test]
-    fn the_grant_lets_every_account_run_the_folder_that_holds_cash() {
-        // No `current` junction here, so the folder is cash's own; Scoop's and the
-        // installer's give the folder that holds `current` instead.
+    fn the_grant_lets_every_account_run_the_directory_that_holds_cash() {
+        // No `current` junction here, so the directory is cash's own; Scoop's and the
+        // installer's give the directory that holds `current` instead.
         let fix = grant_to_every_account(Path::new(r"C:\Tools\cash\cash.exe"));
         let fix = paint(&fix, false).replace(NO_BREAK, " ");
         assert_eq!(
@@ -1262,7 +1262,7 @@ mod tests {
             ),
             "~/x"
         );
-        // Another folder that only starts with the same letters is not under home.
+        // Another directory that only starts with the same letters is not under home.
         assert_eq!(
             shown_from(Path::new(r"C:\Users\meg\x"), Some(home)),
             "C:/Users/meg/x"

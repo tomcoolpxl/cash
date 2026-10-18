@@ -245,7 +245,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_scoop_shim_is_seen_through_to_the_real_carapace() {
-        // Scoop's shim folder holds `carapace.exe` and a `carapace.shim` naming the real
+        // Scoop's shim directory holds `carapace.exe` and a `carapace.shim` naming the real
         // one. The stand-in "shim" here cannot run, so only the real one can answer.
         let real = tempfile::tempdir().unwrap();
         let real_carapace = real.path().join("carapace.cmd");

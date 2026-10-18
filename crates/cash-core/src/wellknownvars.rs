@@ -270,7 +270,7 @@ pub(crate) fn init_well_known_vars(
     shell.env_mut().set_global(
         "DIRSTACK",
         ShellVariable::new(ShellValue::Dynamic {
-            // The working folder first, then the stack from the last one pushed, as `dirs`
+            // The working directory first, then the stack from the last one pushed, as `dirs`
             // lists them; it was the stack alone, first one pushed first.
             getter: |shell| {
                 std::iter::once(shell.working_dir())

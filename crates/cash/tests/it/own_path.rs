@@ -1,9 +1,9 @@
 //! `cash --add-to-path`, `cash --remove-from-path` and `cash doctor`'s line about PATH: the
-//! folder that stands for this `cash.exe` on the user PATH, per layout. The test's
-//! `cash.exe` is copied into a scratch folder laid out as a portable copy, as Scoop's
+//! directory that stands for this `cash.exe` on the user PATH, per layout. The test's
+//! `cash.exe` is copied into a scratch directory laid out as a portable copy, as Scoop's
 //! install or as the installer's. Each test has a home, a `LOCALAPPDATA` and a user `Path`
 //! key of its own, so nothing of the developer's is read or written; the machine PATH is
-//! the real one, only read, and no scratch folder is on it.
+//! the real one, only read, and no scratch directory is on it.
 #![allow(
     clippy::tests_outside_test_module,
     clippy::unwrap_used,
@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::common::{CASH, DoctorFinding, doctor_findings};
 
-/// `name` with this process's id and a count after it, so that no two folders, in this
+/// `name` with this process's id and a count after it, so that no two directories, in this
 /// run or another one at the same time, share a name.
 fn unique(name: &str) -> String {
     static COUNT: AtomicU32 = AtomicU32::new(0);
@@ -40,7 +40,7 @@ fn plain(path: &Path) -> String {
     text.trim_end_matches('\\').to_lowercase()
 }
 
-/// `path` as cash spells it on the user PATH: its folder real, backslashes, no prefix.
+/// `path` as cash spells it on the user PATH: its directory real, backslashes, no prefix.
 /// The name itself is kept, so a `current` junction is not followed.
 fn entry(path: &Path) -> String {
     let parent = std::fs::canonicalize(path.parent().unwrap()).unwrap();
@@ -59,20 +59,20 @@ struct Copy {
 }
 
 impl Copy {
-    /// The exe in `<dir>\<folders...>\cash.exe`.
-    fn under(name: &str, folders: &[&str]) -> Self {
+    /// The exe in `<dir>\<directories...>\cash.exe`.
+    fn under(name: &str, directories: &[&str]) -> Self {
         let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
             .join("own-path")
             .join(unique(name));
         let _ = std::fs::remove_dir_all(&dir);
         let mut exe_dir = dir.clone();
-        for folder in folders {
-            exe_dir.push(folder);
+        for directory in directories {
+            exe_dir.push(directory);
         }
         let home = dir.join("home");
         let local = dir.join("local");
-        for folder in [&exe_dir, &home, &local] {
-            std::fs::create_dir_all(folder).unwrap();
+        for directory in [&exe_dir, &home, &local] {
+            std::fs::create_dir_all(directory).unwrap();
         }
         let exe = exe_dir.join("cash.exe");
         std::fs::copy(CASH, &exe).unwrap();
@@ -177,29 +177,29 @@ impl Drop for Copy {
     }
 }
 
-/// A folder as cash shows it: real, backslashes, no prefix, the disk's case. A junction
+/// A directory as cash shows it: real, backslashes, no prefix, the disk's case. A junction
 /// is followed, so for `current` the caller shows its parent and adds the name.
-fn shown(folder: &Path) -> String {
-    let folder = std::fs::canonicalize(folder).unwrap();
-    let text = folder.to_string_lossy().replace('/', "\\");
+fn shown(directory: &Path) -> String {
+    let directory = std::fs::canonicalize(directory).unwrap();
+    let text = directory.to_string_lossy().replace('/', "\\");
     text.strip_prefix(r"\\?\")
         .unwrap_or(&text)
         .trim_end_matches('\\')
         .to_owned()
 }
 
-/// A folder [`shown`] as `cash doctor` writes it: with forward slashes.
+/// A directory [`shown`] as `cash doctor` writes it: with forward slashes.
 fn in_doctor(shown: &str) -> String {
     shown.replace('\\', "/")
 }
 
 /// The report: a portable cash is noted by doctor with the fix; `--add-to-path` puts its
-/// folder first on the user PATH and doctor says `ok`; a second add changes nothing;
+/// directory first on the user PATH and doctor says `ok`; a second add changes nothing;
 /// `--remove-from-path` takes it off, and doctor notes it again.
 #[test]
 fn a_portable_cash_is_noted_added_first_and_removed() {
     let copy = Copy::under("portable", &["unpacked"]);
-    let folder = shown(copy.exe.parent().unwrap());
+    let directory = shown(copy.exe.parent().unwrap());
     // A user with entries of their own: cash's goes before them, and they stay.
     copy.seed_user_path(r"C:\users-own\bin;%USERPROFILE%\go\bin");
 
@@ -209,7 +209,7 @@ fn a_portable_cash_is_noted_added_first_and_removed() {
         line.text,
         format!(
             "{} is on no PATH, so new windows will not find cash",
-            in_doctor(&folder)
+            in_doctor(&directory)
         )
     );
     assert_eq!(line.fix.as_deref(), Some("cash --add-to-path"));
@@ -218,7 +218,9 @@ fn a_portable_cash_is_noted_added_first_and_removed() {
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert_eq!(
         text(&out.stdout),
-        format!("cash: {folder} added to your user PATH: windows opened from now on have cash\n")
+        format!(
+            "cash: {directory} added to your user PATH: windows opened from now on have cash\n"
+        )
     );
     assert_eq!(text(&out.stderr), "");
     assert_eq!(
@@ -234,7 +236,7 @@ fn a_portable_cash_is_noted_added_first_and_removed() {
     assert_eq!(line.level, "ok", "{line:?}");
     assert_eq!(
         line.text,
-        format!("{} is on your user PATH", in_doctor(&folder))
+        format!("{} is on your user PATH", in_doctor(&directory))
     );
     assert_eq!(line.fix, None);
 
@@ -243,7 +245,7 @@ fn a_portable_cash_is_noted_added_first_and_removed() {
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert_eq!(
         text(&out.stdout),
-        format!("cash: {folder} is on your user PATH already\n")
+        format!("cash: {directory} is on your user PATH already\n")
     );
     assert_eq!(copy.path_entries().len(), 3);
 
@@ -251,7 +253,7 @@ fn a_portable_cash_is_noted_added_first_and_removed() {
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert_eq!(
         text(&out.stdout),
-        format!("cash: {folder} removed from your user PATH\n")
+        format!("cash: {directory} removed from your user PATH\n")
     );
     assert_eq!(
         copy.path_entries(),
@@ -269,14 +271,14 @@ fn a_portable_cash_is_noted_added_first_and_removed() {
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert_eq!(
         text(&out.stdout),
-        format!("cash: {folder} was not on your user PATH\n")
+        format!("cash: {directory} was not on your user PATH\n")
     );
 }
 
-/// The report: a cash under `scoop\apps\` is Scoop's, whose shims folder is what is on
+/// The report: a cash under `scoop\apps\` is Scoop's, whose shims directory is what is on
 /// PATH; cash reports on it and never adds or removes it.
 #[test]
-fn scoops_copy_names_its_shims_folder_and_leaves_it_to_scoop() {
+fn scoops_copy_names_its_shims_directory_and_leaves_it_to_scoop() {
     let copy = Copy::under("scoop", &["scoop", "apps", "cash", "current"]);
     let shims = copy.dir.join("scoop").join("shims");
     let shown = format!("{}\\shims", shown(&copy.dir.join("scoop")));
@@ -296,17 +298,17 @@ fn scoops_copy_names_its_shims_folder_and_leaves_it_to_scoop() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(
         text(&out.stderr),
-        format!("cash: installed by Scoop, but its shims folder {shown} is on no PATH\n")
+        format!("cash: installed by Scoop, but its shims directory {shown} is on no PATH\n")
     );
     assert_eq!(copy.user_path(), None);
 
-    // As Scoop's installer leaves it: the shims folder on the user PATH.
+    // As Scoop's installer leaves it: the shims directory on the user PATH.
     copy.seed_user_path(&shims.to_string_lossy());
     let out = copy.cash(&["--add-to-path"]);
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert_eq!(
         text(&out.stdout),
-        "cash: installed by Scoop: its shims folder is already on PATH\n"
+        "cash: installed by Scoop: its shims directory is already on PATH\n"
     );
     let line = copy.doctor_path_line();
     assert_eq!(line.level, "ok", "{line:?}");
@@ -327,9 +329,9 @@ fn scoops_copy_names_its_shims_folder_and_leaves_it_to_scoop() {
 }
 
 /// The report: a cash in the installer's layout adds `current`, the junction beside its
-/// version folder, never the version folder itself.
+/// version directory, never the version directory itself.
 #[test]
-fn an_installed_cash_adds_current_not_its_version_folder() {
+fn an_installed_cash_adds_current_not_its_version_directory() {
     let copy = Copy::under("installed", &["Programs", "cash", "9.9.9"]);
     let root = copy.dir.join("Programs").join("cash");
     let current = root.join("current");

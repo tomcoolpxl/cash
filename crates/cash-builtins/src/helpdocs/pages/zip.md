@@ -5,7 +5,7 @@ see: unzip tar gzip
 ## Description
 
 `zip ARCHIVE FILE...` adds files to a zip archive, making it when there is none and
-replacing members already in it; `-r` takes folders whole. `-u` adds only what is new or
+replacing members already in it; `-r` takes directories whole. `-u` adds only what is new or
 changed, `-f` replaces only what changed, `-d` deletes members and `-FS` makes the
 archive hold exactly the files named. `.zip` is added to an archive's name that has no
 suffix. `-` as the archive writes it to standard output; `-` as a file reads standard
@@ -42,7 +42,7 @@ Info-ZIP's unzip read, with Unix modes and times.
 ## Examples
 
 ```
-zip -r site.zip site/            # a folder, whole
+zip -r site.zip site/            # a directory, whole
 zip -u site.zip site/index.html  # only if changed
 zip -d site.zip 'site/tmp/*'     # members out
 zip -rq - src | ssh host 'cat > src.zip'

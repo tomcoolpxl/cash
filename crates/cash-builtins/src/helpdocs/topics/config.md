@@ -15,14 +15,14 @@ option on the command line wins over the file, the file over the default.
 syntax-highlighting = true            # colour the line as you type
 
 [experimental]
-terminal-shell-integration = true     # OSC 133 command marks, OSC 9;9 folder
+terminal-shell-integration = true     # OSC 133 command marks, OSC 9;9 directory
 zsh-hooks = false                     # zsh-style preexec and precmd functions
 ```
 
 - `syntax-highlighting`: default `true`; `--enable-highlighting=false` turns it off for
   one run.
 - `terminal-shell-integration`: default `true`. Windows Terminal and VS Code use the marks
-  to jump between commands and to open new tabs in the same folder.
+  to jump between commands and to open new tabs in the same directory.
   `--enable-terminal-integration=false` turns it off for one run.
 - `zsh-hooks`: default `false`; `--enable-zsh-hooks` turns it on.
 
@@ -46,7 +46,7 @@ cash's own:
 
 - `cash doctor`: check the tools on `PATH` and what cash will run.
 - `cash help [NAME]`: this help, from PowerShell or cmd.
-- `cash --add-to-path`: put the folder of this `cash.exe` on your user PATH, so `cash`
+- `cash --add-to-path`: put the directory of this `cash.exe` on your user PATH, so `cash`
   works from any window; `--remove-from-path` takes it off. `cash doctor` says whether it
   is there.
 - `cash --terminal-profile`: add a cash profile to Windows Terminal;
@@ -55,7 +55,7 @@ cash's own:
   programs outside cash can run; `--unlink-tools` removes them.
 - `--disable-color`, `--disable-bracketed-paste`, `--noenv`, `--xtrace-file FILE`.
 
-`cash doctor` and `cash help` give way to a script of that name in the current folder.
+`cash doctor` and `cash help` give way to a script of that name in the current directory.
 
 ## Changing the running shell
 

@@ -1046,7 +1046,7 @@ impl builtins::Command for XxdCommand {
             // Opened as the shell's `<` opens it: `/dev/stdin` and the rest are its own.
             match context.open_input(name, Dash::Stdin) {
                 Ok(opened) => input = opened.read_all()?,
-                // vim's xxd opens a folder, and fails reading it.
+                // vim's xxd opens a directory, and fails reading it.
                 Err(InputError::IsADirectory(_)) => {
                     return failed(&Failure::new(2, "Is a directory".to_owned()));
                 }

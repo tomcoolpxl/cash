@@ -55,7 +55,7 @@ mod clipboard_and_small_tools;
 // `command_not_found_handle`, run as Bash runs it: the command and its arguments, in a
 // subshell, its status the command's; the install hint only without one.
 mod command_not_found_handle;
-// The binary, a run of it isolated from the user's settings, and a scratch folder.
+// The binary, a run of it isolated from the user's settings, and a scratch directory.
 mod common;
 // D40: `docker completion bash` and friends, which need bash-completion's helpers.
 mod completion_scripts;
@@ -107,8 +107,8 @@ mod find_xargs;
 mod finished_command_orphans;
 // `flock`, util-linux's, against its golden output; the lock across processes and
 // descriptors.
+mod directory_history;
 mod flock_builtin;
-mod folder_history;
 // `free`, `nice` and `renice`: procps' layout on Windows' counters, and the priority classes.
 mod free_nice;
 mod fuser_lsof;
@@ -143,7 +143,7 @@ mod init_rc;
 // at an interactive prompt only, from the table of `help tools`.
 mod install_hint;
 // The installer's own steps: `cash --install-finish`, `--install-remove` and `--update`,
-// against a fake install folder with the test's cash.exe copied in as a version.
+// against a fake install directory with the test's cash.exe copied in as a version.
 mod installer;
 // Text that must never become a command: `start`'s target, a twice-expanded subscript.
 mod injection;
@@ -159,21 +159,21 @@ mod line_ending_tools;
 mod link_tools;
 // `logger`: to the Application event log, read back with wevtutil; util-linux's -s line.
 mod logger_builtin;
-// Programs started from a folder too long for Windows to start one in.
-mod long_folders;
+// Programs started from a directory too long for Windows to start one in.
+mod long_directories;
 // A `TEMP` in 8.3 form taken to its long form as cash starts.
 mod long_temp;
 mod ls_builtin;
 mod msys_args;
 mod namerefs;
-// `cash --add-to-path`, `--remove-from-path` and doctor's `path` line: the folder that
+// `cash --add-to-path`, `--remove-from-path` and doctor's `path` line: the directory that
 // stands for this cash.exe on the user PATH, per layout.
 mod own_path;
 // `nc`, OpenBSD netcat's: connecting, scanning, listening and the data between the two.
 mod nc_builtin;
 // D48: one pager behind `less` and `more`.
 mod pager;
-// D3: every spelling of a folder in every place a script writes a path.
+// D3: every spelling of a directory in every place a script writes a path.
 mod path_spellings;
 mod ping;
 // The offer a portable cash makes once at its first prompt: PATH, the Terminal profile,
@@ -201,10 +201,10 @@ mod real_world_tests;
 mod refusals;
 // D3/D7/D8/D34/D35: what cash says it will run vs what it runs.
 mod resolution_honesty;
-// `rm -r` takes a junction inside a folder away as the link it is, its target or not.
+// `rm -r` takes a junction inside a directory away as the link it is, its target or not.
 mod rm_links;
-// `rm` removes the folder it runs in, the shell's, as a trap at exit asks.
-mod rm_own_folder;
+// `rm` removes the directory it runs in, the shell's, as a trap at exit asks.
+mod rm_own_directory;
 // EXE-07: a script that does not parse runs a complete command at a time, up to the error.
 mod run_by_command;
 // `select`, a bash construct cash could not parse at all.
@@ -251,7 +251,7 @@ mod xxd_builtin;
 mod xz_builtin;
 // rm, sort, tee, uniq and shuf, taken from uutils: their messages are English, not ids.
 mod uutils_messages;
-// D80: `z`, the folder jump, on a record of folders made for the test; its Tab completion.
+// D80: `z`, the directory jump, on a record of directories made for the test; its Tab completion.
 mod z_jump;
 // `zip`, `unzip` and `zipinfo`: Info-ZIP's golden output, Windows' own readers and writers.
 mod zip_builtin;

@@ -1,4 +1,4 @@
-== folders keep their times and attributes
+== directories keep their times and attributes
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
 Trial version             Type 'rar -?' for help
@@ -183,7 +183,7 @@ rc=0
 ./src/a.txt 2024-01-01 00:00:00 A
 ./src/b.txt 2025-01-01 00:00:00 A
 ./src/c.txt 2024-01-01 00:00:00 A
-== -o+ over an older folder
+== -o+ over an older directory
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
 Trial version             Type 'rar -?' for help
@@ -203,7 +203,7 @@ rc=0
 ./src/empty 2024-02-02 00:00:00 -
 ./src/sub 2024-02-02 00:00:00 H
 ./src/sub/c.txt 2024-01-01 00:00:00 A
-== -ad: a folder for each archive in the destination
+== -ad: a directory for each archive in the destination
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
 Trial version             Type 'rar -?' for help
@@ -280,7 +280,7 @@ Total errors: 1
 
 src/sub/c.txt        - checksum error
 rc=3
-== -ad1: a folder for each beside it, the destination ignored
+== -ad1: a directory for each beside it, the destination ignored
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
 Trial version             Type 'rar -?' for help
@@ -323,7 +323,7 @@ rc=0
 ./two/src/sub 2024-02-02 00:00:00 H
 ./two/src/sub/c.txt 2024-01-01 00:00:00 A
 o9 is not made
-== -ad2: the archive's own folder
+== -ad2: the archive's own directory
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
 Trial version             Type 'rar -?' for help
@@ -447,7 +447,7 @@ Skipping    g/a2
 Testing     g/a3                                                           OK 
 All OK
 rc=0
-== damaged folder headers near the end: said, and read as they stand
+== damaged directory headers near the end: said, and read as they stand
 
 Testing archive dmg200.rar
 

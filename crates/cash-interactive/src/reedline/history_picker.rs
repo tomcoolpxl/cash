@@ -1,7 +1,7 @@
 //! Ctrl-R: the history picker, below the line it was pressed on (spec D79). Each command
 //! once, at its last use, newest first; what the line held is the filter it opens with.
 //! Enter puts the command picked on the line, Tab runs it; Ctrl-R in the picker shows
-//! what ran in the current folder, from the record cash keeps beside the history file.
+//! what ran in the current directory, from the record cash keeps beside the history file.
 
 use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
@@ -15,10 +15,10 @@ use cash_picker::term;
 struct FromShell {
     /// Each command once, newest first.
     commands: Vec<Line>,
-    /// The current folder, in cash's spelling.
+    /// The current directory, in cash's spelling.
     here: String,
-    /// The record of the folder each command ran in, when one is kept.
-    folders_file: Option<std::path::PathBuf>,
+    /// The record of the directory each command ran in, when one is kept.
+    directories_file: Option<std::path::PathBuf>,
     home: Option<String>,
     picker_colors: Option<String>,
     height: Option<String>,
@@ -89,9 +89,9 @@ fn open(
         FromShell {
             commands,
             here: cash_win32::path::render(shell.working_dir()),
-            folders_file: shell
+            directories_file: shell
                 .records()
-                .history_folders_file()
+                .history_directories_file()
                 .map(std::path::Path::to_path_buf),
             home: var("HOME")
                 .filter(|home| !home.is_empty())
@@ -102,7 +102,7 @@ fn open(
         }
     };
 
-    let here = from_shell.folders_file.as_ref().map(|file| {
+    let here = from_shell.directories_file.as_ref().map(|file| {
         let in_history: HashSet<&str> = from_shell
             .commands
             .iter()
@@ -158,7 +158,7 @@ fn ran_here(file: &std::path::Path, here: &str, in_history: &HashSet<&str>) -> V
         .unwrap_or_default()
         .into_iter()
         .rev()
-        .filter(|ran| kept::same_folder(&ran.folder, here))
+        .filter(|ran| kept::same_directory(&ran.directory, here))
         .filter(|ran| in_history.contains(ran.command.as_str()))
         .filter(|ran| seen.insert(ran.command.clone()))
         .map(|ran| Line {
@@ -168,16 +168,16 @@ fn ran_here(file: &std::path::Path, here: &str, in_history: &HashSet<&str>) -> V
         .collect()
 }
 
-/// A folder as a header shows it: under the home folder as `~/…`.
-fn shown(folder: &str, home: Option<&str>) -> String {
+/// A directory as a header shows it: under the home directory as `~/…`.
+fn shown(directory: &str, home: Option<&str>) -> String {
     if let Some(home) = home
-        && let Some(rest) = folder
+        && let Some(rest) = directory
             .get(..home.len())
             .filter(|head| head.eq_ignore_ascii_case(home))
-            .and_then(|_| folder.get(home.len()..))
+            .and_then(|_| directory.get(home.len()..))
         && (rest.is_empty() || rest.starts_with('/'))
     {
         return format!("~{rest}");
     }
-    folder.to_owned()
+    directory.to_owned()
 }

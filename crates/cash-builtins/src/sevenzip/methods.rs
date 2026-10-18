@@ -82,7 +82,7 @@ impl Filter {
         }
     }
 
-    /// The filter an existing block's last coder is (`Get_FilterGroup_for_Folder`).
+    /// The filter an existing block's last coder is (`Get_FilterGroup_for_Directory`).
     pub(super) fn of_coder(id: &[u8], props: &[u8]) -> Option<Self> {
         Some(match id {
             [0x03] => Self::Delta(u32::from(*props.first()?) + 1),

@@ -150,7 +150,7 @@ impl builtins::Command for RevCommand {
             // Opened as the shell's `<` opens it: `/dev/stdin` and the rest are its own.
             match context.open_input(&file, Dash::File) {
                 Ok(input) => reversed.extend(reverse_all(&input.read_all()?, separator)),
-                // util-linux opens a folder, and fails reading it.
+                // util-linux opens a directory, and fails reading it.
                 Err(InputError::IsADirectory(_)) => {
                     writeln!(context.stderr(), "rev: fgetwc() failed: Is a directory")?;
                     status = ExecutionResult::general_error();

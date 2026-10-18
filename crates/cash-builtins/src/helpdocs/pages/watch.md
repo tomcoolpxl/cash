@@ -16,7 +16,7 @@ start of each run, `-r` does not rerun the command when the window is resized, a
 `-x` runs the words as one command rather than as shell source.
 
 `q` and Ctrl-C leave, with status 0. Space runs the command at once. `s` saves the
-screen as text into `watch_DATE-TIME` in the working folder, or the folder `-s` names.
+screen as text into `watch_DATE-TIME` in the working directory, or the directory `-s` names.
 
 ## Windows notes
 

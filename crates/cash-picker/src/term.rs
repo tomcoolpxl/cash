@@ -37,7 +37,7 @@ pub fn rows_for(setting: Option<&str>, total: usize) -> usize {
 
 /// Runs `picker` until it closes, drawing on `out`.
 ///
-/// `pick` gets each pick (its path, whether it is a folder, whether the picker closes
+/// `pick` gets each pick (its path, whether it is a directory, whether the picker closes
 /// after it), and may return the command line as it now reads from the word being
 /// replaced on, which is drawn on the line while the picker stays open; `echo_from` is
 /// how many columns before the cursor that word starts, `None` where the line is not to
@@ -72,10 +72,10 @@ pub fn run<W: Write>(
                     Outcome::Closed => Ok(Flow::Stop),
                     Outcome::Picked {
                         path,
-                        folder,
+                        directory,
                         close,
                     } => {
-                        let line = pick(&path, folder, close);
+                        let line = pick(&path, directory, close);
                         if close {
                             return Ok(Flow::Stop);
                         }
@@ -437,7 +437,7 @@ mod tests {
         let mut picker = Picker::new(crate::ui::Setup {
             root: dir.path().to_path_buf(),
             typed: String::new(),
-            shows: crate::context::Shows::Folders,
+            shows: crate::context::Shows::Directories,
             then: crate::context::Then::Run,
             history: Vec::new(),
             home: None,

@@ -20,13 +20,13 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let Some(archive) = parsed.archive.as_deref() else {
         return Ok(());
     };
-    // `destpath\`: the folder the result goes in, as typed.
-    let folder = match parsed.names.last() {
+    // `destpath\`: the directory the result goes in, as typed.
+    let directory = match parsed.names.last() {
         Some(Name::Plain(last)) if last.ends_with(['/', '\\']) => last.replace('\\', "/"),
         _ => String::new(),
     };
     for found in open::find(rar, archive)? {
-        repair(rar, &found, &folder)?;
+        repair(rar, &found, &directory)?;
     }
     Ok(())
 }
@@ -34,7 +34,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
 fn repair<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     found: &Found,
-    folder: &str,
+    directory: &str,
 ) -> Result<(), Stop> {
     let bytes = match std::fs::read(&found.path) {
         Ok(bytes) => bytes,
@@ -69,7 +69,7 @@ fn repair<SE: cash_core::ShellExtensions>(
                         .map(|mended| marked.damaged.iter().cloned().zip(mended).collect());
                     if !mend(
                         rar,
-                        folder,
+                        directory,
                         &name,
                         bytes,
                         &marked.damaged,
@@ -79,7 +79,7 @@ fn repair<SE: cash_core::ShellExtensions>(
                         done(rar);
                     }
                 }
-                _ if matches!(failure, Failure::NotRar) => unreadable(rar, found, folder, &name),
+                _ if matches!(failure, Failure::NotRar) => unreadable(rar, found, directory, &name),
                 _ => {
                     rar.console.msg("\nData recovery record not found");
                     rar.console.err("\nNo files found");
@@ -100,22 +100,22 @@ fn repair<SE: cash_core::ShellExtensions>(
                     .map(|mended| marked.damaged.iter().cloned().zip(mended).collect());
                 if !mend(
                     rar,
-                    folder,
+                    directory,
                     &name,
                     bytes.clone(),
                     &marked.damaged,
                     mended,
                     marked.intact,
                 ) {
-                    reconstruct(rar, found, folder, &name, &bytes, false)?;
+                    reconstruct(rar, found, directory, &name, &bytes, false)?;
                 }
             } else {
-                reconstruct(rar, found, folder, &name, &bytes, true)?;
+                reconstruct(rar, found, directory, &name, &bytes, true)?;
             }
             return Ok(());
         }
         Err(_) => {
-            reconstruct(rar, found, folder, &name, &bytes, true)?;
+            reconstruct(rar, found, directory, &name, &bytes, true)?;
             return Ok(());
         }
     };
@@ -129,8 +129,8 @@ fn repair<SE: cash_core::ShellExtensions>(
             .msg(&format!("\nSearching for recovery record{area}"));
         let (damaged, mended, intact, base) = recovered(archive, password, &bytes);
         // Damage the record cannot mend is said, and the archive rebuilt instead.
-        if !mend(rar, folder, &name, base, &damaged, mended, intact) {
-            reconstruct(rar, found, folder, &name, &bytes, false)?;
+        if !mend(rar, directory, &name, base, &damaged, mended, intact) {
+            reconstruct(rar, found, directory, &name, &bytes, false)?;
         }
         return Ok(());
     }
@@ -140,7 +140,7 @@ fn repair<SE: cash_core::ShellExtensions>(
         done(rar);
         return Ok(());
     }
-    reconstruct(rar, found, folder, &name, &bytes, true)
+    reconstruct(rar, found, directory, &name, &bytes, true)
 }
 
 /// What a recovery record mends.
@@ -206,7 +206,7 @@ fn recovered(archive: &rar50::Archive, password: Option<&[u8]>, bytes: &[u8]) ->
 /// nothing is written and the run goes on.
 fn mend<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
-    folder: &str,
+    directory: &str,
     name: &str,
     bytes: Vec<u8>,
     damaged: &[std::ops::Range<usize>],
@@ -216,7 +216,7 @@ fn mend<SE: cash_core::ShellExtensions>(
     let area = area(rar);
     rar.console.msg("\nData recovery record found");
     rar.console.msg(&format!("\nAnalyzing file data{area}"));
-    let shown = format!("{folder}fixed.{name}");
+    let shown = format!("{directory}fixed.{name}");
     rar.console.msg(&format!("\nBuilding {shown}{area}"));
     let outcome = if mended.is_some() {
         "data recovered"
@@ -267,7 +267,7 @@ fn mend<SE: cash_core::ShellExtensions>(
 fn reconstruct<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     found: &Found,
-    folder: &str,
+    directory: &str,
     name: &str,
     bytes: &[u8],
     not_found: bool,
@@ -277,7 +277,7 @@ fn reconstruct<SE: cash_core::ShellExtensions>(
     }
     rar.console
         .msg(&format!("\nReconstructing {}", found.display));
-    let shown = format!("{folder}rebuilt.{name}");
+    let shown = format!("{directory}rebuilt.{name}");
     rar.console.msg(&format!("\nBuilding {shown}{}", area(rar)));
     // A main header that does not check is said corrupt, twice, and rar asks whether
     // the archive it rebuilds is solid.
@@ -329,7 +329,7 @@ fn ask_solid<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) -> Result<bool, 
 fn unreadable<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     found: &Found,
-    folder: &str,
+    directory: &str,
     name: &str,
 ) {
     rar.console.msg("\nData recovery record not found");
@@ -337,8 +337,10 @@ fn unreadable<SE: cash_core::ShellExtensions>(
     rar.console.msg("\nData recovery record not found");
     rar.console
         .msg(&format!("\nReconstructing {}", found.display));
-    rar.console
-        .msg(&format!("\nBuilding {folder}rebuilt.{name}{}", area(rar)));
+    rar.console.msg(&format!(
+        "\nBuilding {directory}rebuilt.{name}{}",
+        area(rar)
+    ));
     rar.console.err(
         "\nUnexpected end of archive\n - the file header is corrupt\nUnexpected end of archive\nNo files found",
     );

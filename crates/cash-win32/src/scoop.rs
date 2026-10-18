@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 /// The program a Scoop shim starts, or `None` for anything that is not a Scoop shim.
 ///
 /// For `C:\…\shims\tool.exe` it is the `path = "…"` line of the `tool.shim` beside it,
-/// resolved against the shim's folder when it is relative.
+/// resolved against the shim's directory when it is relative.
 #[must_use]
 pub fn shim_target(shim: &Path) -> Option<PathBuf> {
     let contents = std::fs::read_to_string(shim.with_extension("shim")).ok()?;

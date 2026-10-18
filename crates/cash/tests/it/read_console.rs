@@ -68,8 +68,8 @@ const FINISHED: &str = "read-finished";
 /// second, or a timeout of two at most: one still running after this is stuck.
 const STUCK: Duration = Duration::from_secs(10);
 
-/// A script running in cash on a pseudo console, in a folder of its own. The session is
-/// dropped before the folder, which is cash's working folder.
+/// A script running in cash on a pseudo console, in a directory of its own. The session is
+/// dropped before the directory, which is cash's working directory.
 pub(super) struct Script {
     session: ConPtySession,
     dir: Scratch,
@@ -88,7 +88,7 @@ impl Script {
         Self::start_beside(name, body, &[])
     }
 
-    /// Like [`Self::start`], with `files` in the script's folder: a second script, for a
+    /// Like [`Self::start`], with `files` in the script's directory: a second script, for a
     /// cash the first one starts with a standard input and output of its own.
     pub(super) fn start_beside(name: &str, body: &str, files: &[(&str, &str)]) -> Self {
         let dir = Scratch::new(&format!("read-console-{name}"));

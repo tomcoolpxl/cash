@@ -1,4 +1,4 @@
-//! fish's `prevd`, `nextd` and `cdh`: moving through the folders the shell has been in
+//! fish's `prevd`, `nextd` and `cdh`: moving through the directories the shell has been in
 //! (spec D62). Alt-← and Alt-→ on an empty prompt line run `prevd` and `nextd`.
 
 use std::fmt::Write as _;
@@ -7,7 +7,7 @@ use std::path::Path;
 
 use cash_core::{ExecutionResult, builtins};
 
-/// Go back through the folder history.
+/// Go back through the directory history.
 #[derive(clap::Parser)]
 #[clap(disable_help_flag = true, disable_version_flag = true)]
 pub(crate) struct PrevdCommand {
@@ -15,7 +15,7 @@ pub(crate) struct PrevdCommand {
     args: Vec<String>,
 }
 
-/// Go forward through the folder history.
+/// Go forward through the directory history.
 #[derive(clap::Parser)]
 #[clap(disable_help_flag = true, disable_version_flag = true)]
 pub(crate) struct NextdCommand {
@@ -23,7 +23,7 @@ pub(crate) struct NextdCommand {
     args: Vec<String>,
 }
 
-/// Choose a recent folder to go to.
+/// Choose a recent directory to go to.
 #[derive(clap::Parser)]
 #[clap(disable_help_flag = true, disable_version_flag = true)]
 pub(crate) struct CdhCommand {
@@ -65,7 +65,7 @@ impl builtins::Command for NextdCommand {
     }
 }
 
-/// `prevd`/`nextd [-l] [N]`: move N folders (default 1) in `direction`.
+/// `prevd`/`nextd [-l] [N]`: move N directories (default 1) in `direction`.
 fn step<SE: cash_core::ShellExtensions>(
     context: &mut cash_core::ExecutionContext<'_, SE>,
     name: &str,
@@ -94,7 +94,7 @@ fn step<SE: cash_core::ShellExtensions>(
     let moved = context.shell.step_directory_history(direction * count)?;
     if moved.is_none() {
         let side = if direction < 0 { "behind" } else { "ahead of" };
-        writeln!(context.stderr(), "{name}: no folder {side} this one")?;
+        writeln!(context.stderr(), "{name}: no directory {side} this one")?;
         return Ok(ExecutionResult::general_error());
     }
     if list {
@@ -104,8 +104,8 @@ fn step<SE: cash_core::ShellExtensions>(
     Ok(ExecutionResult::success())
 }
 
-/// The history as fish's `dirh` shows it: the folders behind, numbered back from the
-/// current one, the current one, and the folders ahead, numbered forward.
+/// The history as fish's `dirh` shows it: the directories behind, numbered back from the
+/// current one, the current one, and the directories ahead, numbered forward.
 fn history_listing(shell: &cash_core::Shell<impl cash_core::ShellExtensions>) -> String {
     let history = shell.directory_history();
     let show = |path: &Path| shell.tilde_shorten(path.to_string_lossy().into_owned());
@@ -136,21 +136,21 @@ impl builtins::Command for CdhCommand {
     ) -> Result<ExecutionResult, Self::Error> {
         match self.args.as_slice() {
             [] => {}
-            // Taken for a folder named `--help` until `help`'s pages asked for it.
+            // Taken for a directory named `--help` until `help`'s pages asked for it.
             [help] if help == "--help" => {
-                writeln!(context.stdout(), "Usage: cdh [FOLDER]")?;
+                writeln!(context.stdout(), "Usage: cdh [DIRECTORY]")?;
                 return Ok(ExecutionResult::success());
             }
             [dir] => return go(&mut context, Path::new(dir), "cdh"),
             _ => {
-                writeln!(context.stderr(), "cdh: usage: cdh [FOLDER]")?;
+                writeln!(context.stderr(), "cdh: usage: cdh [DIRECTORY]")?;
                 return Ok(ExecutionResult::new(2));
             }
         }
 
-        let choices = recent_folders(context.shell);
+        let choices = recent_directories(context.shell);
         if choices.is_empty() {
-            writeln!(context.stderr(), "cdh: no other folder in the history")?;
+            writeln!(context.stderr(), "cdh: no other directory in the history")?;
             return Ok(ExecutionResult::general_error());
         }
 
@@ -162,7 +162,7 @@ impl builtins::Command for CdhCommand {
                 .tilde_shorten(dir.to_string_lossy().into_owned());
             let _ = writeln!(listing, "{:>3}) {shown}", i + 1);
         }
-        listing.push_str("Select a folder by number: ");
+        listing.push_str("Select a directory by number: ");
         write!(context.stdout(), "{listing}")?;
         context.stdout().flush()?;
 
@@ -181,8 +181,8 @@ impl builtins::Command for CdhCommand {
     }
 }
 
-/// The folders behind the current one, most recent first, each once, without the current.
-fn recent_folders(
+/// The directories behind the current one, most recent first, each once, without the current.
+fn recent_directories(
     shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
 ) -> Vec<std::path::PathBuf> {
     let current = shell.working_dir();

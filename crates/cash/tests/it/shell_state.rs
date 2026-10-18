@@ -2,7 +2,7 @@
 //!
 //! cash never changes its own working directory, and `export` never touches the process
 //! environment: both live in the shell, so that a subshell or a background job can have
-//! its own. Anything that reaches for the process's copy instead gets the folder cash was
+//! its own. Anything that reaches for the process's copy instead gets the directory cash was
 //! started in and the environment it was started with (`REVIEW_REPORT.md` §4.1).
 
 #![allow(
@@ -27,8 +27,8 @@ fn output_of_system_program(program: &str) -> String {
 }
 
 #[test]
-fn a_relative_program_runs_from_the_shells_folder() {
-    // Two programs of one name, `tool.exe` in the folder cash starts in and in `sub`.
+fn a_relative_program_runs_from_the_shells_directory() {
+    // Two programs of one name, `tool.exe` in the directory cash starts in and in `sub`.
     // They print different things, so the output says which one ran.
     let scratch = Scratch::new("relative-program");
     std::fs::create_dir(scratch.path().join("sub")).unwrap();
@@ -49,8 +49,8 @@ fn a_relative_program_runs_from_the_shells_folder() {
     .unwrap();
     let hostname = output_of_system_program("hostname.exe");
 
-    // `cd sub && ./tool.exe` ran the start folder's `tool.exe`, and `./only-here.exe` was
-    // "command not found", because Windows resolved them against cash's own folder.
+    // `cd sub && ./tool.exe` ran the start directory's `tool.exe`, and `./only-here.exe` was
+    // "command not found", because Windows resolved them against cash's own directory.
     let out = run_in(
         scratch.path(),
         "cd sub && ./tool.exe && ./tool && ./only-here.exe",
@@ -66,13 +66,13 @@ fn a_relative_program_runs_from_the_shells_folder() {
     );
     assert_eq!(out.stdout, "4", "{}", out.stderr);
 
-    // A relative entry in PATH is the shell's folder's too.
+    // A relative entry in PATH is the shell's directory's too.
     let out = run_in(scratch.path(), r#"PATH=".:$PATH"; cd sub && only-here"#);
     assert_eq!(out.stdout, hostname, "{}", out.stderr);
 }
 
-/// A scratch folder with `sub/a.txt` and `show.cmd`, a batch file that prints `$XF` and
-/// its first argument, found by its bare name through a `bin` folder put on `PATH`.
+/// A scratch directory with `sub/a.txt` and `show.cmd`, a batch file that prints `$XF` and
+/// its first argument, found by its bare name through a `bin` directory put on `PATH`.
 fn batch_scratch(name: &str) -> Scratch {
     let scratch = Scratch::new(name);
     std::fs::create_dir_all(scratch.path().join("sub")).unwrap();
@@ -181,8 +181,8 @@ fn detach_starts_its_program_where_the_shell_is_and_lets_it_outlive_cash() {
     )
     .unwrap();
 
-    // The shell's folder and exported variables, and a `.cmd` found by its bare name:
-    // `detach` used to pass a null folder and environment to CreateProcessW.
+    // The shell's directory and exported variables, and a `.cmd` found by its bare name:
+    // `detach` used to pass a null directory and environment to CreateProcessW.
     let out = run_in(scratch.path(), &format!("{SETUP}; detach info"));
     assert!(out.stdout.starts_with("[detached] pid "), "{}", out.stderr);
     let written = scratch.path().join("sub").join("detached.txt");
@@ -220,8 +220,8 @@ fn detach_starts_its_program_where_the_shell_is_and_lets_it_outlive_cash() {
 }
 
 #[test]
-fn install_and_find_newer_take_their_files_from_the_shells_folder() {
-    // After `cd sub`, both looked for their files in the folder cash was started in.
+fn install_and_find_newer_take_their_files_from_the_shells_directory() {
+    // After `cd sub`, both looked for their files in the directory cash was started in.
     let scratch = Scratch::new("install-newer");
     let sub = scratch.path().join("sub");
     std::fs::create_dir(&sub).unwrap();

@@ -4,7 +4,7 @@ see: gzip bzip2 xz zstd
 ---
 ## Description
 
-`tar -cf ARCHIVE FILE...` packs files and folders into an archive, `tar -tf ARCHIVE`
+`tar -cf ARCHIVE FILE...` packs files and directories into an archive, `tar -tf ARCHIVE`
 lists it and `tar -xf ARCHIVE` unpacks it. `-z`, `-j`, `-J`, `--lzma`, `--lzip` and
 `--zstd` compress the archive, or `-a` by its suffix; reading finds the compression by
 itself. Compression runs on every core, as cash's `gzip`, `bzip2`, `xz` and `zstd` run
@@ -41,12 +41,12 @@ writes, Windows' own `tar.exe` reads, and what `tar.exe` writes, cash reads.
 - `-Z`, `--lzop` and `-I PROGRAM` are refused: cash carries no such compressor. So are
   tapes, multi-volume archives, incremental snapshots (`-g`, `-G`), `--to-command`,
   `-W` and `-w`.
-- `--sort=none` reads a folder in the order Windows gives, which on NTFS is by name.
+- `--sort=none` reads a directory in the order Windows gives, which on NTFS is by name.
 
 ## Examples
 
 ```
-tar -czf site.tar.gz site/             # a gzip-compressed archive of a folder
+tar -czf site.tar.gz site/             # a gzip-compressed archive of a directory
 tar -tvf site.tar.gz                   # list it, long form
 tar -xf site.tar.gz -C /tmp/restore    # unpack it somewhere else
 tar -xf release.tar.xz --strip-components=1

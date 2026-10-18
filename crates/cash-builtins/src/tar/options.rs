@@ -21,7 +21,7 @@ pub(super) enum Op {
     TestLabel,
 }
 
-/// A command-line argument that is not an option, in order: a name, or a folder to
+/// A command-line argument that is not an option, in order: a name, or a directory to
 /// change to before the names after it.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum Name {
@@ -450,8 +450,8 @@ fn usage(message: impl Into<String>, status: u8) -> Stop {
     Stop::Usage(message.into(), status)
 }
 
-/// What a tag file keeps out of the archive: the rest of its folder, everything in the
-/// folder, or the folder itself.
+/// What a tag file keeps out of the archive: the rest of its directory, everything in the
+/// directory, or the directory itself.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TagWhat {
     Contents,
@@ -459,7 +459,7 @@ pub enum TagWhat {
     All,
 }
 
-/// A file whose presence in a folder keeps the folder's contents out of the archive.
+/// A file whose presence in a directory keeps the directory's contents out of the archive.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Tag {
     pub file: String,
@@ -468,8 +468,8 @@ pub struct Tag {
     pub what: TagWhat,
 }
 
-/// `--one-top-level`: off, a folder named by the archive's name without its suffixes,
-/// or a folder given.
+/// `--one-top-level`: off, a directory named by the archive's name without its suffixes,
+/// or a directory given.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TopLevel {
     Off,
@@ -779,7 +779,7 @@ mod tests {
     }
 
     #[test]
-    fn the_top_level_folder_is_the_archive_name_without_its_suffixes() {
+    fn the_top_level_directory_is_the_archive_name_without_its_suffixes() {
         for (archive, dir) in [
             ("pack.tar", Some("pack")),
             ("dir/pack.tar.gz", Some("pack")),

@@ -177,7 +177,7 @@ impl builtins::Command for StatCommand {
 
         for path in options.files.iter().map(PathBuf::from) {
             let path = &path;
-            // A builtin runs in the shell's process, whose working folder is not the
+            // A builtin runs in the shell's process, whose working directory is not the
             // shell's: a path is resolved against the shell's, as `ls` resolves it.
             let resolved = context.shell.absolute_path(path);
 
@@ -341,7 +341,7 @@ impl FileStatInfo {
             (Kind::File, "regular file")
         };
         // The mode by the rule `ls -l` shows, `cash_win32::unix`'s: the access list
-        // decides `w`, a program or a folder gets `x`.
+        // decides `w`, a program or a directory gets `x`.
         let security = cash_win32::fs::file_security(path);
         let bits = permissions(
             kind,
@@ -515,16 +515,16 @@ fn dev_info<SE: cash_core::ShellExtensions>(
     })
 }
 
-/// The inode, links and device `stat` shows. A folder's are its own: it could not be
-/// opened without backup semantics, and was inode 0 on device 0 (ARCH-06). A folder's
-/// links are counted, 2 and one for each folder in it, as on Linux: `ls -l` shows 1, the
-/// value for "not counted", since it would have to read every folder it lists, so this is
+/// The inode, links and device `stat` shows. A directory's are its own: it could not be
+/// opened without backup semantics, and was inode 0 on device 0 (ARCH-06). A directory's
+/// links are counted, 2 and one for each directory in it, as on Linux: `ls -l` shows 1, the
+/// value for "not counted", since it would have to read every directory it lists, so this is
 /// where the count is found.
 fn query_file_index_and_links(path: &Path, is_dir: bool) -> (u64, u32, u32) {
     let (index, links, volume) = cash_win32::fs::file_info(path)
         .map_or((0, 1, 0), |info| (info.index, info.links, info.volume));
     let links = if is_dir {
-        cash_win32::fs::folder_link_count(path)
+        cash_win32::fs::directory_link_count(path)
     } else {
         links
     };

@@ -1,7 +1,7 @@
 //! `a`, `u`, `f`, `m` and `mf`: files put into an archive, made or changed, as rar does
-//! it. A folder is walked in the file system's own order, its files and folders as they
-//! come; folders are written after every file, deepest first. An update keeps the
-//! archive's files where they are, puts new files after them and the folders after
+//! it. A directory is walked in the file system's own order, its files and directories as they
+//! come; directories are written after every file, deepest first. An update keeps the
+//! archive's files where they are, puts new files after them and the directories after
 //! those. Each file put in has its line, then "Done".
 
 use std::io;
@@ -35,7 +35,7 @@ enum Mode {
     Freshen,
 }
 
-/// What is deleted once archived: nothing, the files, or files and folders.
+/// What is deleted once archived: nothing, the files, or files and directories.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Delete {
     None,
@@ -43,22 +43,22 @@ enum Delete {
     All,
 }
 
-/// A file or folder found to put in.
+/// A file or directory found to put in.
 #[derive(Clone, Debug)]
 struct Source {
     path: PathBuf,
-    /// As its line shows it: the name typed with its folders, `/` between.
+    /// As its line shows it: the name typed with its directories, `/` between.
     shown: String,
-    /// Its name in the archive, `/` between folders.
+    /// Its name in the archive, `/` between directories.
     name: String,
     is_dir: bool,
-    /// Its size in bytes; a folder's is 0.
+    /// Its size in bytes; a directory's is 0.
     size: u64,
     modified: Option<SystemTime>,
     created: Option<SystemTime>,
     accessed: Option<SystemTime>,
     attributes: u32,
-    /// Its place in the walk, each folder before what it holds: rar deletes in the
+    /// Its place in the walk, each directory before what it holds: rar deletes in the
     /// opposite order.
     walk: usize,
     /// With `-oh`, a file that has other names.
@@ -67,7 +67,7 @@ struct Source {
     link: Option<rar::rar50::FileRedirection>,
 }
 
-/// A file with other names: which file it is, and the times its folder's entry gives,
+/// A file with other names: which file it is, and the times its directory's entry gives,
 /// which a hard link stored keeps.
 #[derive(Clone, Copy, Debug)]
 struct HardLinked {
@@ -90,7 +90,7 @@ enum Action {
 enum Slot {
     /// An archived member kept as it is: its index among the archive's members.
     Kept(usize),
-    /// A file or folder put in: its index among the sources.
+    /// A file or directory put in: its index among the sources.
     Put(usize),
 }
 
@@ -188,7 +188,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     if !missing.is_empty() {
         rar.fail(code::NO_FILES);
     }
-    // A folder that could not be listed, by its whole path, as rar names it.
+    // A directory that could not be listed, by its whole path, as rar names it.
     for (path, error) in &unlisted {
         let path = path.display().to_string().replace('/', "\\");
         let path = path.strip_prefix(r"\\?\").unwrap_or(&path);
@@ -255,7 +255,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let mut links: Vec<Option<rar::rar50::FileRedirection>> =
         sources.iter().map(|source| source.link.clone()).collect();
     // `-oh`: a file's other names put in after it are hard links to it, with the times
-    // their folders' entries give.
+    // their directories' entries give.
     let mut named: std::collections::HashMap<(u32, u64), usize> = std::collections::HashMap::new();
     for index in 0..sources.len() {
         let Some(hard) = sources[index].hard.filter(|_| actions[index].is_some()) else {
@@ -585,7 +585,7 @@ pub(super) fn member_time(
     SystemTime::UNIX_EPOCH.checked_add(since)
 }
 
-/// An archived member's name as rar compares it: `/` between folders.
+/// An archived member's name as rar compares it: `/` between directories.
 pub(super) fn member_name(member: &rar::ArchiveMember) -> String {
     String::from_utf8_lossy(&member.meta.name).replace('\\', "/")
 }
@@ -692,7 +692,7 @@ fn version_files<SE: cash_core::ShellExtensions>(
 }
 
 /// The order rar writes in: the archive's files where they were, a replaced one in its
-/// place; then the new files; then every folder, the new before the old, deepest first.
+/// place; then the new files; then every directory, the new before the old, deepest first.
 fn plan(
     sources: &[Source],
     actions: &[Option<(Action, Option<usize>)>],
@@ -715,20 +715,20 @@ fn plan(
             slots.push(Slot::Put(index));
         }
     }
-    let mut folders: Vec<(usize, Slot)> = Vec::new();
+    let mut directories: Vec<(usize, Slot)> = Vec::new();
     for (index, (source, action)) in sources.iter().zip(actions).enumerate() {
         if source.is_dir && matches!(action, Some((Action::Add, _))) {
-            folders.push((depth(&source.name), Slot::Put(index)));
+            directories.push((depth(&source.name), Slot::Put(index)));
         }
     }
     for (index, member) in members.iter().enumerate() {
         if member.meta.is_directory && !dropped.contains(&index) {
             let slot = replacing(index).map_or(Slot::Kept(index), Slot::Put);
-            folders.push((depth(&member_name(member)), slot));
+            directories.push((depth(&member_name(member)), slot));
         }
     }
-    folders.sort_by_key(|(depth, _)| std::cmp::Reverse(*depth));
-    slots.extend(folders.into_iter().map(|(_, slot)| slot));
+    directories.sort_by_key(|(depth, _)| std::cmp::Reverse(*depth));
+    slots.extend(directories.into_iter().map(|(_, slot)| slot));
     slots
 }
 
@@ -769,7 +769,7 @@ pub(super) fn data_password<SE: cash_core::ShellExtensions>(
         .map(|password| rardata::password_utf8(&password).into_bytes()))
 }
 
-/// The folder temporary files go in: `-w`'s, else the archive's own.
+/// The directory temporary files go in: `-w`'s, else the archive's own.
 pub(super) fn work_dir<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     archive: &Path,
@@ -1751,7 +1751,7 @@ fn write_volumes<SE: cash_core::ShellExtensions>(
             }
         }
     }
-    let folder = match display.rfind('/') {
+    let directory = match display.rfind('/') {
         Some(at) => display.get(..=at).unwrap_or_default(),
         None => "",
     };
@@ -1763,7 +1763,7 @@ fn write_volumes<SE: cash_core::ShellExtensions>(
         let first = spans.next().unwrap_or(volume);
         while volume < first {
             volume += 1;
-            announce_volume(rar, folder, &written, volume, solid);
+            announce_volume(rar, directory, &written, volume, solid);
         }
         let Some((shown, action)) = line else {
             for next in spans {
@@ -1778,7 +1778,7 @@ fn write_volumes<SE: cash_core::ShellExtensions>(
                 rar.console.msg("    ");
             }
             volume = next;
-            announce_volume(rar, folder, &written, volume, solid);
+            announce_volume(rar, directory, &written, volume, solid);
             if !rar.switches.no_names {
                 rar.console
                     .msg(&format!("\n...       {shown:<58}{}", area(rar)));
@@ -1795,7 +1795,7 @@ fn write_volumes<SE: cash_core::ShellExtensions>(
 /// set's, as rar says it of the first.
 fn announce_volume<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
-    folder: &str,
+    directory: &str,
     written: &[PathBuf],
     volume: usize,
     solid: bool,
@@ -1810,7 +1810,7 @@ fn announce_volume<SE: cash_core::ShellExtensions>(
     } else {
         "Creating archive"
     };
-    rar.console.msg(&format!("\n\n{words} {folder}{name}\n"));
+    rar.console.msg(&format!("\n\n{words} {directory}{name}\n"));
 }
 
 /// A file written beside the archive, shown as the archive's name is.
@@ -1887,7 +1887,7 @@ fn sort_solid<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, sources: &mut [
             file,
         )
     };
-    // Folders keep their places: they are written after the files anyway.
+    // Directories keep their places: they are written after the files anyway.
     let mut files: Vec<Source> = sources.iter().filter(|s| !s.is_dir).cloned().collect();
     files.sort_by_cached_key(key);
     let mut files = files.into_iter();
@@ -1952,7 +1952,7 @@ fn place(order: &[String], name: &str, file: &str) -> Option<usize> {
 }
 
 /// What the names give: the sources, the names not there with Windows' errors, the
-/// files another program holds open for writing, with theirs, and the folders that could
+/// files another program holds open for writing, with theirs, and the directories that could
 /// not be listed.
 struct Collected {
     sources: Vec<Source>,
@@ -1961,9 +1961,9 @@ struct Collected {
     unlisted: Vec<(PathBuf, io::Error)>,
 }
 
-/// The files and folders the names give, by rar's rules: a folder named alone is put in
-/// whole (only itself with `-r-`); a mask takes the files of its folder, and with `-r`
-/// those of every folder below and the folders it matches. Names that are not there
+/// The files and directories the names give, by rar's rules: a directory named alone is put in
+/// whole (only itself with `-r-`); a mask takes the files of its directory, and with `-r`
+/// those of every directory below and the directories it matches. Names that are not there
 /// come back with their errors.
 fn collect<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
@@ -2023,21 +2023,21 @@ fn collect<SE: cash_core::ShellExtensions>(
         unlisted,
         ..
     } = walker;
-    // Each once, where it was first found; files first, then the folders deepest first.
+    // Each once, where it was first found; files first, then the directories deepest first.
     let mut seen = std::collections::HashSet::new();
     let mut files = Vec::new();
-    let mut folders = Vec::new();
+    let mut directories = Vec::new();
     for source in found {
         if seen.insert(source.name.to_lowercase()) {
             if source.is_dir {
-                folders.push(source);
+                directories.push(source);
             } else {
                 files.push(source);
             }
         }
     }
-    folders.sort_by_key(|folder| std::cmp::Reverse(depth(&folder.name)));
-    files.extend(folders);
+    directories.sort_by_key(|directory| std::cmp::Reverse(depth(&directory.name)));
+    files.extend(directories);
     Ok(Collected {
         sources: files,
         missing,
@@ -2064,11 +2064,11 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
     fn name(&mut self, arg: &str) {
         let recurse = self.rar.switches.recurse;
         let deep = matches!(recurse, Some('r' | '0'));
-        // With `-r` (not `-r0`) a file's name is looked for in every folder below its
-        // own, as a mask is; a folder's is not.
+        // With `-r` (not `-r0`) a file's name is looked for in every directory below its
+        // own, as a mask is; a directory's is not.
         let searched = recurse == Some('r') && !arg.ends_with('/') && !self.rar.path(arg).is_dir();
         if open::has_wildcard(arg) || arg.ends_with('/') || searched {
-            let (folder, mask) = if arg.ends_with('/') {
+            let (directory, mask) = if arg.ends_with('/') {
                 (arg.trim_end_matches('/').to_owned(), "*".to_owned())
             } else {
                 match arg.rfind('/') {
@@ -2079,12 +2079,12 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
                     None => (String::new(), arg.to_owned()),
                 }
             };
-            let base = if folder.is_empty() {
+            let base = if directory.is_empty() {
                 String::new()
             } else {
-                format!("{folder}/")
+                format!("{directory}/")
             };
-            self.masked(&folder, &mask, &base, deep);
+            self.masked(&directory, &mask, &base, deep);
             return;
         }
         let arg = arg.trim_end_matches('/');
@@ -2101,7 +2101,7 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
             None => String::new(),
         };
         match self.seen(&path, &metadata) {
-            Kind::Folder if recurse != Some('-') => self.folder(&path, arg, &base, &metadata),
+            Kind::Directory if recurse != Some('-') => self.directory(&path, arg, &base, &metadata),
             Kind::Skip => {}
             kind => self.keep(&path, arg, &base, &metadata, kind),
         }
@@ -2113,7 +2113,7 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
     fn seen(&self, path: &Path, metadata: &std::fs::Metadata) -> Kind {
         if !metadata.file_type().is_symlink() {
             return if metadata.is_dir() {
-                Kind::Folder
+                Kind::Directory
             } else {
                 Kind::File
             };
@@ -2121,18 +2121,18 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
         match self.rar.switches.links.as_deref() {
             Some("-") => Kind::Skip,
             Some(_) => stored_link(path, metadata)
-                .map_or(Kind::Skip, |(link, folder)| Kind::Link(link, folder)),
+                .map_or(Kind::Skip, |(link, directory)| Kind::Link(link, directory)),
             None => match std::fs::metadata(path) {
-                Ok(followed) if followed.is_dir() => Kind::Folder,
+                Ok(followed) if followed.is_dir() => Kind::Directory,
                 Ok(_) => Kind::File,
                 Err(_) => Kind::Skip,
             },
         }
     }
 
-    /// What is below the folder `path`, shown as `shown`, in the file system's order, on
+    /// What is below the directory `path`, shown as `shown`, in the file system's order, on
     /// the shared walker: only what is in it unless `deep`. Through links as [`Self::seen`]
-    /// takes them; a link back to a folder above is passed by, where rar goes round it
+    /// takes them; a link back to a directory above is passed by, where rar goes round it
     /// until the path is too long, so each file is stored once.
     fn below(&self, path: &Path, shown: &str, deep: bool) -> tree::Walk {
         let options = tree::WalkOptions {
@@ -2150,7 +2150,7 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
     }
 
     /// One step of a walk: the entry and its own metadata, or nothing for what is passed
-    /// over. A folder that cannot be listed is kept to be said, as rar says it.
+    /// over. A directory that cannot be listed is kept to be said, as rar says it.
     fn step(
         &mut self,
         next: Result<tree::Entry, tree::WalkError>,
@@ -2172,9 +2172,9 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
         }
     }
 
-    /// A folder, then what it holds in the file system's order, each folder in turn.
-    fn folder(&mut self, path: &Path, shown: &str, base: &str, metadata: &std::fs::Metadata) {
-        self.keep(path, shown, base, metadata, Kind::Folder);
+    /// A directory, then what it holds in the file system's order, each directory in turn.
+    fn directory(&mut self, path: &Path, shown: &str, base: &str, metadata: &std::fs::Metadata) {
+        self.keep(path, shown, base, metadata, Kind::Directory);
         for next in self.below(path, shown, true) {
             let Some((entry, metadata)) = self.step(next) else {
                 continue;
@@ -2186,23 +2186,25 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
         }
     }
 
-    /// A mask's files in a folder; with `deep`, the folders below too, and those of them
+    /// A mask's files in a directory; with `deep`, the directories below too, and those of them
     /// it matches.
-    fn masked(&mut self, folder: &str, mask: &str, base: &str, deep: bool) {
-        let path = self.rar.path(if folder.is_empty() { "." } else { folder });
-        for next in self.below(&path, folder, deep) {
+    fn masked(&mut self, directory: &str, mask: &str, base: &str, deep: bool) {
+        let path = self
+            .rar
+            .path(if directory.is_empty() { "." } else { directory });
+        for next in self.below(&path, directory, deep) {
             let Some((entry, metadata)) = self.step(next) else {
                 continue;
             };
             let name = entry.name().to_string_lossy().into_owned();
             match self.seen(&entry.path, &metadata) {
-                Kind::Folder => {
+                Kind::Directory => {
                     if deep && open::mask_matches(mask, &name) {
-                        self.keep(&entry.path, &entry.shown, base, &metadata, Kind::Folder);
+                        self.keep(&entry.path, &entry.shown, base, &metadata, Kind::Directory);
                     }
                 }
                 Kind::Skip => {}
-                // A link stored, a folder's too, is taken as a file is.
+                // A link stored, a directory's too, is taken as a file is.
                 kind => {
                     if open::mask_matches(mask, &name) {
                         self.keep(&entry.path, &entry.shown, base, &metadata, kind);
@@ -2212,7 +2214,7 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
         }
     }
 
-    /// Whether the switches let a file, folder or link in: `-ed`, `-x` and `-n`, the
+    /// Whether the switches let a file, directory or link in: `-ed`, `-x` and `-n`, the
     /// sizes, the attributes and the times asked.
     fn admits(&self, shown: &str, metadata: &std::fs::Metadata, is_dir: bool) -> bool {
         use std::os::windows::fs::MetadataExt;
@@ -2257,7 +2259,7 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
         time_filters(self.rar, metadata.modified().ok())
     }
 
-    /// One file, folder or link, if the switches let it in.
+    /// One file, directory or link, if the switches let it in.
     fn keep(
         &mut self,
         path: &Path,
@@ -2271,8 +2273,8 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
         self.walk += 1;
         let switches = &self.rar.switches;
         let (is_dir, link) = match kind {
-            Kind::Folder => (true, None),
-            Kind::Link(link, folder) => (folder, Some(link)),
+            Kind::Directory => (true, None),
+            Kind::Link(link, directory) => (directory, Some(link)),
             Kind::File | Kind::Skip => (false, None),
         };
         if !self.admits(shown, metadata, is_dir) {
@@ -2311,7 +2313,7 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
                 Err(_) => {}
             }
         }
-        // A file's size and times are its own: its folder's entry for a hard link's
+        // A file's size and times are its own: its directory's entry for a hard link's
         // other name may not have caught up with them.
         let own = if is_dir {
             None
@@ -2355,9 +2357,9 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
 /// What the walk makes of a file system entry.
 enum Kind {
     File,
-    Folder,
+    Directory,
     /// A symbolic link or junction stored as one (`-ol`), and whether it stands for a
-    /// folder.
+    /// directory.
     Link(rar::rar50::FileRedirection, bool),
     /// Left out: a link with `-ol-`, or one that cannot be followed or read.
     Skip,
@@ -2367,8 +2369,8 @@ enum Kind {
 const REPARSE_POINT: u32 = 0x400;
 
 /// `-ol`'s record of a symbolic link or junction, as rar stores it: type 2 or 3, the
-/// substitute name its reparse data holds, `\??\` and all, with `/` between folders; and
-/// whether it stands for a folder.
+/// substitute name its reparse data holds, `\??\` and all, with `/` between directories; and
+/// whether it stands for a directory.
 fn stored_link(
     path: &Path,
     metadata: &std::fs::Metadata,
@@ -2376,46 +2378,46 @@ fn stored_link(
     use std::os::windows::fs::MetadataExt;
     let data = cash_win32::reparse::data(path).ok()?;
     let target = cash_win32::reparse::target(&data)?;
-    let folder = metadata.file_attributes() & 0x10 != 0;
+    let directory = metadata.file_attributes() & 0x10 != 0;
     let kind = if target.junction { 3 } else { 2 };
     Some((
         rar::rar50::FileRedirection::new(
             kind,
-            u64::from(folder),
+            u64::from(directory),
             target.substitute.replace('\\', "/").into_bytes(),
         ),
-        folder,
+        directory,
     ))
 }
 
-/// The folders `-dr` sends to the Recycle Bin whole, as rar does: those at the top of
-/// what was archived whose every file and folder was archived.
-fn whole_folders(archived: &[&Source], stop: &cash_core::StopToken) -> Vec<PathBuf> {
+/// The directories `-dr` sends to the Recycle Bin whole, as rar does: those at the top of
+/// what was archived whose every file and directory was archived.
+fn whole_directories(archived: &[&Source], stop: &cash_core::StopToken) -> Vec<PathBuf> {
     let paths: std::collections::HashSet<&Path> = archived
         .iter()
         .map(|source| source.path.as_path())
         .collect();
-    let folders: std::collections::HashSet<&Path> = archived
+    let directories: std::collections::HashSet<&Path> = archived
         .iter()
         .filter(|source| source.is_dir)
         .map(|source| source.path.as_path())
         .collect();
-    folders
+    directories
         .iter()
-        .filter(|folder| {
-            !folder
+        .filter(|directory| {
+            !directory
                 .parent()
-                .is_some_and(|parent| folders.contains(parent))
+                .is_some_and(|parent| directories.contains(parent))
         })
-        .filter(|folder| all_archived(folder, &paths, stop))
-        .map(|folder| folder.to_path_buf())
+        .filter(|directory| all_archived(directory, &paths, stop))
+        .map(|directory| directory.to_path_buf())
         .collect()
 }
 
-/// Whether everything below a folder was archived: not when anything below could not be
+/// Whether everything below a directory was archived: not when anything below could not be
 /// looked at, or the walk was stopped.
 fn all_archived(
-    folder: &Path,
+    directory: &Path,
     paths: &std::collections::HashSet<&Path>,
     stop: &cash_core::StopToken,
 ) -> bool {
@@ -2425,12 +2427,12 @@ fn all_archived(
         min_depth: 1,
         ..tree::WalkOptions::default()
     };
-    tree::Walk::new("", folder, &options, stop.clone())
+    tree::Walk::new("", directory, &options, stop.clone())
         .all(|next| next.is_ok_and(|entry| paths.contains(entry.path.as_path())))
 }
 
-/// A folder to the Recycle Bin once its files have gone: as `rd`, an empty one only.
-fn recycle_folder(path: &Path) -> io::Result<()> {
+/// A directory to the Recycle Bin once its files have gone: as `rd`, an empty one only.
+fn recycle_directory(path: &Path) -> io::Result<()> {
     if std::fs::read_dir(path)?.next().is_some() {
         // What `rd` says of it, in Windows' words.
         return Err(io::Error::from_raw_os_error(145));
@@ -2481,8 +2483,8 @@ fn open_unshared(path: &Path) -> io::Result<std::fs::File> {
         .open(path)
 }
 
-/// Whether `-x` or `-n`'s mask takes a source: one with a wildcard and no folder matches
-/// its name anywhere, else the path; a plain one the path or a folder of it.
+/// Whether `-x` or `-n`'s mask takes a source: one with a wildcard and no directory matches
+/// its name anywhere, else the path; a plain one the path or a directory of it.
 fn mask_match(mask: &str, shown: &str, last: &str) -> bool {
     let mask = mask.trim_end_matches('/');
     if open::has_wildcard(mask) {
@@ -2581,8 +2583,8 @@ fn parse_period(text: &str) -> Option<std::time::Duration> {
 }
 
 /// A source's name in the archive by the path switches: `-ep` its name alone, `-ep1`
-/// without the folder named, `-ep2` its full path, `-ep3` with the drive too, `-ep4` a
-/// prefix taken off, `-ap` a folder put before; `-cl` and `-cu` its case.
+/// without the directory named, `-ep2` its full path, `-ep3` with the drive too, `-ep4` a
+/// prefix taken off, `-ap` a directory put before; `-cl` and `-cu` its case.
 fn archive_name<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     shown: &str,
@@ -2641,7 +2643,7 @@ fn archive_name<SE: cash_core::ShellExtensions>(
 }
 
 /// `m`, `mf`, `-df`: what was archived, deleted, a line each, the walk backwards: what a
-/// folder holds before the folder. `mf` leaves folders, which count all the same.
+/// directory holds before the directory. `mf` leaves directories, which count all the same.
 fn delete_sources<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     archived: &[&Source],
@@ -2651,7 +2653,7 @@ fn delete_sources<SE: cash_core::ShellExtensions>(
     let mut order: Vec<&Source> = archived.to_vec();
     order.sort_by_key(|source| std::cmp::Reverse(source.walk));
     let whole = if rar.switches.recycle && delete == Delete::All {
-        whole_folders(archived, &rar.context.stop_token())
+        whole_directories(archived, &rar.context.stop_token())
     } else {
         Vec::new()
     };
@@ -2660,10 +2662,10 @@ fn delete_sources<SE: cash_core::ShellExtensions>(
         if source.is_dir && delete == Delete::Files {
             continue;
         }
-        // In a folder that goes to the Recycle Bin whole: gone with it.
+        // In a directory that goes to the Recycle Bin whole: gone with it.
         if whole
             .iter()
-            .any(|folder| source.path != *folder && source.path.starts_with(folder))
+            .any(|directory| source.path != *directory && source.path.starts_with(directory))
         {
             continue;
         }
@@ -2674,7 +2676,7 @@ fn delete_sources<SE: cash_core::ShellExtensions>(
             if whole.contains(&source.path) {
                 cash_win32::fs::recycle(&source.path)
             } else if recycle {
-                recycle_folder(&source.path)
+                recycle_directory(&source.path)
             } else {
                 std::fs::remove_dir(&source.path)
             }

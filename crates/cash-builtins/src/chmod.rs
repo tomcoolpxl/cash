@@ -112,7 +112,7 @@ impl builtins::Command for ChmodCommand {
         for file in files {
             let path = context.shell.absolute_path(Path::new(file));
             // GNU's chmod goes through no link as it walks (-P), and changes a link it is
-            // named through, without walking the folder it names.
+            // named through, without walking the directory it names.
             let options = WalkOptions {
                 links: Links::Never,
                 order: Order::Listing,
@@ -123,7 +123,7 @@ impl builtins::Command for ChmodCommand {
                 let entry = match next {
                     Ok(entry) => entry,
                     Err(WalkError::Stopped) => break,
-                    // A name not there, or a folder that cannot be listed, in GNU's words:
+                    // A name not there, or a directory that cannot be listed, in GNU's words:
                     // cash passed the second over in silence, status 0.
                     Err(
                         ref failed_on @ (WalkError::Io {

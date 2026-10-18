@@ -1,5 +1,5 @@
 //! `cash --install-finish`, `--install-remove` and `--update`: the steps the per-user
-//! installer leaves to cash, run against a fake install folder with the test's `cash.exe`
+//! installer leaves to cash, run against a fake install directory with the test's `cash.exe`
 //! copied in as a version. Each test has a home, a `LOCALAPPDATA` and a user `Path` key of
 //! its own, so nothing of the developer's is read or written.
 #![allow(
@@ -19,7 +19,7 @@ use crate::common::{CASH, doctor_finding, doctor_header};
 /// font is installed, whatever this machine has.
 const NO_FONTS: &str = r"Software\cash-test-no-fonts";
 
-/// `name` with this process's id and a count after it, so that no two folders, in this
+/// `name` with this process's id and a count after it, so that no two directories, in this
 /// run or another one at the same time, share a name.
 fn unique(name: &str) -> String {
     static COUNT: AtomicU32 = AtomicU32::new(0);
@@ -52,8 +52,8 @@ impl Install {
         let root = dir.join("Programs").join("cash");
         let home = dir.join("home");
         let local = dir.join("local");
-        for folder in [&root, &home, &local] {
-            std::fs::create_dir_all(folder).unwrap();
+        for directory in [&root, &home, &local] {
+            std::fs::create_dir_all(directory).unwrap();
         }
         let key_root = format!(r"Software\cash-test-installer-{}", unique(name));
         let key = format!(r"{key_root}\Environment");
@@ -67,12 +67,12 @@ impl Install {
         }
     }
 
-    /// A version folder with the test's `cash.exe` copied in, as the setup lays it out;
+    /// A version directory with the test's `cash.exe` copied in, as the setup lays it out;
     /// that exe.
     fn version(&self, version: &str) -> PathBuf {
-        let folder = self.root.join(version);
-        std::fs::create_dir_all(&folder).unwrap();
-        let exe = folder.join("cash.exe");
+        let directory = self.root.join(version);
+        std::fs::create_dir_all(&directory).unwrap();
+        let exe = directory.join("cash.exe");
         std::fs::copy(CASH, &exe).unwrap();
         exe
     }
@@ -137,7 +137,7 @@ impl Install {
         Some(value.trim().to_owned())
     }
 
-    /// The folder the `current` junction names, as `cash --install-finish` spells it.
+    /// The directory the `current` junction names, as `cash --install-finish` spells it.
     fn current_target(&self) -> Option<String> {
         let target = std::fs::read_link(self.current()).ok()?;
         Some(plain(&target))
@@ -165,7 +165,7 @@ fn plain(path: &Path) -> String {
     text.trim_end_matches('\\').to_lowercase()
 }
 
-/// `path` as the installer spells it on the user PATH: its folder real, backslashes, no
+/// `path` as the installer spells it on the user PATH: its directory real, backslashes, no
 /// prefix. The name itself is kept, so the `current` junction is not followed.
 fn entry(path: &Path) -> String {
     let parent = std::fs::canonicalize(path.parent().unwrap()).unwrap();
@@ -265,8 +265,8 @@ fn links_make_the_tools_first_on_path_and_an_upgrade_refreshes_and_sweeps() {
         [entry(&install.bin()), entry(&install.current())]
     );
 
-    // The upgrade: a new version folder, finished without `--links`. The manifest says
-    // the links are wanted, so they are refreshed to the new exe; the old folder, whose
+    // The upgrade: a new version directory, finished without `--links`. The manifest says
+    // the links are wanted, so they are refreshed to the new exe; the old directory, whose
     // exe nothing runs, is swept.
     wait_until_free(&old);
     let new = install.version("9.9.10");
@@ -327,8 +327,8 @@ fn links_make_the_tools_first_on_path_and_an_upgrade_refreshes_and_sweeps() {
 /// Waits until `exe` can be opened for writing, as the installer's sweep opens it to tell
 /// whether it runs. Right after a freshly copied exe has run, something can still hold it
 /// for a moment (Defender's scan of a new executable, or the image's teardown), and the
-/// sweep then kept the folder: "kept 9.9.9: its cash.exe is running" on a first try,
-/// `ci full` before 1.20.0. A real upgrade sweeps such a folder on the next one.
+/// sweep then kept the directory: "kept 9.9.9: its cash.exe is running" on a first try,
+/// `ci full` before 1.20.0. A real upgrade sweeps such a directory on the next one.
 fn wait_until_free(exe: &Path) {
     let start = std::time::Instant::now();
     while std::fs::OpenOptions::new().write(true).open(exe).is_err()
@@ -350,7 +350,7 @@ fn kill_tree(child: &mut std::process::Child) {
 }
 
 #[test]
-fn a_version_folder_whose_exe_is_running_is_kept_and_an_idle_one_is_swept() {
+fn a_version_directory_whose_exe_is_running_is_kept_and_an_idle_one_is_swept() {
     let install = Install::new("sweep");
     install.version("1.0.0");
     let busy = install.version("2.0.0");
@@ -362,7 +362,7 @@ fn a_version_folder_whose_exe_is_running_is_kept_and_an_idle_one_is_swept() {
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
-    // Give the shell time to be running from its folder.
+    // Give the shell time to be running from its directory.
     std::thread::sleep(std::time::Duration::from_millis(500));
 
     let out = install.finish(&new, &[]);
@@ -415,10 +415,13 @@ fn install_remove_undoes_the_links_the_path_the_profile_and_the_junction() {
     assert!(stdout.contains("current removed\n"), "{stdout}");
 
     assert!(!install.current().exists(), "the junction is still there");
-    assert!(!install.bin().exists(), "the links folder is still there");
+    assert!(
+        !install.bin().exists(),
+        "the links directory is still there"
+    );
     assert!(!install.fragment().exists());
     assert_eq!(install.user_path(), None);
-    // The version folder is the uninstaller's to delete; the user's files stay.
+    // The version directory is the uninstaller's to delete; the user's files stay.
     assert!(install.root.join("9.9.9").join("cash.exe").is_file());
     assert!(install.home.join(".bashrc").is_file());
 
@@ -434,7 +437,7 @@ fn install_remove_undoes_the_links_the_path_the_profile_and_the_junction() {
     assert_eq!(text(&again.stdout), "");
 }
 
-/// A `file://` address curl reads, for a file under the test's folder.
+/// A `file://` address curl reads, for a file under the test's directory.
 fn file_url(path: &Path) -> String {
     format!(
         "file:///{}",
@@ -607,7 +610,7 @@ fn update_fetches_verifies_unpacks_and_finishes_a_release() {
 #[test]
 fn update_refuses_a_cash_outside_the_installers_layout() {
     let install = Install::new("plain");
-    // A zip unpacked anywhere: no `current` junction beside the folder.
+    // A zip unpacked anywhere: no `current` junction beside the directory.
     let plain = install.dir.join("unzipped");
     std::fs::create_dir_all(&plain).unwrap();
     let exe = plain.join("cash.exe");
@@ -628,14 +631,14 @@ fn update_refuses_a_cash_outside_the_installers_layout() {
 #[test]
 fn a_cash_scoop_installed_refuses_the_installers_commands() {
     let install = Install::new("scoop");
-    let folder = install
+    let directory = install
         .dir
         .join("scoop")
         .join("apps")
         .join("cash")
         .join("9.9.9");
-    std::fs::create_dir_all(&folder).unwrap();
-    let exe = folder.join("cash.exe");
+    std::fs::create_dir_all(&directory).unwrap();
+    let exe = directory.join("cash.exe");
     std::fs::copy(CASH, &exe).unwrap();
 
     let out = install.finish(&exe, &[]);

@@ -33,7 +33,7 @@ pub enum Key {
     End,
     /// The root's parent, or the drives at a drive's root.
     Left,
-    /// The selected folder as the root.
+    /// The selected directory as the root.
     Right,
     /// Pick.
     Enter,
@@ -45,9 +45,9 @@ pub enum Key {
     Backspace,
     /// A letter of the filter.
     Char(char),
-    /// Alt-F: folders only, or files too.
+    /// Alt-F: directories only, or files too.
     Files,
-    /// Alt-H: the folder history.
+    /// Alt-H: the directory history.
     History,
     /// Alt-.: hidden entries.
     Hidden,
@@ -66,8 +66,8 @@ pub enum Outcome {
     Picked {
         /// What was picked.
         path: PathBuf,
-        /// Whether it is a folder.
-        folder: bool,
+        /// Whether it is a directory.
+        directory: bool,
         /// Whether the picker is done.
         close: bool,
     },
@@ -77,18 +77,18 @@ pub enum Outcome {
 
 /// How a picker starts.
 pub struct Setup {
-    /// The folder it opens in.
+    /// The directory it opens in.
     pub root: PathBuf,
     /// The filter it opens with.
     pub typed: String,
-    /// Folders only, or files too.
+    /// Directories only, or files too.
     pub shows: Shows,
     /// What a pick does.
     pub then: Then,
-    /// The folders Alt-H lists, in their order: those recorded across sessions, best
-    /// first, or the session's folder history, most recent first.
+    /// The directories Alt-H lists, in their order: those recorded across sessions, best
+    /// first, or the session's directory history, most recent first.
     pub history: Vec<PathBuf>,
-    /// The home folder, shown as `~`.
+    /// The home directory, shown as `~`.
     pub home: Option<PathBuf>,
     /// The colours to draw in.
     pub colours: Colours,
@@ -106,7 +106,7 @@ enum View {
 struct Item {
     /// What a pick or Right takes; `None` for a line that cannot be selected.
     path: Option<PathBuf>,
-    folder: bool,
+    directory: bool,
     /// Tree branches drawn before the text.
     prefix: String,
     text: String,
@@ -173,7 +173,7 @@ impl Picker {
         }
     }
 
-    /// The folder shown.
+    /// The directory shown.
     #[must_use]
     pub fn root(&self) -> &Path {
         &self.root
@@ -201,7 +201,7 @@ impl Picker {
             Key::Right => {
                 if let Some(item) = self.items.get(self.selected).cloned()
                     && let Some(path) = item.path
-                    && item.folder
+                    && item.directory
                 {
                     self.enter(path);
                 }
@@ -226,8 +226,8 @@ impl Picker {
             }
             Key::Files => {
                 self.filter.shows = match self.filter.shows {
-                    Shows::Folders => Shows::Everything,
-                    Shows::Everything => Shows::Folders,
+                    Shows::Directories => Shows::Everything,
+                    Shows::Everything => Shows::Directories,
                 };
                 self.refilter();
             }
@@ -274,13 +274,13 @@ impl Picker {
         }
         Outcome::Picked {
             path,
-            folder: item.folder,
+            directory: item.directory,
             close: close_anyway || self.then != Then::StayOpen,
         }
     }
 
-    fn enter(&mut self, folder: PathBuf) {
-        self.root = folder;
+    fn enter(&mut self, directory: PathBuf) {
+        self.root = directory;
         self.view = View::Tree;
         self.typed.clear();
         self.want = None;
@@ -374,12 +374,12 @@ impl Picker {
         let place = match self.view {
             View::Tree => self.shown(&self.root),
             View::Drives => "Drives".to_owned(),
-            View::History => "Folder history".to_owned(),
+            View::History => "Directory history".to_owned(),
         };
         let mut header = format!(
             "{place}   [{}]",
             match self.filter.shows {
-                Shows::Folders => "folders",
+                Shows::Directories => "directories",
                 Shows::Everything => "all",
             }
         );
@@ -409,7 +409,7 @@ impl Picker {
         header
     }
 
-    /// A folder as the header shows it: under the home folder as `~/…`.
+    /// A directory as the header shows it: under the home directory as `~/…`.
     fn shown(&self, path: &Path) -> String {
         let text = cash_win32::path::render(path);
         if let Some(home) = &self.home {
@@ -441,7 +441,7 @@ impl Picker {
         }
         let mut out = paint(&self.colours.dim, &item.prefix);
         let entry_colour = if item.path.is_some() {
-            self.colours.entry(&item.text, item.folder)
+            self.colours.entry(&item.text, item.directory)
         } else {
             self.colours.dim.clone()
         };
@@ -500,10 +500,10 @@ impl Picker {
     fn tree_items(&mut self, rows: usize) -> Vec<Item> {
         let filter = self.filter;
         let (cache, ignores) = (&mut self.cache, &mut self.ignores);
-        let mut read = |folder: &Path| -> Vec<Entry> {
+        let mut read = |directory: &Path| -> Vec<Entry> {
             cache
-                .entry(folder.to_path_buf())
-                .or_insert_with(|| tree::read(folder, filter, ignores))
+                .entry(directory.to_path_buf())
+                .or_insert_with(|| tree::read(directory, filter, ignores))
                 .clone()
         };
         let top = read(&self.root);
@@ -518,14 +518,14 @@ impl Picker {
                     rails,
                 } => Item {
                     prefix: branches(&rails, depth, Some(last)),
-                    text: if entry.folder {
+                    text: if entry.directory {
                         format!("{}/", entry.name)
                     } else {
                         entry.name
                     },
                     age: filter.by_date.then(|| entry.modified.map(age)).flatten(),
                     path: Some(entry.path),
-                    folder: entry.folder,
+                    directory: entry.directory,
                     positions: Vec::new(),
                 },
                 Line::More {
@@ -536,7 +536,7 @@ impl Picker {
                     prefix: branches(&rails, depth, None),
                     text: format!("\u{2026} {count} more"),
                     path: None,
-                    folder: false,
+                    directory: false,
                     positions: Vec::new(),
                     age: None,
                 },
@@ -570,9 +570,9 @@ impl Picker {
                     let entry = found.get(m.index)?;
                     Some(Item {
                         path: Some(entry.path.clone()),
-                        folder: entry.folder,
+                        directory: entry.directory,
                         prefix: String::new(),
-                        text: if entry.folder {
+                        text: if entry.directory {
                             format!("{}/", entry.relative)
                         } else {
                             entry.relative.clone()
@@ -600,25 +600,25 @@ impl Picker {
         let places: Vec<(String, PathBuf)> = self
             .history
             .iter()
-            .filter(|folder| folder.is_dir())
-            .map(|folder| {
+            .filter(|directory| directory.is_dir())
+            .map(|directory| {
                 (
-                    format!("{}/", self.shown(folder).trim_end_matches('/')),
-                    folder.clone(),
+                    format!("{}/", self.shown(directory).trim_end_matches('/')),
+                    directory.clone(),
                 )
             })
             .collect();
         self.listed(places)
     }
 
-    /// Folders as a list, filtered by what was typed.
+    /// Directories as a list, filtered by what was typed.
     fn listed(&mut self, places: Vec<(String, PathBuf)>) -> Vec<Item> {
         if self.typed.is_empty() {
             return places
                 .into_iter()
                 .map(|(text, path)| Item {
                     path: Some(path),
-                    folder: true,
+                    directory: true,
                     prefix: String::new(),
                     text,
                     positions: Vec::new(),
@@ -635,7 +635,7 @@ impl Picker {
                 let (text, path) = places.get(m.index)?;
                 Some(Item {
                     path: Some(path.clone()),
-                    folder: true,
+                    directory: true,
                     prefix: String::new(),
                     text: text.clone(),
                     positions: m.positions,
@@ -747,17 +747,17 @@ mod tests {
 
     fn sample() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
-        for folder in ["alpha/one", "alpha/two", "beta"] {
-            std::fs::create_dir_all(dir.path().join(folder)).unwrap();
+        for directory in ["alpha/one", "alpha/two", "beta"] {
+            std::fs::create_dir_all(dir.path().join(directory)).unwrap();
         }
         std::fs::write(dir.path().join("notes.txt"), "").unwrap();
         dir
     }
 
     #[test]
-    fn the_tree_shows_folders_with_their_levels() {
+    fn the_tree_shows_directories_with_their_levels() {
         let dir = sample();
-        let mut picker = picker(dir.path(), Shows::Folders, Then::Run);
+        let mut picker = picker(dir.path(), Shows::Directories, Then::Run);
         let frame = plain(&mut picker, 8);
         assert_eq!(
             &frame[1..5],
@@ -769,21 +769,21 @@ mod tests {
             ],
             "{frame:#?}"
         );
-        assert!(frame[0].contains("[folders]"), "{frame:#?}");
+        assert!(frame[0].contains("[directories]"), "{frame:#?}");
         assert!(frame.iter().all(|l| !l.contains("notes.txt")), "{frame:#?}");
     }
 
     #[test]
     fn enter_picks_the_selection_and_cd_closes() {
         let dir = sample();
-        let mut picker = picker(dir.path(), Shows::Folders, Then::Run);
+        let mut picker = picker(dir.path(), Shows::Directories, Then::Run);
         picker.frame(60, 8);
         picker.key(Key::Down);
         assert_eq!(
             picker.key(Key::Enter),
             Outcome::Picked {
                 path: dir.path().join("alpha").join("one"),
-                folder: true,
+                directory: true,
                 close: true,
             }
         );
@@ -792,7 +792,7 @@ mod tests {
     #[test]
     fn right_and_left_move_the_root() {
         let dir = sample();
-        let mut picker = picker(dir.path(), Shows::Folders, Then::Run);
+        let mut picker = picker(dir.path(), Shows::Directories, Then::Run);
         picker.frame(60, 8);
         picker.key(Key::Right);
         assert_eq!(picker.root(), dir.path().join("alpha"));
@@ -801,12 +801,12 @@ mod tests {
         picker.key(Key::Left);
         assert_eq!(picker.root(), dir.path());
         picker.frame(60, 8);
-        // The folder left is selected again.
+        // The directory left is selected again.
         assert_eq!(
             picker.key(Key::Enter),
             Outcome::Picked {
                 path: dir.path().join("alpha"),
-                folder: true,
+                directory: true,
                 close: true,
             }
         );
@@ -815,7 +815,7 @@ mod tests {
     #[test]
     fn files_show_with_alt_f_and_other_commands_stay_open() {
         let dir = sample();
-        let mut picker = picker(dir.path(), Shows::Folders, Then::StayOpen);
+        let mut picker = picker(dir.path(), Shows::Directories, Then::StayOpen);
         picker.key(Key::Files);
         let frame = plain(&mut picker, 10);
         assert!(frame.iter().any(|l| l == "notes.txt"), "{frame:#?}");
@@ -824,7 +824,7 @@ mod tests {
             picker.key(Key::Enter),
             Outcome::Picked {
                 path: dir.path().join("notes.txt"),
-                folder: false,
+                directory: false,
                 close: false,
             }
         );
@@ -837,7 +837,7 @@ mod tests {
     #[test]
     fn typing_filters_below_the_root_and_esc_clears_then_closes() {
         let dir = sample();
-        let mut picker = picker(dir.path(), Shows::Folders, Then::Run);
+        let mut picker = picker(dir.path(), Shows::Directories, Then::Run);
         picker.frame(60, 8);
         for c in "two".chars() {
             picker.key(Key::Char(c));
@@ -856,12 +856,12 @@ mod tests {
     }
 
     #[test]
-    fn a_long_folder_scrolls_down_to_its_last_entry() {
+    fn a_long_directory_scrolls_down_to_its_last_entry() {
         let dir = tempfile::tempdir().unwrap();
         for i in 0..30 {
             std::fs::create_dir(dir.path().join(format!("f{i:02}"))).unwrap();
         }
-        let mut picker = picker(dir.path(), Shows::Folders, Then::Run);
+        let mut picker = picker(dir.path(), Shows::Directories, Then::Run);
         // Six rows of list: Down past the bottom scrolls rather than stopping.
         picker.frame(60, 8);
         for _ in 0..7 {
@@ -878,7 +878,7 @@ mod tests {
             picker.key(Key::Enter),
             Outcome::Picked {
                 path: dir.path().join("f29"),
-                folder: true,
+                directory: true,
                 close: true,
             }
         );

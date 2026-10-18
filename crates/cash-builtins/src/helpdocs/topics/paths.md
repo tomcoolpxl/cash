@@ -19,7 +19,7 @@ everywhere `C:\src` does. The cost: `case $PWD in /c/*)` no longer matches.
 
 ## Unix spellings
 
-`/c/src`, `/tmp` (your `TEMP` folder), `/dev/null`, `/dev/tty`, `/dev/stdin` and the
+`/c/src`, `/tmp` (your `TEMP` directory), `/dev/null`, `/dev/tty`, `/dev/stdin` and the
 other `/dev` names work wherever cash itself opens the path: in redirections
 (`> /tmp/out`, `2> /dev/null`), `cd`, `source`, `test` and `[`, globs, and cash's own
 builtins such as `ls`. A glob gives its matches in cash's spelling, so
@@ -78,9 +78,9 @@ are case-insensitive, as in Windows: `$Path` is `$PATH`.
 ## Long paths, globbing, links
 
 - Paths of any length work in cash's own file operations, whatever the long-path
-  setting. Windows starts no program in a folder over 258 characters; cash starts
-  it in the folder's 8.3 short name instead.
+  setting. Windows starts no program in a directory over 258 characters; cash starts
+  it in the directory's 8.3 short name instead.
 - Globbing ignores case, as the file system does: `*.sh` matches `Setup.SH`.
   `shopt -u nocaseglob` makes it case-sensitive.
 - `ln -s` makes a real symbolic link when Windows allows it (Developer Mode or an
-  elevated shell), a junction for a folder otherwise, and fails for a file.
+  elevated shell), a junction for a directory otherwise, and fails for a file.

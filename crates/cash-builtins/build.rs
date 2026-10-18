@@ -12,8 +12,8 @@ fn main() -> std::io::Result<()> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let docs = manifest.join("src").join("helpdocs");
     let mut out = String::new();
-    for (constant, folder) in [("PAGES", "pages"), ("TOPICS", "topics")] {
-        let dir = docs.join(folder);
+    for (constant, directory) in [("PAGES", "pages"), ("TOPICS", "topics")] {
+        let dir = docs.join(directory);
         println!("cargo:rerun-if-changed={}", dir.display());
         let mut files: Vec<_> = std::fs::read_dir(&dir)?
             .filter_map(Result::ok)

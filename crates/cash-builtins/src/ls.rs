@@ -1,7 +1,7 @@
 //! Native Windows-optimized pure-Rust `ls` builtin.
 //!
 //! Provides accurate Windows file ownership (SIDs -> Account Names), NTFS hard link
-//! counts, directory subfolder link counts, proper permissions, sorting, and colored
+//! counts, directory subdirectory link counts, proper permissions, sorting, and colored
 //! output matching POSIX / BusyBox conventions.
 //!
 //! cash (D67) adds what lsd shows beside GNU `ls`'s own options: icons (`--icons`, Nerd
@@ -137,9 +137,9 @@ List information about the FILEs (the current directory by default).
                                anywhere else) or fancy (the glyphs regardless)
       --attributes           show Windows' attributes as lsd does: d (or .),
                                archive, read-only, hidden, system (`.a-h-`)
-      --count-links          with -l, count a folder's links as Linux has them,
-                               2 and one per folder in it, reading each folder;
-                               without it a folder shows 1, as in Git Bash
+      --count-links          with -l, count a directory's links as Linux has them,
+                               2 and one per subdirectory, reading each one;
+                               without it a directory shows 1, as in Git Bash
       --tree                 list the directories as a tree
       --depth=NUM            descend at most NUM levels, with --tree or -R
       --help                 display this help and exit
@@ -213,7 +213,7 @@ pub(crate) struct LsCommand {
     #[arg(long = "group-directories-first")]
     group_directories_first: bool,
 
-    /// With -l, count each folder's links (2 and one per folder in it), reading it.
+    /// With -l, count each directory's links (2 and one per directory in it), reading it.
     #[arg(long = "count-links")]
     count_links: bool,
 
@@ -299,7 +299,7 @@ pub(crate) struct LsCommand {
 
     /// `-L`, `-H` or `--dereference-command-line-symlink-to-dir`, the last given: which
     /// links are followed. `None` is GNU's default: a link named on the command line to
-    /// a folder is listed as the folder, unless `-l`, `-d` or `-F` asks for the link.
+    /// a directory is listed as the directory, unless `-l`, `-d` or `-F` asks for the link.
     #[arg(skip)]
     deref: Option<Deref>,
 
@@ -331,7 +331,7 @@ pub(crate) struct LsCommand {
     #[arg(skip)]
     dired: bool,
 
-    /// A folder `-RL` would have gone round: said, status 2.
+    /// A directory `-RL` would have gone round: said, status 2.
     #[arg(skip)]
     looped: std::sync::atomic::AtomicBool,
 
@@ -408,7 +408,7 @@ enum Layout {
 enum Indicator {
     #[default]
     None,
-    /// `/` after a folder (`-p`).
+    /// `/` after a directory (`-p`).
     Slash,
     /// `-F`'s marks but `*` (`--file-type`).
     FileType,
@@ -945,7 +945,7 @@ struct ItemInfo {
     executable: OnceCell<bool>,
     /// A device's numbers, major and minor, which `-l` shows in place of the size.
     device: Option<(u32, u32)>,
-    /// What `-lF` marks a link's target with, when its kind is known beyond a folder:
+    /// What `-lF` marks a link's target with, when its kind is known beyond a directory:
     /// `|` for a descriptor's name whose descriptor is a pipe.
     target_mark: Option<char>,
 }
@@ -1002,9 +1002,9 @@ enum Deref {
     /// `-H`: those named on the command line.
     CommandLine,
     /// `--dereference-command-line-symlink-to-dir`: those named on the command line that
-    /// name a folder.
+    /// name a directory.
     CommandLineDirs,
-    /// `-L`: every one, and `-R` goes into the folders they name.
+    /// `-L`: every one, and `-R` goes into the directories they name.
     Always,
 }
 
@@ -1312,7 +1312,7 @@ struct Look {
     /// Whether a nongraphic character left as it is shows as `?` (`-q`).
     hide_control: bool,
     /// What ends each line of entries: NUL under `--zero`, else a newline. Headers and
-    /// the blank lines between folders keep theirs, as in GNU ls.
+    /// the blank lines between directories keep theirs, as in GNU ls.
     eol: char,
     /// Whether names are links to their files (`--hyperlink`).
     hyperlink: bool,
@@ -1687,7 +1687,7 @@ impl LsCommand {
 
 impl LsCommand {
     /// `--tree` of a directory named on the command line, answered as
-    /// [`Self::list_operand`] answers. Each folder it could not open is said in GNU ls's
+    /// [`Self::list_operand`] answers. Each directory it could not open is said in GNU ls's
     /// words, as `-R` says it: they were passed over in silence.
     fn tree_operand<SE: cash_core::ShellExtensions>(
         &self,
@@ -1937,14 +1937,14 @@ impl LsCommand {
         (width > 0).then_some(width)
     }
 
-    /// Whether an operand is shown as an entry rather than listed as a folder: a file, `-d`,
+    /// Whether an operand is shown as an entry rather than listed as a directory: a file, `-d`,
     /// or a link named on the command line that `-l` or `-F` asks about itself, as GNU ls
     /// decides; `-L` goes through a link always.
     fn shown_as_entry(&self, path: &Path) -> bool {
         if self.directory || !path.is_dir() {
             return true;
         }
-        // A link to a folder is listed as the folder, as GNU's default follows it, unless
+        // A link to a directory is listed as the directory, as GNU's default follows it, unless
         // -l or -F asks for the link and no option says to follow it.
         let link = path
             .symlink_metadata()
@@ -1953,7 +1953,7 @@ impl LsCommand {
     }
 
     /// What an operand shown as an entry shows: what it names when `-L` or `-H` follows
-    /// it, or `--dereference-command-line-symlink-to-dir` a link to a folder, and it is
+    /// it, or `--dereference-command-line-symlink-to-dir` a link to a directory, and it is
     /// there; otherwise itself.
     fn followed_operand(&self, path: &Path) -> Option<Metadata> {
         match self.deref {
@@ -2060,9 +2060,9 @@ impl LsCommand {
 
         let read_dir = std::fs::read_dir(dir_path)?;
         // The facts `-l`, `-s`, `-c` and `-i` need of each entry, from one query of the
-        // folder rather than calls of each file's own.
+        // directory rather than calls of each file's own.
         let listed = if self.want().facts {
-            cash_win32::fs::folder_facts(dir_path)
+            cash_win32::fs::directory_facts(dir_path)
         } else {
             std::collections::HashMap::new()
         };
@@ -2146,7 +2146,7 @@ impl LsCommand {
                 if item.kind == EntryKind::Dir && item.name != "." && item.name != ".." {
                     // Joined once: `ls -R foo/` printed `foo//bar:`.
                     let sub_str = crate::walk::join_shown(dir_str, &item.name);
-                    // With -L a link to a folder above is not gone round, as GNU ls says.
+                    // With -L a link to a directory above is not gone round, as GNU ls says.
                     if self.deref == Some(Deref::Always)
                         && crate::walk::loop_ancestor(&item.path, item.path.ancestors().skip(1))
                             .is_some()
@@ -2193,7 +2193,7 @@ impl LsCommand {
 
     /// `--tree`: the directory, then everything below it with the branches drawn, as
     /// deep as `--depth` allows. Links to directories are shown, not followed. What it
-    /// gives back is each folder it could not open, by name, and whether that was the
+    /// gives back is each directory it could not open, by name, and whether that was the
     /// operand, for the caller to say.
     fn render_tree(
         &self,
@@ -2230,7 +2230,7 @@ impl LsCommand {
         Ok(unopened)
     }
 
-    /// The rows below the folder `dir`, shown as `shown`; a folder that cannot be opened
+    /// The rows below the directory `dir`, shown as `shown`; a directory that cannot be opened
     /// goes into `unopened`.
     fn tree_rows(
         &self,
@@ -2297,12 +2297,12 @@ impl LsCommand {
         look: &Look,
         prefixes: Option<&[String]>,
     ) -> Result<(), std::io::Error> {
-        // A folder shows 1, as in Git Bash; --count-links counts it, reading it.
+        // A directory shows 1, as in Git Bash; --count-links counts it, reading it.
         let links: Vec<u32> = items
             .iter()
             .map(|item| {
                 if self.count_links && item.kind == EntryKind::Dir {
-                    cash_win32::fs::folder_link_count(&item.path)
+                    cash_win32::fs::directory_link_count(&item.path)
                 } else {
                     item.links
                 }
@@ -2521,7 +2521,7 @@ impl LsCommand {
         }
     }
 
-    /// The mark after an entry's name: `/` for a folder with any style, `@` for a link
+    /// The mark after an entry's name: `/` for a directory with any style, `@` for a link
     /// with `--file-type` and `-F`, and `*` for a program with `-F` alone.
     fn indicator(&self, item: &ItemInfo) -> Option<char> {
         match (self.indicator_style(), item.kind) {
@@ -2702,7 +2702,7 @@ fn shown_name(name: &str, look: &Look) -> String {
     }
 }
 
-/// A folder's header line: [`header`] and a colon, indented and its place kept under
+/// A directory's header line: [`header`] and a colon, indented and its place kept under
 /// `--dired`, as GNU ls writes it.
 fn write_header(
     out: &mut impl Write,
@@ -2718,7 +2718,7 @@ fn write_header(
     writeln!(out, "{}:", header(shown, path, look))
 }
 
-/// A folder's header, `shown` quoted, and a link to `path` under `--hyperlink`.
+/// A directory's header, `shown` quoted, and a link to `path` under `--hyperlink`.
 fn header(shown: &str, path: &Path, look: &Look) -> String {
     if look.hyperlink {
         let target = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
@@ -3113,7 +3113,7 @@ fn inspect_dot(dir_path: &Path, name: &str, want: Want) -> Option<ItemInfo> {
         target_mark: None,
     };
     if want.long {
-        // A folder's link count is 1, as Git Bash shows it (`file_link_count`).
+        // A directory's link count is 1, as Git Bash shows it (`file_link_count`).
         item.links = 1;
         fill_long(&mut item, &metadata);
     }
@@ -3136,7 +3136,7 @@ fn take_facts(item: &mut ItemInfo, facts: Option<cash_win32::fs::FileFacts>, wan
     }
 }
 
-/// Where `--dired` output has put names and folder headers, in visible bytes from its
+/// Where `--dired` output has put names and directory headers, in visible bytes from its
 /// start: escapes are not counted, as GNU ls counts none.
 #[derive(Debug, Default)]
 struct Dired {
@@ -3144,7 +3144,7 @@ struct Dired {
     position: AtomicU64,
     /// Each name's start and end.
     names: Mutex<Vec<u64>>,
-    /// Each folder header's name's start and end.
+    /// Each directory header's name's start and end.
     subdirs: Mutex<Vec<u64>>,
 }
 
@@ -3425,7 +3425,7 @@ fn inspect_path(
         device: None,
         target_mark: None,
     };
-    // The facts the folder's listing gave (`cash_win32::fs::folder_facts`), which spare
+    // The facts the directory's listing gave (`cash_win32::fs::directory_facts`), which spare
     // asking the file.
     let mut facts_taken = listed.is_some();
     if want.facts {
@@ -3441,7 +3441,7 @@ fn inspect_path(
             cash_win32::fs::listing_facts(path, read_start, !facts_taken)
         });
         if let Some(Some(facts)) = facts {
-            // A folder's link count is not counted in a listing (`--count-links` does).
+            // A directory's link count is not counted in a listing (`--count-links` does).
             item.links = if kind == EntryKind::Dir {
                 1
             } else {

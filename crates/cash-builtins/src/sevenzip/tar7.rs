@@ -1188,7 +1188,7 @@ fn comment(path: &[u8], raw: &[u8]) -> String {
 /// The properties a technical listing shows for a tar item, in 7-Zip's order.
 pub(super) const ITEM_PROPS: [Prop; 18] = [
     Prop::Path,
-    Prop::Folder,
+    Prop::Directory,
     Prop::Size,
     Prop::PackedSize,
     Prop::Modified,
@@ -1376,7 +1376,7 @@ fn listed_item(item: &TarItem) -> Item {
     let text = utf8_escaped;
     listed.extra = vec![
         (
-            Prop::Folder,
+            Prop::Directory,
             if item.is_dir() { "+" } else { "-" }.to_owned(),
         ),
         (

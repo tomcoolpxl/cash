@@ -1,4 +1,4 @@
-//! `t`, `x`, `e` and `p`: an archive set's files tested, written out with their folders
+//! `t`, `x`, `e` and `p`: an archive set's files tested, written out with their directories
 //! or without, or printed, as rar does each, with its words a line a file.
 
 use std::fs::File;
@@ -63,7 +63,7 @@ impl Mode {
 struct Job {
     mode: Mode,
     masks: Masks,
-    /// The folder to extract into, as typed, `/` its separator, none at its end.
+    /// The directory to extract into, as typed, `/` its separator, none at its end.
     dest: Option<String>,
     /// The same with its separator at its end if typed so, as a temporary file's line
     /// shows it.
@@ -308,8 +308,8 @@ struct Work<'r, 'a, SE: cash_core::ShellExtensions> {
     overwrite: Overwrite,
     /// The name of a volume a set goes on into that is not there.
     missing: Option<String>,
-    /// The folders extracted, given their times and attributes after their files.
-    folders: Vec<(PathBuf, Stamps)>,
+    /// The directories extracted, given their times and attributes after their files.
+    directories: Vec<(PathBuf, Stamps)>,
     /// Whether the archive is solid, its files one stream.
     solid: bool,
     /// The files not asked for that a file reference asked for copies: by their place.
@@ -474,7 +474,7 @@ fn set<SE: cash_core::ShellExtensions>(
             Overwrite::Ask
         }),
         missing,
-        folders: Vec::new(),
+        directories: Vec::new(),
         solid: false,
         sources: std::collections::HashSet::new(),
         temps: std::collections::HashMap::new(),
@@ -518,7 +518,7 @@ fn set<SE: cash_core::ShellExtensions>(
     if work.stopped || stop.requested() {
         return Err(Stop::Break);
     }
-    work.finish_folders();
+    work.finish_directories();
     work.say_damaged_services(work.volumes.len());
     if job.mode == Mode::Test {
         work.test_recovery_records();
@@ -1193,15 +1193,15 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             None => relative,
         };
         let path = self.rar.path(&shown);
-        // A junction, or a folder's symbolic link, is a link to make, not a folder.
+        // A junction, or a directory's symbolic link, is a link to make, not a directory.
         if entry.directory && entry.link.is_none() {
             if paths && !matches!(self.rar.switches.exclude_paths, Some(0)) {
-                // `-f` freshens what is there: a folder that is not stays so.
+                // `-f` freshens what is there: a directory that is not stays so.
                 if self.rar.switches.freshen && !path.is_dir() {
                     return Ok(());
                 }
-                self.make_folders(&shown);
-                self.folders.push((path, Stamps::of(entry)));
+                self.make_directories(&shown);
+                self.directories.push((path, Stamps::of(entry)));
                 self.done += 1;
                 self.rar.log_file(&entry.name);
             }
@@ -1362,7 +1362,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
     }
 
     /// A symbolic link or, with `junction`, a junction: left out with `-ol-`, skipped as
-    /// unsafe without `-ola`, made when Windows allows it. Its folder is made once it is
+    /// unsafe without `-ola`, made when Windows allows it. Its directory is made once it is
     /// to be made, its line said first.
     fn extract_symlink(
         &mut self,
@@ -1403,7 +1403,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             return Ok(());
         }
         let _ = std::fs::remove_file(&path);
-        let made = if entry.link_to_folder {
+        let made = if entry.link_to_directory {
             std::os::windows::fs::symlink_dir(&target, &path)
         } else {
             std::os::windows::fs::symlink_file(&target, &path)
@@ -1415,8 +1415,8 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
                 self.rar.log_file(&entry.name);
             }
             Err(error) => {
-                // rar makes a folder's link on a folder it makes first.
-                if entry.link_to_folder {
+                // rar makes a directory's link on a directory it makes first.
+                if entry.link_to_directory {
                     let _ = std::fs::create_dir(&path);
                 }
                 self.error(
@@ -1433,7 +1433,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
 
     /// A junction to `target`, its `\??\` taken off for the reparse data to put back.
     /// rar ends its line with a question mark over the progress, after the line of the
-    /// folder it made for it if any.
+    /// directory it made for it if any.
     fn make_junction(&mut self, entry: &Entry, target: &str, shown: &str, path: &Path) {
         let target = target.strip_prefix(r"\??\").unwrap_or(target);
         let data = cash_win32::reparse::link_data(target, true);
@@ -1482,17 +1482,17 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         }
     }
 
-    /// Makes the folders a file's name holds, saying so.
+    /// Makes the directories a file's name holds, saying so.
     fn make_parent(&mut self, shown: &str) {
         if let Some(parent) = Path::new(shown).parent()
             && !parent.as_os_str().is_empty()
         {
             let parent = parent.to_string_lossy().replace('\\', "/");
-            self.make_folders(&parent);
+            self.make_directories(&parent);
         }
     }
 
-    /// An archived name where it is extracted: in the destination, its folders kept or
+    /// An archived name where it is extracted: in the destination, its directories kept or
     /// not.
     fn beside_destination(&self, name: &str, paths: bool) -> String {
         let keep_paths = paths && !matches!(self.rar.switches.exclude_paths, Some(0));
@@ -1514,11 +1514,11 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         String::from_utf8_lossy(&target.0).into_owned()
     }
 
-    /// Where files go: the destination named; with `-ad1` a folder named after the
-    /// archive, beside it; with `-ad2` the archive's own folder.
+    /// Where files go: the destination named; with `-ad1` a directory named after the
+    /// archive, beside it; with `-ad2` the archive's own directory.
     fn destination(&self) -> Option<String> {
         let archive = self.volumes.first().map_or("", |v| v.display.as_str());
-        let folder = archive
+        let directory = archive
             .rfind('/')
             .map(|at| archive.get(..at).unwrap_or_default().to_owned());
         match self.rar.switches.alt_destination {
@@ -1527,9 +1527,12 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
                     .file_stem()
                     .map(|s| s.to_string_lossy().into_owned())
                     .unwrap_or_default();
-                Some(folder.map_or_else(|| stem.clone(), |folder| format!("{folder}/{stem}")))
+                Some(
+                    directory
+                        .map_or_else(|| stem.clone(), |directory| format!("{directory}/{stem}")),
+                )
             }
-            Some(2) => folder,
+            Some(2) => directory,
             _ => self.job.dest.clone(),
         }
     }
@@ -1551,7 +1554,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
     }
 
     /// The name a file is extracted under, relative to the destination: its archived
-    /// name with `-ap`'s or `-ep4`'s prefix taken off, its folders kept or not, in
+    /// name with `-ap`'s or `-ep4`'s prefix taken off, its directories kept or not, in
     /// `-cl`'s or `-cu`'s case. `None` when `-ap` leaves it out.
     fn target_name(&self, entry: &Entry, paths: bool) -> Option<String> {
         let mut name = if matches!(self.rar.switches.versions, Some(Arg::Given(_))) {
@@ -1620,8 +1623,8 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         Some(name)
     }
 
-    /// Makes each folder of `shown` that is not there, saying so: "Creating".
-    fn make_folders(&mut self, shown: &str) {
+    /// Makes each directory of `shown` that is not there, saying so: "Creating".
+    fn make_directories(&mut self, shown: &str) {
         let parts: Vec<&str> = shown.split('/').filter(|p| !p.is_empty()).collect();
         let mut so_far = String::new();
         for (index, part) in parts.iter().enumerate() {
@@ -1740,9 +1743,9 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         }
     }
 
-    /// The folders extracted, given their times and attributes now their files are in.
-    fn finish_folders(&mut self) {
-        for (path, stamps) in std::mem::take(&mut self.folders).iter().rev() {
+    /// The directories extracted, given their times and attributes now their files are in.
+    fn finish_directories(&mut self) {
+        for (path, stamps) in std::mem::take(&mut self.directories).iter().rev() {
             self.finish(stamps, path, true);
         }
     }
@@ -1752,10 +1755,10 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         self.finish(&Stamps::of(entry), path, false);
     }
 
-    /// A file's or folder's times and attributes, as the archive keeps them. Its
+    /// A file's or directory's times and attributes, as the archive keeps them. Its
     /// modification time unless `-tsm-`; its creation and access times when `-ts`,
     /// `-tsc` or `-tsa` asks for them; its attributes unless `-ai`.
-    fn finish(&self, entry: &Stamps, path: &Path, folder: bool) {
+    fn finish(&self, entry: &Stamps, path: &Path, directory: bool) {
         let asked = self.rar.switches.times;
         let restore = |which: Option<char>, time: Option<Time>| {
             which
@@ -1789,7 +1792,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
                 let _ = cash_win32::unix::set_attributes(path, attributes);
             }
         } else if !self.rar.switches.ignore_attributes
-            && !folder
+            && !directory
             && entry.host == Host::Unix
             && entry.attributes & 0o200 == 0
         {
@@ -2025,7 +2028,7 @@ impl Sink for Collect {
 }
 
 /// Whether a symbolic link stays inside the destination as rar judges it: a target
-/// neither absolute nor going up by `..` more often than the link's own folders.
+/// neither absolute nor going up by `..` more often than the link's own directories.
 fn safe_link(name: &str, target: &str) -> bool {
     let absolute = target.starts_with(['\\', '/']) || target.as_bytes().get(1) == Some(&b':');
     let ups = target

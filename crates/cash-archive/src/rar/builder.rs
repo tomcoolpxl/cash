@@ -595,7 +595,7 @@ impl Builder {
 
     /// Queue a RAR5/7 link of any kind, without reading what it points at: a hard link
     /// or file reference (types 4 and 5) to an earlier member of `size` bytes, or a
-    /// symbolic link or junction (2 and 3), `is_directory` when it stands for a folder.
+    /// symbolic link or junction (2 and 3), `is_directory` when it stands for a directory.
     /// `mtime` is a header Unix time, as for [`Self::add_directory`]. Single-archive
     /// output only.
     pub fn add_link(
@@ -1860,7 +1860,7 @@ impl Builder {
                 .with_carried(entry.carried.clone())
                 .with_version(entry.version);
             // A carried member's data is already as encrypted as it is going to be; a
-            // folder has none, and WinRAR gives it no encryption record.
+            // directory has none, and WinRAR gives it no encryption record.
             let data_password = if entry.carried.is_some() || entry.is_directory {
                 None
             } else {

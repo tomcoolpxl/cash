@@ -255,12 +255,12 @@ fn line<SE: cash_core::ShellExtensions>(env: &Env<'_, SE>, item: &Item) -> Strin
     )
 }
 
-/// The totals' lines: "N files, M folders", and with alternate streams theirs and all
+/// The totals' lines: "N files, M directories", and with alternate streams theirs and all
 /// the streams'.
 fn sums<SE: cash_core::ShellExtensions>(env: &Env<'_, SE>, stat: &Stat, alt: &Stat) -> String {
     let mut names = format!("{} files", stat.files);
     if stat.dirs != 0 {
-        let _ = write!(names, ", {} folders", stat.dirs);
+        let _ = write!(names, ", {} directories", stat.dirs);
     }
     let mut out = sum(env, stat, &names);
     if alt.files != 0 {

@@ -1,8 +1,8 @@
-//! `z [-l|-i] [WORDS...]`: the folder jump (spec D80), zoxide's `z` on the record of the
-//! folders an interactive cash has been in (`cash_core::kept::folders`).
+//! `z [-l|-i] [WORDS...]`: the directory jump (spec D80), zoxide's `z` on the record of the
+//! directories an interactive cash has been in (`cash_core::kept::directories`).
 //!
-//! `z` alone, `z -` and `z FOLDER` are `cd`'s; any other words go to the best-ranked
-//! folder whose path holds them in turn, the last in its last part. `-l` lists the
+//! `z` alone, `z -` and `z DIRECTORY` are `cd`'s; any other words go to the best-ranked
+//! directory whose path holds them in turn, the last in its last part. `-l` lists the
 //! matches with their scores; `-i` opens a list to pick from on the terminal, as `croot`
 //! draws on it.
 
@@ -15,7 +15,7 @@ use cash_picker::list::{Line, List, Scope, Setup};
 use cash_picker::term;
 use clap::Parser as _;
 
-/// Jump to a folder you often go to.
+/// Jump to a directory you often go to.
 #[derive(clap::Parser)]
 #[clap(disable_help_flag = true, disable_version_flag = true)]
 pub(crate) struct ZCommand {
@@ -28,13 +28,13 @@ const USAGE: &str = "Usage: z [-l|-i] [WORDS...]";
 /// What `z --help` prints.
 const HELP: &str = "\
 Usage: z [-l|-i] [WORDS...]
-Go to the best-ranked recorded folder whose path holds WORDS in turn.
+Go to the best-ranked recorded directory whose path holds WORDS in turn.
 
   -l, --list         list the matches with their scores, best first
   -i, --interactive  pick one of the matches from a list
   -h, --help         show this help
 
-With no WORDS, z goes home; `z -` goes back, and `z FOLDER` is `cd FOLDER`.";
+With no WORDS, z goes home; `z -` goes back, and `z DIRECTORY` is `cd DIRECTORY`.";
 
 /// What the words ask for.
 #[derive(PartialEq, Eq)]
@@ -77,9 +77,9 @@ impl builtins::Command for ZCommand {
             }
         }
 
-        // `z`, `z -` and `z FOLDER` are `cd`'s, as zoxide has them.
+        // `z`, `z -` and `z DIRECTORY` are `cd`'s, as zoxide has them.
         if mode == Mode::Jump {
-            let is_folder = |word: &str| {
+            let is_directory = |word: &str| {
                 context
                     .shell
                     .absolute_path(cash_win32::path::accept_path(word))
@@ -87,7 +87,7 @@ impl builtins::Command for ZCommand {
             };
             let cd_word = match words.as_slice() {
                 [] => Some(None),
-                [word] if *word == "-" || is_folder(word) => Some(Some(*word)),
+                [word] if *word == "-" || is_directory(word) => Some(Some(*word)),
                 _ => None,
             };
             if let Some(word) = cd_word {
@@ -97,20 +97,20 @@ impl builtins::Command for ZCommand {
             }
         }
 
-        let Some(record) = context.shell.folder_record() else {
+        let Some(record) = context.shell.directory_record() else {
             writeln!(
                 context.stderr(),
-                "z: no folders are recorded: CASH_NO_RECORDS is set, or LOCALAPPDATA is not"
+                "z: no directories are recorded: CASH_NO_RECORDS is set, or LOCALAPPDATA is not"
             )?;
             return Ok(ExecutionResult::general_error());
         };
         let here = cash_win32::path::render(context.shell.working_dir());
-        let found = kept::folders::find(&record, &words, kept::now(), Some(&here));
+        let found = kept::directories::find(&record, &words, kept::now(), Some(&here));
         if found.is_empty() {
             let what = if words.is_empty() {
-                "no folder is recorded yet".to_owned()
+                "no directory is recorded yet".to_owned()
             } else {
-                format!("no folder matches '{}'", words.join(" "))
+                format!("no directory matches '{}'", words.join(" "))
             };
             writeln!(context.stderr(), "z: {what}")?;
             return Ok(ExecutionResult::general_error());
@@ -119,8 +119,8 @@ impl builtins::Command for ZCommand {
         match mode {
             Mode::List => {
                 let mut stdout = context.stdout();
-                for (folder, score) in &found {
-                    writeln!(stdout, "{score:>6.1} {}", folder.path)?;
+                for (directory, score) in &found {
+                    writeln!(stdout, "{score:>6.1} {}", directory.path)?;
                 }
                 Ok(ExecutionResult::success())
             }
@@ -152,12 +152,12 @@ fn go<SE: cash_core::ShellExtensions>(
     }
 }
 
-/// The folder picked from `found` in a list drawn on the terminal: `Ok(None)` when the
+/// The directory picked from `found` in a list drawn on the terminal: `Ok(None)` when the
 /// list closed without a pick, `Err` with the status to return when it could not be
 /// drawn.
 fn pick<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
-    found: &[(kept::folders::Folder, f64)],
+    found: &[(kept::directories::Directory, f64)],
 ) -> Result<Result<Option<String>, ExecutionResult>, cash_core::Error> {
     let Ok(mut console) = std::fs::OpenOptions::new().write(true).open("CONOUT$") else {
         writeln!(context.stderr(), "z: no terminal to draw on")?;
@@ -167,9 +167,9 @@ fn pick<SE: cash_core::ShellExtensions>(
     let colour = var("NO_COLOR").is_none_or(|value| value.is_empty());
     let lines = found
         .iter()
-        .map(|(folder, _)| Line {
-            text: context.shell.tilde_shorten(folder.path.clone()),
-            when: u64::try_from(folder.last).ok().and_then(|seconds| {
+        .map(|(directory, _)| Line {
+            text: context.shell.tilde_shorten(directory.path.clone()),
+            when: u64::try_from(directory.last).ok().and_then(|seconds| {
                 std::time::SystemTime::UNIX_EPOCH
                     .checked_add(std::time::Duration::from_secs(seconds))
             }),
@@ -177,7 +177,7 @@ fn pick<SE: cash_core::ShellExtensions>(
         .collect();
     let mut list = List::new(Setup {
         scopes: vec![Scope {
-            title: "Folders".to_owned(),
+            title: "Directories".to_owned(),
             lines,
         }],
         typed: String::new(),
@@ -192,7 +192,9 @@ fn pick<SE: cash_core::ShellExtensions>(
     let height = var("CASH_PICKER_HEIGHT");
     match term::run_list(&mut list, &mut console, height.as_deref(), &mut Vec::new()) {
         Ok(picked) => Ok(Ok(picked.and_then(|(_, index, _)| {
-            found.get(index).map(|(folder, _)| folder.path.clone())
+            found
+                .get(index)
+                .map(|(directory, _)| directory.path.clone())
         }))),
         Err(error) => {
             writeln!(context.stderr(), "z: {error}")?;

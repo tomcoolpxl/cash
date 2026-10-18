@@ -1,7 +1,7 @@
 //! The offer a portable cash makes once, at its first interactive prompt.
 //!
 //! A portable cash is one unpacked from the release zip: neither Scoop's (under
-//! `scoop\apps\`) nor the installer's (a version folder with a `current` junction beside
+//! `scoop\apps\`) nor the installer's (a version directory with a `current` junction beside
 //! it), which each set the machine up as they are installed. The zip sets up nothing, so
 //! the first interactive shell asks, once, whether to put cash on the user PATH, add the
 //! Windows Terminal profile, and put the tools on PATH for other programs. Enter means no,
@@ -142,10 +142,10 @@ fn marker_path() -> Option<PathBuf> {
     Some(PathBuf::from(local).join("cash").join(MARKER))
 }
 
-/// Writes the marker, making its folder.
+/// Writes the marker, making its directory.
 fn write_marker(marker: &Path, answers: Answers) -> std::io::Result<()> {
-    if let Some(folder) = marker.parent() {
-        std::fs::create_dir_all(folder)?;
+    if let Some(directory) = marker.parent() {
+        std::fs::create_dir_all(directory)?;
     }
     std::fs::write(marker, marker_text(answers, &today()))
 }

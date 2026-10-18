@@ -461,14 +461,14 @@ impl Pattern {
 
         let component_count = components.len();
         let starts_at_a_root = prefix_to_remove.is_none();
-        // Whether the folders reached so far were written out, not found by a pattern.
+        // Whether the directories reached so far were written out, not found by a pattern.
         let mut written_out = true;
         for (component_index, component) in components.into_iter().enumerate() {
             if self.enable_globstar && is_globstar_component(&component) {
                 let include_files = component_index + 1 == component_count;
-                // A last `**` after a folder matches the folder too, as Bash has it:
-                // `sub/` when the folder is written out, `sub` when a pattern found it.
-                let folders_too: Vec<PathBuf> =
+                // A last `**` after a directory matches the directory too, as Bash has it:
+                // `sub/` when the directory is written out, `sub` when a pattern found it.
+                let directories_too: Vec<PathBuf> =
                     if include_files && (component_index > 0 || starts_at_a_root) {
                         paths_so_far
                             .iter()
@@ -483,13 +483,13 @@ impl Pattern {
                     include_files,
                     options.require_dot_in_pattern_to_match_dot_files,
                 );
-                paths_so_far.extend(
-                    folders_too.into_iter().map(
-                        |folder| {
-                            if written_out { folder.join("") } else { folder }
-                        },
-                    ),
-                );
+                paths_so_far.extend(directories_too.into_iter().map(|directory| {
+                    if written_out {
+                        directory.join("")
+                    } else {
+                        directory
+                    }
+                }));
                 written_out = false;
                 continue;
             }
@@ -518,11 +518,11 @@ impl Pattern {
                 continue;
             }
 
-            // The component's pattern and its matcher, once for every folder it is matched
+            // The component's pattern and its matcher, once for every directory it is matched
             // in; each name read once, the dot-file rule asked before the pattern. The
-            // matches are not sorted folder by folder: the whole expansion is, below. The
-            // folder's sort compared paths part by part, and with a name read twice and a
-            // pattern made for each folder, a glob of System32's DLLs took twice Bash's time.
+            // matches are not sorted directory by directory: the whole expansion is, below. The
+            // directory's sort compared paths part by part, and with a name read twice and a
+            // pattern made for each directory, a glob of System32's DLLs took twice Bash's time.
             let subpattern = Self::from(&component)
                 .set_extended_globbing(self.enable_extended_globbing)
                 .set_globstar(self.enable_globstar)
@@ -583,7 +583,7 @@ impl Pattern {
                     path_ref = stripped;
                 }
 
-                // The working folder itself, which `**/` reaches, has no name to give:
+                // The working directory itself, which `**/` reaches, has no name to give:
                 // Bash leaves it out.
                 (!path_ref.is_empty()).then(|| path_ref.to_string())
             })

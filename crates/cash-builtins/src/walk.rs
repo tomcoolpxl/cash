@@ -1,5 +1,5 @@
-//! The folder walks the builtins share (decisions.md, "Builtins share their option parsing,
-//! input opening and folder walks"; `research/central-components-design.md`).
+//! The directory walks the builtins share (decisions.md, "Builtins share their option parsing,
+//! input opening and directory walks"; `research/central-components-design.md`).
 //!
 //! Built on walkdir, which iterates rather than recurses, sorts, limits the depth, keeps
 //! to one file system and prunes. cash adds what every walk here needs beside it:
@@ -7,10 +7,10 @@
 //!   doubled `/`;
 //! - one answer to what a link is: a symlink or a junction (a name surrogate), as std and
 //!   walkdir say, never another reparse point (a cloud placeholder, a deduplicated file),
-//!   which is the file or folder it holds;
+//!   which is the file or directory it holds;
 //! - the links below a root followed here, each into a walk of its own, and a loop found
-//!   by file identity: walkdir's own following opens every folder it goes into to read,
-//!   for its loop check, so a folder that cannot be read was lost, and its error said
+//!   by file identity: walkdir's own following opens every directory it goes into to read,
+//!   for its loop check, so a directory that cannot be read was lost, and its error said
 //!   without a name;
 //! - the stop token, asked before each entry;
 //! - every error handed to the tool, which words it, sets its status and goes on.
@@ -25,20 +25,20 @@ use cash_core::StopToken;
 pub(crate) enum Links {
     /// None: a link is an entry of its own, [`Kind::Link`].
     Never,
-    /// The root's, when the root is one (`find -H`, `grep -r` on a linked folder).
+    /// The root's, when the root is one (`find -H`, `grep -r` on a linked directory).
     Roots,
     /// Every one (`find -L`, `grep -R`), a loop reported.
     All,
 }
 
-/// The order of a folder's entries.
+/// The order of a directory's entries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Order {
     /// As Windows lists them.
     Listing,
     /// By name, unit for unit: GNU's tools in the C locale (`find`, `grep`, `tree`).
     Ordinal,
-    /// A folder's files before its folders, each by name as Windows folds names:
+    /// A directory's files before its directories, each by name as Windows folds names:
     /// `where`, as `where.exe` lists them.
     FilesFirst,
 }
@@ -48,13 +48,13 @@ pub(crate) enum Order {
 pub(crate) struct WalkOptions {
     pub(crate) links: Links,
     pub(crate) order: Order,
-    /// A folder after what is in it (`find -depth`, `rm -r`).
+    /// A directory after what is in it (`find -depth`, `rm -r`).
     pub(crate) contents_first: bool,
     /// The shallowest entry handed out: 1 leaves the root out.
     pub(crate) min_depth: usize,
     /// The deepest entry handed out.
     pub(crate) max_depth: usize,
-    /// No folder on another volume is gone into.
+    /// No directory on another volume is gone into.
     pub(crate) one_file_system: bool,
 }
 
@@ -75,7 +75,7 @@ impl Default for WalkOptions {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
     File,
-    Folder,
+    Directory,
     /// A symlink or a junction the walk does not go through.
     Link,
     /// Anything else: a device, a socket.
@@ -131,12 +131,12 @@ impl Entry {
 /// What went wrong in a walk, for the tool to word.
 #[derive(Debug)]
 pub(crate) enum WalkError {
-    /// A followed link back to a folder above it: its name, and the folder's.
+    /// A followed link back to a directory above it: its name, and the directory's.
     Loop { shown: String, ancestor: String },
     /// A link the walk follows whose target is not there: GNU's `grep -R` says so, its
     /// `find -L` lists the link as it is.
     Dangling(Entry),
-    /// A folder that could not be listed: handed out first, then this.
+    /// A directory that could not be listed: handed out first, then this.
     Unlisted {
         shown: String,
         path: PathBuf,
@@ -153,11 +153,11 @@ pub(crate) enum WalkError {
 
 /// A walk of the tree under one root.
 pub(crate) struct Walk {
-    /// walkdir's walks under way: the root's, then one inside each link to a folder the
+    /// walkdir's walks under way: the root's, then one inside each link to a directory the
     /// walk goes through, the innermost last.
     walks: Vec<Inner>,
-    /// The walk inside the link to a folder just handed out, gone into on the next step
-    /// unless [`Self::skip_folder`] says not to.
+    /// The walk inside the link to a directory just handed out, gone into on the next step
+    /// unless [`Self::skip_directory`] says not to.
     pending: Option<Inner>,
     options: WalkOptions,
     root: PathBuf,
@@ -200,9 +200,9 @@ impl Walk {
         }
     }
 
-    /// Goes no further into the folder just handed out (`find -prune`, an excluded
-    /// folder).
-    pub(crate) fn skip_folder(&mut self) {
+    /// Goes no further into the directory just handed out (`find -prune`, an excluded
+    /// directory).
+    pub(crate) fn skip_directory(&mut self) {
         if self.pending.take().is_none()
             && let Some(walk) = self.walks.last_mut()
         {
@@ -255,7 +255,7 @@ impl Walk {
                 followed: false,
             });
         }
-        // walkdir words both alike; what failed on a folder is its listing.
+        // walkdir words both alike; what failed on a directory is its listing.
         let listed = error
             .path()
             .filter(|path| std::fs::metadata(path).is_ok_and(|m| m.is_dir()))
@@ -268,7 +268,7 @@ impl Walk {
     }
 
     /// A link below the root the walk goes through: what it names, its walk set to go
-    /// into it when a folder (after it, or before it with `contents_first`, when nothing
+    /// into it when a directory (after it, or before it with `contents_first`, when nothing
     /// is handed out now); or why it is not gone through.
     fn follow(&mut self, mut entry: Entry) -> Option<Result<Entry, WalkError>> {
         let target = match std::fs::metadata(&entry.path) {
@@ -285,7 +285,7 @@ impl Walk {
         };
         entry.followed = true;
         entry.kind = kind_of(&target);
-        if entry.kind != Kind::Folder || entry.depth >= self.options.max_depth {
+        if entry.kind != Kind::Directory || entry.depth >= self.options.max_depth {
             return Some(Ok(entry));
         }
         if let Some(ancestor) = self.ancestor(&entry.path) {
@@ -313,13 +313,13 @@ impl Walk {
         Some(Ok(entry))
     }
 
-    /// The folder at or above the root that the link `link` names, shown: a loop.
+    /// The directory at or above the root that the link `link` names, shown: a loop.
     fn ancestor(&self, link: &Path) -> Option<String> {
         let above = link
             .ancestors()
             .skip(1)
-            .take_while(|folder| folder.starts_with(&self.root));
-        loop_ancestor(link, above).map(|folder| self.shown(folder))
+            .take_while(|directory| directory.starts_with(&self.root));
+        loop_ancestor(link, above).map(|directory| self.shown(directory))
     }
 }
 
@@ -410,12 +410,12 @@ fn walkdir_of(
     .into_iter()
 }
 
-/// The folder of `folders`, a link's own above it, that the link `link` names: a loop.
-/// Each is read with no more than its attributes, which the listing right of the folder
+/// The directory of `directories`, a link's own above it, that the link `link` names: a loop.
+/// Each is read with no more than its attributes, which the listing right of the directory
 /// it is in grants, so one that cannot be read is still told.
 pub(crate) fn loop_ancestor<'p>(
     link: &Path,
-    mut folders: impl Iterator<Item = &'p Path>,
+    mut directories: impl Iterator<Item = &'p Path>,
 ) -> Option<&'p Path> {
     let identity = |path: &Path| {
         cash_win32::fs::file_info(path)
@@ -423,13 +423,13 @@ pub(crate) fn loop_ancestor<'p>(
             .map(|info| (info.volume, info.index))
     };
     let target = identity(link)?;
-    folders.find(|folder| identity(folder) == Some(target))
+    directories.find(|directory| identity(directory) == Some(target))
 }
 
 /// What a followed link names is, by its metadata.
 fn kind_of(target: &std::fs::Metadata) -> Kind {
     if target.is_dir() {
-        Kind::Folder
+        Kind::Directory
     } else if target.is_file() {
         Kind::File
     } else {
@@ -439,13 +439,13 @@ fn kind_of(target: &std::fs::Metadata) -> Kind {
 
 /// What a listing's entry is, by the one answer the builtins give: a link is a symlink or
 /// a junction (a name surrogate), as std says; another reparse point (a cloud
-/// placeholder, a deduplicated file) is the file or folder it holds. For a walk of its
-/// own that needs a folder whole before it shows any of it, as `tree` draws its branches.
+/// placeholder, a deduplicated file) is the file or directory it holds. For a walk of its
+/// own that needs a directory whole before it shows any of it, as `tree` draws its branches.
 pub(crate) fn kind(file_type: std::fs::FileType) -> Kind {
     if file_type.is_symlink() {
         Kind::Link
     } else if file_type.is_dir() {
-        Kind::Folder
+        Kind::Directory
     } else if file_type.is_file() {
         Kind::File
     } else {
@@ -467,8 +467,8 @@ pub(crate) fn join_shown(root: &str, below: &str) -> String {
     }
 }
 
-/// Where an entry goes in [`Order::FilesFirst`]: after the files when it is a folder or a
-/// link to one (a junction, a folder symlink, which Windows marks as folders), then by its
+/// Where an entry goes in [`Order::FilesFirst`]: after the files when it is a directory or a
+/// link to one (a junction, a directory symlink, which Windows marks as directories), then by its
 /// name as Windows folds names.
 fn files_first(entry: &walkdir::DirEntry) -> (bool, String) {
     use std::os::windows::fs::FileTypeExt;
@@ -532,8 +532,8 @@ mod tests {
             [
                 "top/B.txt File",
                 "top/a.txt File",
-                "top/b Folder",
-                "top/b/deep Folder",
+                "top/b Directory",
+                "top/b/deep Directory",
                 "top/b/deep/f File"
             ]
         );
@@ -545,7 +545,7 @@ mod tests {
         };
         assert_eq!(
             walked(root, "top/", &files_first),
-            ["top/a.txt File", "top/B.txt File", "top/b Folder"]
+            ["top/a.txt File", "top/B.txt File", "top/b Directory"]
         );
         // A junction back to the root: a link not followed, a loop when followed.
         let link = root.join("b").join("up");
@@ -586,7 +586,12 @@ mod tests {
         };
         assert_eq!(
             walked(&root, "t", &all),
-            ["t/a Folder", "t/a/f File", "t/a/j Folder", "t/a/j/o File"]
+            [
+                "t/a Directory",
+                "t/a/f File",
+                "t/a/j Directory",
+                "t/a/j/o File"
+            ]
         );
         let last = WalkOptions {
             contents_first: true,
@@ -594,7 +599,12 @@ mod tests {
         };
         assert_eq!(
             walked(&root, "t", &last),
-            ["t/a/f File", "t/a/j/o File", "t/a/j Folder", "t/a Folder"]
+            [
+                "t/a/f File",
+                "t/a/j/o File",
+                "t/a/j Directory",
+                "t/a Directory"
+            ]
         );
         // A link above the shallowest entry shown is still gone into.
         let deep = WalkOptions {
@@ -609,7 +619,7 @@ mod tests {
         };
         assert_eq!(
             walked(&root, "t", &shallow),
-            ["t/a Folder", "t/a/f File", "t/a/j Folder"]
+            ["t/a Directory", "t/a/f File", "t/a/j Directory"]
         );
         std::fs::remove_dir(root.join("a").join("j")).unwrap();
     }
@@ -663,16 +673,16 @@ mod tests {
         // As NTFS keeps them: by name folded to capitals, `_` after the letters.
         assert_eq!(
             order(Order::Listing),
-            ["A File", "b File", "D Folder", "_c File"]
+            ["A File", "b File", "D Directory", "_c File"]
         );
         // Unit by unit: capitals, then `_`, then small letters.
         assert_eq!(
             order(Order::Ordinal),
-            ["A File", "D Folder", "_c File", "b File"]
+            ["A File", "D Directory", "_c File", "b File"]
         );
         assert_eq!(
             order(Order::FilesFirst),
-            ["A File", "b File", "_c File", "D Folder"]
+            ["A File", "b File", "_c File", "D Directory"]
         );
     }
 }

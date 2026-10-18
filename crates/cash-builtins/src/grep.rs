@@ -1246,7 +1246,7 @@ impl<W: Write, E: Write> Walker<'_, W, E> {
     /// is printed, empty for the working directory searched with no operand.
     fn walk(&mut self, shown: &str, actual: &Path) -> std::io::Result<()> {
         // `-r` goes through a link it is named, not those inside; `-R` through every one,
-        // and a link back to a folder above is GNU's warning, not a walk round it for ever.
+        // and a link back to a directory above is GNU's warning, not a walk round it for ever.
         let options = WalkOptions {
             links: if self.opts().follow {
                 Links::All
@@ -1287,9 +1287,9 @@ impl<W: Write, E: Write> Walker<'_, W, E> {
             let name = entry.name().to_string_lossy().into_owned();
             match entry.kind {
                 Kind::Link => {}
-                Kind::Folder => {
+                Kind::Directory => {
                     if self.exclude_dirs.iter().any(|g| g.matches(&name)) {
-                        walk.skip_folder();
+                        walk.skip_directory();
                     }
                 }
                 Kind::File | Kind::Other => {

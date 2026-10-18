@@ -1,6 +1,6 @@
 //! `cash --terminal-profile` and `--remove-terminal-profile` (spec D38, ROADMAP item 18):
 //! the Windows Terminal fragment Scoop's manifest writes on install and removes on
-//! uninstall. Each test points `LOCALAPPDATA` at a folder of its own.
+//! uninstall. Each test points `LOCALAPPDATA` at a directory of its own.
 #![allow(
     clippy::tests_outside_test_module,
     clippy::unwrap_used,
@@ -176,8 +176,8 @@ fn the_profile_runs_this_cash_and_goes_away_again() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let folder = fragments(local.path());
-    let json = std::fs::read_to_string(folder.join("cash.json")).unwrap();
+    let directory = fragments(local.path());
+    let json = std::fs::read_to_string(directory.join("cash.json")).unwrap();
     // The program as this test started it, quoted, with JSON's doubled backslashes.
     let exe = Path::new(CASH).display().to_string().replace('/', "\\");
     let quoted = format!("\\\"{}\\\"", exe.replace('\\', "\\\\"));
@@ -186,7 +186,7 @@ fn the_profile_runs_this_cash_and_goes_away_again() {
         "{json}\nexpected {quoted}"
     );
     assert!(json.contains("\"name\": \"cash\""), "{json}");
-    // Home, not the folder Terminal itself runs in (C:\WINDOWS\system32).
+    // Home, not the directory Terminal itself runs in (C:\WINDOWS\system32).
     assert!(
         json.contains("\"startingDirectory\": \"%USERPROFILE%\""),
         "{json}"
@@ -202,20 +202,20 @@ fn the_profile_runs_this_cash_and_goes_away_again() {
     );
     let logo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/cash_logo_small.png");
     assert_eq!(
-        std::fs::read(folder.join("cash_logo_small.png")).unwrap(),
+        std::fs::read(directory.join("cash_logo_small.png")).unwrap(),
         std::fs::read(logo).unwrap()
     );
 
     // Written again, as every upgrade does: still one profile.
     assert!(cash(local.path(), "--terminal-profile").status.success());
     assert_eq!(
-        std::fs::read_to_string(folder.join("cash.json")).unwrap(),
+        std::fs::read_to_string(directory.join("cash.json")).unwrap(),
         json
     );
 
     let gone = cash(local.path(), "--remove-terminal-profile");
     assert!(gone.status.success());
-    assert!(!folder.exists());
+    assert!(!directory.exists());
 
     // Removing what is not there is not an error: Scoop may run it twice.
     let again = cash(local.path(), "--remove-terminal-profile");
@@ -327,10 +327,10 @@ fn a_menu_listed_profile_by_profile_gets_cash_and_loses_it_on_removal() {
     assert_eq!(std::fs::read_to_string(&unpackaged).unwrap(), LISTED_MENU);
 }
 
-/// A fragment folder that will not go, held open by Terminal or a scanner, still lets
-/// the menu entry go; the removal fails and names the folder (BIN-11).
+/// A fragment directory that will not go, held open by Terminal or a scanner, still lets
+/// the menu entry go; the removal fails and names the directory (BIN-11).
 #[test]
-fn a_folder_that_will_not_go_still_takes_the_menu_entry_out() {
+fn a_directory_that_will_not_go_still_takes_the_menu_entry_out() {
     use std::os::windows::fs::OpenOptionsExt;
 
     let local = local_app_data("menu-held");

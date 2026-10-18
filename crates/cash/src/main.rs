@@ -25,7 +25,7 @@ static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 fn main() {
     // Read first, while cash has a single thread, so it can be removed safely.
     let invoked_as = take_invoked_name();
-    long_temp_folders();
+    long_temp_directories();
 
     // D6's outermost guarantee, installed before anything can spawn.
     let state = cash_win32::session::install_and_leak();
@@ -66,7 +66,7 @@ fn main() {
 
     // `cash --link-tools` and `--unlink-tools` (D65), `--terminal-profile` (D38),
     // `--init-rc` (D69), the installer's `--install-finish`, `--install-remove` and
-    // `--update` (D75) and `--add-to-path`/`--remove-from-path` for cash's own folder,
+    // `--update` (D75) and `--add-to-path`/`--remove-from-path` for cash's own directory,
     // like `cash doctor`, act on the installation rather than running anything in a shell.
     let args: Vec<String> = std::env::args().collect();
     if let Some(status) = link_tools::command(&args)
@@ -144,10 +144,10 @@ fn take_invoked_name() -> Option<String> {
 }
 
 /// `TEMP` and `TMP` in their long form. Windows gives them in 8.3 form for a long user
-/// name (`C:\Users\RUNNER~1\AppData\Local\Temp`) while `HOME` is long, so a folder under
+/// name (`C:\Users\RUNNER~1\AppData\Local\Temp`) while `HOME` is long, so a directory under
 /// `TEMP` was never under `~` and had two spellings in cash's records. Everything cash
 /// does and starts sees the long form: `/tmp`, temporary files, the variables.
-fn long_temp_folders() {
+fn long_temp_directories() {
     for name in ["TEMP", "TMP"] {
         if let Some(long) = std::env::var_os(name).and_then(|v| cash_win32::path::long_form(&v)) {
             // SAFETY: called from the start of `main`, before any other thread exists, so

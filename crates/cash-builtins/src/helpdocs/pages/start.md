@@ -3,7 +3,7 @@ see: detach elevate
 ---
 ## Description
 
-`start TARGET` opens a file, a folder or a URL with the program Windows has for it, as
+`start TARGET` opens a file, a directory or a URL with the program Windows has for it, as
 double-clicking it in Explorer would: `start report.pdf`, `start .`, `start
 https://example.com`. It is the Windows `xdg-open` or `open`. It does not wait for the
 program.
@@ -16,7 +16,7 @@ prog`); inside cash, the name is this builtin. `cmd /c start ...` still reaches 
 ## Examples
 
 ```
-start .                    # this folder in Explorer
+start .                    # this directory in Explorer
 start "$(winpath -w ~/Downloads)"
 start https://github.com/tomcoolpxl/cash
 ```

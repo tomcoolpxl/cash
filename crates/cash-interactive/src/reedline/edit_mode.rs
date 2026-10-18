@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 /// an edit of the line. The NUL keeps it from equalling any real `bind -x` command.
 pub(crate) const YANK_LAST_ARG: &str = "\0cash:yank-last-arg";
 
-/// What `cash-picker` (Alt-E) carries: the input backend opens croot, the file and folder
+/// What `cash-picker` (Alt-E) carries: the input backend opens croot, the file and directory
 /// picker, below the line it was pressed on (spec D73).
 pub(crate) const PICKER: &str = "\0cash:picker";
 
@@ -35,9 +35,9 @@ pub(crate) const PREVD_OR_BACKWARD_WORD: &str = "\0cash:prevd-or-backward-word";
 /// What Alt-→ carries: fish's `nextd-or-forward-word`; see [`PREVD_OR_BACKWARD_WORD`].
 pub(crate) const NEXTD_OR_FORWARD_WORD: &str = "\0cash:nextd-or-forward-word";
 
-/// For a folder-history key's marker, the command it runs on an empty line and the edit it
+/// For a directory-history key's marker, the command it runs on an empty line and the edit it
 /// makes on any other.
-pub(crate) fn folder_history_key(marker: &str) -> Option<(&'static str, reedline::EditCommand)> {
+pub(crate) fn directory_history_key(marker: &str) -> Option<(&'static str, reedline::EditCommand)> {
     // Quiet at either end of the history, as fish is: the key simply does nothing there.
     match marker {
         PREVD_OR_BACKWARD_WORD => Some((
@@ -964,7 +964,9 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
             }
         }
         // Readline has no name for these; like its other unnamed bindings, unlisted.
-        reedline::ReedlineEvent::ExecuteHostCommand(cmd) if folder_history_key(cmd).is_some() => {
+        reedline::ReedlineEvent::ExecuteHostCommand(cmd)
+            if directory_history_key(cmd).is_some() =>
+        {
             None
         }
         reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == YANK_LAST_ARG => {

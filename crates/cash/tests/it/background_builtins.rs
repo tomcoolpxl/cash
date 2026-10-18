@@ -76,7 +76,7 @@ fn busy_background_jobs_leave_the_foreground_a_lone_processor() {
     // each time it woke waiting a turn behind all of them, and CI's four processors with
     // Windows Server's longer time slices timed out at 15 s. A job's threads run below
     // normal priority now, in turns of a millisecond: it takes 0.2 s.
-    let dir = tempfile::tempdir().expect("temporary folder");
+    let dir = tempfile::tempdir().expect("temporary directory");
     let script = dir.path().join("busy.sh");
     std::fs::write(
         &script,

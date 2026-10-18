@@ -96,7 +96,7 @@ pub const MADE_BY_ZIP_3_UNIX: u16 = (host::UNIX as u16) << 8 | 0x1e;
 
 /// The Unix type bits of a mode.
 pub const S_IFMT: u32 = 0o170_000;
-/// A folder's type bits.
+/// A directory's type bits.
 pub const S_IFDIR: u32 = 0o040_000;
 /// A file's type bits.
 pub const S_IFREG: u32 = 0o100_000;
@@ -105,7 +105,7 @@ pub const S_IFLNK: u32 = 0o120_000;
 /// A pipe's type bits.
 pub const S_IFIFO: u32 = 0o010_000;
 
-/// MS-DOS's attribute for a folder.
+/// MS-DOS's attribute for a directory.
 pub const DOS_DIRECTORY: u8 = 0x10;
 /// MS-DOS's read-only attribute.
 pub const DOS_READ_ONLY: u8 = 0x01;
@@ -188,7 +188,7 @@ pub struct Entry {
     pub compressed_size: u64,
     /// The size of the data uncompressed.
     pub size: u64,
-    /// The name, `/` between its parts, a folder's ending in `/`.
+    /// The name, `/` between its parts, a directory's ending in `/`.
     pub name: Vec<u8>,
     /// The central directory's extra field.
     pub extra: Vec<u8>,
@@ -210,7 +210,7 @@ impl Entry {
         self.version_made_by.to_be_bytes()[0]
     }
 
-    /// Whether it names a folder: its name ends in `/`.
+    /// Whether it names a directory: its name ends in `/`.
     pub fn is_dir(&self) -> bool {
         self.name.last() == Some(&b'/')
     }

@@ -64,7 +64,7 @@ rc=64
 == -c wants exactly one argument
 flock: -c requires exactly one command argument
 rc=64
-== missing folder
+== missing directory
 flock: cannot open lock file nosuch/dir/f: No such file or directory
 rc=66
 == command not found

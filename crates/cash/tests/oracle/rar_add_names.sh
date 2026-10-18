@@ -1,6 +1,6 @@
 # rar's a, m and mf with names and -r, run under WinRAR 7.23's Rar.exe (the oracle:
 # Scoop's extras/winrar on Windows) and under cash's builtin: a plain file name looked
-# for in every folder with -r, not with -r0; the folders m and -df leave because files
+# for in every directory with -r, not with -r0; the directories m and -df leave because files
 # they hold were left out ("NOT DELETED"). rar_add_names.out is the original's output.
 #
 # As in rar_write.sh, `z` keeps standard output and standard error apart, turns CRLF and
@@ -29,7 +29,7 @@ z() {
   fi
   echo "rc=$r"
 }
-# A fresh src: files to archive, .log files to leave, a folder holding only one.
+# A fresh src: files to archive, .log files to leave, a directory holding only one.
 mk() {
   rm -rf src && mkdir -p src/sub src/keep
   printf 'a\n' > src/a.txt
@@ -39,7 +39,7 @@ mk() {
   touch -d '2024-01-01T00:00:00Z' src/a.txt src/b.log src/sub/c.txt src/keep/k.log src/sub src/keep src
 }
 
-echo "== -r: a file's name looked for in every folder below its own"
+echo "== -r: a file's name looked for in every directory below its own"
 mk
 z rar a -m0 -idc -r r1.rar c.txt
 z rar a -m0 -idc -r r2.rar a.txt nothere.txt
@@ -52,7 +52,7 @@ z rar a -m0 -idc -r0 r6.rar c.txt
 z rar a -m0 -idc -r0 r7.rar '*.txt'
 z rar lb r7.rar
 
-echo "== m: a folder holding a file left out is not deleted"
+echo "== m: a directory holding a file left out is not deleted"
 z rar m -m0 -idc -x'*.log' m1.rar src
 find src | sort
 mk
@@ -74,7 +74,7 @@ mk
 z rar u -m0 -idc -as s.rar src
 z rar lb s.rar
 rm src/a.txt
-# The folder's time as it was, whatever rm did to it: not newer, not updated.
+# The directory's time as it was, whatever rm did to it: not newer, not updated.
 touch -d '2024-01-01T00:00:00Z' src
 z rar u -m0 -idc -as s.rar src
 z rar lb s.rar

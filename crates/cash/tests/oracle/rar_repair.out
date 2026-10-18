@@ -57,7 +57,7 @@ Testing the recovery record         OK
 All OK
 rc=0
 fixed.bad1.rar is the archive before its damage
-== damaged in two places, into a folder
+== damaged in two places, into a directory
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
 Trial version             Type 'rar -?' for help

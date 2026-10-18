@@ -3,7 +3,7 @@
 //! Each write a builtin made went to its file at once: into a pipe or a file, every piece
 //! of a `write!` was a system call of its own; to a console, `std::io::Stdout` wrote a
 //! line at a time, and each line costs Windows Terminal's pseudo console about half a
-//! millisecond. `ls -la` in a folder of 200 files took twice as long to appear as it
+//! millisecond. `ls -la` in a directory of 200 files took twice as long to appear as it
 //! took to make.
 //!
 //! The output of a builtin now collects in a buffer its execution parameters hold for the

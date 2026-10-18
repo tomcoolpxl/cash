@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 
 use crate::common::{Scratch, cash_command};
 
-/// A folder of files named like the ones `where.exe` was measured on, by its canonical
+/// A directory of files named like the ones `where.exe` was measured on, by its canonical
 /// path: `%TEMP%` may be spelled with 8.3 names (`RUNNER~1` on CI), and a test runs `where`
-/// in the folder and expects it printed in one spelling.
+/// in the directory and expects it printed in one spelling.
 struct Fixture {
     real: PathBuf,
     _scratch: Scratch,
@@ -51,7 +51,7 @@ fn fixture(name: &str) -> Fixture {
     }
 }
 
-/// The folder as `where` prints it.
+/// The directory as `where` prints it.
 fn shown(dir: &Path) -> String {
     let text = dir.display().to_string().replace('\\', "/");
     text.strip_prefix("//?/").unwrap_or(&text).to_owned()
@@ -83,20 +83,20 @@ fn a_bare_name_matches_itself_and_its_pathext_names_in_windows_order() {
     assert_eq!(status, 0);
     assert_eq!(stdout, format!("{d}/foo\n{d}/foo.bat\n{d}/foo.exe\n"));
 
-    // The current folder, then PATH; a PATH folder listed twice is searched once.
+    // The current directory, then PATH; a PATH directory listed twice is searched once.
     let sub = format!("{d}/sub");
     let (_, stdout, _) = run(&dir, &format!("{sub};{sub}"), "where foo.exe");
     assert_eq!(stdout, format!("{d}/foo.exe\n{d}/sub/foo.exe\n"));
 }
 
 #[test]
-fn wildcards_extensions_and_folders_match_as_in_where_exe() {
+fn wildcards_extensions_and_directories_match_as_in_where_exe() {
     let dir = fixture("wild");
     let d = shown(&dir);
     let (_, stdout, _) = run(&dir, "", "where '?foo.exe'");
     assert_eq!(stdout, format!("{d}/afoo.exe\n{d}/zfoo.exe\n"));
 
-    // `NAME.*` matches `NAME` too, and a folder never matches.
+    // `NAME.*` matches `NAME` too, and a directory never matches.
     let (_, stdout, _) = run(&dir, "", "where 'foo.*'");
     assert_eq!(
         stdout,
@@ -115,7 +115,7 @@ fn wildcards_extensions_and_folders_match_as_in_where_exe() {
 }
 
 #[test]
-fn recursive_lists_a_folders_files_before_the_folders_below_it() {
+fn recursive_lists_a_directories_files_before_the_directories_below_it() {
     let dir = fixture("recursive");
     let d = shown(&dir);
     let (status, stdout, _) = run(&dir, "", "where -r . foo");
@@ -133,8 +133,8 @@ fn recursive_lists_a_folders_files_before_the_folders_below_it() {
 }
 
 #[test]
-fn recursive_goes_through_junctions_as_folders_and_once_round_a_loop() {
-    // where.exe goes through a junction met below the folder, sorted with the folders, and
+fn recursive_goes_through_junctions_as_directories_and_once_round_a_loop() {
+    // where.exe goes through a junction met below the directory, sorted with the directories, and
     // round a junction back up until the path is too long; cash lists each file once.
     let dir = fixture("junctions");
     let d = shown(&dir);
@@ -152,7 +152,7 @@ fn recursive_goes_through_junctions_as_folders_and_once_round_a_loop() {
 }
 
 #[test]
-fn folder_and_variable_forms_search_only_there() {
+fn directory_and_variable_forms_search_only_there() {
     let dir = fixture("forms");
     let d = shown(&dir);
     let (_, stdout, _) = run(&dir, "", "where sub:foo.exe");

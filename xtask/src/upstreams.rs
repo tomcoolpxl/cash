@@ -38,7 +38,7 @@ struct List {
 #[derive(Deserialize)]
 struct Upstream {
     #[serde(rename = "crate")]
-    folder: String,
+    directory: String,
     name: Option<String>,
     version: Option<String>,
     repository: Option<String>,
@@ -90,7 +90,11 @@ pub fn run(args: &UpstreamsArgs, verbose: bool) -> Result<()> {
         let (now, moved) = upstream_now(upstream, verbose)?;
         wanted += usize::from(moved);
         let mark = if moved { "**moved on**: " } else { "" };
-        let _ = writeln!(report, "| `{}` | {taken} | {mark}{now} |", upstream.folder);
+        let _ = writeln!(
+            report,
+            "| `{}` | {taken} | {mark}{now} |",
+            upstream.directory
+        );
 
         if let (Some(name), Some(version)) = (&upstream.name, &upstream.version) {
             for advisory in advisories(name, verbose)? {
@@ -106,7 +110,7 @@ pub fn run(args: &UpstreamsArgs, verbose: bool) -> Result<()> {
                 let _ = writeln!(
                     notes,
                     "- `{}` ({name} {version}): [{}](https://rustsec.org/advisories/{}.html), {kind}: {}",
-                    upstream.folder,
+                    upstream.directory,
                     advisory.advisory.id,
                     advisory.advisory.id,
                     advisory.advisory.title
@@ -172,12 +176,12 @@ fn upstream_now(upstream: &Upstream, verbose: bool) -> Result<(String, bool)> {
     let (Some(name), Some(version)) = (&upstream.name, &upstream.version) else {
         bail!(
             "{}: a name and version, or a repository and revision",
-            upstream.folder
+            upstream.directory
         );
     };
     let seen = upstream.reviewed.as_deref().unwrap_or(version);
     let seen = semver::Version::parse(seen)
-        .with_context(|| format!("{}: version {seen}", upstream.folder))?;
+        .with_context(|| format!("{}: version {seen}", upstream.directory))?;
     match newest_release(name, verbose)? {
         Some(newest) => Ok((newest.to_string(), newest > seen)),
         None => Ok(("no release on crates.io".to_owned(), false)),
@@ -244,7 +248,7 @@ fn commits_since(repo: &str, revision: &str, path: Option<&str>, verbose: bool) 
         .count())
 }
 
-/// The advisories in the `RustSec` database for `name`; none when it has no folder for it.
+/// The advisories in the `RustSec` database for `name`; none when it has no directory for it.
 fn advisories(name: &str, verbose: bool) -> Result<Vec<Advisory>> {
     let listing = Command::new("gh")
         .args([
@@ -361,14 +365,14 @@ mod tests {
         for upstream in &list.upstream {
             let named = upstream.name.is_some() && upstream.version.is_some();
             let from_git = upstream.repository.is_some() && upstream.revision.is_some();
-            assert!(named || from_git, "{}", upstream.folder);
+            assert!(named || from_git, "{}", upstream.directory);
             assert!(
                 std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("..")
-                    .join(&upstream.folder)
+                    .join(&upstream.directory)
                     .exists(),
-                "{} is not a folder of the repository",
-                upstream.folder
+                "{} is not a directory of the repository",
+                upstream.directory
             );
         }
     }

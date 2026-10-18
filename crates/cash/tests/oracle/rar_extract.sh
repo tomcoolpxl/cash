@@ -34,7 +34,7 @@ z() {
   fi
   echo "rc=$r"
 }
-# What a folder holds: each file and its CRC, each folder.
+# What a directory holds: each file and its CRC, each directory.
 tree() {
   (cd "$1" 2>/dev/null && find . -mindepth 1 | sort | while read -r f; do
     if [ -d "$f" ]; then echo "$f/"; else echo "$f $(cksum < "$f")"; fi
@@ -136,7 +136,7 @@ z rar t bad4.rar
 mkdir lonely && cp rar50/multivol.part1.rar lonely/
 z rar t lonely/multivol.part1.rar
 
-echo "== x into a new folder, then again over what is there"
+echo "== x into a new directory, then again over what is there"
 z rar x rar50/multifile.rar out1/
 tree out1
 z rar x rar50/multifile.rar out1/

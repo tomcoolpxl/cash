@@ -235,7 +235,7 @@ impl builtins::Command for LoggerCommand {
                     .lines()
                     .map(str::to_owned)
                     .collect(),
-                // util-linux opens a folder and reads nothing from it: nothing is logged.
+                // util-linux opens a directory and reads nothing from it: nothing is logged.
                 Err(InputError::IsADirectory(_)) => Vec::new(),
                 Err(error) => {
                     writeln!(context.stderr(), "{name}: file {file}: {}", error.reason())?;

@@ -325,7 +325,7 @@ const MISSING_PARTS: &str = "zipfile claims to be last disk of a multi-part arch
   doesn't exist yet (coming soon).
 ";
 
-/// The archives a name with wildcards names, in the order its folder lists them:
+/// The archives a name with wildcards names, in the order its directory lists them:
 /// `UnZip`'s own expansion, for a name the shell did not expand.
 fn expand_archives<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
@@ -338,10 +338,10 @@ fn expand_archives<SE: cash_core::ShellExtensions>(
         ),
         None => ("", pattern),
     };
-    let folder = context
+    let directory = context
         .shell
         .absolute_path(if dir.is_empty() { "." } else { dir });
-    let Ok(entries) = std::fs::read_dir(folder) else {
+    let Ok(entries) = std::fs::read_dir(directory) else {
         return Vec::new();
     };
     entries
@@ -453,7 +453,7 @@ fn open_archive(path: &Path) -> io::Result<Opened> {
 }
 
 /// Whether a path is one of the shell's substitution files, `<(...)` or `>(...)`, which
-/// it hands a builtin as a temporary file in a folder of its own: a name zip adds no
+/// it hands a builtin as a temporary file in a directory of its own: a name zip adds no
 /// `.zip` to.
 fn is_substitution_file(path: &Path) -> bool {
     path.parent()

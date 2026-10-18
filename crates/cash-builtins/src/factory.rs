@@ -244,18 +244,18 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         // cash (D60): fish's abbreviations, expanded by the interactive line editor.
         m.insert("abbr".into(), builtin::<abbr::AbbrCommand, SE>());
 
-        // cash (D62): fish's folder history, also on Alt-← and Alt-→ at the prompt.
+        // cash (D62): fish's directory history, also on Alt-← and Alt-→ at the prompt.
         m.insert("prevd".into(), builtin::<dirhistory::PrevdCommand, SE>());
         m.insert("nextd".into(), builtin::<dirhistory::NextdCommand, SE>());
         m.insert("cdh".into(), builtin::<dirhistory::CdhCommand, SE>());
 
-        // cash (D73): the file and folder picker, also on Alt-E at the prompt.
+        // cash (D73): the file and directory picker, also on Alt-E at the prompt.
         m.insert(
             "croot".into(),
             builtin::<croot::CrootCommand, SE>().streams_output(),
         );
 
-        // cash (D80): zoxide's folder jump, on the folders an interactive cash records.
+        // cash (D80): zoxide's directory jump, on the directories an interactive cash records.
         m.insert("z".into(), builtin::<z::ZCommand, SE>());
     }
 

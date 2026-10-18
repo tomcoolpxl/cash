@@ -185,7 +185,7 @@ fn grep_reads_the_shells_device_names() {
 
 #[test]
 fn grep_r_follows_a_link_round_a_loop_once_and_says_so() {
-    // grep -R went round a junction back to a folder above it until Windows refused the
+    // grep -R went round a junction back to a directory above it until Windows refused the
     // path; it walks on the shared walker now, which finds the loop by file identity and
     // says it in GNU grep's words, the status untouched. -r does not go through links.
     let scratch = Scratch::new("grep-loop");

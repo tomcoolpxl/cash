@@ -291,7 +291,7 @@ impl<T: Read + Seek> ReadSeek for T {}
 
 /// A member's data.
 pub enum Input<'a> {
-    /// None: a folder.
+    /// None: a directory.
     None,
     /// A file, which can be read again.
     File(&'a mut dyn ReadSeek),
@@ -498,8 +498,8 @@ impl<O: Output> Writer<O> {
         mut ahead: Option<Ahead>,
     ) -> io::Result<Added> {
         let start = self.at;
-        let folder = matches!(input, Input::None);
-        let mut method = if folder {
+        let directory = matches!(input, Input::None);
+        let mut method = if directory {
             method::STORED
         } else {
             member.method
@@ -507,7 +507,7 @@ impl<O: Output> Writer<O> {
         let mut text = TextCheck::default();
         let large = member.size_hint.is_some_and(|s| s >= 0xffff_ffff);
         loop {
-            let encrypted = member.password.is_some() && !folder;
+            let encrypted = member.password.is_some() && !directory;
             let descriptor = encrypted || !self.out.seekable();
             let mut flags = 0;
             if !member.name.is_ascii() {
@@ -574,7 +574,7 @@ impl<O: Output> Writer<O> {
                     count: 0,
                 };
                 let mut sink: Box<dyn Write + '_> = if let Some(password) = &member.password
-                    && !folder
+                    && !directory
                 {
                     let mut keys = Keys::new(password);
                     let check_byte = member.time.time.to_be_bytes();
@@ -595,7 +595,7 @@ impl<O: Output> Writer<O> {
                 // Data compressed ahead stands for the first pass, never encrypted.
                 let ready = ahead
                     .take()
-                    .filter(|_| method != method::STORED && !encrypted && !folder);
+                    .filter(|_| method != method::STORED && !encrypted && !directory);
                 let (crc, size) = match (ready, &mut input) {
                     (Some(ready), _) => {
                         sink.write_all(&ready.compressed)?;
@@ -1063,7 +1063,7 @@ mod tests {
 
     #[test]
     fn a_split_archive_reads_back_from_its_parts() {
-        let dir = tempfile::tempdir().unwrap_or_else(|_| unreachable!("a temporary folder"));
+        let dir = tempfile::tempdir().unwrap_or_else(|_| unreachable!("a temporary directory"));
         let target = dir.path().join("sp.zip");
         let mut writer = Writer::new(
             SplitOutput::create(&target, 300).unwrap_or_else(|_| unreachable!("a part")),

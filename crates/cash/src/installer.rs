@@ -2,12 +2,12 @@
 //! per-user installer that are cash's own, and the upgrade from the releases page.
 //!
 //! The setup on the releases page copies a release into
-//! `%LOCALAPPDATA%\Programs\cash\<version>\` and runs that folder's `cash.exe
+//! `%LOCALAPPDATA%\Programs\cash\<version>\` and runs that directory's `cash.exe
 //! --install-finish ROOT`, which does for this channel what Scoop's manifest does for
-//! Scoop's, from one implementation: points the `current` junction at the version folder,
+//! Scoop's, from one implementation: points the `current` junction at the version directory,
 //! puts `current` on the user PATH, writes the Windows Terminal profile, makes or
 //! refreshes the tool links, writes a starter `~/.bashrc` once, and sweeps the version
-//! folders no process runs. A running `cash.exe` is never touched: a window that is open
+//! directories no process runs. A running `cash.exe` is never touched: a window that is open
 //! keeps its version, new tabs get the new one. The uninstaller runs `--install-remove`
 //! before it deletes the files; the user's `~/.bashrc`, history and config stay. `cash
 //! --update` fetches the latest release, checks its `.sha256`, unpacks it beside the
@@ -17,7 +17,7 @@
 //! The web is reached through Windows' own `curl.exe`, and the zip opened with its
 //! `tar.exe`, both in System32 since Windows 10 1803. For the tests: `CASH_UPDATE_API`
 //! names the release to ask about in place of GitHub's API, and `CASH_UPDATE_DOWNLOAD`
-//! the folder its files come from; `curl` reads a `file://` address for either.
+//! the directory its files come from; `curl` reads a `file://` address for either.
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -27,7 +27,7 @@ use cash_win32::install_layout::{Layout, installed_by_scoop, layout};
 use cash_win32::userpath::Added;
 
 const FINISH_USAGE: &str = "usage: cash --install-finish ROOT [--links] [--scoop] [--quiet]\n\
-                            ROOT is the install folder holding the version folders.";
+                            ROOT is the install directory holding the version directories.";
 
 const REMOVE_USAGE: &str = "usage: cash --install-remove ROOT [--quiet]";
 
@@ -42,7 +42,7 @@ const RELEASES_PAGE: &str = "https://github.com/tomcoolpxl/cash/releases";
 /// The target in the release zip's name.
 const TARGET: &str = "x86_64-pc-windows-msvc";
 
-/// Where a swept version folder is renamed to first, so that a delete that stops halfway
+/// Where a swept version directory is renamed to first, so that a delete that stops halfway
 /// leaves nothing that looks like a version; the next run finishes it.
 const SWEPT: &str = ".cash-old";
 
@@ -81,14 +81,14 @@ fn shown(path: &Path) -> String {
     cash_win32::path::to_backslash(path)
 }
 
-/// A folder's own name.
+/// A directory's own name.
 fn name_of(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default()
 }
 
-/// This `cash.exe`, as a real path: the version folder's, not `current\cash.exe`.
+/// This `cash.exe`, as a real path: the version directory's, not `current\cash.exe`.
 fn own_exe() -> Result<PathBuf, String> {
     std::env::current_exe()
         .and_then(std::fs::canonicalize)
@@ -158,12 +158,12 @@ fn finish(exe: &Path, options: &FinishOptions) -> Result<(), String> {
     let say = Say {
         quiet: options.quiet,
     };
-    let version_dir = exe.parent().ok_or("cash.exe has no folder")?;
+    let version_dir = exe.parent().ok_or("cash.exe has no directory")?;
     let root = std::fs::canonicalize(&options.root)
         .map_err(|e| format!("{}: {e}", shown(&options.root)))?;
     if version_dir.parent() != Some(root.as_path()) {
         return Err(format!(
-            "{} is not in a version folder under {}",
+            "{} is not in a version directory under {}",
             shown(exe),
             shown(&root)
         ));
@@ -209,10 +209,10 @@ fn finish(exe: &Path, options: &FinishOptions) -> Result<(), String> {
         say.line(&format!("wrote {}, a starter ~/.bashrc", shown(&path)));
     }
 
-    for folder in old_versions(&root, version_dir) {
-        match sweep(&folder) {
-            Ok(()) => say.line(&format!("removed {}", name_of(&folder))),
-            Err(why) => say.line(&format!("kept {}: {why}", name_of(&folder))),
+    for directory in old_versions(&root, version_dir) {
+        match sweep(&directory) {
+            Ok(()) => say.line(&format!("removed {}", name_of(&directory))),
+            Err(why) => say.line(&format!("kept {}: {why}", name_of(&directory))),
         }
     }
 
@@ -222,13 +222,13 @@ fn finish(exe: &Path, options: &FinishOptions) -> Result<(), String> {
     Ok(())
 }
 
-/// The version folders under `root` that are not `keep`, this run's: those with a
+/// The version directories under `root` that are not `keep`, this run's: those with a
 /// `cash.exe`, and those an earlier sweep renamed aside but could not delete. Never
 /// `bin`, never a junction.
 fn old_versions(root: &Path, keep: &Path) -> Vec<PathBuf> {
     let keep = std::fs::canonicalize(keep).unwrap_or_else(|_| keep.to_path_buf());
     let current = root.join("current");
-    let mut folders: Vec<PathBuf> = std::fs::read_dir(root)
+    let mut directories: Vec<PathBuf> = std::fs::read_dir(root)
         .into_iter()
         .flatten()
         .flatten()
@@ -246,40 +246,40 @@ fn old_versions(root: &Path, keep: &Path) -> Vec<PathBuf> {
                 && (path.join("cash.exe").is_file() || name.ends_with(SWEPT))
         })
         .collect();
-    folders.sort();
-    folders
+    directories.sort();
+    directories
 }
 
-/// Delete a version folder, renaming it aside first: Windows will not rename a folder
+/// Delete a version directory, renaming it aside first: Windows will not rename a directory
 /// holding a running program, so one that is in use stays, with the reason.
-fn sweep(folder: &Path) -> Result<(), String> {
-    let exe = folder.join("cash.exe");
+fn sweep(directory: &Path) -> Result<(), String> {
+    let exe = directory.join("cash.exe");
     if exe.exists() {
         in_use(&exe)?;
     }
-    let aside = if name_of(folder).ends_with(SWEPT) {
-        folder.to_path_buf()
+    let aside = if name_of(directory).ends_with(SWEPT) {
+        directory.to_path_buf()
     } else {
         let free = (1..1000)
             .map(|n| {
-                let name = name_of(folder);
+                let name = name_of(directory);
                 let suffix = if n == 1 {
                     String::new()
                 } else {
                     format!("-{n}")
                 };
-                folder.with_file_name(format!("{name}{SWEPT}{suffix}"))
+                directory.with_file_name(format!("{name}{SWEPT}{suffix}"))
             })
             .find(|aside| !aside.exists())
             .ok_or("no free name to rename it to")?;
-        std::fs::rename(folder, &free).map_err(|e| format!("could not be renamed: {e}"))?;
+        std::fs::rename(directory, &free).map_err(|e| format!("could not be renamed: {e}"))?;
         free
     };
     std::fs::remove_dir_all(&aside).map_err(|e| format!("could not be deleted: {e}"))
 }
 
 /// Whether a program is running: Windows maps a running exe so that nothing may open it
-/// for writing, and a folder holding one can be renamed but not emptied. Opening it for
+/// for writing, and a directory holding one can be renamed but not emptied. Opening it for
 /// writing changes nothing; `Err` says why it could not be.
 fn in_use(exe: &Path) -> Result<(), String> {
     match std::fs::OpenOptions::new().write(true).open(exe) {
@@ -291,7 +291,7 @@ fn in_use(exe: &Path) -> Result<(), String> {
     }
 }
 
-/// Where Scoop is, if it is installed: its shims folder under `%SCOOP%` or
+/// Where Scoop is, if it is installed: its shims directory under `%SCOOP%` or
 /// `%USERPROFILE%\scoop`, or a `scoop` command on PATH.
 fn scoop_installed() -> Option<PathBuf> {
     let roots = [
@@ -368,7 +368,7 @@ fn remove_command(args: &[String]) -> u8 {
     remove_install(Path::new(root), quiet)
 }
 
-/// Undo what `--install-finish` set up outside the install folder, and the junction in
+/// Undo what `--install-finish` set up outside the install directory, and the junction in
 /// it. What is already gone is no failure; what cannot be undone is named, and the
 /// status is 1.
 fn remove_install(root: &Path, quiet: bool) -> u8 {
@@ -404,7 +404,7 @@ fn remove_install(root: &Path, quiet: bool) -> u8 {
         Err(message) => failures.push(message),
     }
     if cash_win32::junction::is_junction(&current) {
-        // The junction alone: its target is a version folder the uninstaller deletes.
+        // The junction alone: its target is a version directory the uninstaller deletes.
         match std::fs::remove_dir(&current) {
             Ok(()) => say.line(&format!("{} removed", shown(&current))),
             Err(e) => failures.push(format!("{}: {e}", shown(&current))),
@@ -638,7 +638,7 @@ fn verify(zip: &Path, sum: &Path) -> Result<(), String> {
     }
 }
 
-/// Unpack `zip` into `target`, a new folder, with Windows' tar.
+/// Unpack `zip` into `target`, a new directory, with Windows' tar.
 fn unpack(tar: &Path, zip: &Path, target: &Path) -> Result<(), String> {
     std::fs::create_dir_all(target).map_err(|e| format!("{}: {e}", shown(target)))?;
     let output = Command::new(tar)
@@ -684,7 +684,7 @@ mod tests {
     }
 
     #[test]
-    fn the_sweep_takes_other_version_folders_with_a_cash_exe_and_nothing_else() {
+    fn the_sweep_takes_other_version_directories_with_a_cash_exe_and_nothing_else() {
         let root = tempfile::tempdir().unwrap();
         let make = |name: &str, with_exe: bool| {
             let dir = root.path().join(name);
@@ -700,7 +700,7 @@ mod tests {
         make("bin", true);
         make("notes", false);
         std::fs::write(root.path().join("unins000.exe"), "MZ").unwrap();
-        // The junction's target is never swept, even when it is not this run's folder.
+        // The junction's target is never swept, even when it is not this run's directory.
         let pointed = make("1.4.0", true);
         cash_win32::junction::point(&root.path().join("current"), &pointed).unwrap();
 
@@ -710,8 +710,8 @@ mod tests {
             .collect();
         assert_eq!(names, ["1.4.2.cash-old", "1.4.3"]);
 
-        for folder in old_versions(root.path(), &keep) {
-            sweep(&folder).unwrap();
+        for directory in old_versions(root.path(), &keep) {
+            sweep(&directory).unwrap();
         }
         assert!(!root.path().join("1.4.3").exists());
         assert!(!root.path().join("1.4.2.cash-old").exists());

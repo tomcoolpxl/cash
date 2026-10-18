@@ -82,11 +82,11 @@ fn xdg_open_takes_one_target_and_exits_as_the_real_one_does() {
     );
 
     // A drive letter is a path, not a scheme.
-    let out = run_in(dir, "xdg-open C:/no/such/folder/x.txt; echo rc=$?");
+    let out = run_in(dir, "xdg-open C:/no/such/directory/x.txt; echo rc=$?");
     assert_eq!(out.stdout, "rc=2");
     assert_eq!(
         out.stderr,
-        "xdg-open: file 'C:/no/such/folder/x.txt' does not exist"
+        "xdg-open: file 'C:/no/such/directory/x.txt' does not exist"
     );
 
     // Status 4, Windows refusing, is not provoked here: an unknown scheme makes Windows

@@ -2,7 +2,7 @@
 ///
 /// It held 48 flags, one per OSC number some terminal understands, of which the
 /// integration read one, 633, VS Code's; Windows Terminal, told 633 alone, never got the
-/// OSC 133 marks and OSC 9;9 working folder D39 promises it (XC-18).
+/// OSC 133 marks and OSC 9;9 working directory D39 promises it (XC-18).
 #[derive(Clone, Debug, Default)]
 pub struct TerminalInfo {
     /// If applicable, a session nonce assigned by the terminal.
@@ -11,7 +11,7 @@ pub struct TerminalInfo {
     /// How the prompt, the command line and the command's output are marked, if at all.
     pub marks: Option<Marks>,
 
-    /// How the working folder is reported, if at all.
+    /// How the working directory is reported, if at all.
     pub cwd_report: Option<CwdReport>,
 }
 
@@ -25,7 +25,7 @@ pub enum Marks {
     Osc633,
 }
 
-/// The sequence that reports the working folder.
+/// The sequence that reports the working directory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CwdReport {
     /// OSC 7 with a `file://` URL: iTerm2, `WezTerm`, Ghostty.

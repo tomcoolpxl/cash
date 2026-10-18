@@ -9,9 +9,9 @@
 /// What the picker lists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shows {
-    /// Folders only.
-    Folders,
-    /// Folders and files.
+    /// Directories only.
+    Directories,
+    /// Directories and files.
     Everything,
 }
 
@@ -76,7 +76,7 @@ impl Line {
     #[must_use]
     pub fn shows(&self) -> Shows {
         match self.command.as_deref().map(command_name) {
-            None | Some("cd" | "pushd" | "rmdir" | "mkdir") => Shows::Folders,
+            None | Some("cd" | "pushd" | "rmdir" | "mkdir") => Shows::Directories,
             Some(_) => Shows::Everything,
         }
     }
@@ -92,7 +92,7 @@ impl Line {
     }
 }
 
-/// A command's name without its folder or `.exe`, folded to lower case, as Windows finds
+/// A command's name without its directory or `.exe`, folded to lower case, as Windows finds
 /// `CD`, `C:/Windows/System32/cd.exe` or `cd` alike.
 fn command_name(command: &str) -> &'static str {
     let base = command.rsplit(['/', '\\']).next().unwrap_or(command);
@@ -282,10 +282,10 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_line_shows_folders_and_runs() {
+    fn an_empty_line_shows_directories_and_runs() {
         let line = at("^");
         assert_eq!(line.command, None);
-        assert_eq!((line.shows(), line.then()), (Shows::Folders, Then::Run));
+        assert_eq!((line.shows(), line.then()), (Shows::Directories, Then::Run));
         assert_eq!(line.word, 0..0);
     }
 
@@ -294,7 +294,7 @@ mod tests {
         let line = at("cd ~/src/fo^");
         assert_eq!(line.command.as_deref(), Some("cd"));
         assert_eq!((line.word.clone(), line.text.as_str()), (3..11, "~/src/fo"));
-        assert_eq!((line.shows(), line.then()), (Shows::Folders, Then::Run));
+        assert_eq!((line.shows(), line.then()), (Shows::Directories, Then::Run));
     }
 
     #[test]
@@ -315,7 +315,7 @@ mod tests {
             (Shows::Everything, Then::StayOpen)
         );
         assert_eq!(at("source ^").then(), Then::Close);
-        assert_eq!(at("rmdir ^").shows(), Shows::Folders);
+        assert_eq!(at("rmdir ^").shows(), Shows::Directories);
     }
 
     #[test]
@@ -330,7 +330,7 @@ mod tests {
         assert_eq!(at("sudo -u admin cp ^").command.as_deref(), Some("cp"));
         assert_eq!(at("FOO=1 BAR=2 cd ^").command.as_deref(), Some("cd"));
         assert_eq!(at("command cd ^").command.as_deref(), Some("cd"));
-        assert_eq!(at("CD ^").shows(), Shows::Folders);
+        assert_eq!(at("CD ^").shows(), Shows::Directories);
     }
 
     #[test]

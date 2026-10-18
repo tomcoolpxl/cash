@@ -379,7 +379,7 @@ fn startup_file_keeps_the_shells_zero_and_accepts_windows_paths() {
 }
 
 /// In `~/.bashrc` too, `$0` is the shell's name, and `BASH_SOURCE` names the file as cash
-/// spells paths (D3), not with the backslash joining it onto the home folder left.
+/// spells paths (D3), not with the backslash joining it onto the home directory left.
 /// `coolfetch`, the banner a `~/.bashrc` runs, called the shell `.bashrc`.
 #[test]
 fn bashrc_sees_the_shells_zero_and_its_own_name_with_forward_slashes() {
@@ -620,11 +620,11 @@ fn disabling_globskipdots_exposes_dot_and_dotdot() {
 fn globignore_and_a_last_globstar_match_as_in_bash() {
     // As Bash 5.3: GLOBIGNORE takes out what its patterns match, a part of a pattern for
     // each part of a path but a last `*` taking any parts after, never `.` or `..`, and lets
-    // a glob find dot files; a last `**` matches its folder too, `sub/` as written, `sub`
-    // as a pattern found it, and `**/` leaves the working folder out.
+    // a glob find dot files; a last `**` matches its directory too, `sub/` as written, `sub`
+    // as a pattern found it, and `**/` leaves the working directory out.
     let root = Scratch::new("globignore");
-    for folder in ["s", "sub/deep"] {
-        std::fs::create_dir_all(root.join(folder)).unwrap();
+    for directory in ["s", "sub/deep"] {
+        std::fs::create_dir_all(root.join(directory)).unwrap();
     }
     for file in [
         ".hid",

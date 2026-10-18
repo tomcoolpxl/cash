@@ -1,7 +1,7 @@
 //! The user's own `Path`, in `HKEY_CURRENT_USER\Environment`.
 //!
 //! Windows appends it to the machine's for every program the user starts, and `cash
-//! --link-tools --add-to-path` puts its links folder at the front of it (ROADMAP item 18).
+//! --link-tools --add-to-path` puts its links directory at the front of it (ROADMAP item 18).
 //! Written the way PowerShell's `[Environment]::SetEnvironmentVariable` does not: .NET
 //! reads the value expanded and writes it back as a plain `REG_SZ`, baking every
 //! `%USERPROFILE%` into a fixed path (dotnet/runtime#1442). Here the value keeps its type,
@@ -38,9 +38,9 @@ const MACHINE_ENVIRONMENT: &str = r"SYSTEM\CurrentControlSet\Control\Session Man
 /// Whether [`add_first`] changed the user `Path`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Added {
-    /// The folder is now the first entry.
+    /// The directory is now the first entry.
     Added,
-    /// An entry already named the folder, and was left where it is.
+    /// An entry already named the directory, and was left where it is.
     AlreadyThere,
 }
 
@@ -95,7 +95,7 @@ pub fn lists(value: &str, dir: &Path) -> bool {
     value.split(';').any(|each| same_entry(each, &entry))
 }
 
-/// `value` with `entry` first, or `None` when an entry already names the same folder.
+/// `value` with `entry` first, or `None` when an entry already names the same directory.
 fn with_entry_first(value: &str, entry: &str) -> Option<String> {
     if value.split(';').any(|each| same_entry(each, entry)) {
         return None;
@@ -107,7 +107,7 @@ fn with_entry_first(value: &str, entry: &str) -> Option<String> {
     })
 }
 
-/// `value` without the entries naming `entry`'s folder, or `None` when there are none.
+/// `value` without the entries naming `entry`'s directory, or `None` when there are none.
 /// Everything else, empty entries included, is kept as it was.
 fn without_entry(value: &str, entry: &str) -> Option<String> {
     let kept: Vec<&str> = value
@@ -117,14 +117,14 @@ fn without_entry(value: &str, entry: &str) -> Option<String> {
     (kept.len() != value.split(';').count()).then(|| kept.join(";"))
 }
 
-/// Whether two `Path` entries name one folder: `%VAR%` expanded, quotes, case, slash
+/// Whether two `Path` entries name one directory: `%VAR%` expanded, quotes, case, slash
 /// direction and a trailing separator aside.
 fn same_entry(one: &str, other: &str) -> bool {
-    let one = folder(one);
-    !one.is_empty() && one == folder(other)
+    let one = directory(one);
+    !one.is_empty() && one == directory(other)
 }
 
-fn folder(entry: &str) -> String {
+fn directory(entry: &str) -> String {
     expand(entry.trim().trim_matches('"'))
         .replace('/', "\\")
         .trim_end_matches('\\')
@@ -304,14 +304,14 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_already_named_anywhere_is_left_where_it_is() {
+    fn a_directory_already_named_anywhere_is_left_where_it_is() {
         let value = r"C:\x;c:/LINKS/;C:\y";
         assert_eq!(with_entry_first(value, r"C:\links"), None);
         assert_eq!(with_entry_first(r#""C:\links""#, r"C:\links"), None);
     }
 
     #[test]
-    fn an_entry_spelled_with_a_variable_names_the_same_folder() {
+    fn an_entry_spelled_with_a_variable_names_the_same_directory() {
         let Ok(profile) = std::env::var("USERPROFILE") else {
             return;
         };
@@ -334,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn a_value_lists_a_folder_whatever_its_case_slashes_or_trailing_separator() {
+    fn a_value_lists_a_directory_whatever_its_case_slashes_or_trailing_separator() {
         let dir = Path::new(r"C:\Tools\cash");
         assert!(lists(r"C:\x;c:\tools\CASH;C:\y", dir));
         assert!(lists(r"C:\x;C:\Tools\cash\", dir));

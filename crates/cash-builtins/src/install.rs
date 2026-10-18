@@ -1,7 +1,7 @@
 //! `install` builtin — copy files and set attributes for Makefiles and build systems.
 //!
 //! Every operand is a path the shell resolves, against its own working directory (D10):
-//! the process's is the folder cash was started in, so after `cd sub`, `install a b`
+//! the process's is the directory cash was started in, so after `cd sub`, `install a b`
 //! looked for `a` in the wrong place (`REVIEW_REPORT.md` BI-07). Messages name the
 //! operands as they were written.
 
@@ -170,7 +170,7 @@ impl builtins::Command for InstallCommand {
 }
 
 impl InstallCommand {
-    /// Copies each of `sources` into the folder `target`, under its own name.
+    /// Copies each of `sources` into the directory `target`, under its own name.
     fn copy_into<SE: cash_core::ShellExtensions>(
         &self,
         sources: &[Operand<'_>],

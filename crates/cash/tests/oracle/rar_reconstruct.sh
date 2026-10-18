@@ -34,9 +34,9 @@ damage() {
   tail -c +$(($2 + $3 + 1)) "$1" >> "$1.new"
   mv "$1.new" "$1"
 }
-# A fresh copy of a set in folder s.
+# A fresh copy of a set in directory s.
 set5() { rm -rf s && mkdir s && cp "$fx"/rar50/multivol_rev.* s/; }
-# Each file of folder s and its CRC.
+# Each file of directory s and its CRC.
 sums() { (cd s && for f in *; do echo "$f $(cksum < "$f")"; done); }
 
 echo "== RAR 5: one volume missing"

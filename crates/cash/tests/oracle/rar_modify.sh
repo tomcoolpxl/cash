@@ -187,7 +187,7 @@ z rar t -idc vs/v.part1.rar
 z rar d -idc vs/v.part1.rar vs.bin
 
 echo "== -ams saves the archive's name and time, -tl stamps it, ch -amr restores them"
-# With -tl both times are the newest file's, folders left out, so each run is the same:
+# With -tl both times are the newest file's, directories left out, so each run is the same:
 # the archive's own time is shown in the zone, what it saves by lt. A recovery record
 # of an archive this small differs from one run of rar to the next: rr is shown by size.
 mkdir am

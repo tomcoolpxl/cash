@@ -1,4 +1,4 @@
-//! Alt-E: croot, the file and folder picker, opened below the line it was pressed on
+//! Alt-E: croot, the file and directory picker, opened below the line it was pressed on
 //! (spec D73). The line says what to list and what a pick does; the pick goes back on
 //! it, and for `cd`, `pushd` or an empty line the line runs at once.
 
@@ -76,7 +76,7 @@ fn open(
             home: var("HOME")
                 .filter(|home| !home.is_empty())
                 .map(|home| cash_win32::path::accept_path(&home)),
-            history: shell.folders_to_offer(),
+            history: shell.directories_to_offer(),
             ls_colors: var("LS_COLORS"),
             picker_colors: var("CASH_PICKER_COLORS"),
             height: var("CASH_PICKER_HEIGHT"),
@@ -104,8 +104,8 @@ fn open(
     });
 
     let mut picks: Vec<String> = Vec::new();
-    let written = |path: &Path, folder: bool| {
-        pick::written(path, folder, &from_shell.cwd, from_shell.home.as_deref())
+    let written = |path: &Path, directory: bool| {
+        pick::written(path, directory, &from_shell.cwd, from_shell.home.as_deref())
     };
     // While the picker stays open, each pick shows on the line: drawn from the start of
     // the word it replaces, which is this many columns before the cursor.
@@ -122,8 +122,8 @@ fn open(
         from_shell.height.as_deref(),
         pending,
         Some(echo_from),
-        |path, folder, _close| {
-            picks.push(written(path, folder));
+        |path, directory, _close| {
+            picks.push(written(path, directory));
             Some(format!("{} {rest}", picks.join(" ")))
         },
     );

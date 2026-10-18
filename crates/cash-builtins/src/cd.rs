@@ -68,8 +68,8 @@ impl builtins::Command for CdCommand {
         };
 
         // CDPATH, as Bash searches it: a relative name not starting with `.` or `..` is
-        // looked for in each entry first, an empty entry being the current folder; the
-        // folder found through a non-empty entry is printed. It was not searched at all.
+        // looked for in each entry first, an empty entry being the current directory; the
+        // directory found through a non-empty entry is printed. It was not searched at all.
         if self
             .target_dir
             .as_ref()
@@ -119,7 +119,7 @@ impl builtins::Command for CdCommand {
     }
 }
 
-/// The folder `target` names through `CDPATH`, and whether a non-empty entry gave it (so
+/// The directory `target` names through `CDPATH`, and whether a non-empty entry gave it (so
 /// `cd` prints it); `None` when `target` is absolute, starts with `.` or `..`, `CDPATH`
 /// is unset or empty, or no entry holds it.
 fn search_cdpath(

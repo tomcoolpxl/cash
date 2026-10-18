@@ -4,7 +4,7 @@ see: zip tar
 ---
 ## Description
 
-`unzip ARCHIVE` extracts a zip archive into the current folder, `-d FOLDER` into
+`unzip ARCHIVE` extracts a zip archive into the current directory, `-d DIRECTORY` into
 another; names after the archive choose members, `-x` names leave some out. `-l` and
 `-v` list it, `-t` tests every member's data, `-p` writes members to standard output,
 `-z` shows the comment. `zipinfo ARCHIVE` (or `unzip -Z`) lists it as `ls -l` does, from
@@ -29,7 +29,7 @@ reads. Info-ZIP's own unzip reads fewer of these.
 - Extracting restores times and the read-only attribute (from a Unix mode's owner write
   bit, or MS-DOS's), not owners or other modes.
 - A member's name Windows cannot hold (`:`, `"`, a trailing dot or space, `CON` and the
-  like) is refused by name; `\` in a name is a folder separator. A drive and a leading
+  like) is refused by name; `\` in a name is a directory separator. A drive and a leading
   `/` are removed with UnZip's warning, and `../` parts too, unless `-:`.
 - A symbolic link is made where Windows allows one (Developer Mode, or an elevated
   shell), and written as a file holding its target where it does not.

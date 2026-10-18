@@ -18,8 +18,8 @@
 //!   made in cash is the same bytes as one made in Git Bash.
 //! - compress (`.Z`), pack, lzh and zip input is refused by name rather than
 //!   decompressed: cash carries deflate only, and `tar.exe` reads a `.tar.Z`.
-//! - `-r` reads a folder in name order; GNU gzip takes the file system's order.
-//! - A stored name is taken without its folders on either separator, `/` or `\`.
+//! - `-r` reads a directory in name order; GNU gzip takes the file system's order.
+//! - A stored name is taken without its directories on either separator, `/` or `\`.
 //! - The `GZIP` environment variable is read as GNU gzip 1.14 reads it: a compression
 //!   level in it is taken, anything else in it is ignored, and nothing is said.
 //! - A file replaced in place is written beside it under a temporary name and renamed
@@ -403,8 +403,8 @@ fn version_line(invoked: &str) -> String {
 enum Located {
     /// A file or a device, open.
     File(cash_core::input::Input),
-    /// A folder, at this absolute path: `-r` goes into it.
-    Folder(PathBuf),
+    /// A directory, at this absolute path: `-r` goes into it.
+    Directory(PathBuf),
 }
 
 /// Why a file was given up on, with everything already said.
@@ -786,7 +786,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         Ok(())
     }
 
-    /// Every entry of the folder `name`, in name order.
+    /// Every entry of the directory `name`, in name order.
     fn treat_dir(&mut self, name: &str, path: &Path) -> Result<(), Stop> {
         // GNU's gzip goes through no link unless -f, and says so as its open's ELOOP; under
         // -f it goes through them, and a loop is said the same way, where GNU's went round
@@ -805,7 +805,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             match next {
                 Ok(entry) => match entry.kind {
                     // The walk goes into it itself.
-                    Kind::Folder => {}
+                    Kind::Directory => {}
                     Kind::Link => {
                         self.error(&format!(
                             "{}: Too many levels of symbolic links",
@@ -838,7 +838,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
     fn locate(&self, name: &str) -> Result<(String, Located), io::Error> {
         let open = |candidate: &str| match self.context.open_input(candidate, Dash::File) {
             Ok(input) => Ok(Located::File(input)),
-            Err(InputError::IsADirectory(path)) => Ok(Located::Folder(path)),
+            Err(InputError::IsADirectory(path)) => Ok(Located::Directory(path)),
             Err(error) => Err(io::Error::from(error)),
         };
         match open(name) {
@@ -964,7 +964,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         };
         let name = name.as_str();
         let opened = match located {
-            Located::Folder(path) => {
+            Located::Directory(path) => {
                 if options.recursive {
                     return self.treat_dir(name, &path);
                 }

@@ -167,11 +167,11 @@ fn pathext_match_still_beats_the_extensionless_script() {
 }
 
 #[test]
-fn type_a_and_which_a_find_every_folders_match_from_one_look_at_each() {
-    // `type -a` and `which -a` checked each PATHEXT extension in each folder, 43 ms over
-    // 79 folders; they look at each folder once now, as running a command does. What
-    // they find is the same: a folder named `prog` is no command beside `PROG.CMD`, an
-    // extension is matched whatever its case, a folder without the name is passed.
+fn type_a_and_which_a_find_every_directories_match_from_one_look_at_each() {
+    // `type -a` and `which -a` checked each PATHEXT extension in each directory, 43 ms over
+    // 79 directories; they look at each directory once now, as running a command does. What
+    // they find is the same: a directory named `prog` is no command beside `PROG.CMD`, an
+    // extension is matched whatever its case, a directory without the name is passed.
     let first = tempfile::tempdir().expect("scratch dir");
     let none = tempfile::tempdir().expect("scratch dir");
     let second = tempfile::tempdir().expect("scratch dir");
@@ -192,13 +192,13 @@ fn type_a_and_which_a_find_every_folders_match_from_one_look_at_each() {
     );
     let lines: Vec<&str> = out.stdout.lines().collect();
     assert_eq!(lines.len(), 4, "{}", out.stdout);
-    for (line, folder, file) in [
+    for (line, directory, file) in [
         (lines[0], first.path(), "prog.cmd"),
         (lines[1], second.path(), "prog.bat"),
         (lines[2], first.path(), "prog.cmd"),
         (lines[3], second.path(), "prog.bat"),
     ] {
-        let want = folder.join(file).to_string_lossy().replace('\\', "/");
+        let want = directory.join(file).to_string_lossy().replace('\\', "/");
         assert!(
             line.to_lowercase().ends_with(&want.to_lowercase()),
             "{line} for {want}: {}",

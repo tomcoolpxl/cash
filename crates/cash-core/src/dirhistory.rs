@@ -1,27 +1,27 @@
-//! fish's folder history: where the shell has been, for `prevd`, `nextd`, `cdh` and
+//! fish's directory history: where the shell has been, for `prevd`, `nextd`, `cdh` and
 //! Alt-← / Alt-→ at the prompt (spec D62).
 //!
-//! Every change of working folder (`cd`, `pushd`, `popd`) records the folder it left, and
-//! forgets the folders ahead of it, as a browser's history does. `prevd` and `nextd` move
+//! Every change of working directory (`cd`, `pushd`, `popd`) records the directory it left, and
+//! forgets the directories ahead of it, as a browser's history does. `prevd` and `nextd` move
 //! through the record without adding to it.
 
 use std::path::{Path, PathBuf};
 
-/// How many folders are kept behind the current one, as fish keeps 25.
+/// How many directories are kept behind the current one, as fish keeps 25.
 pub const LIMIT: usize = 25;
 
-/// The folders behind and ahead of the current one.
+/// The directories behind and ahead of the current one.
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DirectoryHistory {
-    /// Oldest first; the last is the folder just left.
+    /// Oldest first; the last is the directory just left.
     back: Vec<PathBuf>,
-    /// Furthest first; the last is the folder `nextd` goes to.
+    /// Furthest first; the last is the directory `nextd` goes to.
     forward: Vec<PathBuf>,
 }
 
 impl DirectoryHistory {
-    /// Records that the shell left `from` for another folder, other than by stepping
+    /// Records that the shell left `from` for another directory, other than by stepping
     /// through this history.
     pub fn left(&mut self, from: PathBuf) {
         if self.back.last() != Some(&from) {
@@ -34,7 +34,7 @@ impl DirectoryHistory {
         self.forward.clear();
     }
 
-    /// The folder `steps` places away: back through history when negative, forward when
+    /// The directory `steps` places away: back through history when negative, forward when
     /// positive; `None` if the history does not reach that far.
     #[must_use]
     pub fn target(&self, steps: isize) -> Option<&Path> {
@@ -60,13 +60,13 @@ impl DirectoryHistory {
         }
     }
 
-    /// The folders behind the current one, oldest first.
+    /// The directories behind the current one, oldest first.
     #[must_use]
     pub fn back(&self) -> &[PathBuf] {
         &self.back
     }
 
-    /// The folders ahead of the current one, the next one first.
+    /// The directories ahead of the current one, the next one first.
     pub fn forward(&self) -> impl Iterator<Item = &PathBuf> {
         self.forward.iter().rev()
     }
@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn leaving_the_same_folder_twice_records_it_once() {
+    fn leaving_the_same_directory_twice_records_it_once() {
         let mut history = DirectoryHistory::default();
         history.left(p("a"));
         history.left(p("a"));

@@ -180,21 +180,21 @@ fn stat_reads_gnus_options_and_reports_a_file_system() {
 }
 
 #[test]
-fn the_whole_file_tools_read_device_names_and_word_a_folder_as_upstream() {
+fn the_whole_file_tools_read_device_names_and_word_a_directory_as_upstream() {
     // rev, column, hexdump, xxd and iconv opened their files themselves: `/dev/stdin` was
-    // no file, and a folder read as "Permission denied". They open them as the shell's
-    // `<` does now, and word a folder as util-linux, vim's xxd and glibc's iconv do.
+    // no file, and a directory read as "Permission denied". They open them as the shell's
+    // `<` does now, and word a directory as util-linux, vim's xxd and glibc's iconv do.
     let script = r#"
-        cd "$TEMP" && mkdir -p whole-file-folder
+        cd "$TEMP" && mkdir -p whole-file-directory
         echo x | rev /dev/stdin
         printf "a b\n" | column /dev/stdin
         echo x | xxd /dev/stdin
         echo x | iconv -f utf-8 -t utf-8 /dev/stdin
-        rev whole-file-folder; echo "rev $?"
-        column whole-file-folder; echo "column $?"
-        hexdump whole-file-folder; echo "hexdump $?"
-        xxd whole-file-folder; echo "xxd $?"
-        rmdir whole-file-folder
+        rev whole-file-directory; echo "rev $?"
+        column whole-file-directory; echo "column $?"
+        hexdump whole-file-directory; echo "hexdump $?"
+        xxd whole-file-directory; echo "xxd $?"
+        rmdir whole-file-directory
     "#;
     let out = cash_command()
         .args(["-c", script])
@@ -209,6 +209,6 @@ fn the_whole_file_tools_read_device_names_and_word_a_folder_as_upstream() {
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
         "rev: fgetwc() failed: Is a directory\ncolumn: read failed: Is a directory\n\
-         hexdump: whole-file-folder: Is a directory\nxxd: Is a directory\n"
+         hexdump: whole-file-directory: Is a directory\nxxd: Is a directory\n"
     );
 }

@@ -1,5 +1,5 @@
 //! Finding and opening archives as rar does: `.rar` added to a name without an
-//! extension, wildcards matched in the archive's folder, a volume's followers by
+//! extension, wildcards matched in the archive's directory, a volume's followers by
 //! their names, and an encrypted header's password asked for.
 
 use std::io;
@@ -19,7 +19,7 @@ pub(super) struct Found {
 }
 
 /// The archives a command's archive name means: the name itself, or what its wildcard
-/// matches in its folder (and below, with `-r`); a stop is rar's "User break".
+/// matches in its directory (and below, with `-r`); a stop is rar's "User break".
 pub(super) fn find<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     name: &str,
@@ -30,7 +30,7 @@ pub(super) fn find<SE: cash_core::ShellExtensions>(
         let path = rar.path(&display);
         return Ok(vec![Found { display, path }]);
     }
-    let (folder, mask) = match display.rfind('/') {
+    let (directory, mask) = match display.rfind('/') {
         Some(at) => (
             display.get(..=at).unwrap_or_default().to_owned(),
             display.get(at + 1..).unwrap_or_default().to_owned(),
@@ -40,7 +40,7 @@ pub(super) fn find<SE: cash_core::ShellExtensions>(
     let mut found = Vec::new();
     collect(
         rar,
-        &folder,
+        &directory,
         &mask,
         rar.switches.recurse == Some('r'),
         &mut found,
@@ -48,18 +48,18 @@ pub(super) fn find<SE: cash_core::ShellExtensions>(
     Ok(found)
 }
 
-/// The archives `mask` matches in `folder`, and below it with `recurse`, as Rar.exe 7.23
-/// takes them: in the order the folder lists them, going into each folder where it is
-/// met, and through junctions; one back to a folder above is passed by, so each archive
+/// The archives `mask` matches in `directory`, and below it with `recurse`, as Rar.exe 7.23
+/// takes them: in the order the directory lists them, going into each directory where it is
+/// met, and through junctions; one back to a directory above is passed by, so each archive
 /// is taken once.
 fn collect<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
-    folder: &str,
+    directory: &str,
     mask: &str,
     recurse: bool,
     found: &mut Vec<Found>,
 ) -> Result<(), Stop> {
-    let base = rar.path(if folder.is_empty() { "." } else { folder });
+    let base = rar.path(if directory.is_empty() { "." } else { directory });
     let options = tree::WalkOptions {
         links: tree::Links::All,
         order: tree::Order::Listing,
@@ -67,13 +67,15 @@ fn collect<SE: cash_core::ShellExtensions>(
         max_depth: if recurse { usize::MAX } else { 1 },
         ..tree::WalkOptions::default()
     };
-    for next in tree::Walk::new(folder, &base, &options, rar.context.stop_token()) {
+    for next in tree::Walk::new(directory, &base, &options, rar.context.stop_token()) {
         let entry = match next {
             Ok(entry) => entry,
             Err(tree::WalkError::Stopped) => return Err(Stop::Break),
             Err(_) => continue,
         };
-        if entry.kind != tree::Kind::Folder && mask_matches(mask, &entry.name().to_string_lossy()) {
+        if entry.kind != tree::Kind::Directory
+            && mask_matches(mask, &entry.name().to_string_lossy())
+        {
             found.push(Found {
                 path: entry.path,
                 display: entry.shown,

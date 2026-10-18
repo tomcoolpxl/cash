@@ -17,9 +17,9 @@ user, is always a new cash, and the shell you typed the command in stays as it w
 
 - `sudo COMMAND`: the command elevated, in this terminal, with its output here, as on
   Unix. `sudo -i` gives an elevated login shell, `sudo -s` an elevated shell in this
-  folder; `sudo -u USER COMMAND` runs it as another account, at that account's usual
+  directory; `sudo -u USER COMMAND` runs it as another account, at that account's usual
   level.
-- `su`: a new elevated cash (`su -` a login shell in your home folder), or `su USER` a
+- `su`: a new elevated cash (`su -` a login shell in your home directory), or `su USER` a
   cash as that account; `su -c COMMAND` runs one command.
 - `sudoedit FILE`: edit a file you may not write. Your editor runs unelevated, on a copy;
   only writing the copy back is elevated.
@@ -59,7 +59,7 @@ and ~ are theirs`.
 ## Network drives
 
 Drive letters are mapped per logon, and an elevated process has none of yours. In a
-folder on a mapped drive, the elevated command starts in the folder's network path
+directory on a mapped drive, the elevated command starts in the directory's network path
 (`\\server\share\...`).
 
 ## What escapes cash's job

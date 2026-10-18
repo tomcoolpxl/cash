@@ -525,7 +525,7 @@ async fn lock_file_and_run<SE: cash_core::ShellExtensions>(
                 writeln!(context.stdout(), "flock: executing cash")?;
             }
             // The `sh -c` util-linux starts: a shell of its own, with this one's
-            // variables and folder, whose `exit` and assignments stay inside it.
+            // variables and directory, whose `exit` and assignments stay inside it.
             let source_info = context.shell.call_stack().current_pos_as_source_info();
             let mut subshell = context.shell.clone();
             let result = subshell

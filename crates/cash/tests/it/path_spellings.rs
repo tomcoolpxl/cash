@@ -1,5 +1,5 @@
 //! Every way of writing a path, in every place a script writes one (spec D3): a table of
-//! places by spellings, each cell a check. A folder named `my dir`, spelled `C:/…`,
+//! places by spellings, each cell a check. A directory named `my dir`, spelled `C:/…`,
 //! `c:/…`, `C:\…`, `C:/…\…`, `/c/…`, `~/…`, relative, `./…`, `//server/share/…` and
 //! `\\server\share\…` (the drive's admin share on `localhost`), goes to `cd`, `pushd`,
 //! `cdh`, `CDPATH`, `z`, redirections, `source`, `test`, `ls`, globs, a script run by
@@ -7,7 +7,7 @@
 //!
 //! A Unix spelling reaches a program as written, so `/c/…` given to `cat` or `git` is
 //! the one documented exception: cash warns and names the `C:/` spelling. Tab and
-//! Alt-E's start folder have tables of their own, in `completion_windows.rs` and
+//! Alt-E's start directory have tables of their own, in `completion_windows.rs` and
 //! `cash-picker`'s `pick.rs`.
 
 #![allow(
@@ -21,7 +21,7 @@ use std::process::Stdio;
 
 use crate::common::{Scratch, cash_command};
 
-/// A place a path is written, with `{S}` for the folder's spelling, and what its output
+/// A place a path is written, with `{S}` for the directory's spelling, and what its output
 /// holds when the path worked.
 const PLACES: [(&str, &str, &str); 17] = [
     ("cd", "cd {S} && pwd", "my dir"),
@@ -63,11 +63,11 @@ const PLACES: [(&str, &str, &str); 17] = [
 const WARNING: &str = "cash does not translate Unix path spellings in arguments";
 
 #[test]
-fn each_spelling_of_a_folder_works_in_each_place() {
+fn each_spelling_of_a_directory_works_in_each_place() {
     let scratch = Scratch::new("spellings");
     let home = scratch.join("home");
     let dir = home.join("my dir");
-    std::fs::create_dir_all(dir.join("sub")).expect("create the folders");
+    std::fs::create_dir_all(dir.join("sub")).expect("create the directories");
     std::fs::write(dir.join("f.txt"), "hello\n").expect("write f.txt");
     std::fs::write(dir.join("s.sh"), "echo script-ran\n").expect("write s.sh");
     std::fs::write(dir.join("t.sh"), "#!/bin/sh\necho script-ran\n").expect("write t.sh");

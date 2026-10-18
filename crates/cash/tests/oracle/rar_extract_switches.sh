@@ -1,11 +1,11 @@
 # rar's x and e with -f, -u, -ad, -ad1, -ad2 and -ai, and the times and attributes of
-# the folders extracted, run under WinRAR 7.23's Rar.exe (the oracle: Scoop's
+# the directories extracted, run under WinRAR 7.23's Rar.exe (the oracle: Scoop's
 # extras/winrar on Windows) and under cash's builtin. rar_extract_switches.out is the
 # original's output.
 #
 # As in rar_write.sh, `z` keeps standard output and standard error apart, turns CRLF and
 # `\` into LF and `/`, and drops the percentages rar writes with backspaces. `tree` shows
-# each file and folder with its time in UTC ("now" for one made by the run, not from the
+# each file and directory with its time in UTC ("now" for one made by the run, not from the
 # archive) and its attributes as Windows' attrib shows them.
 #
 # Regenerate the golden file on Windows, with Scoop's WinRAR and a cash without the
@@ -36,7 +36,7 @@ tree() {
     echo "$f $t ${a:--}"
   done)
 }
-# A folder with src/a.txt older than the archive's, src/b.txt newer, src older.
+# A directory with src/a.txt older than the archive's, src/b.txt newer, src older.
 there() {
   mkdir -p "$1/src"
   printf 'old\n' > "$1/src/a.txt"
@@ -57,7 +57,7 @@ attrib +r 'src\b.txt'
 rar a -m0 -idq one.rar src
 attrib -r 'src\b.txt'
 
-echo "== folders keep their times and attributes"
+echo "== directories keep their times and attributes"
 z rar x one.rar o1/
 tree o1
 echo "== -ai: the times, not the attributes"
@@ -82,12 +82,12 @@ tree o5
 there o6
 z rar e -u -o+ one.rar o6/src/
 tree o6
-echo "== -o+ over an older folder"
+echo "== -o+ over an older directory"
 there o7
 z rar x -o+ one.rar o7/
 tree o7
 
-echo "== -ad: a folder for each archive in the destination"
+echo "== -ad: a directory for each archive in the destination"
 mkdir a1 a2 a3
 cp one.rar a1/ && cp one.rar a1/two.rar
 z rar x -ad 'a1/*.rar' o8/
@@ -98,12 +98,12 @@ at=$(grep -abo three a1/bad.rar | head -1 | cut -d: -f1)
 printf 'XXXX' | dd of=a1/bad.rar bs=1 seek="$at" conv=notrunc 2>/dev/null
 z rar t 'a1/*.rar'
 rm a1/bad.rar
-echo "== -ad1: a folder for each beside it, the destination ignored"
+echo "== -ad1: a directory for each beside it, the destination ignored"
 cp one.rar a2/ && cp one.rar a2/two.rar
 z rar x -ad1 'a2/*.rar' o9/
 tree a2
 [ -e o9 ] || echo "o9 is not made"
-echo "== -ad2: the archive's own folder"
+echo "== -ad2: the archive's own directory"
 cp one.rar a3/
 z rar x -ad2 a3/one.rar o10/
 tree a3
@@ -133,9 +133,9 @@ set +f
 echo "-- e and t"
 z rar e -idc solid.rar 'g\s' o11/
 z rar t -idc solid.rar 'g\a3'
-echo "== damaged folder headers near the end: said, and read as they stand"
+echo "== damaged directory headers near the end: said, and read as they stand"
 # Four bytes of one.rar overwritten with 'X': at 200 they hit two headers, the empty
-# folder's time among them; at 230 one. rar reads a time past 2185 as wrapped around.
+# directory's time among them; at 230 one. rar reads a time past 2185 as wrapped around.
 for at in 200 230; do
   head -c $at one.rar > dmg$at.rar
   printf 'XXXX' >> dmg$at.rar

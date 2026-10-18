@@ -33,7 +33,7 @@ z() {
   fi
   echo "rc=$r"
 }
-# What a folder holds: each file and its CRC, each folder.
+# What a directory holds: each file and its CRC, each directory.
 tree() {
   (cd "$1" 2>/dev/null && find . -mindepth 1 | sort | while read -r f; do
     if [ -d "$f" ]; then echo "$f/"; else echo "$f $(cksum < "$f")"; fi
@@ -47,7 +47,7 @@ check() {
   rar x -inul "$1" "$dir/check/"
   tree "$dir/check"
 }
-# The fixture: files and folders of fixed contents and times.
+# The fixture: files and directories of fixed contents and times.
 fresh() {
   rm -rf src && mkdir -p src/sub/deep src/empty
   printf 'hello\n' > src/a.txt
@@ -67,7 +67,7 @@ z rar a new.rar 'src\a.txt'
 z rar a new.rar 'src\a.txt'
 check new.rar
 
-echo "== a -m0, a folder: its files, then its folders, deepest first"
+echo "== a -m0, a directory: its files, then its directories, deepest first"
 z rar a -m0 st.rar src
 check st.rar
 cksum < st.rar

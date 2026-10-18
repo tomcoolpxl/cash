@@ -3,7 +3,7 @@
 //! cmd never expands a wildcard, so every command-line program Windows ships in
 //! `System32` and `SysWOW64` reads `*` and `?` itself when it wants them (`xcopy`,
 //! `findstr`, `taskkill`, OpenSSH's `scp`), or means something else by them: `net user
-//! NAME *` asks for the password, and bash's globbing hands `net` the folder's file names
+//! NAME *` asks for the password, and bash's globbing hands `net` the directory's file names
 //! instead. With the option on, the words after such a program are not
 //! pathname-expanded. A program anywhere else, `python` or `rg`, gets the shell's
 //! globbing, which it needs. Scripts keep bash's globbing: the option is on at the

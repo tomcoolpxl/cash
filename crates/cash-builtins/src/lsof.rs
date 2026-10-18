@@ -9,7 +9,7 @@
 //!   the Restart Manager;
 //! * TCP and UDP sockets with their owners (`-i`), from IP Helper;
 //! * for selected processes (`-p`, `-c`, `-u`), or every process with no selection: the
-//!   executable (`txt`), loaded modules (`mem`), sockets, and the files and folders it
+//!   executable (`txt`), loaded modules (`mem`), sockets, and the files and directories it
 //!   holds open, from the handle walk in `cash_win32::handles` (FD is 0 to 2 for the
 //!   standard handles, which are listed on pipes and devices too, and the handle value
 //!   otherwise, each with `r`, `w` or `u`). That walk is what handle.exe does; unelevated
@@ -479,7 +479,7 @@ fn warn_about(walk: &Walk, stderr: &mut impl Write) -> std::io::Result<()> {
     Ok(())
 }
 
-/// The rows for what processes hold at or below the folder `root` ([`fileuse::held_below`]),
+/// The rows for what processes hold at or below the directory `root` ([`fileuse::held_below`]),
 /// named in the user's spelling `shown`: `./held.txt` for `+D .`.
 fn rows_below(
     root: &Path,
@@ -513,7 +513,7 @@ fn rows_below(
         writeln!(
             stderr,
             "lsof: WARNING: {shown} holds over {} entries; the {} processes lsof can't open are not looked for in it",
-            fileuse::RESTART_MANAGER_FOLDER_LIMIT,
+            fileuse::RESTART_MANAGER_DIRECTORY_LIMIT,
             below.unasked
         )?;
     }
@@ -617,9 +617,9 @@ fn run(
         && options.commands.is_empty()
         && options.users.is_none();
 
-    // Files, from the Restart Manager; folders, `+D` (all below), `+d` (directly in) and a
-    // folder named as a file (all below), from the handle walk.
-    let mut folders: Vec<(PathBuf, &str, bool)> = Vec::new();
+    // Files, from the Restart Manager; directories, `+D` (all below), `+d` (directly in) and a
+    // directory named as a file (all below), from the handle walk.
+    let mut directories: Vec<(PathBuf, &str, bool)> = Vec::new();
     for name in &options.files {
         let path = context.shell.absolute_path(name);
         if !path.exists() {
@@ -632,7 +632,7 @@ fn run(
             continue;
         }
         if path.is_dir() {
-            folders.push((path, name, true));
+            directories.push((path, name, true));
             continue;
         }
         file_keys.insert(fileuse::path_key(&path));
@@ -652,7 +652,7 @@ fn run(
     for (dir, recursive) in &options.dirs {
         let path = context.shell.absolute_path(dir);
         if path.is_dir() {
-            folders.push((path, dir, *recursive));
+            directories.push((path, dir, *recursive));
         } else {
             writeln!(
                 stderr,
@@ -660,15 +660,15 @@ fn run(
             )?;
         }
     }
-    // Every process's handles, for folders and for `lsof` alone; otherwise only the
+    // Every process's handles, for directories and for `lsof` alone; otherwise only the
     // selected processes' are walked, below.
-    let full_walk = (everything || !folders.is_empty()).then(|| handles::open_files(None));
+    let full_walk = (everything || !directories.is_empty()).then(|| handles::open_files(None));
     if let Some(Err(error)) = &full_walk {
         let error = cash_core::error::os_error_text(error);
         writeln!(stderr, "lsof: can't list open files: {error}")?;
     }
     let full_walk = full_walk.and_then(Result::ok);
-    for (root, shown, recursive) in &folders {
+    for (root, shown, recursive) in &directories {
         let found = rows_below(
             root,
             shown,
@@ -739,7 +739,7 @@ fn run(
             })
             .collect();
         // Their open files, from the handle walk: the one already made for `lsof` alone
-        // or for a folder (which also has the processes started since `process::list`),
+        // or for a directory (which also has the processes started since `process::list`),
         // else one of these processes only.
         let walked = if full_walk.is_some() {
             Ok(None)

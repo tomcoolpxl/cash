@@ -37,7 +37,7 @@ Exit Codes
    4      the action failed: Windows has no program for the target, or it refused
 ";
 
-/// Open a file, folder or URL with its default program; `start`, under the name
+/// Open a file, directory or URL with its default program; `start`, under the name
 /// cross-platform scripts try first.
 #[derive(Parser)]
 #[command(

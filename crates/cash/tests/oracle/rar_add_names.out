@@ -1,4 +1,4 @@
-== -r: a file's name looked for in every folder below its own
+== -r: a file's name looked for in every directory below its own
 
 Evaluation copy. Please register.
 
@@ -76,7 +76,7 @@ rc=0
 src/a.txt
 src/sub/c.txt
 rc=0
-== m: a folder holding a file left out is not deleted
+== m: a directory holding a file left out is not deleted
 
 Evaluation copy. Please register.
 

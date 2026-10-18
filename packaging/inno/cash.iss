@@ -6,9 +6,9 @@
 ; SourceDir holds what the release zip holds: cash.exe, README.md, LICENSE, NOTICE,
 ; licenses\ and THIRD-PARTY-LICENSES.html. The files go to
 ; %LOCALAPPDATA%\Programs\cash\<version>\; `cash --install-finish` then points the
-; `current` junction at that folder, puts it on the user PATH, writes the Windows Terminal
+; `current` junction at that directory, puts it on the user PATH, writes the Windows Terminal
 ; profile, makes the tool links when asked, writes the starter ~/.bashrc once, and sweeps
-; old version folders nothing runs. Every step after the copy is cash's own command, so
+; old version directories nothing runs. Every step after the copy is cash's own command, so
 ; the Scoop channel and this one share one implementation.
 ;
 ; Silent: cash-vX.Y.Z-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
@@ -49,7 +49,7 @@ OutputBaseFilename=cash-v{#AppVersion}-setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-; A running cash.exe is never touched: the files go to a new version folder and the
+; A running cash.exe is never touched: the files go to a new version directory and the
 ; junction moves, so nothing has to be closed, and a shell must not be sent Ctrl-C.
 CloseApplications=no
 RestartApplications=no
@@ -87,7 +87,7 @@ Filename: "{app}\{#AppVersion}\cash.exe"; Description: "Open cash"; Flags: posti
 ; profile, the junction. ~/.bashrc, history and config stay. The uninstaller runs with
 ; Windows' redirection-trust mitigation, which its children inherit, so nothing it starts
 ; may cross the `current` junction ("the path cannot be traversed because it contains an
-; untrusted mount point"); RemoverExe finds a cash.exe in a version folder directly,
+; untrusted mount point"); RemoverExe finds a cash.exe in a version directory directly,
 ; whichever version `cash --update` has left there.
 Filename: "{code:RemoverExe}"; Parameters: "--install-remove ""{app}"""; Flags: runhidden waituntilterminated; RunOnceId: "remove"
 
@@ -96,9 +96,9 @@ Type: filesandordirs; Name: "{app}\bin"
 Type: filesandordirs; Name: "{app}"
 
 [Code]
-// A cash.exe in a version folder under {app}, for the uninstaller: not through the
+// A cash.exe in a version directory under {app}, for the uninstaller: not through the
 // `current` junction, which the uninstaller's processes may not cross. Any version
-// serves for --install-remove; the newest-named folder is preferred.
+// serves for --install-remove; the newest-named directory is preferred.
 function RemoverExe(Param: String): String;
 var
   App, Found: String;
@@ -123,7 +123,7 @@ begin
   end;
   if Found = '' then
   begin
-    Log('No version folder with cash.exe under ' + App + '; nothing to run');
+    Log('No version directory with cash.exe under ' + App + '; nothing to run');
     Result := App + '\current\cash.exe';
   end
   else

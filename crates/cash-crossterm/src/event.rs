@@ -115,7 +115,7 @@
 //! }
 //! ```
 //!
-//! Check the [examples](https://github.com/crossterm-rs/crossterm/tree/master/examples) folder for more of
+//! Check the [examples](https://github.com/crossterm-rs/crossterm/tree/master/examples) directory for more of
 //! them (`event-*`).
 
 pub(crate) mod filter;

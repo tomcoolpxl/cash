@@ -17,20 +17,20 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::common::{CASH, cash_command, doctor_finding, doctor_findings};
 
-/// NTFS gives a file at most 1023 names, and each links folder gives the test's
-/// `cash.exe` 126 more. So the tests take turns: a test holds the turn while a folder of
-/// its own exists, and a folder is deleted when its test is done with it. That serializes
+/// NTFS gives a file at most 1023 names, and each links directory gives the test's
+/// `cash.exe` 126 more. So the tests take turns: a test holds the turn while a directory of
+/// its own exists, and a directory is deleted when its test is done with it. That serializes
 /// the threads of `cargo test`; nextest, which runs each test in a process of its own,
 /// runs them one at a time through the `link-tools` group in `.config/nextest.toml`.
 static TURN: Mutex<()> = Mutex::new(());
 
 thread_local! {
-    /// This test's folders, and its turn while it has any.
+    /// This test's directories, and its turn while it has any.
     static HELD: RefCell<(usize, Option<MutexGuard<'static, ()>>)> =
         const { RefCell::new((0, None)) };
 }
 
-/// `name` with this process's id and a count after it, so that no two folders, in this
+/// `name` with this process's id and a count after it, so that no two directories, in this
 /// run or another one at the same time, share a name (BIN-19).
 fn unique(name: &str) -> String {
     static COUNT: AtomicU32 = AtomicU32::new(0);
@@ -38,12 +38,12 @@ fn unique(name: &str) -> String {
     format!("{name}-{}-{count}", std::process::id())
 }
 
-/// A fresh folder on the same drive as the test's `cash.exe`, which a hard link needs;
+/// A fresh directory on the same drive as the test's `cash.exe`, which a hard link needs;
 /// deleted when dropped. Not `common::Scratch`, which is in `%TEMP%`: on CI that is on
 /// C:, and the build on D:.
-struct Folder(PathBuf);
+struct Directory(PathBuf);
 
-fn folder(name: &str) -> Folder {
+fn directory(name: &str) -> Directory {
     HELD.with_borrow_mut(|(count, turn)| {
         if *count == 0 {
             *turn = Some(TURN.lock().unwrap_or_else(PoisonError::into_inner));
@@ -55,10 +55,10 @@ fn folder(name: &str) -> Folder {
         .join(unique(name));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    Folder(dir)
+    Directory(dir)
 }
 
-impl Drop for Folder {
+impl Drop for Directory {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
         HELD.with_borrow_mut(|(count, turn)| {
@@ -70,14 +70,14 @@ impl Drop for Folder {
     }
 }
 
-impl std::ops::Deref for Folder {
+impl std::ops::Deref for Directory {
     type Target = Path;
     fn deref(&self) -> &Path {
         &self.0
     }
 }
 
-impl AsRef<OsStr> for Folder {
+impl AsRef<OsStr> for Directory {
     fn as_ref(&self) -> &OsStr {
         self.0.as_os_str()
     }
@@ -129,7 +129,7 @@ fn run(program: &Path, args: &[&str], input: &str) -> Output {
 
 #[test]
 fn links_every_tool_and_writes_the_manifest() {
-    let dir = folder("every");
+    let dir = directory("every");
     let out = link_tools(&dir);
     assert!(out.status.success(), "{}", text(&out.stderr));
     let stdout = text(&out.stdout);
@@ -154,7 +154,7 @@ fn links_every_tool_and_writes_the_manifest() {
 fn links_made_before_an_error_are_listed() {
     use std::os::windows::fs::OpenOptionsExt;
 
-    let dir = folder("stopped");
+    let dir = directory("stopped");
     // A link of cash's that nothing may delete or rename: the run stops there.
     std::fs::write(dir.join(".cash-links"), "xargs\n").unwrap();
     let held_path = dir.join("xargs.exe");
@@ -191,7 +191,7 @@ fn links_made_before_an_error_are_listed() {
 /// that started the same link again got the shell in its place (BIN-09).
 #[test]
 fn a_link_leaves_its_children_nothing_and_runs_itself_again() {
-    let dir = folder("descendants");
+    let dir = directory("descendants");
     assert!(link_tools(&dir).status.success());
 
     let env = run(&dir.join("env.exe"), &[], "");
@@ -221,7 +221,7 @@ fn a_link_leaves_its_children_nothing_and_runs_itself_again() {
 
 #[test]
 fn a_link_runs_as_its_tool_outside_cash() {
-    let dir = folder("runs");
+    let dir = directory("runs");
     assert!(link_tools(&dir).status.success());
 
     // A bundled tool, which cash runs by re-entering its own exe: here, the link.
@@ -255,7 +255,7 @@ fn a_link_runs_as_its_tool_outside_cash() {
 
 #[test]
 fn a_link_that_runs_commands_runs_them() {
-    let dir = folder("commands");
+    let dir = directory("commands");
     assert!(link_tools(&dir).status.success());
 
     let xargs = run(&dir.join("xargs.exe"), &["-n1", "basename"], "a/b c/d\n");
@@ -267,7 +267,7 @@ fn a_link_that_runs_commands_runs_them() {
 
 #[test]
 fn rerunning_keeps_current_links_and_leaves_other_files_alone() {
-    let dir = folder("rerun");
+    let dir = directory("rerun");
     std::fs::write(dir.join("ls.exe"), "not cash").unwrap();
     let first = text(&link_tools(&dir).stdout);
     assert!(
@@ -288,7 +288,7 @@ fn rerunning_keeps_current_links_and_leaves_other_files_alone() {
 
 #[test]
 fn a_replaced_link_is_refreshed_and_doctor_reports_it_first() {
-    let dir = folder("stale");
+    let dir = directory("stale");
     assert!(link_tools(&dir).status.success());
 
     // What an upgrade leaves: a link to a cash.exe that is no longer this one.
@@ -303,7 +303,7 @@ fn a_replaced_link_is_refreshed_and_doctor_reports_it_first() {
         .output()
         .unwrap();
     let report = text(&doctor.stdout);
-    // This folder's, not the developer's own links, which can be an older cash's.
+    // This directory's, not the developer's own links, which can be an older cash's.
     let name = dir.file_name().unwrap().to_string_lossy().into_owned();
     let stale_here = |report: &str| {
         doctor_findings(report).into_iter().find(|finding| {
@@ -349,7 +349,7 @@ fn a_replaced_link_is_refreshed_and_doctor_reports_it_first() {
 fn a_link_for_a_tool_no_longer_carried_is_removed() {
     // What a cash that dropped a tool finds: a link an older one made, still listed. A
     // listed link already gone is dropped from the manifest without a word.
-    let dir = folder("retired");
+    let dir = directory("retired");
     assert!(link_tools(&dir).status.success());
     let manifest = dir.join(".cash-links");
     let mut listed = std::fs::read_to_string(&manifest).unwrap();
@@ -374,7 +374,7 @@ fn a_link_for_a_tool_no_longer_carried_is_removed() {
 
 #[test]
 fn the_tools_system32_also_has_are_named() {
-    let dir = folder("system32");
+    let dir = directory("system32");
     // A file of the user's own is not cash's link, so its name is not cash's to note.
     std::fs::write(dir.join("whoami.exe"), "not cash").unwrap();
     let out = link_tools(&dir);
@@ -402,7 +402,7 @@ fn the_tools_system32_also_has_are_named() {
 
 #[test]
 fn which_prints_the_link_when_it_is_on_path() {
-    let dir = folder("which");
+    let dir = directory("which");
     assert!(link_tools(&dir).status.success());
     let out = cash_command()
         .args(["-c", "which ls; which cd"])
@@ -422,7 +422,7 @@ fn which_prints_the_link_when_it_is_on_path() {
 }
 
 #[test]
-fn a_folder_on_another_drive_is_an_error() {
+fn a_directory_on_another_drive_is_an_error() {
     // Only where this machine has a second drive to try.
     let here = CASH.chars().next().unwrap_or('C').to_ascii_uppercase();
     let Some(other) = ('C'..='Z')
@@ -432,7 +432,7 @@ fn a_folder_on_another_drive_is_an_error() {
         eprintln!("skipped: this machine has no second drive");
         return;
     };
-    // At the root of that drive, not in a scratch folder: the drive is the point.
+    // At the root of that drive, not in a scratch directory: the drive is the point.
     let dir = PathBuf::from(format!("{other}:\\{}", unique("cash-link-tools-test")));
     let out = link_tools(&dir);
     let _ = std::fs::remove_dir_all(&dir);
@@ -445,8 +445,8 @@ fn a_folder_on_another_drive_is_an_error() {
 }
 
 #[test]
-fn without_a_folder_the_links_go_in_bin_beside_cash() {
-    let home = folder("default");
+fn without_a_directory_the_links_go_in_bin_beside_cash() {
+    let home = directory("default");
     let cash = home.join("cash.exe");
     std::fs::hard_link(CASH, &cash).unwrap();
     let out = Command::new(&cash)
@@ -482,13 +482,13 @@ fn set_aside(dir: &Path) -> Vec<String> {
 #[test]
 fn a_link_windows_will_not_delete_is_renamed_aside_and_a_later_run_deletes_it() {
     // Links to an old cash.exe that is itself gone (`scoop cleanup` removed its version
-    // folder), so the links are that file's last names, and a program outside cash still
+    // directory), so the links are that file's last names, and a program outside cash still
     // runs one. Windows deletes a name of a running program while it has others, but not
     // its last: the refresh reaches that with the last link it replaces.
-    let old_home = folder("in-use-old");
+    let old_home = directory("in-use-old");
     let old = old_home.join("cash.exe");
     std::fs::copy(CASH, &old).unwrap();
-    let dir = folder("in-use");
+    let dir = directory("in-use");
     let made = Command::new(&old)
         .arg("--link-tools")
         .arg(&dir)
@@ -593,7 +593,7 @@ impl Drop for UserEnvironment {
     }
 }
 
-/// How cash spells a folder on the user `Path`: backslashes, and no `\\?\`.
+/// How cash spells a directory on the user `Path`: backslashes, and no `\\?\`.
 fn path_entry(dir: &Path) -> String {
     let real = std::fs::canonicalize(dir).unwrap().display().to_string();
     real.strip_prefix(r"\\?\").unwrap_or(&real).to_owned()
@@ -604,8 +604,8 @@ fn expand_sz(value: &str) -> (String, String) {
 }
 
 #[test]
-fn add_to_path_puts_the_folder_first_once_and_unlink_takes_it_off() {
-    let dir = folder("path");
+fn add_to_path_puts_the_directory_first_once_and_unlink_takes_it_off() {
+    let dir = directory("path");
     let before = r"%USERPROFILE%\go\bin;C:\x";
     let env = UserEnvironment::new("path", Some(before));
     let link = [
@@ -621,7 +621,7 @@ fn add_to_path_puts_the_folder_first_once_and_unlink_takes_it_off() {
         stdout.contains("added to the front of your user PATH"),
         "{stdout}"
     );
-    // The type and the unexpanded %USERPROFILE% survive; the folder comes first.
+    // The type and the unexpanded %USERPROFILE% survive; the directory comes first.
     let first = format!("{};{before}", path_entry(&dir));
     assert_eq!(env.path(), Some(expand_sz(&first)));
 
@@ -633,7 +633,7 @@ fn add_to_path_puts_the_folder_first_once_and_unlink_takes_it_off() {
     let stdout = text(&gone.stdout);
     assert!(gone.status.success(), "{stdout}{}", text(&gone.stderr));
     assert!(stdout.contains("taken off your user PATH"), "{stdout}");
-    assert!(stdout.contains("the folder is removed"), "{stdout}");
+    assert!(stdout.contains("the directory is removed"), "{stdout}");
     assert!(!stdout.contains(" 0 links removed"), "{stdout}");
     assert!(!dir.exists());
     assert_eq!(env.path(), Some(expand_sz(before)));
@@ -641,7 +641,7 @@ fn add_to_path_puts_the_folder_first_once_and_unlink_takes_it_off() {
 
 #[test]
 fn a_user_with_no_path_of_their_own_is_left_with_none() {
-    let dir = folder("fresh");
+    let dir = directory("fresh");
     let env = UserEnvironment::new("fresh", None);
 
     let out = env.cash([
@@ -659,7 +659,7 @@ fn a_user_with_no_path_of_their_own_is_left_with_none() {
 
 #[test]
 fn without_add_to_path_it_says_how_and_writes_nothing() {
-    let dir = folder("advice");
+    let dir = directory("advice");
     let env = UserEnvironment::new("advice", Some(r"C:\x"));
     let out = env.cash(["--link-tools".as_ref(), dir.as_os_str()]);
     let stdout = text(&out.stdout);
@@ -672,10 +672,10 @@ fn without_add_to_path_it_says_how_and_writes_nothing() {
 }
 
 #[test]
-fn a_folder_already_on_path_needs_no_advice() {
+fn a_directory_already_on_path_needs_no_advice() {
     // On the PATH cash was started with, as a terminal's own settings may put it, but not
     // on the user Path.
-    let dir = folder("on-path");
+    let dir = directory("on-path");
     let env = UserEnvironment::new("on-path", Some(r"C:\x"));
     let out = env
         .command()
@@ -687,7 +687,7 @@ fn a_folder_already_on_path_needs_no_advice() {
     let stdout = text(&out.stdout);
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert!(
-        stdout.contains("  the folder is on PATH: other programs can run these now\n"),
+        stdout.contains("  the directory is on PATH: other programs can run these now\n"),
         "{stdout}"
     );
     assert!(!stdout.contains("--add-to-path"), "{stdout}");
@@ -695,9 +695,9 @@ fn a_folder_already_on_path_needs_no_advice() {
 }
 
 #[test]
-fn a_folder_the_user_path_names_needs_no_advice() {
+fn a_directory_the_user_path_names_needs_no_advice() {
     // Named anywhere on it and spelled any way, though not on the PATH cash started with.
-    let dir = folder("on-user-path");
+    let dir = directory("on-user-path");
     let entry = path_entry(&dir).replace('\\', "/").to_uppercase();
     let user_path = format!(r"C:\x;{entry}/");
     let env = UserEnvironment::new("on-user-path", Some(&user_path));
@@ -705,7 +705,7 @@ fn a_folder_the_user_path_names_needs_no_advice() {
     let stdout = text(&out.stdout);
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert!(
-        stdout.contains("  the folder is on your user PATH\n"),
+        stdout.contains("  the directory is on your user PATH\n"),
         "{stdout}"
     );
     assert!(!stdout.contains("--add-to-path"), "{stdout}");
@@ -715,7 +715,7 @@ fn a_folder_the_user_path_names_needs_no_advice() {
 #[test]
 fn a_bare_cash_copy_is_still_the_shell() {
     // A file named like a tool but not in a manifest is cash, not the tool.
-    let dir = folder("unlisted");
+    let dir = directory("unlisted");
     let copy = dir.join("ls.exe");
     std::fs::hard_link(CASH, &copy).unwrap();
     let out = Command::new(&copy)

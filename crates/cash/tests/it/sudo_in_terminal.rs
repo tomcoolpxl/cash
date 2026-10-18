@@ -26,7 +26,7 @@ const APPROVAL: Duration = Duration::from_secs(180);
 /// How long the script may take once the command has what it waits for.
 const AFTER: Duration = Duration::from_secs(20);
 
-/// Runs `body` as `cash script.sh` on a pseudo console of its own, in a scratch folder.
+/// Runs `body` as `cash script.sh` on a pseudo console of its own, in a scratch directory.
 fn start(name: &str, body: &str) -> (ConPtySession, Scratch) {
     let dir = Scratch::new(&format!("sudo-{name}"));
     std::fs::write(dir.join("script.sh"), body).expect("write the script");
@@ -89,9 +89,9 @@ fn ctrl_c_at_the_password_prompt_runs_nothing() {
 /// `CASH_TEST_PASSWORD`, which the test types at the prompt. That account must be able to
 /// read the cash under test, which lies in your profile:
 /// `icacls target\debug\cash.exe /grant NAME:RX` lets it. The command runs from the test's
-/// own folder, under your profile, which the account cannot enter — so it also exercises
+/// own directory, under your profile, which the account cannot enter — so it also exercises
 /// the fallback to the system temp. The redirected file is written through the inherited
-/// handle regardless of the folder.
+/// handle regardless of the directory.
 #[test]
 #[ignore = "needs a second account and its password"]
 fn sudo_u_runs_the_command_as_the_account() {

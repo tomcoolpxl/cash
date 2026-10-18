@@ -1475,7 +1475,7 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn spools_without_a_named_folder_are_in_the_system_temp_folder() {
+    fn spools_without_a_named_directory_are_in_the_system_temp_directory() {
         let spool = Spool::create(&WriterResources::default()).unwrap();
         assert_eq!(spool.path.parent(), Some(std::env::temp_dir().as_path()));
         let path = spool.path.clone();

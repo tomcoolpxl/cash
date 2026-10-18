@@ -1107,7 +1107,7 @@ fn read_inputs<SE: cash_core::ShellExtensions>(
         // Opened as the shell's `<` opens it: `/dev/stdin` and the rest are its own.
         match context.open_input(file, Dash::File) {
             Ok(input) => inputs.push(input.read_all()?),
-            // util-linux opens a folder, and fails reading it.
+            // util-linux opens a directory, and fails reading it.
             Err(InputError::IsADirectory(_)) => {
                 writeln!(context.stderr(), "column: read failed: Is a directory")?;
                 failures += 1;

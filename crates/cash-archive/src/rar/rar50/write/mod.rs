@@ -386,7 +386,7 @@ pub fn write_streaming_volumes_with_progress(
     if extras.layout.winrar {
         options.features.quick_open = false;
     }
-    // Folders hold no data to encrypt, so they stay plain among encrypted files.
+    // Directories hold no data to encrypt, so they stay plain among encrypted files.
     let encrypted = entries.iter().any(|entry| entry.password.is_some());
     if encrypted
         && !entries
@@ -488,7 +488,7 @@ pub fn write_streaming_volumes_with_progress(
 pub struct Layout {
     /// WinRAR 7's framing: sizes and offsets padded as WinRAR pads them, a locator
     /// in the main header whenever quick open is on, the skip flag on blocks a
-    /// reader may pass over, no checksum on folders, and plain checksums under
+    /// reader may pass over, no checksum on directories, and plain checksums under
     /// encrypted headers. A stored archive comes out as WinRAR 7.23's, byte for
     /// byte; one volume set too, each volume the size asked, its end zero-filled.
     /// The builder also marks RAR 1.5 to 4 members with DOS attributes as made on

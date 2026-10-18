@@ -1,4 +1,4 @@
-//! `z`, the folder jump (spec D80), run as a script on a record of folders written for
+//! `z`, the directory jump (spec D80), run as a script on a record of directories written for
 //! the test, in a `%LOCALAPPDATA%` of its own; and Tab after `z`, driven through
 //! `Shell::complete`. The record an interactive cash keeps as it goes is in
 //! `conpty_interactive_tests.rs`.
@@ -17,40 +17,40 @@ use cash_builtins::ShellBuilderExt as _;
 
 use crate::common::{Scratch, cash_command};
 
-/// A scratch folder holding `local`, the `%LOCALAPPDATA%` whose `cash\folders` is the
-/// record, and the folders it names.
+/// A scratch directory holding `local`, the `%LOCALAPPDATA%` whose `cash\directories` is the
+/// record, and the directories it names.
 struct Record {
     dir: Scratch,
 }
 
 impl Record {
-    /// Folders made under the scratch folder, each with its rank and the seconds since
+    /// Directories made under the scratch directory, each with its rank and the seconds since
     /// its last visit; a name starting with `gone/` is recorded but not made.
-    fn new(name: &str, folders: &[(&str, f64, i64)]) -> Self {
+    fn new(name: &str, directories: &[(&str, f64, i64)]) -> Self {
         let dir = Scratch::new(&format!("z-{name}"));
         let now = cash_core::kept::now();
         let mut text = String::new();
-        for (folder, rank, ago) in folders {
-            let path = format!("{}/{folder}", dir.as_script_path());
-            if !folder.starts_with("gone/") {
-                std::fs::create_dir_all(&path).expect("create folder");
+        for (directory, rank, ago) in directories {
+            let path = format!("{}/{directory}", dir.as_script_path());
+            if !directory.starts_with("gone/") {
+                std::fs::create_dir_all(&path).expect("create directory");
             }
             let _ = writeln!(text, "{rank}\t{}\t{path}", now - ago);
         }
-        std::fs::create_dir_all(dir.join("local/cash")).expect("create the record's folder");
-        std::fs::write(dir.join("local/cash/folders"), text).expect("write the record");
+        std::fs::create_dir_all(dir.join("local/cash")).expect("create the record's directory");
+        std::fs::write(dir.join("local/cash/directories"), text).expect("write the record");
         Self { dir }
     }
 
-    fn path(&self, folder: &str) -> String {
-        format!("{}/{folder}", self.dir.as_script_path())
+    fn path(&self, directory: &str) -> String {
+        format!("{}/{directory}", self.dir.as_script_path())
     }
 
     fn local(&self) -> String {
         self.path("local")
     }
 
-    /// Runs `script` in the scratch folder with the record kept: standard output, standard
+    /// Runs `script` in the scratch directory with the record kept: standard output, standard
     /// error and the status.
     fn run(&self, script: &str) -> (String, String, i32) {
         let out = cash_command()
@@ -69,9 +69,9 @@ impl Record {
         )
     }
 
-    /// The record as it is now: its folders, below the scratch folder.
-    fn folders(&self) -> Vec<String> {
-        let text = std::fs::read_to_string(self.dir.join("local/cash/folders")).unwrap();
+    /// The record as it is now: its directories, below the scratch directory.
+    fn directories(&self) -> Vec<String> {
+        let text = std::fs::read_to_string(self.dir.join("local/cash/directories")).unwrap();
         let prefix = format!("{}/", self.dir.as_script_path());
         text.lines()
             .filter_map(|line| line.split('\t').nth(2))
@@ -104,7 +104,7 @@ fn z_goes_to_the_best_ranked_match_as_zoxide_ranks_it() {
 }
 
 #[test]
-fn the_last_word_must_be_in_the_last_part_and_the_current_folder_is_left_out() {
+fn the_last_word_must_be_in_the_last_part_and_the_current_directory_is_left_out() {
     let record = Record::new(
         "words",
         &[
@@ -148,12 +148,12 @@ fn z_lists_the_matches_with_their_scores_best_first() {
 }
 
 #[test]
-fn z_alone_a_dash_or_a_folder_is_cds() {
+fn z_alone_a_dash_or_a_directory_is_cds() {
     let record = Record::new(
         "cd",
         &[("home", 1.0, 60), ("proj", 1.0, 60), ("x", 1.0, 60)],
     );
-    // `x` is a folder here, so `z x` is `cd x`; `z -` prints the folder, as `cd -` does.
+    // `x` is a directory here, so `z x` is `cd x`; `z -` prints the directory, as `cd -` does.
     let (out, err, code) = record.run("z x && pwd; z && pwd; z - ; z .. && pwd");
     assert_eq!(code, 0, "{err}");
     let root = record.dir.as_script_path();
@@ -170,7 +170,7 @@ fn z_alone_a_dash_or_a_folder_is_cds() {
 }
 
 #[test]
-fn a_folder_that_is_gone_is_skipped_and_forgotten_after_ninety_days() {
+fn a_directory_that_is_gone_is_skipped_and_forgotten_after_ninety_days() {
     let record = Record::new(
         "gone",
         &[
@@ -182,7 +182,7 @@ fn a_folder_that_is_gone_is_skipped_and_forgotten_after_ninety_days() {
     let (out, err, code) = record.run("z proj && pwd");
     assert_eq!(code, 0, "{err}");
     assert_eq!(out, format!("{}\n", record.path("here/proj")));
-    assert_eq!(record.folders(), ["gone/lately/proj", "here/proj"]);
+    assert_eq!(record.directories(), ["gone/lately/proj", "here/proj"]);
 }
 
 #[test]
@@ -190,7 +190,7 @@ fn no_match_no_record_and_a_wrong_option_say_so() {
     let record = Record::new("none", &[("proj", 1.0, 60)]);
     let (out, err, code) = record.run("z nothing-like-it");
     assert_eq!((out.as_str(), code), ("", 1));
-    assert_eq!(err, "z: no folder matches 'nothing-like-it'\n");
+    assert_eq!(err, "z: no directory matches 'nothing-like-it'\n");
 
     let (_, err, code) = record.run("z -q proj");
     assert_eq!(code, 2);
@@ -217,7 +217,7 @@ fn a_z_function_comes_before_the_builtin() {
 }
 
 /// The candidates Tab offers at the end of `line`, in a shell started in the record's
-/// scratch folder with the record kept, and the length of the line they replace.
+/// scratch directory with the record kept, and the length of the line they replace.
 async fn complete(record: &Record, line: &str) -> (Vec<String>, usize) {
     let mut shell = cash_core::Shell::builder()
         .profile(cash_core::ProfileLoadBehavior::Skip)
@@ -238,8 +238,8 @@ async fn complete(record: &Record, line: &str) -> (Vec<String>, usize) {
 }
 
 #[tokio::test]
-async fn tab_after_z_offers_the_matching_folders_best_first() {
-    // The words are ones the scratch folder's own path cannot hold.
+async fn tab_after_z_offers_the_matching_directories_best_first() {
+    // The words are ones the scratch directory's own path cannot hold.
     let record = Record::new(
         "tab",
         &[

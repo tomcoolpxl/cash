@@ -15,7 +15,7 @@ use super::transform::Target;
 use super::{Fatal, Tar, Wanted, is_dir, system_time};
 use crate::compress::strerror;
 
-/// A folder made while extracting: its time is set once what is in it is.
+/// A directory made while extracting: its time is set once what is in it is.
 struct MadeDir {
     path: PathBuf,
     member: Member,

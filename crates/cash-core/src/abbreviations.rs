@@ -109,7 +109,7 @@ pub fn is_valid_name(name: &str) -> bool {
 /// anywhere on the line, LF-separated, written whole on every change. `abbr -a` and
 /// `abbr -e` write it; an interactive shell reads it after the rc files, so a
 /// definition in `~/.bashrc` wins over the file's for the same name. It is state, not
-/// configuration: `--no-config` leaves it alone, and the folder is made when needed.
+/// configuration: `--no-config` leaves it alone, and the directory is made when needed.
 pub mod store {
     use std::path::PathBuf;
 
@@ -202,7 +202,7 @@ pub mod store {
     pub enum StoreError {
         /// `APPDATA` is not set, so there is nowhere to keep them.
         NoPlace,
-        /// The file or its folder could not be read or written.
+        /// The file or its directory could not be read or written.
         Io(PathBuf, std::io::Error),
         /// The file does not parse.
         Parse(PathBuf, ParseError),
@@ -261,8 +261,9 @@ pub mod store {
             Err(error) => return Err(error),
         }
         change(&mut kept);
-        if let Some(folder) = path.parent() {
-            std::fs::create_dir_all(folder).map_err(|error| StoreError::Io(path.clone(), error))?;
+        if let Some(directory) = path.parent() {
+            std::fs::create_dir_all(directory)
+                .map_err(|error| StoreError::Io(path.clone(), error))?;
         }
         std::fs::write(&path, render(kept.iter())).map_err(|error| StoreError::Io(path, error))
     }

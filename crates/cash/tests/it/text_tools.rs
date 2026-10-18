@@ -90,7 +90,7 @@ fn sed_in_place_replaces_a_file_in_one_move_and_keeps_its_attributes() {
     let mut permissions = std::fs::metadata(&file).unwrap().permissions();
     #[expect(
         clippy::permissions_set_readonly_false,
-        reason = "on Windows this clears the read-only attribute, so the scratch folder can go"
+        reason = "on Windows this clears the read-only attribute, so the scratch directory can go"
     )]
     permissions.set_readonly(false);
     std::fs::set_permissions(&file, permissions).unwrap();

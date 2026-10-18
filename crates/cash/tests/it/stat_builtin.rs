@@ -33,11 +33,11 @@ fn cash(script: &str) -> String {
 }
 
 #[test]
-fn stat_counts_a_folders_links_as_linux_does() {
-    // 2 and one per folder in it, where `ls -l` shows 1 unless asked to count; a file's
+fn stat_counts_a_directories_links_as_linux_does() {
+    // 2 and one per directory in it, where `ls -l` shows 1 unless asked to count; a file's
     // are its hard links.
     let scratch = Scratch::new("stat-links");
-    let dir = scratch.path().join("folder");
+    let dir = scratch.path().join("directory");
     std::fs::create_dir_all(dir.join("one")).unwrap();
     std::fs::create_dir_all(dir.join("two")).unwrap();
     std::fs::write(dir.join("file"), "x").unwrap();
@@ -163,8 +163,8 @@ fn stat_default_report_names_the_real_owner() {
 }
 
 #[test]
-fn a_folder_has_an_inode_and_ef_compares_files() {
-    // A folder could not be opened without backup semantics: `stat` gave it inode 0 on
+fn a_directory_has_an_inode_and_ef_compares_files() {
+    // A directory could not be opened without backup semantics: `stat` gave it inode 0 on
     // device 0 (ARCH-06), and `[ a -ef b ]` was "not supported" (XC-3).
     let scratch = Scratch::new("ef");
     let (file, posix) = sample_file(&scratch);
@@ -198,7 +198,7 @@ fn stat_change_is_the_files_change_time() {
     let out = cash(&format!("stat -c '%Y %Z' '{posix}'"));
     #[expect(
         clippy::permissions_set_readonly_false,
-        reason = "the scratch folder is removed after the test, its files with it"
+        reason = "the scratch directory is removed after the test, its files with it"
     )]
     permissions.set_readonly(false);
     std::fs::set_permissions(&file, permissions).unwrap();

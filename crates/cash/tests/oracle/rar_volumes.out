@@ -110,7 +110,7 @@ v.part4.rar 43494
  Name: a.bin	 Packed size: 15413
  Name: b.bin	 Packed size: 25000
 t: 0
-== -v20k -psecret, a folder among the files
+== -v20k -psecret, a directory among the files
 v.part1.rar 20480
 v.part2.rar 20480
 v.part3.rar 20480
@@ -126,7 +126,7 @@ v.part5.rar 4595
 t: 0
 one archive: 85482
 after d: 60278
-== -v20k -hpsecret, a folder among the files
+== -v20k -hpsecret, a directory among the files
 v.part1.rar 20480
 v.part2.rar 20480
 v.part3.rar 20480
@@ -141,7 +141,7 @@ v.part5.rar 5518
 t: 0
 one archive: 85758
 after d: 60510
-== -v20k -hpsecret -rr3, a folder among the files
+== -v20k -hpsecret -rr3, a directory among the files
 v.part1.rar 20480
 v.part2.rar 20480
 v.part3.rar 20480

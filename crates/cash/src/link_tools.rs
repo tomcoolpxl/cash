@@ -5,22 +5,22 @@
 //! `which ls` prints `C:/…/cash.exe/ls` (D58), which only cash can run: Python's
 //! `subprocess` or a `.bat` file can start only a real file. A hard link is one: the same
 //! file as `cash.exe` under another name, costing no space. Started as `ls.exe`, cash
-//! finds its name in the folder's manifest and runs as `ls` ([`linked_tool`]).
+//! finds its name in the directory's manifest and runs as `ls` ([`linked_tool`]).
 //!
 //! Decided with the user:
 //!
-//! - the folder is DIR, or `bin` next to `cash.exe`, made when missing and used as it is
+//! - the directory is DIR, or `bin` next to `cash.exe`, made when missing and used as it is
 //!   when it exists;
 //! - a link cash made before (named in the manifest) is refreshed to this `cash.exe`, so
 //!   re-running after an upgrade updates them; any other file is left alone and listed.
 //!   A link Windows will not delete is renamed aside, and a later run deletes it;
 //! - every tool is linked; those whose names a Windows program also has in System32 are
 //!   named;
-//! - PATH changes only when asked: `--add-to-path` puts the folder at the front of the
+//! - PATH changes only when asked: `--add-to-path` puts the directory at the front of the
 //!   user `Path` ([`cash_win32::userpath`]), which Windows puts after the machine's, so
 //!   System32's `find` and `sort` still win for `.bat` files while cash's tools win over
 //!   the user's other Unix tools. `--unlink-tools` removes the links, that entry, and the
-//!   folder when nothing else is in it.
+//!   directory when nothing else is in it.
 
 use std::collections::BTreeSet;
 use std::io::Write as _;
@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 
 use cash_win32::userpath::Added;
 
-/// The manifest in a links folder: the names of the links cash made there, one a line.
+/// The manifest in a links directory: the names of the links cash made there, one a line.
 pub const MANIFEST: &str = ".cash-links";
 
 /// How a link renamed aside is named: `ls.exe.cash-old-1`. With no `.exe` at the end, no
@@ -83,7 +83,7 @@ pub fn has_manifest(dir: &Path) -> bool {
 }
 
 /// For the installer: the links in `dir` to this `cash.exe`, made or refreshed, and the
-/// folder first on the user PATH. How many links there are, and what PATH did.
+/// directory first on the user PATH. How many links there are, and what PATH did.
 ///
 /// # Errors
 ///
@@ -96,7 +96,7 @@ pub fn link_for_installer(dir: &Path) -> Result<(usize, Added), String> {
     Ok((total, added))
 }
 
-/// For the installer's uninstall: the links in `dir`, its PATH entry and the folder.
+/// For the installer's uninstall: the links in `dir`, its PATH entry and the directory.
 /// The links removed; an error names what is still there.
 ///
 /// # Errors
@@ -169,7 +169,7 @@ fn write_manifest(dir: &Path, names: &BTreeSet<String>) -> Result<(), String> {
 }
 
 /// If this process is a link `cash --link-tools` made, the tool it stands for: the file's
-/// name, when the manifest in its folder lists it. `cash.exe` itself, and a copy under
+/// name, when the manifest in its directory lists it. `cash.exe` itself, and a copy under
 /// another name nobody linked, are the shell.
 ///
 /// cash re-enters its own exe for bundled tools (`--invoke-bundled`), for `sh`, `bash` and
@@ -190,9 +190,9 @@ pub fn linked_tool() -> Option<String> {
         .find(|name| name.eq_ignore_ascii_case(stem))
 }
 
-/// The links a folder's manifest lists that are no longer this `cash.exe`: made by an
+/// The links a directory's manifest lists that are no longer this `cash.exe`: made by an
 /// older one and not refreshed since, replaced by another file, or deleted. With the
-/// number listed, for `cash doctor`; `None` when the folder has no manifest.
+/// number listed, for `cash doctor`; `None` when the directory has no manifest.
 pub fn stale_links(dir: &Path) -> Option<(usize, Vec<String>)> {
     let owned = read_manifest(dir);
     if owned.is_empty() {
@@ -252,17 +252,17 @@ fn own_exe() -> Result<PathBuf, String> {
         .map_err(|e| format!("cannot find cash.exe: {e}"))
 }
 
-/// The links folder: DIR, or `bin` next to `cash.exe`.
-fn links_folder(dir: Option<&Path>, exe: &Path) -> Result<PathBuf, String> {
+/// The links directory: DIR, or `bin` next to `cash.exe`.
+fn links_directory(dir: Option<&Path>, exe: &Path) -> Result<PathBuf, String> {
     Ok(match dir {
         Some(dir) => dir.to_path_buf(),
-        None => exe.parent().ok_or("cash.exe has no folder")?.join("bin"),
+        None => exe.parent().ok_or("cash.exe has no directory")?.join("bin"),
     })
 }
 
 fn link_all(dir: Option<&Path>) -> Result<(PathBuf, Outcome), String> {
     let exe = own_exe()?;
-    let dir = links_folder(dir, &exe)?;
+    let dir = links_directory(dir, &exe)?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", render(&dir)))?;
     let dir = std::fs::canonicalize(&dir).map_err(|e| format!("{}: {e}", render(&dir)))?;
     sweep_set_aside(&dir);
@@ -379,13 +379,13 @@ fn make_link(exe: &Path, link: &Path, dir: &Path) -> Result<(), String> {
     std::fs::hard_link(exe, link).map_err(|e| match e.raw_os_error() {
         Some(ERROR_NOT_SAME_DEVICE) => format!(
             "{} is on another drive than {}; a hard link cannot cross drives. \
-             Name a folder on the same drive.",
+             Name a directory on the same drive.",
             render(dir),
             render(exe)
         ),
         Some(ERROR_TOO_MANY_LINKS) => format!(
-            "{} already has the 1023 names NTFS allows a file, each links folder giving it \
-             one a tool; `cash --unlink-tools DIR` removes a folder's links",
+            "{} already has the 1023 names NTFS allows a file, each links directory giving it \
+             one a tool; `cash --unlink-tools DIR` removes a directory's links",
             render(exe)
         ),
         _ => format!("{}: {e}", render(link)),
@@ -487,38 +487,38 @@ fn report(dir: &Path, outcome: &Outcome, added: Option<Added>) {
             say!("  already on your user PATH, left where it is");
         }
         None if cash_win32::userpath::contains(dir) => {
-            say!("  the folder is on your user PATH");
+            say!("  the directory is on your user PATH");
         }
         None if on_path(dir) => {
-            say!("  the folder is on PATH: other programs can run these now");
+            say!("  the directory is on PATH: other programs can run these now");
         }
         None => {
             say!(
-                "  to let other programs run these, put the folder at the front of your user PATH:"
+                "  to let other programs run these, put the directory at the front of your user PATH:"
             );
             say!("    cash --link-tools --add-to-path \"{shown}\"");
         }
     }
 }
 
-/// What unlinking a folder did.
+/// What unlinking a directory did.
 struct Unlinked {
-    /// The folder, as a real path.
+    /// The directory, as a real path.
     dir: PathBuf,
     removed: usize,
     /// Links Windows would not delete, renamed aside for a later run to delete.
     set_aside: Vec<String>,
     /// Links that could not be removed or renamed, still listed for the next run.
     failed: BTreeSet<String>,
-    /// Whether the folder was on the user PATH, or why it could not be taken off.
+    /// Whether the directory was on the user PATH, or why it could not be taken off.
     off_path: std::io::Result<bool>,
-    folder_gone: bool,
+    directory_gone: bool,
 }
 
-/// The links cash made in `dir`, the folder's entry on the user PATH, and the folder when
+/// The links cash made in `dir`, the directory's entry on the user PATH, and the directory when
 /// nothing else is in it.
 fn unlink_all(dir: &Path) -> Unlinked {
-    // A folder already gone can still be on PATH.
+    // A directory already gone can still be on PATH.
     let dir = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
     sweep_set_aside(&dir);
 
@@ -551,21 +551,21 @@ fn unlink_all(dir: &Path) -> Unlinked {
     }
 
     let off_path = cash_win32::userpath::remove(&dir);
-    let folder_gone = std::fs::remove_dir(&dir).is_ok() || !dir.exists();
+    let directory_gone = std::fs::remove_dir(&dir).is_ok() || !dir.exists();
     Unlinked {
         dir,
         removed,
         set_aside,
         failed,
         off_path,
-        folder_gone,
+        directory_gone,
     }
 }
 
-/// `cash --unlink-tools [DIR]`: the links cash made there, the folder's entry on the user
-/// PATH, and the folder when nothing else is in it. Returns the process exit status.
+/// `cash --unlink-tools [DIR]`: the links cash made there, the directory's entry on the user
+/// PATH, and the directory when nothing else is in it. Returns the process exit status.
 fn unlink(dir: Option<&Path>) -> u8 {
-    let dir = match own_exe().and_then(|exe| links_folder(dir, &exe)) {
+    let dir = match own_exe().and_then(|exe| links_directory(dir, &exe)) {
         Ok(dir) => dir,
         Err(message) => {
             eprintln!("cash --unlink-tools: {message}");
@@ -597,10 +597,10 @@ fn unlink(dir: Option<&Path>) -> u8 {
     let _ = writeln!(
         out,
         "  {}",
-        if done.folder_gone {
-            "the folder is removed"
+        if done.directory_gone {
+            "the directory is removed"
         } else {
-            "the folder is kept: other files are in it"
+            "the directory is kept: other files are in it"
         }
     );
 

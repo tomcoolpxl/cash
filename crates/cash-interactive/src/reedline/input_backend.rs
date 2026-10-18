@@ -233,7 +233,7 @@ impl InputBackend for ReedlineInputBackend {
                     return Err(ShellError::UnexpectedInputFailure);
                 }
                 Ok(reedline::Signal::HostCommand(command)) => {
-                    // Alt-← and Alt-→ (D62): on an empty line they change folder, and the
+                    // Alt-← and Alt-→ (D62): on an empty line they change directory, and the
                     // prompt is drawn afresh in the new one; on any other they move a word,
                     // and reading simply resumes, without recomposing the prompt.
                     // Alt-E (D73): croot below the line, which stays on screen; its pick
@@ -256,14 +256,14 @@ impl InputBackend for ReedlineInputBackend {
                     }
 
                     let mut command = command;
-                    if let Some((folder_command, word_move)) =
-                        edit_mode::folder_history_key(&command)
+                    if let Some((directory_command, word_move)) =
+                        edit_mode::directory_history_key(&command)
                     {
                         if !reedline.current_buffer_contents().is_empty() {
                             reedline.run_edit_commands(&[word_move]);
                             continue;
                         }
-                        folder_command.clone_into(&mut command);
+                        directory_command.clone_into(&mut command);
                     }
 
                     // As Bash does for `bind -x`, clear the line before the command runs:
@@ -362,7 +362,7 @@ fn compose_key_bindings(completion_menu_name: &str) -> reedline::Keybindings {
             reedline::ReedlineEvent::Edit(vec![reedline::EditCommand::Complete]),
         ]),
     );
-    // Alt-E: croot, the file and folder picker (D73), as `cash-picker`.
+    // Alt-E: croot, the file and directory picker (D73), as `cash-picker`.
     key_bindings.add_binding(
         reedline::KeyModifiers::ALT,
         reedline::KeyCode::Char('e'),

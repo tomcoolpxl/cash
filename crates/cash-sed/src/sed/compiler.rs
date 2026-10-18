@@ -3357,7 +3357,7 @@ mod tests {
 
     #[test]
     fn test_compile_subst_flag_w_with_filename() {
-        let tmp_dir = tempfile::tempdir().expect("failed to create tmp folder");
+        let tmp_dir = tempfile::tempdir().expect("failed to create tmp directory");
         let out = tmp_dir.path().join("out.txt");
         let (lines, mut chars) = make_providers(&format!("w {}", out.display()));
         let mut subst = Substitution::default();

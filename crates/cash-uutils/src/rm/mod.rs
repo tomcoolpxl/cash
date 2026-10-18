@@ -556,11 +556,11 @@ pub fn remove(files: &[&OsStr], options: &Options) -> bool {
     let mut progress_bar: Option<ProgressBar> = None;
     let mut any_files_processed = false;
 
-    // cash: the folder rm sits in, while it still does (see `leave_folder_for`).
+    // cash: the directory rm sits in, while it still does (see `leave_directory_for`).
     let mut sits_in = std::env::current_dir().ok();
 
     for filename in files {
-        let Some(file) = leave_folder_for(Path::new(filename), &mut sits_in, options) else {
+        let Some(file) = leave_directory_for(Path::new(filename), &mut sits_in, options) else {
             if !options.force {
                 show_error!(
                     "{}",
@@ -631,17 +631,17 @@ pub fn remove(files: &[&OsStr], options: &Options) -> bool {
     had_err
 }
 
-/// cash: the path to remove `file` by, after rm has left the folder it sits in when
+/// cash: the path to remove `file` by, after rm has left the directory it sits in when
 /// `file` holds it, or `None` when `file` names nothing because rm has left already.
 ///
-/// Windows will not remove a folder a process sits in, and the bundled rm runs in the
-/// shell's folder, so `d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"` left `$d`
-/// behind. When `file` is a folder that holds rm's working folder and rm is to remove
-/// folders, rm moves to the root of its volume first, and a relative `file` goes on as
+/// Windows will not remove a directory a process sits in, and the bundled rm runs in the
+/// shell's directory, so `d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"` left `$d`
+/// behind. When `file` is a directory that holds rm's working directory and rm is to remove
+/// directories, rm moves to the root of its volume first, and a relative `file` goes on as
 /// its full path. From then on a relative operand names nothing, as on Linux once the
-/// working folder is gone; it is never looked for from the root. An operand that ends
+/// working directory is gone; it is never looked for from the root. An operand that ends
 /// in `.` or `..` is left as it is, for `handle_dir` to refuse.
-fn leave_folder_for<'a>(
+fn leave_directory_for<'a>(
     file: &'a Path,
     sits_in: &mut Option<PathBuf>,
     options: &Options,
@@ -898,7 +898,7 @@ fn remove_file(path: &Path, options: &Options, progress_bar: Option<&ProgressBar
             pb.inc(1);
         }
 
-        // cash: a folder link (a junction, or a symbolic link to a folder) is a folder
+        // cash: a directory link (a junction, or a symbolic link to a directory) is a directory
         // entry, which DeleteFileW refuses ("Permission denied"); RemoveDirectoryW takes
         // the link itself away, never following it, whether its target is there or not.
         let removed = if fs::symlink_metadata(path).is_ok_and(|md| is_symlink_dir(&md)) {

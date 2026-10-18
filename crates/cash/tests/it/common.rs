@@ -1,5 +1,5 @@
 //! What the tests of this executable share: the binary, a run of it and its output, and
-//! a scratch folder.
+//! a scratch directory.
 //!
 //! A test runs cash as a user would, but not with the user's settings: without the
 //! developer's `%APPDATA%\cash\config.toml` (`--no-config`, and an empty `APPDATA` for
@@ -10,8 +10,8 @@
 //! 43 modules had a run helper of their own and most passed the developer's environment
 //! straight through (`REVIEW_REPORT.md` BIN-18, BIN-20).
 //!
-//! A scratch folder's name carries the process id and a counter, so two test runs at
-//! once, another session's included, never empty each other's folders (BIN-19).
+//! A scratch directory's name carries the process id and a counter, so two test runs at
+//! once, another session's included, never empty each other's directories (BIN-19).
 //!
 //! Every module starts cash from here. Where a test cannot take `cash_command()` whole
 //! (a subcommand such as `cash doctor` that must be cash's first argument), it uses
@@ -84,14 +84,14 @@ pub fn with_isolated_environment<R>(start: impl FnOnce(&[(&str, &str)]) -> R) ->
     start(&env)
 }
 
-/// An empty folder for `%APPDATA%`, where cash looks for `cash\config.toml`. `--no-config`
+/// An empty directory for `%APPDATA%`, where cash looks for `cash\config.toml`. `--no-config`
 /// keeps the developer's config from the cash a test starts; this keeps it from every cash
 /// that one starts in turn (a shebang script, `sh -c`, `bash -c`), which inherit the
 /// variable and take no flag. Shared by every test and never written, so its fixed name
 /// is safe.
 fn no_appdata() -> PathBuf {
     let dir = std::env::temp_dir().join("cash-it-no-appdata");
-    std::fs::create_dir_all(&dir).expect("create the empty APPDATA folder");
+    std::fs::create_dir_all(&dir).expect("create the empty APPDATA directory");
     dir
 }
 
@@ -110,12 +110,12 @@ pub fn run(script: &str) -> Output {
     output_of(cash_command().args(["-c", script]))
 }
 
-/// Runs `script` with `cash -c`, in the folder `dir`.
+/// Runs `script` with `cash -c`, in the directory `dir`.
 pub fn run_in(dir: &Path, script: &str) -> Output {
     output_of(cash_command().args(["-c", script]).current_dir(dir))
 }
 
-/// The folder of the oracle scripts and their golden files, `tests/oracle`.
+/// The directory of the oracle scripts and their golden files, `tests/oracle`.
 pub fn oracle_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -195,7 +195,7 @@ mod tests {
     }
 }
 
-/// The folder Git for Windows is installed in, found through the `git` on `PATH`
+/// The directory Git for Windows is installed in, found through the `git` on `PATH`
 /// (`git --exec-path` is `<root>/mingw64/libexec/git-core`), with forward slashes.
 ///
 /// Git for Windows is a prerequisite of cash's workload (spec D35), and CI has it: a test
@@ -205,7 +205,7 @@ pub fn git_for_windows() -> String {
     git_for_windows_layout().0
 }
 
-/// The folder of Git for Windows' own programs and scripts, `<root>/mingw64`, or
+/// The directory of Git for Windows' own programs and scripts, `<root>/mingw64`, or
 /// `<root>/ucrt64` in the builds made with the UCRT (CI's runners since 2026-10), or
 /// `<root>/clangarm64` on ARM.
 pub fn git_for_windows_prefix() -> String {
@@ -235,32 +235,32 @@ fn git_for_windows_layout() -> (String, String) {
     (root.to_owned(), prefix.to_owned())
 }
 
-/// A folder of the test's own, empty when made and removed when dropped.
+/// A directory of the test's own, empty when made and removed when dropped.
 pub struct Scratch(PathBuf);
 
 impl Scratch {
-    /// A new, empty scratch folder; `name` says which test it is for.
+    /// A new, empty scratch directory; `name` says which test it is for.
     pub fn new(name: &str) -> Self {
         static COUNT: AtomicU32 = AtomicU32::new(0);
         let count = COUNT.fetch_add(1, Ordering::Relaxed);
         let dir =
             std::env::temp_dir().join(format!("cash-it-{name}-{}-{count}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create the scratch folder");
+        std::fs::create_dir_all(&dir).expect("create the scratch directory");
         Self(dir)
     }
 
-    /// The folder.
+    /// The directory.
     pub fn path(&self) -> &Path {
         &self.0
     }
 
-    /// `path` inside the folder.
+    /// `path` inside the directory.
     pub fn join(&self, path: impl AsRef<Path>) -> PathBuf {
         self.0.join(path)
     }
 
-    /// The folder in cash's canonical spelling, safe to paste into a script.
+    /// The directory in cash's canonical spelling, safe to paste into a script.
     pub fn as_script_path(&self) -> String {
         self.0.to_string_lossy().replace('\\', "/")
     }
@@ -326,8 +326,8 @@ pub fn doctor_findings(report: &str) -> Vec<DoctorFinding> {
     findings
 }
 
-/// The first line of a `cash doctor` report, `cash doctor · cash VERSION in FOLDER`, with
-/// a wrapped folder joined back on.
+/// The first line of a `cash doctor` report, `cash doctor · cash VERSION in DIRECTORY`, with
+/// a wrapped directory joined back on.
 pub fn doctor_header(report: &str) -> String {
     report
         .split("\n\n")

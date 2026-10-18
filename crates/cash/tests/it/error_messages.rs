@@ -175,14 +175,14 @@ fn a_syntax_error_is_reported_on_two_lines() {
 fn errors_are_worded_as_bash_words_them() {
     // Each as Git Bash 5.3 says it, after `bash: line 1: `.
     let scratch = Scratch::new("wording");
-    std::fs::create_dir_all(scratch.path().join("folder")).expect("mkdir");
+    std::fs::create_dir_all(scratch.path().join("directory")).expect("mkdir");
     let cases = [
         ("nosuch", "nosuch: command not found"),
         (
             "./no-such-script",
             "./no-such-script: No such file or directory",
         ),
-        ("./folder", "./folder: Is a directory"),
+        ("./directory", "./directory: Is a directory"),
         ("readonly r=1; r=2", "r: readonly variable"),
         (
             "readonly r=1; unset r",
@@ -524,10 +524,10 @@ fn a_bad_substitution_is_said_and_abandons_its_command() {
 }
 
 #[test]
-fn a_folder_redirected_or_sourced_is_a_directory() {
-    // Windows refuses a folder opened as a file with "Access is denied", which cash said
+fn a_directory_redirected_or_sourced_is_a_directory() {
+    // Windows refuses a directory opened as a file with "Access is denied", which cash said
     // as "Permission denied"; Bash says "Is a directory".
-    let scratch = Scratch::new("folder-redirect");
+    let scratch = Scratch::new("directory-redirect");
     std::fs::create_dir(scratch.path().join("dd")).unwrap();
     let out = run_in(
         scratch.path(),

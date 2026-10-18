@@ -656,7 +656,7 @@ pub struct VolumeFacts {
     pub available_blocks: u64,
 }
 
-/// The facts of the volume holding `path`, a folder or a file on it; `None` when Windows
+/// The facts of the volume holding `path`, a directory or a file on it; `None` when Windows
 /// cannot say (no such path, a volume not ready).
 #[must_use]
 pub fn volume_facts(path: &std::path::Path) -> Option<VolumeFacts> {

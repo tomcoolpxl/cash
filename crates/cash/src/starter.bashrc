@@ -65,7 +65,7 @@ __prompt_git_branch() {
     done
 }
 
-# The current folder as Windows spells it, for Windows Terminal: C:\Users\me, from
+# The current directory as Windows spells it, for Windows Terminal: C:\Users\me, from
 # cash's C:/Users/me or Git Bash's /c/Users/me. Empty for Git Bash's own /usr and such.
 __prompt_windows_path() {
     local path=$PWD
@@ -100,7 +100,7 @@ __prompt_command() {
     local body="\[\e[1;34m\]\w\[\e[0m\]$branch\n$arrow"
 
     if [[ -n $WT_SESSION ]]; then
-        # Windows Terminal: the tab title, the folder for new tabs and panes (OSC 9;9),
+        # Windows Terminal: the tab title, the directory for new tabs and panes (OSC 9;9),
         # and the marks around prompt, command and output (OSC 133), as Microsoft's
         # shell-integration guide sets them.
         __prompt_windows_path
@@ -119,12 +119,12 @@ PS2='> '
 
 # --- cash only ------------------------------------------------------------------------
 if [[ -n $CASH_VERSION ]]; then
-    # Icons before names, folders first; `ls` in a pipe or a script stays plain. The
+    # Icons before names, directories first; `ls` in a pipe or a script stays plain. The
     # icons need a Nerd Font: `scoop install nerd-fonts/CascadiaMono-NF`, then
     # `cash --terminal-profile` to have Windows Terminal use it.
     alias ls='ls --icons --group-directories-first'
 else
-    # Git Bash: its own ls alias, with folders first too.
+    # Git Bash: its own ls alias, with directories first too.
     alias ls='ls -F --color=auto --show-control-chars --group-directories-first'
 fi
 

@@ -1,14 +1,14 @@
 //! 7-Zip's scan of the disk for `a` and `u` (`EnumDirItems.cpp`): each prefix's tree of
-//! masks walked from its folder, what the masks take, and a warning for each name that
+//! masks walked from its directory, what the masks take, and a warning for each name that
 //! is not there.
 //!
-//! A file's facts come from its folder's listing, as `FindFirstFile` gives them to
-//! 7-Zip: the name's case as it is on disk, and the times the folder's index holds,
-//! which can lag behind the file's own for a folder just written to.
+//! A file's facts come from its directory's listing, as `FindFirstFile` gives them to
+//! 7-Zip: the name's case as it is on disk, and the times the directory's index holds,
+//! which can lag behind the file's own for a directory just written to.
 //!
 //! A link is a symbolic link or a junction (a name surrogate), the builtins' one answer:
 //! another reparse point, a cloud placeholder or a deduplicated file, is the file or
-//! folder it holds, as 7-Zip, which keeps reparse data only when it reads as a link
+//! directory it holds, as 7-Zip, which keeps reparse data only when it reads as a link
 //! (`CReparseAttr::Parse`), takes it.
 
 use std::fs;
@@ -22,7 +22,7 @@ use super::censor::{Censor, Node, check_to_root};
 const ATTRIBUTE_DIRECTORY: u32 = 0x10;
 
 /// Windows' `ERROR_INVALID_FUNCTION`, 7-Zip's error for a name that is a file where a
-/// folder was meant, or the other way round.
+/// directory was meant, or the other way round.
 const ERROR_INVALID_FUNCTION: i32 = 1;
 
 /// Windows' `ERROR_FILE_NOT_FOUND`: "The system cannot find the file specified."
@@ -32,7 +32,7 @@ const ERROR_FILE_NOT_FOUND: i32 = 2;
 /// system.": what 7-Zip says once a junction loop has made the path too deep.
 const ERROR_CANT_RESOLVE_FILENAME: i32 = 1921;
 
-/// A file or folder the scan took.
+/// A file or directory the scan took.
 #[derive(Debug, Clone)]
 pub(super) struct DirItem {
     /// Its name in the archive, `/` between the parts.
@@ -153,8 +153,8 @@ impl Found {
 /// `warn` hears each path that could not be read, with why.
 ///
 /// With `symlinks` (`-snl`) a junction or a symbolic link is kept as one, its reparse
-/// data read, a folder not entered; else it is followed. `progress` hears the count so
-/// far as each folder is entered (`ScanProgress`). A stop ends the scan with nothing:
+/// data read, a directory not entered; else it is followed. `progress` hears the count so
+/// far as each directory is entered (`ScanProgress`). A stop ends the scan with nothing:
 /// 7-Zip's "Break signaled".
 pub(super) fn scan(
     censor: &Censor,
@@ -208,7 +208,7 @@ impl Walker<'_> {
         (self.resolve)(if shown.is_empty() { "." } else { shown })
     }
 
-    /// `FindFile_KeepDots`: the name as its folder lists it, links followed.
+    /// `FindFile_KeepDots`: the name as its directory lists it, links followed.
     fn find(&self, shown: &str) -> io::Result<Found> {
         let path = self.path(shown);
         let name = shown
@@ -239,7 +239,7 @@ impl Walker<'_> {
         Err(io::Error::from_raw_os_error(ERROR_FILE_NOT_FOUND))
     }
 
-    /// `ListDir`: a folder's entries in the order NTFS keeps them.
+    /// `ListDir`: a directory's entries in the order NTFS keeps them.
     fn list(&self, phy: &str) -> io::Result<Vec<Found>> {
         let dir = self.path(phy);
         let mut found = Vec::new();
@@ -304,8 +304,8 @@ impl Walker<'_> {
         }
     }
 
-    /// `EnumerateDirItems_Spec`: the folder `found` under `phy`, with `stack`'s masks. A
-    /// junction back to a folder above it is not gone into: 7-Zip goes round it until the
+    /// `EnumerateDirItems_Spec`: the directory `found` under `phy`, with `stack`'s masks. A
+    /// junction back to a directory above it is not gone into: 7-Zip goes round it until the
     /// path is too deep and says so; cash says the same of the junction, and stores each
     /// file once.
     fn enter(
@@ -337,8 +337,8 @@ impl Walker<'_> {
         );
     }
 
-    /// `EnumerateDirItems`: what the last node of `stack` takes in the folder `phy`,
-    /// `add_parts` being the folders between that node and this one.
+    /// `EnumerateDirItems`: what the last node of `stack` takes in the directory `phy`,
+    /// `add_parts` being the directories between that node and this one.
     fn enumerate(
         &mut self,
         stack: &[&Node],
@@ -376,8 +376,8 @@ impl Walker<'_> {
         }
     }
 
-    /// The names a node gives plainly, looked up without listing their folder, then
-    /// the node's subfolders that no name reached.
+    /// The names a node gives plainly, looked up without listing their directory, then
+    /// the node's subdirectories that no name reached.
     fn enumerate_direct(
         &mut self,
         stack: &[&Node],
@@ -454,7 +454,7 @@ impl Walker<'_> {
         }
     }
 
-    /// `EnumerateForItem`: one entry of a listed folder.
+    /// `EnumerateForItem`: one entry of a listed directory.
     fn enumerate_item(
         &mut self,
         stack: &[&Node],

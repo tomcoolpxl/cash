@@ -135,7 +135,7 @@ for a in rar50/winrar721_header_encrypted_quickopen.rar; do
   z t -pPassword "$a"
 done
 
-# `x` into a folder of its own, then each file it holds and its CRC.
+# `x` into a directory of its own, then each file it holds and its CRC.
 xt() {
   rm -rf out
   z x -y -oout "$@"

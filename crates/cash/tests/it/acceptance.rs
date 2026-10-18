@@ -488,8 +488,8 @@ fn dev_null_discards() {
 }
 
 #[test]
-fn a_file_called_null_in_a_folder_called_dev_is_a_file() {
-    // Any resolved path that ended in `dev/null` was the device, so in a folder called
+fn a_file_called_null_in_a_directory_called_dev_is_a_file() {
+    // Any resolved path that ended in `dev/null` was the device, so in a directory called
     // `dev`, which is where many people keep their work, output sent to a file called
     // `null` was thrown away without a word. bash writes the file.
     for (name, script, file) in [
@@ -767,7 +767,7 @@ fn a_name_that_only_resembles_a_device_is_a_file() {
     let scratch = Scratch::new("dev-near");
     let cd = format!("cd {}", scratch.as_script_path());
 
-    // A folder called `dev` is an ordinary folder.
+    // A directory called `dev` is an ordinary directory.
     let relative = cash(&format!(
         "{cd}; mkdir dev; echo kept > dev/stdout; cat dev/stdout"
     ));

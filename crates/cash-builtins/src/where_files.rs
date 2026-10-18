@@ -1,7 +1,7 @@
 //! `where` — Windows' `where.exe`, with options spelled the way cash spells them (D66).
 //!
-//! `where.exe` finds files by pattern along the current folder and `PATH`, or in the
-//! folders named by `DIR:PATTERN` or `$VAR:PATTERN`, or everywhere below a folder with
+//! `where.exe` finds files by pattern along the current directory and `PATH`, or in the
+//! directories named by `DIR:PATTERN` or `$VAR:PATTERN`, or everywhere below a directory with
 //! `/r`. This port keeps its search, its order, its messages and its exit statuses (0
 //! found, 1 not found, 2 an error), measured against `where.exe` on Windows 11. What
 //! changes is what cash changes everywhere:
@@ -29,10 +29,10 @@ const HELP: &str = "\
 Usage: where [-r DIR] [-q] [-f] [-t] PATTERN...
 
 Displays the location of files that match the search pattern. By default, the
-search is done in the current folder and in the folders on PATH.
+search is done in the current directory and in the directories on PATH.
 
 Options:
-  -r, --recursive DIR  Search DIR and every folder below it, recursively.
+  -r, --recursive DIR  Search DIR and every directory below it, recursively.
   -q, --quiet          Print nothing; report only through the exit status.
   -f, --quote          Print each matched file name in double quotes.
   -t, --times          Print the size and the last modified date and time of
@@ -41,9 +41,9 @@ Options:
 
 PATTERN is a file name, and may use the wildcards * and ?. A PATTERN without an
 extension also matches the name with each extension in PATHEXT. Two other forms
-search other folders:
-  $VAR:PATTERN   the folders listed in the environment variable VAR
-  DIR:PATTERN    DIR, or a list of folders separated by ;
+search other directories:
+  $VAR:PATTERN   the directories listed in the environment variable VAR
+  DIR:PATTERN    DIR, or a list of directories separated by ;
 Neither can be used with -r.
 
 Exit status: 0 if a file was found, 1 if none was, and 2 for an error.
@@ -129,7 +129,7 @@ fn parse(args: &[String]) -> Result<Request, Usage> {
             continue;
         }
         // Short options, which may be bundled (`-qf`); `r` takes the rest of the word
-        // or the next one as its folder.
+        // or the next one as its directory.
         let letters: Vec<char> = arg.chars().skip(1).collect();
         for (at, letter) in letters.iter().enumerate() {
             match letter.to_ascii_lowercase() {
@@ -158,10 +158,10 @@ fn parse(args: &[String]) -> Result<Request, Usage> {
 
 /// Where one pattern is looked for.
 enum Scope {
-    /// The current folder, then `PATH`.
+    /// The current directory, then `PATH`.
     Default,
-    /// Folders named on the command line, or by an environment variable.
-    Folders(Vec<String>),
+    /// Directories named on the command line, or by an environment variable.
+    Directories(Vec<String>),
     /// An environment variable that is not set.
     MissingVariable(String),
 }
@@ -193,7 +193,7 @@ fn plan<SE: cash_core::ShellExtensions>(
             return Err(error("ERROR: \"$env:pattern\" cannot be used with -r."));
         }
         let scope = match variable_value(shell, variable) {
-            Some(value) => Scope::Folders(split_folders(&value)),
+            Some(value) => Scope::Directories(split_directories(&value)),
             None => Scope::MissingVariable(variable.to_owned()),
         };
         return Ok(Search {
@@ -202,7 +202,7 @@ fn plan<SE: cash_core::ShellExtensions>(
             name: name.to_owned(),
         });
     }
-    if let Some((folders, name)) = pattern.rsplit_once(':') {
+    if let Some((directories, name)) = pattern.rsplit_once(':') {
         if recursive {
             return Err(error(
                 "ERROR: \"path:pattern\" format cannot be used with -r.",
@@ -218,7 +218,7 @@ fn plan<SE: cash_core::ShellExtensions>(
         }
         return Ok(Search {
             given: pattern.to_owned(),
-            scope: Scope::Folders(split_folders(folders)),
+            scope: Scope::Directories(split_directories(directories)),
             name: name.to_owned(),
         });
     }
@@ -249,29 +249,31 @@ fn variable_value<SE: cash_core::ShellExtensions>(
     shell.env_str(&actual).map(std::borrow::Cow::into_owned)
 }
 
-/// A folder list, in either `;` or `:` form.
-fn split_folders(value: &str) -> Vec<String> {
+/// A directory list, in either `;` or `:` form.
+fn split_directories(value: &str) -> Vec<String> {
     cash_win32::env::split_path(value)
         .map(str::to_owned)
         .collect()
 }
 
-/// The folders to search, as absolute paths, each once.
-fn folders<SE: cash_core::ShellExtensions>(
+/// The directories to search, as absolute paths, each once.
+fn directories<SE: cash_core::ShellExtensions>(
     shell: &cash_core::Shell<SE>,
     scope: &Scope,
 ) -> Vec<PathBuf> {
     let listed: Vec<String> = match scope {
         Scope::Default => std::iter::once(".".to_owned())
-            .chain(split_folders(&shell.env_str("PATH").unwrap_or_default()))
+            .chain(split_directories(
+                &shell.env_str("PATH").unwrap_or_default(),
+            ))
             .collect(),
-        Scope::Folders(folders) => folders.clone(),
+        Scope::Directories(directories) => directories.clone(),
         Scope::MissingVariable(_) => Vec::new(),
     };
     let mut seen: Vec<String> = Vec::new();
     let mut out = Vec::new();
-    for folder in listed {
-        let path = absolute(shell, &folder);
+    for directory in listed {
+        let path = absolute(shell, &directory);
         let key = cash_win32::fold::name_key(cash_win32::path::render(&path).trim_end_matches('/'));
         if !seen.contains(&key) {
             seen.push(key);
@@ -281,9 +283,12 @@ fn folders<SE: cash_core::ShellExtensions>(
     out
 }
 
-/// `folder` as an absolute path, `..` resolved, against the shell's current folder.
-fn absolute<SE: cash_core::ShellExtensions>(shell: &cash_core::Shell<SE>, folder: &str) -> PathBuf {
-    let path = shell.absolute_path(Path::new(folder));
+/// `directory` as an absolute path, `..` resolved, against the shell's current directory.
+fn absolute<SE: cash_core::ShellExtensions>(
+    shell: &cash_core::Shell<SE>,
+    directory: &str,
+) -> PathBuf {
+    let path = shell.absolute_path(Path::new(directory));
     std::path::absolute(&path).unwrap_or(path)
 }
 
@@ -359,14 +364,14 @@ fn wildcard(pattern: &str, name: &str) -> bool {
     pattern[p..].iter().all(|c| *c == '*')
 }
 
-/// The files at and below `folder` in `where.exe`'s order: a folder's own files, then
-/// each folder in it with what is below it, by name as Windows folds names; only `folder`'s
-/// own unless `recursive`. A link is gone through, a junction to a folder as a folder, as
-/// `where.exe` goes through it, and a link back to a folder above is passed by: `where.exe`
-/// goes round it until the path is too long, so each file is listed once here. A folder
+/// The files at and below `directory` in `where.exe`'s order: a directory's own files, then
+/// each directory in it with what is below it, by name as Windows folds names; only `directory`'s
+/// own unless `recursive`. A link is gone through, a junction to a directory as a directory, as
+/// `where.exe` goes through it, and a link back to a directory above is passed by: `where.exe`
+/// goes round it until the path is too long, so each file is listed once here. A directory
 /// that cannot be listed is passed over, as `where.exe` passes it, and an app execution
 /// alias (`WindowsApps`, a reparse point Windows runs as a program) is a file.
-fn each_file(folder: &Path, recursive: bool, stop: StopToken, mut found: impl FnMut(&Path)) {
+fn each_file(directory: &Path, recursive: bool, stop: StopToken, mut found: impl FnMut(&Path)) {
     use std::os::windows::fs::FileTypeExt;
     let options = WalkOptions {
         links: Links::All,
@@ -375,10 +380,10 @@ fn each_file(folder: &Path, recursive: bool, stop: StopToken, mut found: impl Fn
         max_depth: if recursive { usize::MAX } else { 1 },
         ..WalkOptions::default()
     };
-    for next in Walk::new("", folder, &options, stop) {
+    for next in Walk::new("", directory, &options, stop) {
         match next {
-            Ok(entry) if entry.kind != Kind::Folder => found(&entry.path),
-            // A link to a file that is not there is still a name in the folder.
+            Ok(entry) if entry.kind != Kind::Directory => found(&entry.path),
+            // A link to a file that is not there is still a name in the directory.
             Err(WalkError::Dangling(entry))
                 if !std::fs::symlink_metadata(&entry.path)
                     .is_ok_and(|m| m.file_type().is_symlink_dir()) =>
@@ -392,7 +397,7 @@ fn each_file(folder: &Path, recursive: bool, stop: StopToken, mut found: impl Fn
 }
 
 /// What each search finds, in order: below `root` in one walk for every pattern, or in
-/// the folders each search names, each listed once however many searches look in it.
+/// the directories each search names, each listed once however many searches look in it.
 fn find<SE: cash_core::ShellExtensions>(
     shell: &cash_core::Shell<SE>,
     searches: &[Search],
@@ -421,13 +426,13 @@ fn find<SE: cash_core::ShellExtensions>(
         });
         return found;
     }
-    // A folder's files with their folded names, for the next search that looks in it.
+    // A directory's files with their folded names, for the next search that looks in it.
     let mut listings: HashMap<PathBuf, Vec<(PathBuf, String)>> = HashMap::new();
     for ((search, patterns), found) in searches.iter().zip(&patterns).zip(&mut found) {
-        for folder in folders(shell, &search.scope) {
-            let files = listings.entry(folder).or_insert_with_key(|folder| {
+        for directory in directories(shell, &search.scope) {
+            let files = listings.entry(directory).or_insert_with_key(|directory| {
                 let mut files = Vec::new();
-                each_file(folder, false, stop.clone(), |path| {
+                each_file(directory, false, stop.clone(), |path| {
                     files.push((path.to_path_buf(), folded_name(path)));
                 });
                 files
@@ -472,7 +477,7 @@ fn line(path: &Path, quote: bool, times: bool) -> String {
     format!("{size:>10}   {date}      {time}  {name}")
 }
 
-/// Every search the command line asks for, and the folder `-r` starts from; or why the
+/// Every search the command line asks for, and the directory `-r` starts from; or why the
 /// command line cannot run, found before anything is printed, as `where.exe` does.
 fn prepare<SE: cash_core::ShellExtensions>(
     shell: &cash_core::Shell<SE>,

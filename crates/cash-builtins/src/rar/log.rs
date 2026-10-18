@@ -1,5 +1,5 @@
 //! `-log[fmt][=name]`: archive and file names written to a file as rar works, as
-//! `Rar.exe` 7.23 writes them: one a line, CRLF after each, `\` between folders. `A`
+//! `Rar.exe` 7.23 writes them: one a line, CRLF after each, `\` between directories. `A`
 //! logs the archives (each volume), `F` the files added, extracted, tested, listed or
 //! deleted, and with `F` the archives are not logged, `A` or not; neither is `A`. `P`
 //! appends to the file, else it is made anew; `U` writes UTF-16 (no byte-order mark),

@@ -57,7 +57,7 @@ const USAGE_BODY: &str = "
   -sns[-] : store NTFS alternate streams
   -so : write data to stdout
   -spd : disable wildcard matching for file names
-  -spe : eliminate duplication of root folder for extract command
+  -spe : eliminate duplication of root directory for extract command
   -spf[2] : use fully qualified file paths
   -ssc[-] : set sensitive case mode
   -sse : stop archive creating, if it can't open some input file

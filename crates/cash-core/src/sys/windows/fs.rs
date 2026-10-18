@@ -55,7 +55,7 @@ pub fn resolve_executable(path: PathBuf, extensions: &[String]) -> Option<PathBu
 }
 
 /// [`resolve_executable`], looking only at the names `present` lets through: those a look
-/// at the folder found (`pathsearch::resolve_command`).
+/// at the directory found (`pathsearch::resolve_command`).
 pub(crate) fn resolve_executable_among(
     path: PathBuf,
     extensions: &[String],
@@ -268,7 +268,7 @@ pub fn get_default_standard_utils_paths() -> Vec<PathBuf> {
 
 fn default_system_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
-    // process state: the system's folders, which no script moves.
+    // process state: the system's directories, which no script moves.
     if let Ok(sysroot) = std::env::var("SystemRoot") {
         paths.push(PathBuf::from(&sysroot).join("system32"));
         paths.push(PathBuf::from(&sysroot));
@@ -280,7 +280,7 @@ fn default_system_paths() -> Vec<PathBuf> {
                 .join("v1.0"),
         );
     }
-    // process state: the account's own folder, for the default PATH.
+    // process state: the account's own directory, for the default PATH.
     if let Ok(userprofile) = std::env::var("USERPROFILE") {
         paths.push(
             PathBuf::from(userprofile)
@@ -309,10 +309,10 @@ pub fn get_system_rc_path() -> Option<PathBuf> {
     Some(program_data().join("cash").join("cashrc"))
 }
 
-/// The machine's `ProgramData` folder, which was taken to be `C:\ProgramData`.
+/// The machine's `ProgramData` directory, which was taken to be `C:\ProgramData`.
 fn program_data() -> PathBuf {
-    // ProgramData names one folder for the whole machine, read before any shell state exists.
-    // process state: the machine's ProgramData folder, the same in every process.
+    // ProgramData names one directory for the whole machine, read before any shell state exists.
+    // process state: the machine's ProgramData directory, the same in every process.
     std::env::var_os("ProgramData")
         .filter(|value| !value.is_empty())
         .map_or_else(|| PathBuf::from(r"C:\ProgramData"), PathBuf::from)
@@ -674,7 +674,7 @@ mod tests {
 
     #[test]
     fn a_file_elsewhere_is_not_a_device() {
-        // A folder of one's own called `dev`, and a name in the folder one is in.
+        // A directory of one's own called `dev`, and a name in the directory one is in.
         for path in [
             "C:/src/dev/null",
             "dev/tty",
@@ -682,7 +682,7 @@ mod tests {
             "/dev/fd/3",
             "/dev",
             "/DEV/tty",
-            // A folder of that name, which no device is.
+            // A directory of that name, which no device is.
             "/dev/null/",
         ] {
             assert!(!is_special_file(Path::new(path)), "{path}");
@@ -715,7 +715,7 @@ mod tests {
 
     #[test]
     fn a_file_elsewhere_or_another_name_is_not_a_descriptor() {
-        // A folder of one's own called `dev`, and a name in the folder one is in.
+        // A directory of one's own called `dev`, and a name in the directory one is in.
         assert_eq!(named_descriptor(Path::new("C:/src/dev/stderr")), None);
         assert_eq!(named_descriptor(Path::new("C:/src/dev/fd/3")), None);
         assert_eq!(named_descriptor(Path::new("dev/stderr")), None);

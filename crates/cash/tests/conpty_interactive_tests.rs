@@ -142,7 +142,7 @@ public static class ConsoleState {
 "#;
 
 /// The compiled [`CONSOLE_STATE_CS`] for `pwsh`, made once and kept in the temporary
-/// folder under a name its source and PowerShell decide, for every test process to load.
+/// directory under a name its source and PowerShell decide, for every test process to load.
 ///
 /// The script compiled it with `Add-Type` on each start: half a second to a second here,
 /// and on a fresh CI runner, with Roslyn cold and the new files scanned, more than the 30 s
@@ -628,7 +628,11 @@ fn conpty_interactive_an_alias_runs_its_operators_and_applies_from_the_next_line
     session.send_line("same").unwrap();
     let (ran, screen) = session
         .wait_for_screen(
-            |screen| screen.lines().any(|line| line.trim_end() == "SAME_ALIAS_RAN"),
+            |screen| {
+                screen
+                    .lines()
+                    .any(|line| line.trim_end() == "SAME_ALIAS_RAN")
+            },
             Duration::from_secs(5),
         )
         .unwrap();
@@ -903,13 +907,13 @@ fn conpty_bind_in_a_vi_keymap_is_refused() {
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
 
-/// Alt-E opens croot below the line (D73): after `cd `, folders only; Enter picks the
+/// Alt-E opens croot below the line (D73): after `cd `, directories only; Enter picks the
 /// selected one and the `cd` runs at once.
 #[test]
-fn conpty_alt_e_picks_a_folder_and_cd_runs() {
+fn conpty_alt_e_picks_a_directory_and_cd_runs() {
     let dir = tempfile::tempdir().unwrap();
-    for folder in ["alpha_croot", "beta_croot"] {
-        std::fs::create_dir(dir.path().join(folder)).unwrap();
+    for directory in ["alpha_croot", "beta_croot"] {
+        std::fs::create_dir(dir.path().join(directory)).unwrap();
     }
     std::fs::write(dir.path().join("file_croot.txt"), "").unwrap();
     let mut session = start_reedline_cash();
@@ -924,11 +928,11 @@ fn conpty_alt_e_picks_a_folder_and_cd_runs() {
 
     session.send("cd \x1be").unwrap();
     session
-        .expect("[folders]", Duration::from_secs(10))
+        .expect("[directories]", Duration::from_secs(10))
         .expect("the picker opened");
     session
         .expect("beta_croot/", Duration::from_secs(10))
-        .expect("the picker lists the folders");
+        .expect("the picker lists the directories");
     // Down to beta, then Enter: the line becomes `cd beta_croot/` and runs.
     session.send("\x1b[B").unwrap();
     std::thread::sleep(Duration::from_millis(300));
@@ -937,7 +941,7 @@ fn conpty_alt_e_picks_a_folder_and_cd_runs() {
     session.send("pwd | tr a-z A-Z\r").unwrap();
     session
         .expect("BETA_CROOT", Duration::from_secs(10))
-        .expect("cd ran into the picked folder");
+        .expect("cd ran into the picked directory");
 
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);
@@ -974,7 +978,7 @@ fn conpty_alt_e_inserts_a_file_and_stays_open_for_other_commands() {
     session
         .expect("1 picked", Duration::from_secs(10))
         .expect("the picker stayed open after the pick");
-    // A second pick, the folder at the top: the line shows both while the picker is open.
+    // A second pick, the directory at the top: the line shows both while the picker is open.
     session.send("\x1b[H").unwrap();
     std::thread::sleep(Duration::from_millis(300));
     session.send("\r").unwrap();
@@ -1052,7 +1056,7 @@ fn expect_count(session: &mut ConPtySession, text: &str, times: usize) {
 
 /// Ctrl-R opens the history below the line (D79): typing filters it, Enter puts the
 /// command picked on the line and Tab runs it at once; Ctrl-R in the picker shows what ran
-/// in this folder, from the record kept in `%LOCALAPPDATA%\cash`.
+/// in this directory, from the record kept in `%LOCALAPPDATA%\cash`.
 #[test]
 fn conpty_ctrl_r_picks_from_the_history() {
     let local = tempfile::tempdir().unwrap();
@@ -1063,7 +1067,7 @@ fn conpty_ctrl_r_picks_from_the_history() {
         .expect("PROMPT$", Duration::from_secs(10))
         .expect("prompt displayed");
 
-    // Two commands in the start folder, one in another, then one more in the start folder.
+    // Two commands in the start directory, one in another, then one more in the start directory.
     let start = std::env::current_dir().unwrap();
     let start = cash_win32::path::render(&start);
     let place = cash_win32::path::render(here.path());
@@ -1105,7 +1109,7 @@ fn conpty_ctrl_r_picks_from_the_history() {
     settle(&mut session);
     expect_count(&mut session, "ALPHA_HIST", 2);
 
-    // In the other folder, Ctrl-R twice: what ran there only. `echo` there is gamma's,
+    // In the other directory, Ctrl-R twice: what ran there only. `echo` there is gamma's,
     // where the whole history's newest `echo` is the one just run.
     session.send(&format!("cd '{place}'\r")).unwrap();
     settle(&mut session);
@@ -1114,7 +1118,7 @@ fn conpty_ctrl_r_picks_from_the_history() {
     session.send("\x12").unwrap();
     session
         .expect("History in", Duration::from_secs(10))
-        .expect("the picker switched to this folder");
+        .expect("the picker switched to this directory");
     session.send("echo").unwrap();
     settle(&mut session);
     session.send("\r").unwrap();
@@ -1123,7 +1127,7 @@ fn conpty_ctrl_r_picks_from_the_history() {
     settle(&mut session);
     expect_count(&mut session, "GAMMA_HIST", 2);
 
-    // What `history -c` took out is gone from this folder's list too, though the record
+    // What `history -c` took out is gone from this directory's list too, though the record
     // still holds it.
     session.send("history -c\r").unwrap();
     settle(&mut session);
@@ -1140,38 +1144,38 @@ fn conpty_ctrl_r_picks_from_the_history() {
             Duration::from_secs(10),
         )
         .unwrap();
-    assert!(empty, "this folder's list is not empty:\n{screen}");
+    assert!(empty, "this directory's list is not empty:\n{screen}");
     session.send("\x1b").unwrap();
     settle(&mut session);
 
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);
 
-    // The record holds each command with the folder it ran in.
-    let ran = std::fs::read_to_string(local.path().join("cash").join("history-folders"))
-        .expect("the folders of the commands were kept");
-    let folder_of = |needle: &str| {
+    // The record holds each command with the directory it ran in.
+    let ran = std::fs::read_to_string(local.path().join("cash").join("history-directories"))
+        .expect("the directories of the commands were kept");
+    let directory_of = |needle: &str| {
         ran.lines()
             .find(|line| line.contains(needle))
             .and_then(|line| line.split('\t').nth(1))
             .unwrap_or_default()
             .to_lowercase()
     };
-    assert_eq!(folder_of("gamma_hist"), place.to_lowercase(), "{ran}");
-    assert_eq!(folder_of("delta_hist"), start.to_lowercase(), "{ran}");
+    assert_eq!(directory_of("gamma_hist"), place.to_lowercase(), "{ran}");
+    assert_eq!(directory_of("delta_hist"), start.to_lowercase(), "{ran}");
 }
 
-/// The folders an interactive cash goes to are recorded (D80), and the next cash jumps to
+/// The directories an interactive cash goes to are recorded (D80), and the next cash jumps to
 /// them: `z WORD`, `z -i` and its list, Tab after `z`, and Alt-E's Alt-H.
 #[test]
-fn conpty_z_jumps_to_folders_a_session_before_went_to() {
+fn conpty_z_jumps_to_directories_a_session_before_went_to() {
     let local = tempfile::tempdir().unwrap();
     let root = tempfile::tempdir().unwrap();
     let one = root.path().join("zeta_one");
     let deep = root.path().join("zeta_two").join("deep");
     let three = root.path().join("zeta_three");
-    for folder in [&one, &deep, &three] {
-        std::fs::create_dir_all(folder).unwrap();
+    for directory in [&one, &deep, &three] {
+        std::fs::create_dir_all(directory).unwrap();
     }
     let [one, deep, three] = [&one, &deep, &three].map(|path| cash_win32::path::render(path));
 
@@ -1180,8 +1184,8 @@ fn conpty_z_jumps_to_folders_a_session_before_went_to() {
     first
         .expect("PROMPT$", Duration::from_secs(10))
         .expect("prompt displayed");
-    for folder in [&one, &three, &deep] {
-        first.send(&format!("cd '{folder}'\r")).unwrap();
+    for directory in [&one, &three, &deep] {
+        first.send(&format!("cd '{directory}'\r")).unwrap();
         settle(&mut first);
     }
     first.send("exit 0\r").unwrap();
@@ -1204,14 +1208,14 @@ fn conpty_z_jumps_to_folders_a_session_before_went_to() {
         .expect("the list opened");
     session.send("\r").unwrap();
     settle(&mut session);
-    // The list may show the folder whole (where `TEMP` is not under the home folder as
+    // The list may show the directory whole (where `TEMP` is not under the home directory as
     // spelled, as on CI's `RUNNER~1`), so count what `pwd` adds.
     let listed = count(&session, &one);
     session.send("pwd\r").unwrap();
     settle(&mut session);
     expect_count(&mut session, &one, listed + 1);
 
-    // Tab puts the folder on the line.
+    // Tab puts the directory on the line.
     session.send("z dee\t").unwrap();
     settle(&mut session);
     session.send("\r").unwrap();
@@ -1220,7 +1224,7 @@ fn conpty_z_jumps_to_folders_a_session_before_went_to() {
     settle(&mut session);
     expect_count(&mut session, &deep, 3);
 
-    // Alt-E's Alt-H: the recorded folders, though this session has been in few.
+    // Alt-E's Alt-H: the recorded directories, though this session has been in few.
     session.send("\x0c").unwrap();
     settle(&mut session);
     session.send("\x1be").unwrap();
@@ -1430,10 +1434,10 @@ fn conpty_keys_after_a_bound_key_reach_the_next_prompt() {
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
 
-/// fish's folder history on the keys (D62): Alt-← and Alt-→ on an empty line go back and
-/// forward through the folders visited; on a line with text they move a word.
+/// fish's directory history on the keys (D62): Alt-← and Alt-→ on an empty line go back and
+/// forward through the directories visited; on a line with text they move a word.
 #[test]
-fn conpty_alt_arrows_walk_the_folder_history() {
+fn conpty_alt_arrows_walk_the_directory_history() {
     const ALT_LEFT: &str = "\x1b[1;3D";
     const ALT_RIGHT: &str = "\x1b[1;3C";
 
@@ -1477,17 +1481,17 @@ fn conpty_alt_arrows_walk_the_folder_history() {
     session.send("echo \"STILL=${PWD##*/}\"\r").unwrap();
     session
         .expect("STILL=second_dir", Duration::from_secs(10))
-        .expect("Alt-Left on a line with text changed folder");
+        .expect("Alt-Left on a line with text changed directory");
 
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
 
-/// The first Tab inserts what the folders share, and the second opens the completion menu
-/// on the folder the history hint leads to, so Enter takes that one rather than the first
+/// The first Tab inserts what the directories share, and the second opens the completion menu
+/// on the directory the history hint leads to, so Enter takes that one rather than the first
 /// (D40; crates/cash-reedline/README.md, changes 6 and 7).
 #[test]
-fn conpty_tab_over_a_history_hint_opens_the_menu_on_its_folder() {
+fn conpty_tab_over_a_history_hint_opens_the_menu_on_its_directory() {
     let root = tempfile::tempdir().unwrap();
     for name in ["docker-fullstack-lab", "docker-labs", "dockersub"] {
         std::fs::create_dir(root.path().join(name)).unwrap();
@@ -1509,7 +1513,7 @@ fn conpty_tab_over_a_history_hint_opens_the_menu_on_its_folder() {
     quiet(&mut session);
 
     // The hint after `cd dock` is `er-labs/`. The first Tab inserts the shared `er`, the
-    // second opens the menu; the first Enter takes the folder selected there, the second
+    // second opens the menu; the first Enter takes the directory selected there, the second
     // runs the line.
     session.send("cd dock\t").unwrap();
     quiet(&mut session);
@@ -1521,7 +1525,7 @@ fn conpty_tab_over_a_history_hint_opens_the_menu_on_its_folder() {
     session.send("echo \"AT=${PWD##*/}\"\r").unwrap();
     session
         .expect("AT=docker-labs", Duration::from_secs(10))
-        .expect("Tab over the hint did not open the menu on the hinted folder");
+        .expect("Tab over the hint did not open the menu on the hinted directory");
 
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);

@@ -340,8 +340,8 @@ fn stat_reports_file_attributes() {
 }
 
 #[test]
-fn stat_finds_a_relative_path_in_the_shells_folder() {
-    // `stat` asked the process's working folder, which `cd` does not change: after
+fn stat_finds_a_relative_path_in_the_shells_directory() {
+    // `stat` asked the process's working directory, which `cd` does not change: after
     // `cd tests`, `stat it/main.rs` found nothing (2026-10-02, TODO 4.7).
     let out = cash("cd tests && stat -c %F it/main.rs");
     assert_eq!(out.stdout, "regular file", "{}", out.stderr);

@@ -16,7 +16,7 @@ pub struct ShellConfig {
 
 impl ShellConfig {
     /// The PATH the cases run with: the one given, else none. The cases use what cash
-    /// carries; brush's Unix folders (`/usr/bin`, …) and the folders of the host's PATH
+    /// carries; brush's Unix directories (`/usr/bin`, …) and the directories of the host's PATH
     /// that hold a file named `sh` added nothing on Windows, where there are none.
     pub fn compute_test_path_var(&self) -> OsString {
         self.default_path_var.clone().unwrap_or_default().into()

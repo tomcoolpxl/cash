@@ -112,7 +112,7 @@ pub(crate) struct StartCommand {
 
 /// Opens `target` with its default program, as `start` and `xdg-open` do.
 ///
-/// A file or folder that exists is resolved against the shell's working directory, not
+/// A file or directory that exists is resolved against the shell's working directory, not
 /// the process's (cash never changes its own), in every spelling D3 accepts. Anything
 /// else — a URL, `mailto:`, `ms-settings:`, a program's name — goes to the handler as
 /// written. No command processor sees it, so `&` and `%` mean nothing.
@@ -166,12 +166,12 @@ fn quoted_arguments(args: &[String]) -> String {
 ///
 /// An elevated program cannot join cash's job object, so it runs outside it and is not
 /// ended when cash exits; elevate says so before it asks UAC (-q keeps quiet). The
-/// command starts in the shell's folder, found on the shell's `PATH`, with its arguments
+/// command starts in the shell's directory, found on the shell's `PATH`, with its arguments
 /// as written, from the user's own environment: UAC takes none, so the shell's exported
 /// variables do not follow it. `sudo` runs a command elevated in this terminal instead.
 // D42: a medium-integrity process cannot acquire `PROCESS_SET_QUOTA` on a high-integrity
 // one, so D6's containment stops at the integrity boundary. PowerShell's `Start-Process`,
-// used before, started the command in the folder cash was started in and split an
+// used before, started the command in the directory cash was started in and split an
 // argument with a space (BI-19).
 #[derive(Parser)]
 pub(crate) struct ElevateCommand {
@@ -304,8 +304,8 @@ impl builtins::Command for DetachCommand {
 /// knows none of them.
 const SUDO_HELP: &str = "\
 Options:
-  -i, --login             a login shell in the account's home folder, or COMMAND run by one
-  -s, --shell             a shell in this folder, or COMMAND run by one
+  -i, --login             a login shell in the account's home directory, or COMMAND run by one
+  -s, --shell             a shell in this directory, or COMMAND run by one
   -u, --user USER         as USER, at that account's usual level (USER's password is asked);
                           `-u root` is elevation
   -E, --preserve-env      the shell's exported variables go with the command
@@ -363,7 +363,7 @@ pub(crate) struct SudoCommand {
 struct SudoOptions {
     /// `-i`: a login shell in the account's home.
     login: bool,
-    /// `-s`: a shell in this folder.
+    /// `-s`: a shell in this directory.
     shell: bool,
     /// `-u USER`.
     user: Option<String>,
@@ -793,7 +793,7 @@ fn exported_assignments(shell: &cash_core::Shell<impl cash_core::ShellExtensions
 ///
 /// A program under this user's profile (Scoop's `~/scoop`) is not the other account's to
 /// read; Windows would say only that access is denied, after the password. Copying cash
-/// somewhere shared is not the answer: a folder another account can write to first is a
+/// somewhere shared is not the answer: a directory another account can write to first is a
 /// way to run its program as you.
 fn may_run_as<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
@@ -916,7 +916,7 @@ Options:
   -n, --non-interactive   fail at once when approval would be asked for
   -h, --help              this help
 
-Each FILE is copied to your temporary folder and opened there in $SUDO_EDITOR, $VISUAL
+Each FILE is copied to your temporary directory and opened there in $SUDO_EDITOR, $VISUAL
 or $EDITOR (the first that is set; notepad.exe without one), which runs as you, not
 elevated. When the editor ends, each copy that changed is written back into its file by
 an elevated cash, so the file keeps its access list and owner; a file that did not exist
@@ -991,7 +991,7 @@ impl builtins::Command for SudoeditCommand {
 struct Edited {
     /// The file.
     original: std::path::PathBuf,
-    /// Its copy in the temporary folder.
+    /// Its copy in the temporary directory.
     copy: std::path::PathBuf,
     /// What the file held; nothing for one that did not exist.
     before: Vec<u8>,
@@ -1061,7 +1061,7 @@ fn make_copies<SE: cash_core::ShellExtensions>(
 }
 
 /// `sudoedit FILE...` and `sudo -e FILE...`: each file copied to the user's temporary
-/// folder, the editor run on the copies as the shell runs a command (unelevated), and each
+/// directory, the editor run on the copies as the shell runs a command (unelevated), and each
 /// copy that changed written into its file by an elevated cash (`cat -- COPY > FILE`), so
 /// the file keeps its access list and owner. The copies are removed; one whose writing
 /// failed is kept, and named.
@@ -1091,7 +1091,7 @@ fn edit_files<SE: cash_core::ShellExtensions>(
     else {
         writeln!(
             context.stderr(),
-            "{who}: no temporary folder: TEMP is not set"
+            "{who}: no temporary directory: TEMP is not set"
         )?;
         return Ok(ExecutionResult::new(1));
     };
@@ -1232,7 +1232,7 @@ fn edit_copy(temp: &Path, original: &Path, contents: &[u8]) -> std::io::Result<s
 /// What `su --help` and `help su` list.
 const SU_HELP: &str = "\
 Options:
-  -, -l, --login                    a login shell, started in the account's home folder
+  -, -l, --login                    a login shell, started in the account's home directory
   -c, --command COMMAND             run COMMAND instead of a shell
   -s, --shell SHELL                 run SHELL instead of cash
   -m, -p, --preserve-environment    the shell's exported variables go with it
@@ -1246,7 +1246,7 @@ Windows raises no process that is already running.
 
 Examples:
   su                    an elevated cash
-  su -                  an elevated login shell, in your home folder
+  su -                  an elevated login shell, in your home directory
   su -c 'net stop spooler'
   su alice              a cash as alice
   su -s pwsh            an elevated PowerShell";
@@ -1256,7 +1256,7 @@ Examples:
 /// Without a user (or as `root`) the shell is this account elevated, as `sudo -i` gives
 /// it: Windows has no root account and no root password. With one, it is that account,
 /// whose password is asked for. `-`, `-l` or `--login` make it a login shell started in
-/// the account's home folder; `-c COMMAND` runs a command instead of a shell. It reaches
+/// the account's home directory; `-c COMMAND` runs a command instead of a shell. It reaches
 /// the same tools as `sudo`, and the same limits: an elevated shell or one as another
 /// user is outside cash's job object (D42). The shell is a new cash; the one `su` runs in
 /// stays as it is, as Windows raises no process that is already running.
@@ -1520,7 +1520,7 @@ fn launch_words(
     }
 }
 
-/// Run `program` with `args` as the shell runs a command (its folder, environment and
+/// Run `program` with `args` as the shell runs a command (its directory, environment and
 /// redirections), and give its status.
 fn run_program<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,

@@ -551,7 +551,7 @@ unsigned int f_len = 13;
 00000000: 6865 6c6c 6f0a                           hello.
 == outfile dash is stdout
 00000000: 6865 6c6c 6f0a                           hello.
-== outfile in a missing folder
+== outfile in a missing directory
 xxd: nodir/out: No such file or directory
 rc=3
 == missing infile

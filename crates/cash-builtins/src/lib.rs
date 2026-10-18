@@ -20,9 +20,9 @@ mod uuidgen;
 
 // cash (D60): fish's abbreviations.
 mod abbr;
-// cash (D62): fish's folder history — prevd, nextd, cdh.
+// cash (D62): fish's directory history — prevd, nextd, cdh.
 mod dirhistory;
-// cash (D80): `z`, zoxide's folder jump.
+// cash (D80): `z`, zoxide's directory jump.
 mod z;
 
 // cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
@@ -81,7 +81,7 @@ mod rar;
 mod rardata;
 mod tar;
 // cash: `zip`, `unzip` and `zipinfo`, Info-ZIP's interfaces on cash-archive: Windows has
-// none of them, and Explorer's zip folders are not scriptable.
+// none of them, and Explorer's zip directories are not scriptable.
 mod zip;
 // cash: `tput`, ncurses' for xterm-256color without terminfo: the terminal is VT.
 mod tput;
@@ -98,7 +98,7 @@ mod suspend;
 // cash: `stty`, GNU's words on the console's four modes; the rest is remembered.
 mod stty;
 mod tree;
-// cash: the folder walks the builtins share, on walkdir.
+// cash: the directory walks the builtins share, on walkdir.
 mod walk;
 // cash: `xxd`, vim's, dump and reverse; Windows has no hex dump a script can read back.
 mod xxd;

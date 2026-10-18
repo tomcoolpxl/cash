@@ -36,7 +36,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             // (checked 2026-09-29). It named the file, from a reading of Bash 5.2's notes
             // that bash does not bear out, and `coolfetch` in `~/.bashrc` then called the
             // shell `.bashrc`. The file is named as cash spells paths (D3): joined onto
-            // the home folder it was `C:/Users/me\.bashrc` in `BASH_SOURCE` and in error
+            // the home directory it was `C:/Users/me\.bashrc` in `BASH_SOURCE` and in error
             // messages.
             let path = std::path::PathBuf::from(cash_win32::path::render(path));
             self.source_script(&path, std::iter::empty::<String>(), params)

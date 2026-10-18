@@ -168,10 +168,10 @@ fn solid_threaded_lzma2_with_aes_and_an_encrypted_header_round_trips() {
         EncoderConfiguration::new(EncoderMethod::BCJ_X86_FILTER),
     ]);
     writer.set_header_encryption(Some(aes("pw")));
-    let mut folder = ArchiveEntry::new_directory("dir");
-    folder.has_windows_attributes = true;
-    folder.windows_attributes = 0x10;
-    writer.push_empty(folder);
+    let mut directory = ArchiveEntry::new_directory("dir");
+    directory.has_windows_attributes = true;
+    directory.windows_attributes = 0x10;
+    writer.push_empty(directory);
     writer
         .push_block(
             vec![entry("dir/big.txt"), entry("dir/small.txt")],

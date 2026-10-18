@@ -1,9 +1,9 @@
 //! A list to pick one line from, below the command line as Alt-E's picker is drawn:
-//! Ctrl-R's history (spec D79) and `z -i`'s folders (D80).
+//! Ctrl-R's history (spec D79) and `z -i`'s directories (D80).
 //!
 //! The lines come newest or best first, each with its age. Typing filters them, the
 //! best matches first and, among equals, the order they came in. Where there is more
-//! than one list (Ctrl-R's whole history and this folder's), the switch key shows the
+//! than one list (Ctrl-R's whole history and this directory's), the switch key shows the
 //! next. As [`crate::ui`], there is no terminal here.
 
 use std::fmt::Write as _;

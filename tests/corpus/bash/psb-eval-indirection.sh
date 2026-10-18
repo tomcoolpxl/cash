@@ -1,6 +1,6 @@
 # source: https://github.com/dylanaraps/pure-sh-bible#name-and-access-a-variable-based-on-another-variable
 # desc: eval to set and read a variable whose name is built from another, with quoting kept by eval
-# The second parse globs: in a folder of its own, it sees one file whatever the fixtures are.
+# The second parse globs: in a directory of its own, it sees one file whatever the fixtures are.
 mkdir -p alone && cd alone && : >only-file
 var="world"
 eval "hello_$var=value"

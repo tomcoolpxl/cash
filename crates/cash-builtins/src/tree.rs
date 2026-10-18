@@ -56,7 +56,7 @@ impl builtins::Command for TreeCommand {
 
         writeln!(stdout, "{}", render(&shown))?;
 
-        // The root is looked at through a link, as GNU's tree lists the folder a link it
+        // The root is looked at through a link, as GNU's tree lists the directory a link it
         // is given names.
         let metadata = match std::fs::metadata(&actual) {
             Ok(metadata) => metadata,
@@ -146,7 +146,7 @@ impl TreeCommand {
                 continue;
             }
             // What it is comes free with the listing; a link is not gone into, and a
-            // cloud placeholder or a deduplicated folder is the folder it holds.
+            // cloud placeholder or a deduplicated directory is the directory it holds.
             let file_type = match entry.file_type() {
                 Ok(file_type) => file_type,
                 Err(error) => {
@@ -160,7 +160,7 @@ impl TreeCommand {
                     continue;
                 }
             };
-            let directory = crate::walk::kind(file_type) == crate::walk::Kind::Folder;
+            let directory = crate::walk::kind(file_type) == crate::walk::Kind::Directory;
             if self.directories_only && !directory {
                 continue;
             }

@@ -81,7 +81,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// An assignment to one of the variables the shell keeps itself (a dynamic one, while
     /// it is), given the meaning Bash gives it: `RANDOM` seeds, `SECONDS` restarts,
     /// `BASH_ARGV0` renames `$0`, `BASH_SUBSHELL` sets the level, `DIRSTACK[n]` replaces a
-    /// folder of the stack, `BASH_ALIASES[name]` and `BASH_CMDS[name]` add an alias and a
+    /// directory of the stack, `BASH_ALIASES[name]` and `BASH_CMDS[name]` add an alias and a
     /// remembered program. To any other, as to `DIRSTACK[0]`, it does nothing, as in
     /// Bash. Whether `name` was such a variable; the value has been through
     /// [`Self::value_for_assignment`].
@@ -149,7 +149,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                 self.subshell_level = usize::try_from(number()).unwrap_or(0);
             }
             ("DIRSTACK", Some(index)) => {
-                // `${DIRSTACK[0]}` is the working folder; 1 is the last one pushed.
+                // `${DIRSTACK[0]}` is the working directory; 1 is the last one pushed.
                 let stack_len = self.directory_stack.len();
                 if let Ok(index) = index.trim().parse::<usize>()
                     && (1..=stack_len).contains(&index)

@@ -6,14 +6,14 @@ see: 7z zip tar
 
 `rar l ARCHIVE` lists a RAR archive (`lt` with every field, `lta` with the service
 records too, `lb` names alone; `v`, `vt`, `vta` and `vb` the same, with `-v` adding the
-volumes after it); `rar t` tests it; `rar x` extracts it with its folders and `rar e`
-without them, into the current folder or the folder named last with a trailing `\` or
+volumes after it); `rar t` tests it; `rar x` extracts it with its directories and `rar e`
+without them, into the current directory or the directory named last with a trailing `\` or
 `/`, or `-op`; `rar p` prints files to standard output. Names after the archive choose
 files, `-x` and `-n` leave some out or keep only some, `@list` reads them from a file.
 `-f` extracts only files that are there and older, `-u` those and the files not there;
-`-ad` puts each archive's files in a folder named after it, `-ad1` that folder beside
-the archive, `-ad2` the archive's own folder; `-ts`, `-tsc`, `-tsa` give back the
-creation and access times kept. Folders get their times and attributes back, `-ai`
+`-ad` puts each archive's files in a directory named after it, `-ad1` that directory beside
+the archive, `-ad2` the archive's own directory; `-ts`, `-tsc`, `-tsa` give back the
+creation and access times kept. Directories get their times and attributes back, `-ai`
 leaving the attributes. A hard link is made to the file it names, extracted before it;
 a file reference is a copy; a symbolic link is made when Windows allows it (an
 administrator's right, or Developer Mode), a junction always; either is skipped with
@@ -21,12 +21,12 @@ administrator's right, or Developer Mode), a junction always; either is skipped 
 climbs out by `..`, unless `-ola`. `unrar` has these
 commands alone.
 
-`rar a ARCHIVE NAMES` adds files and folders, making the archive if need be (`.rar` is
+`rar a ARCHIVE NAMES` adds files and directories, making the archive if need be (`.rar` is
 added to a name without an extension); `rar u` adds what is new or newer, `rar f` only
 what is newer than its archived copy, `rar m` and `rar mf` delete what was archived,
-`rar d` deletes files from the archive, and erases it when nothing is left. A folder
+`rar d` deletes files from the archive, and erases it when nothing is left. A directory
 named is added with all it holds, `-r-` takes it alone; a wildcard takes files, and with
-`-r` every folder below and the folders it matches. `-ep`, `-ep1` to `-ep4` and `-ap`
+`-r` every directory below and the directories it matches. `-ep`, `-ep1` to `-ep4` and `-ap`
 choose the names stored, `-ed`, `-e`, `-sl`, `-sm`, `-ta`, `-tb`, `-tn` and `-to` what
 is taken. `-m0` to `-m5` choose the level, `-s` a solid archive, `-htb` BLAKE2
 checksums for CRC32, `-qo` the quick-open record, `-rr` a recovery record,
@@ -46,7 +46,7 @@ keeps three); those are listed, but `x`, `t` and `p` take them only when named e
 or every one with `-ver`, or version N under its file's name with `-verN`.
 
 `rar c` adds a comment, from `-z`'s file or standard input; `rar cw` writes it to a file
-or standard output. `rar rn ARCHIVE OLD NEW…` renames files (a folder with what it
+or standard output. `rar rn ARCHIVE OLD NEW…` renames files (a directory with what it
 holds; `*` and `?` in OLD and NEW for patterns such as `'src/*.txt' 'src/*.bak'`).
 `rar k` locks an archive against change, `rar rr[N]` gives it a recovery record of N%
 (3 by default, up to 1000), and `rar ch` changes it by switches (`-cl`, `-cu`, `-z`,
@@ -58,7 +58,7 @@ file of that name. `rar i=TEXT` looks for a string in the archived files
 and shows where it is (`ic=` case-sensitive, `ih=` hexadecimal bytes,
 `it=` in UTF-8 and UTF-16 too). `rar r` repairs a damaged archive: with a recovery
 record, what it protects is mended into `fixed.NAME`; without one, every file whose
-header is whole is copied into `rebuilt.NAME`, damaged data and all; a folder named
+header is whole is copied into `rebuilt.NAME`, damaged data and all; a directory named
 last with a trailing `\` or `/` takes the result. `rar rc NAME.part1.rar` rebuilds a
 volume set's missing volumes from its recovery volumes (`NAME.part1.rev` and on); a
 RAR 5 set's damaged ones too, the damaged copy renamed `.bad`.
@@ -85,7 +85,7 @@ update copies the files already archived as they are, not packed again, as WinRA
 - Names and messages are UTF-8 wherever they go; `Rar.exe` writes the ANSI code page into
   files and pipes unless told `-scfr`.
 - Times are shown in the zone the shell's `TZ` names, else in Windows' own.
-- `rar.ini` and `rarfiles.lst` are read from `%APPDATA%\WinRAR`, not from a folder of
+- `rar.ini` and `rarfiles.lst` are read from `%APPDATA%\WinRAR`, not from a directory of
   `Rar.exe`'s own. A compressed solid archive's files are sorted by extension, or by
   `rarfiles.lst` when there is one; WinRAR 7.23 reads that list beside `Rar.exe` only.
 - A new archive is RAR 5: `-ma4` is an unknown option, as in WinRAR 7.23. An update of
@@ -100,8 +100,8 @@ update copies the files already archived as they are, not packed again, as WinRA
 
 ```
 rar l archive.rar
-rar x archive.rar out/            # with its folders, into out
-rar e archive.rar '*.txt'          # the text files, without their folders
+rar x archive.rar out/            # with its directories, into out
+rar e archive.rar '*.txt'          # the text files, without their directories
 rar p archive.rar notes.txt | less
 rar t -psecret secret.rar
 rar a backup.rar docs              # docs and all in it

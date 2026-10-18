@@ -5,12 +5,12 @@ one byte up), for 7z's copy links (`7z_rar.sh`). The members are printable rando
 bytes made by awk's `srand(n)`/`rand()`, all dated 2024-01-01 00:00:00 UTC:
 
 - `s/a.bin` 3000 bytes, `s/b.bin` 4000, `s/c.bin` 2000, `s/d.bin` a copy of `s/b.bin`,
-  `s/e.bin` 1000, and the folder `s`. `s/d.bin` is a file reference to `s/b.bin`.
+  `s/e.bin` 1000, and the directory `s`. `s/d.bin` is a file reference to `s/b.bin`.
 - `t/a.bin` 3000 bytes, `t/b.bin` 2000, `t/c.bin` 2000, `t/d.bin` 3000, `t/e.bin` a
-  copy of `t/a.bin`, `t/f.bin` `t/d.bin` and 100 bytes more, and the folder `t`.
+  copy of `t/a.bin`, `t/f.bin` `t/d.bin` and 100 bytes more, and the directory `t`.
   `t/e.bin` is a file reference to `t/a.bin`.
 
-The commands, run in the folder holding `s` and `t` (`-ds` keeps the names' order):
+The commands, run in the directory holding `s` and `t` (`-ds` keeps the names' order):
 
     rar a -oi:1 -ds copy_links_plain.rar s
     rar a -s -oi:1 -ds copy_links_solid.rar s

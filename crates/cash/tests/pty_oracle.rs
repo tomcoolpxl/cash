@@ -441,7 +441,7 @@ fn screen(program: &str, args: &[&str], case: &Case) -> String {
     let text = session.screen().text();
     drop(session);
     // The shell may still be exiting, its working directory this one, which Windows will
-    // not delete: seven runs had left their folders in %TEMP% by 2026-10-04.
+    // not delete: seven runs had left their directories in %TEMP% by 2026-10-04.
     let started = Instant::now();
     while std::fs::remove_dir_all(&dir).is_err()
         && dir.exists()

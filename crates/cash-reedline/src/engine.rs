@@ -4325,7 +4325,7 @@ mod tests {
         }
     }
 
-    /// An engine with `typed` on the line, three folders to complete, Tab's options as
+    /// An engine with `typed` on the line, three directories to complete, Tab's options as
     /// cash sets them, and `history_line` the one line of history.
     fn docker_engine(
         typed: &str,
@@ -4401,7 +4401,7 @@ mod tests {
         assert!(menu_is_active(&rl));
     }
 
-    /// cash (CASH-PATCHES.md, patches 6 and 7): the first Tab inserts what the folders
+    /// cash (CASH-PATCHES.md, patches 6 and 7): the first Tab inserts what the directories
     /// share, the second opens the menu on the one the history hint leads to, and Enter
     /// takes it. Without a hint, or with one leading nowhere, the menu opens on the first.
     #[rstest]

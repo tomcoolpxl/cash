@@ -74,7 +74,7 @@ jobs:
         run: ./.github/scripts/report-flaky.ps1 -Results target/nextest/default/test-results.xml
 
       # Nothing reads the documentation after the run, and the cache's cleanup took a
-      # folder rustdoc made for a module for a build folder, and failed on it (ENOENT
+      # directory rustdoc made for a module for a build directory, and failed on it (ENOENT
       # annotations on every green run).
       - name: Leave the documentation out of the cache
         if: always()

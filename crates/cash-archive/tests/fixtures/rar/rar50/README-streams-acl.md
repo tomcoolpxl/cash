@@ -2,7 +2,7 @@
 
 For 7z on NTFS alternate streams and ACLs (`7z_rar.sh`).
 
-`alt_streams.rar` was made by WinRAR 7.23's `rar a -os` (NTFS streams kept) of a folder
+`alt_streams.rar` was made by WinRAR 7.23's `rar a -os` (NTFS streams kept) of a directory
 `s` holding `a.txt` ("main data a") with a stream `note` ("stream text") and `b.txt`
 ("main data b"), both written by PowerShell's `Set-Content`.
 

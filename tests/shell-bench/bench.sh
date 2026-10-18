@@ -9,7 +9,7 @@
 # own syntax, `-NoProfile -NonInteractive -Command SCRIPT`. The workloads are those of
 # crates/cash-shell/benches (start, loop, echo, arithmetic, expansion, function call),
 # what costs a process (a command substitution, a program: hostname.exe on Windows,
-# /bin/true on Linux; a pipe into cat), and `ls -la` of a folder of 200 files.
+# /bin/true on Linux; a pipe into cat), and `ls -la` of a directory of 200 files.
 # PowerShell has no process for `$(...)`, and pipes into Out-Null.
 set -u
 out=$1
@@ -21,7 +21,7 @@ case $(uname -s) in
 esac
 shells=("$@")
 
-# The folder `ls -la` lists, on the system's own disk: 200 files and 10 folders.
+# The directory `ls -la` lists, on the system's own disk: 200 files and 10 directories.
 listed=$(mktemp -d)
 for i in $(seq 1 200); do printf '%s\n' "$i" > "$listed/file$i.txt"; done
 for i in $(seq 1 10); do mkdir "$listed/dir$i"; done

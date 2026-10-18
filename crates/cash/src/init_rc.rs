@@ -3,7 +3,7 @@
 //! cash reads `~/.bashrc` and then `~/.cashrc` (D24). With neither, a new user gets bash's
 //! bare defaults: a `$ ` prompt, 500 lines of history and no aliases. The starter is the
 //! author's own `~/.bashrc`, less what needs setting up by hand: history kept large and
-//! shared between windows, the usual aliases, a prompt showing the folder and git branch
+//! shared between windows, the usual aliases, a prompt showing the directory and git branch
 //! with Windows Terminal's shell-integration marks, `ls` with icons, and `coolfetch` once
 //! per window.
 //!
@@ -86,7 +86,7 @@ pub fn command(args: &[String]) -> Option<u8> {
 ///
 /// # Errors
 ///
-/// No home folder, or the starter could not be written.
+/// No home directory, or the starter could not be written.
 pub fn run_once() -> Result<Option<PathBuf>, String> {
     let home = home().ok_or_else(|| "neither HOME nor USERPROFILE is set".to_owned())?;
     let marker = std::env::var_os("LOCALAPPDATA")
@@ -109,7 +109,7 @@ enum Outcome {
     DoneBefore,
 }
 
-/// The folder `~` names: `$HOME`, else `%USERPROFILE%`, as cash expands it.
+/// The directory `~` names: `$HOME`, else `%USERPROFILE%`, as cash expands it.
 pub(crate) fn home() -> Option<PathBuf> {
     ["HOME", "USERPROFILE"]
         .into_iter()

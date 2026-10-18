@@ -60,16 +60,16 @@ fn numbered(format: &str) -> bool {
 /// `date` put in `name`: before its extension, or with `before` ahead of its name.
 fn place(name: &str, date: &str, before: bool) -> String {
     let at = name.rfind(['/', '\\']).map_or(0, |at| at + 1);
-    let (folder, file) = name.split_at(at);
+    let (directory, file) = name.split_at(at);
     if before {
-        return format!("{folder}{date}{file}");
+        return format!("{directory}{date}{file}");
     }
     match file.rfind('.') {
         Some(dot) => {
             let (stem, extension) = file.split_at(dot);
-            format!("{folder}{stem}{date}{extension}")
+            format!("{directory}{stem}{date}{extension}")
         }
-        None => format!("{folder}{file}{date}"),
+        None => format!("{directory}{file}{date}"),
     }
 }
 

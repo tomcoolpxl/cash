@@ -35,14 +35,14 @@ for case in "-v37k -rr1" "-v37k -rr5" "-v37k -rr20" "-v50k -rr1" "-v50k -rr5" "-
   echo "t: $?"
 done
 
-# Encrypted, a folder among the files: its header has no encryption record; with -hp
+# Encrypted, a directory among the files: its header has no encryption record; with -hp
 # the quick-open block is encrypted too, in each volume and in one archive.
 rm -rf src && mkdir src
 head -c 60000 a.bin > src/a.bin
 cp b.bin src/b.bin
 touch -d '2024-01-01T00:00:00Z' src/a.bin src/b.bin src
 for case in "-psecret" "-hpsecret" "-hpsecret -rr3"; do
-  echo "== -v20k $case, a folder among the files"
+  echo "== -v20k $case, a directory among the files"
   rm -rf o && mkdir o
   rar a -m0 -idq -v20k $case o/v.rar src
   shape -psecret

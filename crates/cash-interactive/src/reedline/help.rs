@@ -31,7 +31,7 @@ pub(crate) fn on_key(shell: &crate::ShellRef<impl cash_core::ShellExtensions>, c
 }
 
 /// The prompt's colours: the title and section names in the accent the starter
-/// `~/.bashrc` draws the folder in, examples and keys as the highlighter paints a
+/// `~/.bashrc` draws the directory in, examples and keys as the highlighter paints a
 /// command and a quoted word, and the notes dimmed.
 fn palette() -> Palette {
     Palette {

@@ -69,7 +69,7 @@ pub struct Target {
     pub path: String,
     /// The substitute name as the data holds it, `\??\` and all: what `WinRAR` stores.
     pub substitute: String,
-    /// A symbolic link whose path is relative to its folder.
+    /// A symbolic link whose path is relative to its directory.
     pub relative: bool,
     /// A junction rather than a symbolic link.
     pub junction: bool,
@@ -177,7 +177,7 @@ pub fn link_data(target: &str, junction: bool) -> Vec<u8> {
     data
 }
 
-/// Makes `path` the link `data` describes (`SetReparseData`): the file or folder there,
+/// Makes `path` the link `data` describes (`SetReparseData`): the file or directory there,
 /// else a new one, gets the reparse data.
 ///
 /// # Errors
@@ -209,7 +209,7 @@ pub fn set(path: &Path, is_dir: bool, data: &[u8]) -> io::Result<()> {
     };
     let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
     let mut returned = 0u32;
-    // SAFETY: `handle` is open for writing on the file or folder; the input is `data`,
+    // SAFETY: `handle` is open for writing on the file or directory; the input is `data`,
     // its length given, and nothing is asked back.
     let ok = unsafe {
         DeviceIoControl(
@@ -299,7 +299,7 @@ mod tests {
     }
 
     /// A symbolic link is made where Windows allows it; elsewhere the refusal is the
-    /// missing right, and the folder or file is there, as 7-Zip leaves it.
+    /// missing right, and the directory or file is there, as 7-Zip leaves it.
     #[test]
     fn a_symbolic_link_is_set_or_refused_for_the_right() {
         let dir = tempfile::tempdir().unwrap();

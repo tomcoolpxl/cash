@@ -31,21 +31,21 @@ fn layout() -> (tempfile::TempDir, std::path::PathBuf) {
     (root, sub)
 }
 
-/// The folder a `dp0=[…\\]` line names, resolved. `cmd` spells `%~dp0` the way the path
+/// The directory a `dp0=[…\\]` line names, resolved. `cmd` spells `%~dp0` the way the path
 /// reached it, which under an 8.3 `TEMP` (`C:\\Users\\RUNNER~1`, as GitHub's runner has)
-/// is the short form; resolving both sides compares the folders, not their spellings.
-fn dp0_folder(line: &str) -> std::path::PathBuf {
-    let folder = line
+/// is the short form; resolving both sides compares the directories, not their spellings.
+fn dp0_directory(line: &str) -> std::path::PathBuf {
+    let directory = line
         .strip_prefix("dp0=[")
         .and_then(|rest| rest.strip_suffix(']'))
         .unwrap_or_else(|| panic!("not a dp0 line: {line}"));
     assert!(
-        folder.ends_with('\\'),
+        directory.ends_with('\\'),
         "%~dp0 ends with a backslash: {line}"
     );
-    Path::new(folder)
+    Path::new(directory)
         .canonicalize()
-        .unwrap_or_else(|e| panic!("{folder}: {e}"))
+        .unwrap_or_else(|e| panic!("{directory}: {e}"))
 }
 
 fn check(dir: &Path, script: &str, sub: &Path) {
@@ -59,7 +59,7 @@ fn check(dir: &Path, script: &str, sub: &Path) {
         out.stdout
     );
     let dp0 = lines.next().unwrap_or_default();
-    assert_eq!(dp0_folder(dp0), sub, "{script}: {dp0}");
+    assert_eq!(dp0_directory(dp0), sub, "{script}: {dp0}");
 }
 
 #[test]

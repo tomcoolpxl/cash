@@ -13,7 +13,7 @@
 use std::collections::VecDeque;
 use std::ffi::OsStr;
 
-/// What `env` does to the environment, and the folder, before it starts the command.
+/// What `env` does to the environment, and the directory, before it starts the command.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct EnvChanges {
     /// `-i`: start from an empty environment.
