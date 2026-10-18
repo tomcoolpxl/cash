@@ -34,7 +34,8 @@ The phases before, released as 1.22.0 to 1.27.0, are in DONE.md.
    in the steps of its section 7, each ending in a commit:
    1. the pages' model, in the crate `cash-man`: done (2026-10-18, DONE.md);
    2. rendering: done (2026-10-18, DONE.md);
-   3. `help` on the new pages;
+   3. `help` on the new pages: the pages and topics moved into `cash-man`, a draft for
+      every other builtin (done, 2026-10-18, DONE.md); `help` moved onto them next;
    4. the browser;
    5. the examples' test;
    6. the first batch of about 20 pages at full depth, and drafts for the rest; then a

@@ -19,6 +19,18 @@ mod embedded {
     include!(concat!(env!("OUT_DIR"), "/pages.rs"));
 }
 
+/// The kinds of command a page's `kind:` names, in the order `help` lists them.
+pub const KINDS: [&str; 8] = [
+    "Bash builtins",
+    "cash's shell commands",
+    "Terminal and clipboard",
+    "Windows commands",
+    "Processes and network",
+    "Text and file tools",
+    "Coreutils written for Windows",
+    "Bundled coreutils, from uutils",
+];
+
 /// Every page of the manual.
 #[derive(Debug)]
 pub struct Manual {
@@ -110,14 +122,30 @@ mod tests {
     fn every_page_has_the_shape_of_a_page() {
         let manual = manual();
         assert!(manual.page("sed").is_some(), "{:?}", manual.pages);
-        for page in manual.pages.iter().chain(&manual.topics) {
-            assert!(
-                page.problems().is_empty(),
-                "{}.md: {:#?}",
-                page.file,
+        let problems: Vec<String> = manual
+            .pages
+            .iter()
+            .chain(&manual.topics)
+            .flat_map(|page| {
                 page.problems()
-            );
-        }
+                    .into_iter()
+                    .map(|problem| format!("{}.md: {problem}", page.file))
+            })
+            .collect();
+        assert_eq!(problems, Vec::<String>::new(), "{problems:#?}");
+    }
+
+    #[test]
+    fn every_link_leads_to_a_page_and_every_kind_is_known() {
+        let manual = manual();
+        assert_eq!(manual.broken_links(), Vec::<(String, String)>::new());
+        let unknown: Vec<(&str, &str)> = manual
+            .pages
+            .iter()
+            .filter(|page| !KINDS.contains(&page.kind.as_str()))
+            .map(|page| (page.file.as_str(), page.kind.as_str()))
+            .collect();
+        assert_eq!(unknown, Vec::<(&str, &str)>::new());
     }
 
     #[test]

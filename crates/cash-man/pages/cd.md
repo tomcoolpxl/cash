@@ -1,7 +1,7 @@
 ---
 name: cd
 summary: Change the shell's working directory.
-kind: Bash builtin
+kind: Bash builtins
 see: pwd pushd popd dirs prevd nextd cdh z croot winpath paths
 ---
 

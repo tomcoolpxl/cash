@@ -2212,3 +2212,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   its code spans drawn as code, as are the lines continuing it at its column; other
   code is what to type, a comment after two spaces grey. `cargo run -p cash-man
   --example draw -- NAME` prints a page as drawn, for whoever writes them.
+- **`man`, step 3a: every builtin has a page** (2026-10-18): the help catalogue's 83
+  other pages and 10 topics are in `cash-man` now, in its format: Description became
+  How it works, Windows notes and the util-linux differences Different in cash,
+  Examples came first, other headings subsections, fenced code indented; each is
+  marked a draft until written in full. The 124 builtins with no page have a draft of
+  their summary and kind. A test in `crates/cash` fails when a builtin has no page or a
+  page names no builtin, and `cash-man`'s when a See-also link leads nowhere or a kind
+  is unknown. 38 lines of code wider than 76 columns: example comments realigned or
+  put above their command, four lines rewritten. The renderer now wraps a long topic
+  title, breaks a code span longer than a line at its spaces, and wraps a table's last
+  column under itself when the table is wider than the pane (the tools table).

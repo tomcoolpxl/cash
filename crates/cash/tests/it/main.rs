@@ -164,6 +164,7 @@ mod long_directories;
 // A `TEMP` in 8.3 form taken to its long form as cash starts.
 mod long_temp;
 mod ls_builtin;
+mod man_pages;
 mod msys_args;
 mod namerefs;
 // `cash --add-to-path`, `--remove-from-path` and doctor's `path` line: the directory that

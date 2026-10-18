@@ -81,6 +81,8 @@ anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "macros"] }
 tempfile = { workspace = true }
+# The manual's pages, checked against the builtins the shell registers.
+cash-man = { workspace = true }
 # The completion tests drive a `Shell` directly rather than through the binary,
 # because completion has no command-line surface to assert against.
 cash-test-harness = { workspace = true, features = ["insta"] }

@@ -562,6 +562,7 @@ dependencies = [
  "assert_cmd",
  "cash-builtins",
  "cash-core",
+ "cash-man",
  "cash-shell",
  "cash-test-harness",
  "cash-win32",

@@ -1,0 +1,21 @@
+---
+name: fc
+summary: List, edit and run commands from the history.
+kind: Bash builtins
+see: history keys
+draft: yes
+---
+
+## How it works
+
+`fc` lists, edits and reruns commands from the history: `fc -l` lists the last ones,
+`fc` opens the last command in an editor and runs what you save, `fc -s old=new` reruns
+the last command with a substitution. The editor is `-e EDITOR`, else `$FCEDIT`, else
+`$EDITOR`, else `vi`.
+
+## Different in cash
+
+Windows' `fc.exe` compares files; inside cash, `fc` is this builtin. To compare files,
+use cash's `diff` or `cmp`, or `"$SYSTEMROOT/System32/fc.exe"`.
+
+Ctrl-X Ctrl-E at the prompt edits the current line the same way, with `$VISUAL` first.

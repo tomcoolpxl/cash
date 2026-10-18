@@ -174,12 +174,27 @@ pub fn draw(page: &Page, manual: &Manual, width: usize) -> Drawn {
         Subject::Topic => (page.title.clone(), Style::Topic),
     };
     drawer.start_section(&name);
-    let mut top = Line::default();
-    top.push(&name, style, None);
+    // The name and the summary, a dash between them, wrapped as one: a topic's title
+    // can be longer than a line.
+    let mut top: Vec<Word> = name
+        .split_whitespace()
+        .map(|word| Word {
+            pieces: vec![(word.to_owned(), style)],
+            space_before: true,
+        })
+        .collect();
     if !page.summary.is_empty() {
-        top.push(" \u{2014} ", Style::Plain, None);
+        top.push(Word {
+            pieces: vec![("\u{2014}".to_owned(), Style::Plain)],
+            space_before: true,
+        });
+        let mut summary = words(&page.summary);
+        if let Some(first) = summary.first_mut() {
+            first.space_before = true;
+        }
+        top.extend(summary);
     }
-    drawer.wrap(top, &page.summary, 0);
+    drawer.wrap_words(Line::default(), top, 0);
     if page.draft {
         drawer.blank();
         let start = drawer.drawn.lines.len();
@@ -269,6 +284,70 @@ fn words(text: &str) -> Vec<Word> {
         }
     }
     words
+}
+
+/// `word` broken into words at the spaces inside its pieces, each keeping its style: a
+/// code span too long for a line.
+fn broken(word: Word) -> Vec<Word> {
+    let mut out: Vec<Word> = Vec::new();
+    let mut space = word.space_before;
+    for (piece, style) in word.pieces {
+        for (index, part) in piece.split(' ').enumerate() {
+            if index > 0 {
+                space = true;
+            }
+            if part.is_empty() {
+                continue;
+            }
+            add(&mut out, part, style, space);
+            space = false;
+        }
+    }
+    out
+}
+
+/// `text` in lines of at most `width` columns, broken at spaces; a word longer than a
+/// line is broken after its hyphens, and failing that where the line ends.
+fn fit_words(text: &str, width: usize) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let parts: Vec<String> = if word.width() > width {
+            word.split_inclusive('-')
+                .flat_map(|part| hard_break(part, width))
+                .collect()
+        } else {
+            vec![word.to_owned()]
+        };
+        for (index, part) in parts.into_iter().enumerate() {
+            let space = usize::from(index == 0 && !line.is_empty());
+            if !line.is_empty() && line.width() + space + part.width() > width {
+                lines.push(std::mem::take(&mut line));
+            } else if space == 1 {
+                line.push(' ');
+            }
+            line.push_str(&part);
+        }
+    }
+    lines.push(line);
+    lines
+}
+
+/// `part` in pieces of at most `width` columns.
+fn hard_break(part: &str, width: usize) -> Vec<String> {
+    let mut pieces = vec![String::new()];
+    for c in part.chars() {
+        let full = pieces.last().is_some_and(|piece| {
+            piece.width() + unicode_width::UnicodeWidthChar::width(c).unwrap_or(0) > width
+        });
+        if full {
+            pieces.push(String::new());
+        }
+        if let Some(piece) = pieces.last_mut() {
+            piece.push(c);
+        }
+    }
+    pieces
 }
 
 /// A block of a section's markdown.
@@ -526,11 +605,26 @@ impl Drawer {
     /// `text`'s words after what `first` holds, wrapped to the width; the lines after
     /// the first indented by `indent`.
     fn wrap(&mut self, first: Line, text: &str, indent: usize) {
+        self.wrap_words(first, words(text), indent);
+    }
+
+    /// `words` after what `first` holds, wrapped to the width; the lines after the first
+    /// indented by `indent`. A word wider than a line, a long code span, is broken at
+    /// its spaces.
+    fn wrap_words(&mut self, first: Line, words: Vec<Word>, indent: usize) {
+        let room = self.width.saturating_sub(indent);
+        let words = words.into_iter().flat_map(|word| {
+            if word.width() > room {
+                broken(word)
+            } else {
+                vec![word]
+            }
+        });
         let pad = " ".repeat(indent);
         let mut line = first;
         let mut used = line.width();
         let mut empty = true;
-        for word in words(text) {
+        for word in words {
             let space = usize::from(word.space_before && !empty);
             if !empty && used + space + word.width() > self.width {
                 self.push(std::mem::take(&mut line));
@@ -598,7 +692,8 @@ impl Drawer {
         }
     }
 
-    /// A table as aligned columns, two spaces apart, the header bold.
+    /// A table as aligned columns, two spaces apart, the header bold. When it is wider
+    /// than the pane, its last column is wrapped under itself.
     fn table(&mut self, rows: &[Vec<String>]) {
         let columns = rows.iter().map(Vec::len).max().unwrap_or_default();
         let cell = |row: &[String], index: usize| {
@@ -613,22 +708,46 @@ impl Drawer {
                     .unwrap_or_default()
             })
             .collect();
+        let before_last = columns.saturating_sub(1);
+        let last_at = INDENT
+            + widths
+                .iter()
+                .take(before_last)
+                .map(|width| width + 2)
+                .sum::<usize>();
+        let room = self.width.saturating_sub(last_at);
+        let wrap_last = columns > 1
+            && last_at + widths.last().copied().unwrap_or_default() > self.width
+            && room >= 12;
         for (number, row) in rows.iter().enumerate() {
             let mut text = String::new();
-            for (index, width) in widths.iter().enumerate() {
+            for (index, width) in widths.iter().take(before_last).enumerate() {
                 let cell = cell(row, index);
                 text.push_str(&cell);
                 text.push_str(&" ".repeat(width.saturating_sub(cell.width()) + 2));
             }
+            let last = cell(row, before_last);
+            let pieces = if wrap_last {
+                fit_words(&last, room)
+            } else {
+                vec![last]
+            };
             let style = if number == 0 {
                 Style::Bold
             } else {
                 Style::Plain
             };
-            let mut line = Line::default();
-            line.push(&" ".repeat(INDENT), Style::Plain, None);
-            line.push(text.trim_end(), style, None);
-            self.push(line);
+            for (index, piece) in pieces.iter().enumerate() {
+                let mut line = Line::default();
+                if index == 0 {
+                    line.push(&" ".repeat(INDENT), Style::Plain, None);
+                    line.push(format!("{text}{piece}").trim_end(), style, None);
+                } else {
+                    line.push(&" ".repeat(last_at), Style::Plain, None);
+                    line.push(piece, style, None);
+                }
+                self.push(line);
+            }
         }
     }
 
@@ -838,11 +957,19 @@ mod tests {
     #[test]
     fn every_page_reads_in_eighty_columns() {
         let manual = crate::manual();
-        for page in manual.pages.iter().chain(&manual.topics) {
-            let drawn = draw(page, manual, 80);
-            for line in &drawn.lines {
-                assert!(line.width() <= 80, "{}: {}", page.file, line.plain());
-            }
-        }
+        let wide: Vec<String> = manual
+            .pages
+            .iter()
+            .chain(&manual.topics)
+            .flat_map(|page| {
+                draw(page, manual, 80)
+                    .lines
+                    .into_iter()
+                    .filter(|line| line.width() > 80)
+                    .map(|line| format!("{}: {}", page.file, line.plain()))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert_eq!(wide, Vec::<String>::new(), "{wide:#?}");
     }
 }

@@ -1,0 +1,31 @@
+---
+name: where
+summary: Find files by pattern on `PATH` or in directories, as Windows' `where.exe` does.
+kind: Windows commands
+see: which type find paths
+draft: yes
+---
+
+## Examples
+
+    where git
+    where -r . '*.toml'
+    where '$GOPATH:*.exe'
+
+## How it works
+
+`where PATTERN...` finds files as Windows' `where.exe` does: in the current directory and
+along `PATH`, trying the `PATHEXT` extensions on a name without one, with `*` and `?`
+wildcards, in any case. `-r DIR` searches a directory tree instead, and `$VAR:PATTERN` or
+`DIR:PATTERN` searches the directories a variable or a path names.
+
+### Differences from where.exe
+
+- Options take dashes: `-r`, `-q`, `-f`, `-t`, bundled as `-qf`, and `--help`. A `/q`
+  is a pattern, so a path is never taken for an option.
+- Paths print as `pwd` prints them: `C:/Windows/notepad.exe`.
+- Search order, matching, messages and exit statuses (0 found, 1 not found, 2 for a bad
+  command line) are `where.exe`'s.
+
+`which` says what the shell would run for a name; `where` lists every file of that
+name.

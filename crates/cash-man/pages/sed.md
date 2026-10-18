@@ -1,7 +1,7 @@
 ---
 name: sed
 summary: Edit text line by line: substitute, delete, print, insert.
-kind: Text tool (built in)
+kind: Text and file tools
 see: awk grep tr cut dos2unix crlf
 ---
 
