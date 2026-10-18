@@ -356,7 +356,7 @@ impl Picker {
         }
 
         let mut lines = Vec::with_capacity(height);
-        lines.push(paint(&self.colours.frame, &fit(&self.header(), width)));
+        lines.push(paint(&self.colours.frame, &fit(&self.header(width), width)));
         for i in self.scroll..self.scroll + rows {
             lines.push(self.items.get(i).map_or_else(String::new, |item| {
                 self.draw_item(item, i == self.selected, width)
@@ -370,14 +370,16 @@ impl Picker {
         lines
     }
 
-    fn header(&self) -> String {
+    /// The top line in `width` columns: where the picker is, then what it shows. A place
+    /// too long loses its start, so what it shows stays in sight.
+    fn header(&self, width: usize) -> String {
         let place = match self.view {
             View::Tree => self.shown(&self.root),
             View::Drives => "Drives".to_owned(),
             View::History => "Directory history".to_owned(),
         };
         let mut header = format!(
-            "{place}   [{}]",
+            "   [{}]",
             match self.filter.shows {
                 Shows::Directories => "directories",
                 Shows::Everything => "all",
@@ -406,7 +408,8 @@ impl Picker {
                 Status::Done => {}
             }
         }
-        header
+        let used: usize = header.chars().filter_map(char::width).sum();
+        format!("{}{header}", fit_start(&place, width.saturating_sub(used)))
     }
 
     /// A directory as the header shows it: under the home directory as `~/…`.
@@ -703,6 +706,31 @@ pub(crate) fn fit(text: &str, width: usize) -> String {
     out
 }
 
+/// `text` cut to `width` columns from its start, with `…` where it was cut: the end of
+/// a path says more than its start.
+pub(crate) fn fit_start(text: &str, width: usize) -> String {
+    let total: usize = text.chars().filter_map(char::width).sum();
+    if total <= width {
+        return text.to_owned();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    let mut kept = Vec::new();
+    let mut used = 1;
+    for c in text.chars().rev() {
+        let w = c.width().unwrap_or(0);
+        if used + w > width {
+            break;
+        }
+        kept.push(c);
+        used += w;
+    }
+    std::iter::once('\u{2026}')
+        .chain(kept.into_iter().rev())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -771,6 +799,34 @@ mod tests {
         );
         assert!(frame[0].contains("[directories]"), "{frame:#?}");
         assert!(frame.iter().all(|l| !l.contains("notes.txt")), "{frame:#?}");
+    }
+
+    /// A root too long for the top line loses its start, not what the picker shows: on
+    /// CI's longer temporary path `[directories]` was cut.
+    #[test]
+    fn a_long_root_keeps_what_the_picker_shows_in_sight() {
+        let dir = sample();
+        let deep = dir
+            .path()
+            .join("a-directory-with-a-long-name/and-another-below-it");
+        std::fs::create_dir_all(&deep).unwrap();
+        let mut picker = picker(&deep, Shows::Directories, Then::Run);
+        let frame = plain(&mut picker, 4);
+        assert!(
+            frame[0].starts_with('\u{2026}')
+                && frame[0].ends_with("/and-another-below-it   [directories]"),
+            "{frame:#?}"
+        );
+        assert_eq!(frame[0].chars().count(), 60, "{frame:#?}");
+    }
+
+    #[test]
+    fn fitting_from_the_start_keeps_the_end() {
+        assert_eq!(fit_start("C:/a/b/c", 20), "C:/a/b/c");
+        assert_eq!(fit_start("C:/a/b/c", 5), "\u{2026}/b/c");
+        assert_eq!(fit_start("C:/a/b/c", 1), "\u{2026}");
+        assert_eq!(fit_start("C:/a/b/c", 0), "");
+        assert_eq!(fit_start("C:/日本/語", 4), "\u{2026}/語");
     }
 
     #[test]

@@ -2167,3 +2167,14 @@ each item's entry is under "Found along the way, done" below.
   as they are: the 7z format's own term (`kFolder`, a group of coders), Windows
   Terminal's menu folders (a UI construct), the `notify` crate's `CreateKind::Folder`,
   the corpus's fixtures (others' scripts), and file names in recorded output.
+- **A `case` of many options was slow** (2026-10-18, the corpus's `ansi-codes` timing
+  out under load held 1.27.0): each pattern was compiled to a regular expression each
+  time it was tried, as compiled ones are kept in an LRU of 64 and the ansi script's
+  143 options (about 400 patterns) cycled through it, missing every one. A pattern of
+  characters, `?` and `*` alone is now matched directly, as Bash's strmatch does,
+  with what the regular expression would give (a test holds the two together). In
+  debug builds 400 passes through 400 patterns took 88.8 s and take 1.2 s (Git Bash
+  0.26), and `ansi-codes` 7 s and 0.6 s (Git Bash 1.1).
+- **`croot`'s top line kept its place whole and cut what it shows** (2026-10-18, CI's
+  longer temporary path cut `[directories]`): a deep directory now gives up its start,
+  an ellipsis in front, and the picker's mode, flags and search state stay in sight.
