@@ -108,12 +108,33 @@ impl Sid {
     pub(crate) const fn as_psid(&self) -> PSID {
         self.words.as_ptr().cast_mut().cast()
     }
+
+    /// The SID's last part, its relative id: 1001 for a local account, 545 for Users, 11
+    /// for Authenticated Users. The number `id` gives for it.
+    #[must_use]
+    pub fn rid(&self) -> u32 {
+        use windows_sys::Win32::Security::{GetSidSubAuthority, GetSidSubAuthorityCount};
+
+        // SAFETY: the SID is valid, so its count of sub-authorities can be read.
+        let count = unsafe { *GetSidSubAuthorityCount(self.as_psid()) };
+        let Some(last) = u32::from(count).checked_sub(1) else {
+            return 0;
+        };
+        // SAFETY: `last` is below the SID's count of sub-authorities.
+        unsafe { *GetSidSubAuthority(self.as_psid(), last) }
+    }
 }
 
 /// The SID of the user account `name` names (`tom`, `PC\tom`), or `None` when there is no
 /// such account or it is not a user (a group, say).
 #[must_use]
 pub fn lookup_user(name: &str) -> Option<Sid> {
+    lookup_account(name).and_then(|(sid, kind)| (kind == SidTypeUser).then_some(sid))
+}
+
+/// The SID of the account `name` names, a user or a group (`tom`, `Users`), and what kind
+/// of account it is.
+fn lookup_account(name: &str) -> Option<(Sid, SID_NAME_USE)> {
     use windows_sys::Win32::Security::LookupAccountNameW;
 
     let wide = to_wide_nul(name);
@@ -135,10 +156,10 @@ pub fn lookup_user(name: &str) -> Option<Sid> {
             &raw mut kind,
         )
     };
-    if ok == 0 || kind != SidTypeUser {
+    if ok == 0 {
         return None;
     }
-    Sid::copy_of(sid.as_mut_ptr().cast())
+    Some((Sid::copy_of(sid.as_mut_ptr().cast())?, kind))
 }
 
 /// The account a SID names, as `DOMAIN\name`.
@@ -273,11 +294,42 @@ pub fn current_primary_group() -> Option<Sid> {
 /// `CheckTokenMembership` does not count, so the groups are read.
 #[must_use]
 pub fn is_administrator() -> Option<bool> {
+    let administrators = Sid::parse(ADMINISTRATORS)?;
+    Some(
+        token_groups()?
+            .iter()
+            .any(|(sid, _)| *sid == administrators),
+    )
+}
+
+/// The groups this process works with, in its token's order: every enabled group but the
+/// logon session's and the integrity level. An unelevated administrator's Administrators
+/// group is there for denying only, so it is not among them; elevated, it is.
+#[must_use]
+pub fn current_groups() -> Vec<Sid> {
+    // `SE_GROUP_*` in winnt.h, which windows-sys keeps in a module cash does not build.
+    const ENABLED: u32 = 0x4;
+    const INTEGRITY: u32 = 0x20;
+    const LOGON_ID: u32 = 0xC000_0000;
+
+    token_groups()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|(_, attributes)| {
+            attributes & ENABLED != 0
+                && attributes & LOGON_ID != LOGON_ID
+                && attributes & INTEGRITY == 0
+        })
+        .map(|(sid, _)| sid)
+        .collect()
+}
+
+/// The groups in this process's token, each with its attributes.
+fn token_groups() -> Option<Vec<(Sid, u32)>> {
     use windows_sys::Win32::Security::{
         SID_AND_ATTRIBUTES, TOKEN_GROUPS, TOKEN_QUERY, TokenGroups,
     };
 
-    let administrators = Sid::parse(ADMINISTRATORS)?;
     let token = process_token(TOKEN_QUERY)?;
     let buffer = token_information(&token, TokenGroups)?;
     if buffer.len() * 8 < size_of::<TOKEN_GROUPS>() {
@@ -293,8 +345,56 @@ pub fn is_administrator() -> Option<bool> {
     Some(
         entries
             .iter()
-            .any(|entry| Sid::copy_of(entry.Sid).is_some_and(|sid| sid == administrators)),
+            .filter_map(|entry| Some((Sid::copy_of(entry.Sid)?, entry.Attributes)))
+            .collect(),
     )
+}
+
+/// The local groups the account `name` is in, directly or through a domain group: what
+/// `id USER` and `groups USER` list for another account.
+#[must_use]
+pub fn local_groups_of(name: &str) -> Vec<Sid> {
+    use windows_sys::Win32::NetworkManagement::NetManagement::{
+        LG_INCLUDE_INDIRECT, LOCALGROUP_USERS_INFO_0, MAX_PREFERRED_LENGTH, NERR_Success,
+        NetApiBufferFree, NetUserGetLocalGroups,
+    };
+
+    let wide = to_wide_nul(name);
+    // NetUserGetLocalGroups' own allocation, aligned for the entries it holds.
+    let mut buffer: *mut LOCALGROUP_USERS_INFO_0 = std::ptr::null_mut();
+    let mut read: u32 = 0;
+    let mut total: u32 = 0;
+    // SAFETY: a null server is this machine; the name is NUL-terminated, and every
+    // out-param is valid.
+    let status = unsafe {
+        NetUserGetLocalGroups(
+            std::ptr::null(),
+            wide.as_ptr(),
+            0,
+            LG_INCLUDE_INDIRECT,
+            (&raw mut buffer).cast(),
+            MAX_PREFERRED_LENGTH,
+            &raw mut read,
+            &raw mut total,
+        )
+    };
+    let mut groups = Vec::new();
+    if status == NERR_Success && !buffer.is_null() {
+        // SAFETY: on success the buffer holds `read` LOCALGROUP_USERS_INFO_0 entries.
+        let entries = unsafe { std::slice::from_raw_parts(buffer, read as usize) };
+        for entry in entries.iter().filter(|entry| !entry.lgrui0_name.is_null()) {
+            // SAFETY: the name is a NUL-terminated string in the buffer.
+            let group = unsafe { crate::net::widestring_at(entry.lgrui0_name) };
+            if let Some((sid, _)) = lookup_account(&group) {
+                groups.push(sid);
+            }
+        }
+    }
+    if !buffer.is_null() {
+        // SAFETY: the buffer was allocated by the call above and is not used again.
+        unsafe { NetApiBufferFree(buffer.cast()) };
+    }
+    groups
 }
 
 /// Whether `user`, or with `None` every account, may start the program at `path`.

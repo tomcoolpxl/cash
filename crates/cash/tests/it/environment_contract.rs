@@ -328,6 +328,29 @@ fn groups_names_an_account_rather_than_failing() {
 }
 
 #[test]
+fn id_lists_the_groups_and_takes_gnus_options() {
+    // `id -G` and `groups` printed the account itself, not its groups; `-r`, `-z` and a
+    // USER were refused; and `id -un` said `DOMAIN\user` where `whoami` says `user`.
+    let out = cash(
+        r#"
+        id -Gn | grep -qw Everyone && echo everyone
+        groups | grep -qw Everyone && echo groups
+        [ "$(id -un)" = "$(whoami)" ] && echo same
+        id -ur | grep -qx '[0-9]*' && echo real
+        id -zu | od -An -c | grep -q '\\0' && echo zero
+        id "$(whoami)" | grep -q '^uid=.* sid=S-1-' && echo named
+        id nosuchuser 2>/dev/null; echo "missing $?"
+        id -n 2>/dev/null; echo "names alone $?"
+        "#,
+    );
+    assert_eq!(
+        out.stdout, "everyone\ngroups\nsame\nreal\nzero\nnamed\nmissing 1\nnames alone 1",
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn hostname_uname_and_computername_all_agree() {
     let out = cash(
         r#"
