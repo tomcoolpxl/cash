@@ -11,11 +11,10 @@ spelling, `C:/src`, `/c/src` or `C:\src`, and the tools you expect are inside it
 ## Reading this manual
 
 The list on the left holds cash's topics first, then every command from A to Z.
-Type to narrow it, Enter to open a page, Tab to move between the list and the page.
-In a page, `/` finds a word, `n` and `N` go to the next and previous match, and
-Ctrl-F finds a word in every page. Enter on a page lists its See-also pages on the
-left; Backspace goes back to the page before. Esc leaves a search, and pressed again
-leaves the manual.
+Up and Down choose one, and its page shows at once; Page Up, Page Down, Home and
+End move in the page, Ctrl with Up or Down a line. Typing narrows the list, by name,
+summary or text. Ctrl-F finds a word in the page as you type, F3 goes to the next
+match. F1 shows the keys; Esc leaves a search, then the filter, then the manual.
 
 Every command's page has the same sections in the same order: what it is, its
 syntax, examples, how it works, its options, advanced use, and what is different in

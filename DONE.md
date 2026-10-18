@@ -2265,3 +2265,11 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `find --help` listed them and cash refused each as an unknown predicate. `-execdir`
   runs in each file's directory with `./name` for `{}`, once a directory with `+`;
   `-ok` and `-okdir` ask as GNU find asks, `< rm ... ./a.txt > ? `, and run on a `y`.
+- **`man`'s keys, as the user set them on trying it** (2026-10-18): Up and Down choose a
+  topic and its page shows at once, no Enter; PgUp, PgDn, Home and End move in the page,
+  Ctrl or Shift with Up or Down a line, Ctrl with PgUp or PgDn a section; no panes taking
+  turns and no Tab. Typing narrows the list by name, then summary, then the pages' text
+  (which replaces Ctrl-F's search of every page); Ctrl-F finds in the page as it is
+  typed, F3 and Shift-F3 go between matches; F1 shows the keys; Esc leaves the search,
+  then the filter, then `man`. Under 100 columns the page fills the screen and Up and
+  Down still choose.

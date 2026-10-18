@@ -191,26 +191,30 @@ fn browse(out: &mut impl std::io::Write, mut browser: Browser<'_>) -> std::io::R
     }
 }
 
-/// The browser's key for a key pressed.
+/// The browser's key for a key pressed: Up and Down choose a topic, with Ctrl or Shift
+/// they move the page a line; Ctrl with Page Up and Page Down moves it a section.
 const fn key_of(key: KeyEvent) -> Option<Key> {
     let control = key.modifiers.contains(KeyModifiers::CONTROL);
+    let shift = key.modifiers.contains(KeyModifiers::SHIFT);
     let alt = key.modifiers.contains(KeyModifiers::ALT);
     Some(match key.code {
+        KeyCode::Up if control || shift => Key::LineUp,
+        KeyCode::Down if control || shift => Key::LineDown,
         KeyCode::Up => Key::Up,
         KeyCode::Down => Key::Down,
+        KeyCode::PageUp if control => Key::SectionUp,
+        KeyCode::PageDown if control => Key::SectionDown,
         KeyCode::PageUp => Key::PageUp,
         KeyCode::PageDown => Key::PageDown,
         KeyCode::Home => Key::Home,
         KeyCode::End => Key::End,
-        KeyCode::Left if alt => Key::Back,
-        KeyCode::Right if alt => Key::Forward,
-        KeyCode::Left => Key::Left,
-        KeyCode::Right => Key::Right,
-        KeyCode::Tab | KeyCode::BackTab => Key::Tab,
+        KeyCode::F(1) => Key::Keys,
+        KeyCode::F(3) if shift => Key::FindPrevious,
+        KeyCode::F(3) => Key::FindNext,
         KeyCode::Enter => Key::Enter,
         KeyCode::Esc => Key::Esc,
         KeyCode::Backspace => Key::Backspace,
-        KeyCode::Char('f') if control => Key::FindEverywhere,
+        KeyCode::Char('f') if control => Key::Find,
         KeyCode::Char(c) if !control && !alt => Key::Char(c),
         _ => return None,
     })
@@ -223,17 +227,35 @@ mod tests {
     #[test]
     fn keys_map_to_the_browser_s() {
         let key = |code, modifiers| key_of(KeyEvent::new(code, modifiers));
-        assert_eq!(key(KeyCode::Left, KeyModifiers::ALT), Some(Key::Back));
-        assert_eq!(key(KeyCode::Left, KeyModifiers::NONE), Some(Key::Left));
+        assert_eq!(key(KeyCode::Down, KeyModifiers::NONE), Some(Key::Down));
+        assert_eq!(
+            key(KeyCode::Down, KeyModifiers::CONTROL),
+            Some(Key::LineDown)
+        );
+        assert_eq!(key(KeyCode::Up, KeyModifiers::SHIFT), Some(Key::LineUp));
+        assert_eq!(
+            key(KeyCode::PageDown, KeyModifiers::CONTROL),
+            Some(Key::SectionDown)
+        );
+        assert_eq!(
+            key(KeyCode::PageDown, KeyModifiers::NONE),
+            Some(Key::PageDown)
+        );
         assert_eq!(
             key(KeyCode::Char('f'), KeyModifiers::CONTROL),
-            Some(Key::FindEverywhere)
+            Some(Key::Find)
         );
+        assert_eq!(
+            key(KeyCode::F(3), KeyModifiers::SHIFT),
+            Some(Key::FindPrevious)
+        );
+        assert_eq!(key(KeyCode::F(1), KeyModifiers::NONE), Some(Key::Keys));
         assert_eq!(
             key(KeyCode::Char('x'), KeyModifiers::NONE),
             Some(Key::Char('x'))
         );
         assert_eq!(key(KeyCode::Char('x'), KeyModifiers::ALT), None);
-        assert_eq!(key(KeyCode::BackTab, KeyModifiers::SHIFT), Some(Key::Tab));
+        // No Tab: nothing takes turns.
+        assert_eq!(key(KeyCode::Tab, KeyModifiers::NONE), None);
     }
 }

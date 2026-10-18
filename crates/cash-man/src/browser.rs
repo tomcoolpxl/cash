@@ -1,10 +1,15 @@
-//! The browser `man` shows: cash's topics and every command on the left, a page on the
-//! right, keys to move, find and follow links (`research/man-browser-design.md`,
-//! section 3).
+//! The browser `man` shows: cash's topics and every command on the left, the page of
+//! the one chosen on the right (`research/man-browser-design.md`, section 3).
+//!
+//! Up and Down choose a topic, and its page shows at once: nothing is opened, and no
+//! pane takes the keys from another. Page Up, Page Down, Home and End move in the
+//! page, and Ctrl or Shift with Up or Down moves it a line. Typing narrows the list,
+//! by name, then summary, then text. Ctrl-F finds in the page as you type. Under 100
+//! columns the page fills the screen, and Up and Down still choose.
 //!
 //! It is a state that keys change and frames are drawn from, with no terminal of its
 //! own: the `man` builtin reads the keys and writes the frames, and the tests drive it
-//! as text. Under 80 columns one pane fills the screen and Tab switches between them.
+//! as text.
 
 use cash_picker::filter::Fuzzy;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -13,44 +18,48 @@ use crate::Manual;
 use crate::page::Subject;
 use crate::render::{self, Drawn, Line, SectionStart, Style};
 
-/// Below this many columns, one pane at a time: two would leave the page fewer than
-/// about 65 columns, beside a list some 30 wide.
+/// Below this many columns, the page alone: a list beside it would leave the page
+/// fewer than about 65 columns.
 pub const NARROW: usize = 100;
 
 /// A key the browser acts on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Key {
-    /// A line up.
+    /// The topic before.
     Up,
-    /// A line down.
+    /// The topic after.
     Down,
-    /// A screen up.
+    /// Ctrl or Shift with Up: the page a line up.
+    LineUp,
+    /// Ctrl or Shift with Down: the page a line down.
+    LineDown,
+    /// The page a screen up.
     PageUp,
-    /// A screen down.
+    /// The page a screen down.
     PageDown,
-    /// The start.
+    /// The page's start.
     Home,
-    /// The end.
+    /// The page's end.
     End,
-    /// To the list.
-    Left,
-    /// To the page.
-    Right,
-    /// To the other pane.
-    Tab,
-    /// Open, follow, or confirm what is typed.
+    /// Ctrl+PgUp: the section before.
+    SectionUp,
+    /// Ctrl+PgDn: the section after.
+    SectionDown,
+    /// Ctrl-F: find in the page.
+    Find,
+    /// F3: the next match.
+    FindNext,
+    /// Shift-F3: the match before.
+    FindPrevious,
+    /// F1: the keys, or the page again.
+    Keys,
+    /// Enter: the next match, a word being found kept.
     Enter,
-    /// Leave what is typed or found; else quit.
+    /// Leave a search, then the filter, then the browser.
     Esc,
-    /// Take a letter off what is typed; else back.
+    /// Take a letter off what is typed.
     Backspace,
-    /// Alt-Left: the page before.
-    Back,
-    /// Alt-Right: the page after, having gone back.
-    Forward,
-    /// Ctrl-F: find a word in every page.
-    FindEverywhere,
-    /// A letter: typed, or a key of the page.
+    /// A letter: the filter's, or the search's while one is typed.
     Char(char),
 }
 
@@ -78,36 +87,18 @@ struct Entry {
     page: PageId,
 }
 
-/// The pane keys go to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Focus {
-    List,
-    Page,
-}
-
-/// What the list holds.
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Listing {
-    /// Every entry, or those the filter keeps.
-    All,
-    /// The See-also pages of the page open.
-    SeeAlso,
-    /// The pages a search of every page found, and the word.
-    Found(String),
-}
-
-/// A word being typed or found.
+/// A word being found in the page.
 #[derive(Debug)]
 struct Find {
     word: String,
+    /// Whether letters go to the word, not the filter.
     typing: bool,
-    everywhere: bool,
-    /// Each match in the open page: its line and its columns, start and end.
+    /// Each match in the page: its line and its columns, start and end.
     matches: Vec<(usize, usize, usize)>,
     current: usize,
 }
 
-/// The page open, drawn for a width.
+/// The page shown, drawn for a width.
 #[derive(Debug)]
 struct Open {
     page: PageId,
@@ -117,31 +108,25 @@ struct Open {
     scroll: usize,
 }
 
-/// A page opened before, to go back to.
-#[derive(Clone, Debug)]
-struct Visit {
-    page: PageId,
-    name: String,
-    scroll: usize,
-}
-
-/// The keys, as `?` shows them.
-const KEYS: [(&str, &str); 15] = [
-    ("Up Down PgUp PgDn", "move in the pane"),
-    ("Home End", "to the start or the end"),
-    ("Tab, Left Right", "to the other pane"),
-    ("letters (list)", "narrow the list"),
-    ("Enter (list)", "open the page"),
-    ("Enter (page)", "list its See-also pages"),
-    ("/ (page)", "find a word in the page"),
-    ("n N", "the next or previous match"),
-    ("Ctrl-F", "find a word in every page"),
-    ("1 to 8, [ ]", "a section, or the one before or after"),
-    ("Backspace, Alt-Left", "the page before"),
-    ("Alt-Right", "the page after"),
-    ("?", "these keys, or the page again"),
-    ("Esc", "leave a search; pressed again, quit"),
-    ("q (page)", "quit"),
+/// The keys, as F1 shows them.
+const KEYS: [(&str, &str); 11] = [
+    (
+        "Up Down",
+        "the topic before or after: its page shows at once",
+    ),
+    ("PgUp PgDn", "a screen up or down in the page"),
+    ("Home End", "the start or the end of the page"),
+    (
+        "Ctrl+Up Ctrl+Down",
+        "a line up or down in the page; Shift too",
+    ),
+    ("Ctrl+PgUp Ctrl+PgDn", "the section before or after"),
+    ("letters", "narrow the list: by name, summary, then text"),
+    ("Backspace", "take a letter off what is typed"),
+    ("Ctrl-F", "find in the page, as you type"),
+    ("F3 Shift-F3", "the next or the previous match; Enter too"),
+    ("F1", "these keys, or the page again"),
+    ("Esc", "leave the search, then the filter, then man"),
 ];
 
 /// A command's own `--help`, by its name.
@@ -155,26 +140,23 @@ pub struct Browser<'m> {
     commands_from: usize,
     filter: String,
     fuzzy: Fuzzy,
-    listing: Listing,
     /// The entries the list shows, by index.
     shown: Vec<usize>,
+    /// The entry chosen, as a place in `shown`.
     selected: usize,
     list_scroll: usize,
-    focus: Focus,
     open: Option<Open>,
-    back: Vec<Visit>,
-    forward: Vec<Visit>,
     find: Option<Find>,
     keys_shown: bool,
     colour: bool,
-    /// The rows a page pane had at the last frame, for a screen's worth of scrolling.
+    /// The rows the page had at the last frame, for a screen's worth of scrolling.
     rows: usize,
     /// A command's own `--help`, for a draft page.
     own_help: OwnHelp<'m>,
 }
 
 impl<'m> Browser<'m> {
-    /// A browser on `manual`, open on `start` (a command or a topic) or on the topic
+    /// A browser on `manual`, on `start` (a command or a topic) or on the topic
     /// "Getting started"; `own_help` gives a command's own `--help`, which a draft page
     /// ends with.
     pub fn new(
@@ -215,26 +197,19 @@ impl<'m> Browser<'m> {
             commands_from,
             filter: String::new(),
             fuzzy: Fuzzy::plain(),
-            listing: Listing::All,
             selected: 0,
             list_scroll: 0,
-            focus: Focus::Page,
             open: None,
-            back: Vec::new(),
-            forward: Vec::new(),
             find: None,
             keys_shown: false,
             colour,
             rows: 20,
             own_help: Box::new(own_help),
         };
-        let start = start.map_or("getting-started", |start| start);
-        if let Some(entry) = browser.entry_named(start) {
-            browser.selected = entry;
-            browser.open_entry(entry);
-        } else {
-            browser.focus = Focus::List;
-        }
+        let start = browser
+            .entry_named(start.unwrap_or("getting-started"))
+            .unwrap_or(0);
+        browser.select(start);
         browser
     }
 
@@ -265,44 +240,31 @@ impl<'m> Browser<'m> {
             .or_else(|| self.entries.iter().position(|entry| entry.page == wanted))
     }
 
-    /// Opens the page of `entry`, remembering the one open to go back to.
-    fn open_entry(&mut self, entry: usize) {
-        let Some(chosen) = self.entries.get(entry) else {
+    /// Chooses `place` in the list, and shows its page at once, from its top; a word
+    /// being found is found in it.
+    fn select(&mut self, place: usize) {
+        let Some(&entry) = self.shown.get(place) else {
             return;
         };
+        self.selected = place;
+        let chosen = &self.entries[entry];
         let (page, name) = (chosen.page, chosen.name.clone());
-        if let Some(open) = &self.open {
-            if open.page == page {
-                self.focus = Focus::Page;
-                return;
-            }
-            self.back.push(Visit {
-                page: open.page,
-                name: open.name.clone(),
-                scroll: open.scroll,
+        let same = self
+            .open
+            .as_ref()
+            .is_some_and(|open| open.page == page && open.name == name);
+        if !same {
+            let width = self.open.as_ref().map_or(60, |open| open.width);
+            self.open = Some(Open {
+                drawn: self.draw_page(page, width),
+                page,
+                name,
+                width,
+                scroll: 0,
             });
-            self.forward.clear();
+            self.keys_shown = false;
+            self.find_matches();
         }
-        self.show(Visit {
-            page,
-            name,
-            scroll: 0,
-        });
-    }
-
-    /// Shows a page, scrolled as `visit` says.
-    fn show(&mut self, visit: Visit) {
-        let width = self.open.as_ref().map_or(60, |open| open.width);
-        self.open = Some(Open {
-            drawn: self.draw_page(visit.page, width),
-            page: visit.page,
-            name: visit.name,
-            width,
-            scroll: visit.scroll,
-        });
-        self.find = None;
-        self.keys_shown = false;
-        self.focus = Focus::Page;
     }
 
     /// A page drawn for `width`; a draft command's ends with its own `--help`, before
@@ -324,184 +286,77 @@ impl<'m> Browser<'m> {
 
     /// Acts on `key`.
     pub fn key(&mut self, key: Key) -> Outcome {
-        if self.find.as_ref().is_some_and(|find| find.typing) {
-            self.find_key(key);
+        if self.find.as_ref().is_some_and(|find| find.typing) && self.find_key(key) {
             return Outcome::Continue;
         }
+        let rows = isize::try_from(self.rows.max(1)).unwrap_or(1);
         match key {
-            Key::Back => self.go_back(),
-            Key::Forward => self.go_forward(),
-            Key::FindEverywhere => self.start_find(true),
-            Key::Tab => self.toggle_focus(),
-            Key::Esc => return self.escape(),
-            _ => {
-                return match self.focus {
-                    Focus::List => self.list_key(key),
-                    Focus::Page => self.page_key(key),
-                };
+            Key::Up => self.select(self.selected.saturating_sub(1)),
+            Key::Down => self.select((self.selected + 1).min(self.shown.len().saturating_sub(1))),
+            Key::LineUp => self.scroll_by(-1),
+            Key::LineDown => self.scroll_by(1),
+            Key::PageUp => self.scroll_by(-rows),
+            Key::PageDown => self.scroll_by(rows),
+            Key::Home => self.scroll_to(0),
+            Key::End => self.scroll_to(usize::MAX),
+            Key::SectionUp => self.section_step(false),
+            Key::SectionDown => self.section_step(true),
+            Key::Find => {
+                self.find = Some(Find {
+                    word: String::new(),
+                    typing: true,
+                    matches: Vec::new(),
+                    current: 0,
+                });
             }
+            Key::FindNext | Key::Enter => self.next_match(true),
+            Key::FindPrevious => self.next_match(false),
+            Key::Keys => self.keys_shown = !self.keys_shown,
+            Key::Esc => return self.escape(),
+            Key::Backspace => {
+                if self.filter.pop().is_some() {
+                    self.refilter();
+                }
+            }
+            Key::Char(c) if !c.is_control() => {
+                self.filter.push(c);
+                self.refilter();
+            }
+            Key::Char(_) => {}
         }
         Outcome::Continue
     }
 
-    const fn toggle_focus(&mut self) {
-        self.focus = match self.focus {
-            Focus::List if self.open.is_some() => Focus::Page,
-            _ => Focus::List,
-        };
-    }
-
-    /// Esc: a filter, a list of links or found pages, or a search goes first; then the
-    /// browser.
+    /// Esc: the search goes first, then the filter, then the browser.
     fn escape(&mut self) -> Outcome {
         if self.find.take().is_some() {
             return Outcome::Continue;
         }
-        if !self.filter.is_empty() || self.listing != Listing::All {
+        if !self.filter.is_empty() {
+            // Back to the whole list, the page shown still chosen in it.
+            let entry = self.shown.get(self.selected).copied();
             self.filter.clear();
-            self.set_listing(Listing::All);
+            self.shown = (0..self.entries.len()).collect();
+            self.selected = entry.unwrap_or(0);
             return Outcome::Continue;
         }
         Outcome::Quit
     }
 
-    fn list_key(&mut self, key: Key) -> Outcome {
-        let rows = self.rows.max(1);
-        match key {
-            Key::Up => self.selected = self.selected.saturating_sub(1),
-            Key::Down => {
-                self.selected = (self.selected + 1).min(self.shown.len().saturating_sub(1));
-            }
-            Key::PageUp => self.selected = self.selected.saturating_sub(rows),
-            Key::PageDown => {
-                self.selected = (self.selected + rows).min(self.shown.len().saturating_sub(1));
-            }
-            Key::Home => self.selected = 0,
-            Key::End => self.selected = self.shown.len().saturating_sub(1),
-            Key::Right if self.open.is_some() => self.focus = Focus::Page,
-            Key::Enter => self.open_selected(),
-            Key::Backspace if self.filter.pop().is_some() => self.refilter(),
-            Key::Backspace => self.go_back(),
-            Key::Char(c) if !c.is_control() => {
-                self.filter.push(c);
-                self.listing = Listing::All;
-                self.refilter();
-            }
-            _ => {}
-        }
-        Outcome::Continue
-    }
-
-    fn open_selected(&mut self) {
-        let Some(&entry) = self.shown.get(self.selected) else {
-            return;
-        };
-        let word = match &self.listing {
-            Listing::Found(word) => Some(word.clone()),
-            _ => None,
-        };
-        self.open_entry(entry);
-        if let Some(word) = word {
-            self.find = Some(Find {
-                word,
-                typing: false,
-                everywhere: false,
-                matches: Vec::new(),
-                current: 0,
-            });
-            self.find_matches();
-        }
-    }
-
-    fn page_key(&mut self, key: Key) -> Outcome {
-        let rows = self.rows.max(1);
-        match key {
-            Key::Up => self.scroll_by(-1),
-            Key::Down => self.scroll_by(1),
-            Key::PageUp => self.scroll_by(-isize::try_from(rows).unwrap_or(1)),
-            Key::PageDown => self.scroll_by(isize::try_from(rows).unwrap_or(1)),
-            Key::Home => self.scroll_to(0),
-            Key::End => self.scroll_to(usize::MAX),
-            Key::Left => self.focus = Focus::List,
-            Key::Enter => {
-                if self.see_also().is_empty() {
-                    return Outcome::Continue;
-                }
-                self.filter.clear();
-                self.set_listing(Listing::SeeAlso);
-                self.focus = Focus::List;
-            }
-            Key::Backspace => self.go_back(),
-            Key::Char('q') => return Outcome::Quit,
-            Key::Char('/') => self.start_find(false),
-            Key::Char('n') => self.next_match(true),
-            Key::Char('N') => self.next_match(false),
-            Key::Char('?') => self.keys_shown = !self.keys_shown,
-            Key::Char('[') => self.section_step(false),
-            Key::Char(']') => self.section_step(true),
-            Key::Char(c @ '1'..='8') => {
-                let n = c.to_digit(10).and_then(|n| usize::try_from(n).ok());
-                self.section_number(n.unwrap_or(1));
-            }
-            _ => {}
-        }
-        Outcome::Continue
-    }
-
-    /// The entries the open page's See also names, in its order.
-    fn see_also(&self) -> Vec<usize> {
-        let Some(open) = &self.open else {
-            return Vec::new();
-        };
-        let page = match open.page {
-            PageId::Command(index) => &self.manual.pages[index],
-            PageId::Topic(index) => &self.manual.topics[index],
-        };
-        page.see
-            .iter()
-            .filter_map(|name| self.entry_named(name))
-            .collect()
-    }
-
-    fn set_listing(&mut self, listing: Listing) {
-        self.shown = match &listing {
-            Listing::All => (0..self.entries.len()).collect(),
-            Listing::SeeAlso => self.see_also(),
-            Listing::Found(word) => {
-                let mut found = Vec::new();
-                for hit in self.manual.search(word) {
-                    if let Some(entry) = self.entry_named(hit.name)
-                        && !found.contains(&entry)
-                    {
-                        found.push(entry);
-                    }
-                }
-                found
-            }
-        };
-        self.listing = listing;
-        self.selected = 0;
-        self.list_scroll = 0;
-        if self.listing == Listing::All && !self.filter.is_empty() {
-            self.refilter();
-        }
-    }
-
-    /// The list after the filter changed: the entries whose name or summary it
-    /// matches, best first.
+    /// The list after the filter changed, its first entry chosen and shown: the name
+    /// typed whole first, then the names that match, best first, then the entries a
+    /// summary matches, then those whose page holds the text. `sed` is the command
+    /// before the topic whose summary mentions it.
     fn refilter(&mut self) {
-        if self.filter.trim().is_empty() {
+        let typed = self.filter.trim().to_owned();
+        if typed.is_empty() {
             self.shown = (0..self.entries.len()).collect();
         } else {
-            // The name typed whole first, then the names that match, best first, then
-            // the entries only a summary matches: `sed` is the command before the topic
-            // whose summary mentions it.
-            self.fuzzy.set(&self.filter);
-            let typed = self.filter.trim();
+            self.fuzzy.set(&typed);
             let exact = self
                 .entries
                 .iter()
-                .position(|entry| entry.name.eq_ignore_ascii_case(typed));
+                .position(|entry| entry.name.eq_ignore_ascii_case(&typed));
             let by_name: Vec<usize> = self
                 .fuzzy
                 .rank(self.entries.iter().map(|entry| entry.name.as_str()))
@@ -519,44 +374,22 @@ impl<'m> Browser<'m> {
                 .into_iter()
                 .map(|found| found.index)
                 .collect();
+            let by_text: Vec<usize> = self
+                .manual
+                .search(&typed)
+                .into_iter()
+                .filter_map(|hit| self.entry_named(hit.name))
+                .collect();
             let mut shown: Vec<usize> = exact.into_iter().collect();
-            for index in by_name.into_iter().chain(by_summary) {
+            for index in by_name.into_iter().chain(by_summary).chain(by_text) {
                 if !shown.contains(&index) {
                     shown.push(index);
                 }
             }
             self.shown = shown;
         }
-        self.selected = 0;
         self.list_scroll = 0;
-    }
-
-    fn go_back(&mut self) {
-        let Some(visit) = self.back.pop() else {
-            return;
-        };
-        if let Some(open) = &self.open {
-            self.forward.push(Visit {
-                page: open.page,
-                name: open.name.clone(),
-                scroll: open.scroll,
-            });
-        }
-        self.show(visit);
-    }
-
-    fn go_forward(&mut self) {
-        let Some(visit) = self.forward.pop() else {
-            return;
-        };
-        if let Some(open) = &self.open {
-            self.back.push(Visit {
-                page: open.page,
-                name: open.name.clone(),
-                scroll: open.scroll,
-            });
-        }
-        self.show(visit);
+        self.select(0);
     }
 
     fn scroll_by(&mut self, by: isize) {
@@ -596,66 +429,40 @@ impl<'m> Browser<'m> {
         }
     }
 
-    /// The `n`th section under a heading.
-    fn section_number(&mut self, n: usize) {
-        let to = self
-            .open
-            .as_ref()
-            .and_then(|open| open.drawn.sections.get(n))
-            .map(|section| section.line);
-        if let Some(to) = to {
-            self.scroll_to(to);
-        }
-    }
-
-    fn start_find(&mut self, everywhere: bool) {
-        if !everywhere && self.open.is_none() {
-            return;
-        }
-        self.find = Some(Find {
-            word: String::new(),
-            typing: true,
-            everywhere,
-            matches: Vec::new(),
-            current: 0,
-        });
-    }
-
-    /// A key while a word is typed for a search.
-    fn find_key(&mut self, key: Key) {
+    /// A key while a word is typed for the search; whether it took the key. The keys
+    /// that move go on to the page and the list.
+    fn find_key(&mut self, key: Key) -> bool {
         let Some(find) = &mut self.find else {
-            return;
+            return false;
         };
         match key {
             Key::Char(c) if !c.is_control() => find.word.push(c),
             Key::Backspace => {
                 find.word.pop();
             }
-            Key::Esc => self.find = None,
-            Key::Enter if find.word.trim().is_empty() => self.find = None,
-            Key::Enter if find.everywhere => {
-                let word = find.word.clone();
-                self.find = None;
-                self.filter.clear();
-                self.set_listing(Listing::Found(word));
-                self.focus = Focus::List;
-            }
             Key::Enter => {
                 find.typing = false;
-                self.find_matches();
+                return true;
             }
-            _ => {}
+            Key::Esc => {
+                self.find = None;
+                return true;
+            }
+            _ => return false,
         }
+        self.find_matches();
+        true
     }
 
-    /// Every place the word is found in the open page, case aside; the first at or
-    /// after the top line is the current one.
+    /// Every place the word is found in the page, case aside; the first at or after
+    /// the top line is the current one, and is brought into view.
     fn find_matches(&mut self) {
         let (Some(find), Some(open)) = (&mut self.find, &self.open) else {
             return;
         };
         let needle: Vec<char> = find.word.to_lowercase().chars().collect();
         find.matches.clear();
+        find.current = 0;
         if needle.is_empty() {
             return;
         }
@@ -734,13 +541,9 @@ impl<'m> Browser<'m> {
             + 3
     }
 
-    /// Draws the open page again when its pane is a new width, keeping its place.
+    /// Draws the page again when it is shown at a new width, keeping its place.
     fn fit_page(&mut self, width: usize) {
-        let needs = self.open.as_ref().is_some_and(|open| open.width != width);
-        if !needs {
-            return;
-        }
-        let Some(open) = &self.open else {
+        let Some(open) = self.open.as_ref().filter(|open| open.width != width) else {
             return;
         };
         let (page, scroll, total) = (open.page, open.scroll, open.drawn.lines.len().max(1));
@@ -751,9 +554,7 @@ impl<'m> Browser<'m> {
             open.width = width;
             open.scroll = scroll;
         }
-        if self.find.as_ref().is_some_and(|find| !find.typing) {
-            self.find_matches();
-        }
+        self.find_matches();
     }
 
     fn wide_frame(&mut self, width: usize, height: usize) -> Vec<String> {
@@ -766,13 +567,16 @@ impl<'m> Browser<'m> {
         let list = self.list_lines(list_outer - 2, rows);
         let page = self.page_lines(page_outer - 4, rows);
         let dim = |text: &str| self.paint_plain(text, "\x1b[2m");
-        let list_title = self.list_title();
-        let page_title = self.page_title();
+        let list_title = if self.filter.is_empty() {
+            "Topics & commands".to_owned()
+        } else {
+            format!("Filter: {}", self.filter)
+        };
         let mut out = Vec::with_capacity(height);
         out.push(format!(
             "{}{}",
             dim(&border('┌', '┐', &list_title, list_outer)),
-            dim(&border('┌', '┐', &page_title, page_outer))
+            dim(&border('┌', '┐', &self.page_title(), page_outer))
         ));
         for (left, right) in list.iter().zip(&page) {
             out.push(format!(
@@ -788,7 +592,7 @@ impl<'m> Browser<'m> {
             dim(&border('└', '┘', "", list_outer)),
             dim(&border('└', '┘', "", page_outer))
         ));
-        out.push(self.bottom_line(width));
+        out.push(self.bottom_line(width, false));
         out
     }
 
@@ -796,21 +600,21 @@ impl<'m> Browser<'m> {
         let rows = height - 2;
         self.rows = rows;
         self.fit_page(width - 2);
-        self.keep_selection_in_view(rows);
-        let title = match self.focus {
-            Focus::List => self.list_title(),
-            Focus::Page => self.page_title(),
-        };
-        let mut out = vec![self.paint_plain(&pad(&format!(" {title}"), width), "\x1b[7m")];
-        match self.focus {
-            Focus::List => out.extend(self.list_lines(width, rows)),
-            Focus::Page => out.extend(
-                self.page_lines(width - 2, rows)
-                    .into_iter()
-                    .map(|line| format!(" {line} ")),
-            ),
-        }
-        out.push(self.bottom_line(width));
+        let place = format!(
+            "{} / {}",
+            (self.selected + 1).min(self.shown.len()),
+            self.shown.len()
+        );
+        let title = self.page_title();
+        let gap = width.saturating_sub(title.width() + place.width() + 3);
+        let top = pad(&format!(" {title}{}  {place}", " ".repeat(gap)), width);
+        let mut out = vec![self.paint_plain(&top, "\x1b[7m")];
+        out.extend(
+            self.page_lines(width - 2, rows)
+                .into_iter()
+                .map(|line| format!(" {line} ")),
+        );
+        out.push(self.bottom_line(width, true));
         out
     }
 
@@ -822,19 +626,7 @@ impl<'m> Browser<'m> {
         }
     }
 
-    fn list_title(&self) -> String {
-        match &self.listing {
-            Listing::All if self.filter.is_empty() => "Topics & commands".to_owned(),
-            Listing::All => format!("Filter: {}", self.filter),
-            Listing::SeeAlso => format!(
-                "See also: {}",
-                self.open.as_ref().map_or("", |open| open.name.as_str())
-            ),
-            Listing::Found(word) => format!("Found: {word}"),
-        }
-    }
-
-    /// The page pane's title: the page, and the section its top line is in.
+    /// The page's title: its name, and the section its top line is in.
     fn page_title(&self) -> String {
         let Some(open) = &self.open else {
             return String::new();
@@ -842,7 +634,6 @@ impl<'m> Browser<'m> {
         if self.keys_shown {
             return "Keys".to_owned();
         }
-        // The name, not the summary: the page's first line says that.
         let mut title = open.name.clone();
         if let Some(section) = current_section(&open.drawn.sections, open.scroll)
             && section.line < open.scroll
@@ -853,13 +644,8 @@ impl<'m> Browser<'m> {
     }
 
     fn list_lines(&self, width: usize, rows: usize) -> Vec<String> {
-        let open = self
-            .open
-            .as_ref()
-            .map(|open| (open.page, open.name.as_str()));
         let mut lines = Vec::with_capacity(rows);
-        let rule_at =
-            (self.listing == Listing::All && self.filter.is_empty()).then_some(self.commands_from);
+        let rule_at = self.filter.is_empty().then_some(self.commands_from);
         let rule = self.paint_plain(
             &pad(
                 &format!(" {}", "\u{2500}".repeat(width.saturating_sub(2))),
@@ -881,26 +667,11 @@ impl<'m> Browser<'m> {
                 }
             }
             let entry = &self.entries[entry_index];
-            let marker = if open == Some((entry.page, entry.name.as_str())) {
-                "\u{25b8} "
-            } else {
-                "  "
-            };
-            let text = pad(&format!("{marker}{}", entry.name), width);
-            let style = if matches!(entry.page, PageId::Topic(_)) {
-                Style::Topic
-            } else {
-                Style::Plain
-            };
+            let text = pad(&format!("  {}", entry.name), width);
             let line = if index == self.selected {
-                let attribute = if self.focus == Focus::List {
-                    "\x1b[7m"
-                } else {
-                    "\x1b[2;7m"
-                };
-                self.paint_plain(&text, attribute)
-            } else if self.colour && style == Style::Topic {
-                format!("{}{text}\x1b[0m", style.escape())
+                self.paint_plain(&text, "\x1b[7m")
+            } else if self.colour && matches!(entry.page, PageId::Topic(_)) {
+                format!("{}{text}\x1b[0m", Style::Topic.escape())
             } else {
                 text
             };
@@ -953,38 +724,47 @@ impl<'m> Browser<'m> {
         lines
     }
 
-    fn bottom_line(&self, width: usize) -> String {
-        if let Some(find) = self.find.as_ref().filter(|find| find.typing) {
-            let prompt = if find.everywhere {
-                "Find in every page: "
+    /// The bottom line: the search being typed, or the keys and where the page is.
+    /// `narrow` names the filter too, as no list shows it.
+    fn bottom_line(&self, width: usize, narrow: bool) -> String {
+        if let Some(find) = &self.find {
+            let found = if find.word.is_empty() {
+                String::new()
+            } else if find.matches.is_empty() {
+                format!("no {}", find.word)
             } else {
-                "/"
-            };
-            return pad(&format!("{prompt}{}\u{2588}", find.word), width);
-        }
-        let keys = match self.focus {
-            Focus::List => " type to filter  Enter open  Tab page  ? keys  Esc quit",
-            Focus::Page => " / find  Enter see also  Tab list  ? keys  Esc quit",
-        };
-        let place = match (&self.find, &self.open, self.focus) {
-            (Some(find), _, _) if !find.matches.is_empty() => {
                 format!("{} / {}", find.current + 1, find.matches.len())
-            }
-            (Some(find), _, _) => format!("no {}", find.word),
-            (None, Some(open), Focus::Page) => format!(
+            };
+            let cursor = if find.typing { "\u{2588}" } else { "" };
+            let text = format!(
+                " Find: {}{cursor}  F3 next  Shift-F3 back  Esc done",
+                find.word
+            );
+            let gap = width.saturating_sub(text.width() + found.width() + 1);
+            return self.paint_plain(
+                &pad(&format!("{text}{}{found} ", " ".repeat(gap)), width),
+                "\x1b[2m",
+            );
+        }
+        let keys = if narrow && !self.filter.is_empty() {
+            format!(" Filter: {}  Esc clears", self.filter)
+        } else if narrow {
+            " \u{2191}\u{2193} topic  PgUp PgDn page  Ctrl-F find  F1 keys  Esc quit".to_owned()
+        } else {
+            " \u{2191}\u{2193} topic  PgUp PgDn page  Ctrl+\u{2191}\u{2193} line  Ctrl-F find  F1 keys  \
+             Esc quit"
+                .to_owned()
+        };
+        let place = self.open.as_ref().map_or_else(String::new, |open| {
+            format!(
                 "line {} of {}",
                 (open.scroll + 1).min(open.drawn.lines.len()),
                 open.drawn.lines.len()
-            ),
-            _ => format!(
-                "{} / {}",
-                (self.selected + 1).min(self.shown.len()),
-                self.shown.len()
-            ),
-        };
+            )
+        });
         let gap = width.saturating_sub(keys.width() + place.width() + 1);
         let line = if gap == 0 {
-            pad(&format!(" {place}"), width)
+            pad(&keys, width)
         } else {
             format!("{keys}{}{place} ", " ".repeat(gap))
         };
@@ -1115,11 +895,7 @@ mod tests {
         let body = (1..=40)
             .map(|n| format!("Line {n} of the text."))
             .collect::<Vec<_>>()
-            .join(
-                "
-
-",
-            );
+            .join("\n\n");
         Manual {
             pages: vec![
                 page(
@@ -1160,63 +936,105 @@ mod tests {
             .collect()
     }
 
+    fn bottom(browser: &mut Browser<'_>) -> String {
+        plain(&browser.frame(100, 12))[11].clone()
+    }
+
     #[test]
-    fn it_opens_on_getting_started_with_topics_then_commands() {
+    fn it_starts_on_getting_started_with_topics_then_commands() {
         let manual = manual();
         let mut browser = Browser::new(&manual, None, false, |_| None);
         let frame = plain(&browser.frame(100, 12));
         assert!(frame[0].starts_with("┌ Topics & commands"), "{frame:#?}");
         assert!(frame[0].contains("┐┌ Getting started ─"), "{frame:#?}");
-        assert!(frame[1].contains("▸ Getting started"), "{frame:#?}");
-        assert!(frame[2].contains("  Paths"), "{frame:#?}");
-        assert!(frame[3].contains("─────"), "{frame:#?}");
-        assert!(frame[4].contains("  cd"), "{frame:#?}");
+        assert!(frame[1].contains("│  Getting started"), "{frame:#?}");
         assert!(
             frame[1].contains("Getting started \u{2014} Where to begin, as pwd shows."),
             "{frame:#?}"
         );
+        assert!(frame[2].contains("  Paths"), "{frame:#?}");
+        assert!(frame[3].contains("─────"), "{frame:#?}");
+        assert!(frame[4].contains("  cd"), "{frame:#?}");
         assert!(frame.iter().all(|line| line.width() <= 100), "{frame:#?}");
         assert_eq!(browser.frame(100, 12).len(), 12);
     }
 
     #[test]
-    fn typing_filters_the_list_and_enter_opens_the_page() {
+    fn up_and_down_choose_a_topic_and_show_it_at_once() {
         let manual = manual();
         let mut browser = Browser::new(&manual, None, false, |_| None);
-        browser.key(Key::Tab);
+        browser.key(Key::Down);
+        let frame = plain(&browser.frame(100, 12));
+        assert!(frame[0].contains("┐┌ Paths ─"), "{frame:#?}");
+        assert!(
+            frame[1].contains("Paths \u{2014} C:/ and /c/."),
+            "{frame:#?}"
+        );
+        browser.key(Key::Down);
+        assert!(plain(&browser.frame(100, 12))[1].contains("cd \u{2014} Change the directory."));
+        browser.key(Key::Up);
+        browser.key(Key::Up);
+        browser.key(Key::Up);
+        assert!(plain(&browser.frame(100, 12))[0].contains("┐┌ Getting started ─"));
+        // No key opens anything: Enter only goes to a next match.
+        assert_eq!(browser.key(Key::Enter), Outcome::Continue);
+    }
+
+    #[test]
+    fn typing_narrows_the_list_and_shows_the_first_at_once() {
+        let manual = manual();
+        let mut browser = Browser::new(&manual, None, false, |_| None);
         for c in "pwd".chars() {
             browser.key(Key::Char(c));
         }
         let frame = plain(&browser.frame(100, 10));
         assert!(frame[0].starts_with("┌ Filter: pwd"), "{frame:#?}");
-        // The command named first; the topic whose summary mentions it after.
-        assert!(frame[1].contains("pwd"), "{frame:#?}");
-        assert!(frame[2].contains("Getting started"), "{frame:#?}");
-        assert!(frame[1].contains("pwd"), "{frame:#?}");
-        browser.key(Key::Enter);
-        let frame = plain(&browser.frame(100, 10));
+        // The command named first, the topic whose summary mentions it after.
         assert!(
             frame[1].contains("pwd \u{2014} Print the directory."),
             "{frame:#?}"
         );
-        // Esc clears the filter first, and then quits.
+        assert!(frame[2].contains("Getting started"), "{frame:#?}");
+        // Esc clears the filter, the page kept and chosen in the whole list; again, quit.
         assert_eq!(browser.key(Key::Esc), Outcome::Continue);
+        let frame = plain(&browser.frame(100, 10));
+        assert!(frame[0].starts_with("┌ Topics & commands"), "{frame:#?}");
+        assert!(frame[0].contains("┐┌ pwd ─"), "{frame:#?}");
         assert_eq!(browser.key(Key::Esc), Outcome::Quit);
     }
 
     #[test]
-    fn scrolling_keeps_the_section_on_the_top_line_and_sections_jump() {
+    fn the_filter_finds_a_page_by_its_text_too() {
+        let manual = manual();
+        let mut browser = Browser::new(&manual, None, false, |_| None);
+        for c in "logical".chars() {
+            browser.key(Key::Char(c));
+        }
+        let frame = plain(&browser.frame(100, 10));
+        assert!(frame[0].contains("┐┌ cd ─"), "{frame:#?}");
+        browser.key(Key::Backspace);
+        assert_eq!(browser.filter, "logica");
+    }
+
+    #[test]
+    fn page_keys_move_in_the_page_and_its_section_stays_on_top() {
         let manual = manual();
         let mut browser = Browser::new(&manual, Some("cd"), false, |_| None);
         browser.frame(100, 12);
-        browser.key(Key::Char('2'));
+        browser.key(Key::SectionDown);
+        browser.key(Key::SectionDown);
         let frame = plain(&browser.frame(100, 12));
         assert!(frame[1].contains("HOW IT WORKS"), "{frame:#?}");
-        browser.key(Key::Down);
+        browser.key(Key::LineDown);
         let frame = plain(&browser.frame(100, 12));
-        assert!(frame[0].contains("\u{203a} HOW IT WORKS"), "{frame:#?}");
-        // The next section, as near the top as the end of the page lets it come.
-        browser.key(Key::Char(']'));
+        assert!(frame[0].contains("cd \u{203a} HOW IT WORKS"), "{frame:#?}");
+        browser.key(Key::PageDown);
+        assert!(
+            bottom(&mut browser).contains("line 16 of "),
+            "{}",
+            bottom(&mut browser)
+        );
+        browser.key(Key::End);
         let frame = plain(&browser.frame(100, 12));
         assert!(
             frame.iter().any(|line| line.contains("OPTIONS")),
@@ -1224,39 +1042,48 @@ mod tests {
         );
         browser.key(Key::Home);
         assert!(plain(&browser.frame(100, 12))[1].contains("cd \u{2014} Change the directory."));
+        browser.key(Key::LineUp);
+        assert!(bottom(&mut browser).contains("line 1 of "));
     }
 
     #[test]
-    fn find_marks_the_matches_and_n_goes_to_the_next() {
+    fn ctrl_f_finds_as_it_is_typed_and_f3_goes_on() {
         let manual = manual();
         let mut browser = Browser::new(&manual, Some("cd"), false, |_| None);
         browser.frame(100, 12);
-        browser.key(Key::Char('/'));
+        browser.key(Key::Find);
         for c in "line 3".chars() {
             browser.key(Key::Char(c));
         }
-        assert!(plain(&browser.frame(100, 12))[11].starts_with("/line 3"));
+        // Found as typed: "Line 3" and "Line 30" to "Line 39".
+        assert!(
+            bottom(&mut browser).contains("Find: line 3█"),
+            "{}",
+            bottom(&mut browser)
+        );
+        assert!(
+            bottom(&mut browser).ends_with("1 / 11"),
+            "{}",
+            bottom(&mut browser)
+        );
+        assert!(
+            browser
+                .frame(100, 12)
+                .iter()
+                .any(|line| line.contains("\x1b[1;7mL"))
+        );
+        browser.key(Key::FindNext);
+        assert!(bottom(&mut browser).ends_with("2 / 11"));
+        browser.key(Key::FindPrevious);
+        browser.key(Key::FindPrevious);
+        assert!(bottom(&mut browser).ends_with("11 / 11"));
+        // Enter ends the typing; letters go to the filter again, the matches kept.
         browser.key(Key::Enter);
-        let frame = browser.frame(100, 12);
-        let bottom = strip(&frame[11]);
-        // "Line 3" and "Line 30" to "Line 39".
-        assert!(bottom.trim_end().ends_with("1 / 11"), "{bottom}");
+        browser.key(Key::Enter);
         assert!(
-            frame.iter().any(|line| line.contains("\x1b[1;7mL")),
-            "{frame:#?}"
-        );
-        browser.key(Key::Char('n'));
-        assert!(
-            strip(&browser.frame(100, 12)[11])
-                .trim_end()
-                .ends_with("2 / 11")
-        );
-        browser.key(Key::Char('N'));
-        browser.key(Key::Char('N'));
-        assert!(
-            strip(&browser.frame(100, 12)[11])
-                .trim_end()
-                .ends_with("11 / 11")
+            bottom(&mut browser).ends_with("1 / 11"),
+            "{}",
+            bottom(&mut browser)
         );
         // Esc leaves the search, then the browser.
         assert_eq!(browser.key(Key::Esc), Outcome::Continue);
@@ -1265,53 +1092,7 @@ mod tests {
     }
 
     #[test]
-    fn enter_lists_the_see_also_and_backspace_goes_back() {
-        let manual = manual();
-        let mut browser = Browser::new(&manual, Some("cd"), false, |_| None);
-        browser.frame(100, 12);
-        browser.key(Key::Enter);
-        let frame = plain(&browser.frame(100, 12));
-        assert!(frame[0].starts_with("┌ See also: cd"), "{frame:#?}");
-        assert!(
-            frame[1].contains("pwd") && frame[2].contains("Paths"),
-            "{frame:#?}"
-        );
-        browser.key(Key::Down);
-        browser.key(Key::Enter);
-        assert!(plain(&browser.frame(100, 12))[1].contains("Paths \u{2014} C:/ and /c/."));
-        browser.key(Key::Backspace);
-        assert!(plain(&browser.frame(100, 12))[1].contains("cd \u{2014} Change the directory."));
-        browser.key(Key::Forward);
-        assert!(plain(&browser.frame(100, 12))[0].contains("Paths"));
-    }
-
-    #[test]
-    fn find_everywhere_lists_the_pages_and_opens_on_the_match() {
-        let manual = manual();
-        let mut browser = Browser::new(&manual, None, false, |_| None);
-        browser.frame(100, 12);
-        browser.key(Key::FindEverywhere);
-        for c in "logical".chars() {
-            browser.key(Key::Char(c));
-        }
-        browser.key(Key::Enter);
-        let frame = plain(&browser.frame(100, 12));
-        assert!(frame[0].starts_with("┌ Found: logical"), "{frame:#?}");
-        assert!(frame[1].contains("cd"), "{frame:#?}");
-        browser.key(Key::Enter);
-        let frame = browser.frame(100, 12);
-        assert!(
-            strip(&frame[11]).trim_end().ends_with("1 / 1"),
-            "{frame:#?}"
-        );
-        assert!(
-            frame.iter().any(|line| line.contains("\x1b[1;7mlogical")),
-            "{frame:#?}"
-        );
-    }
-
-    #[test]
-    fn a_draft_ends_with_its_own_help_and_a_narrow_screen_has_one_pane() {
+    fn a_draft_ends_with_its_own_help_and_a_narrow_screen_shows_the_page_alone() {
         let manual = manual();
         let mut browser = Browser::new(&manual, Some("egrep"), false, |name| {
             Some(format!(
@@ -1319,35 +1100,37 @@ mod tests {
             ))
         });
         let frame = plain(&browser.frame(60, 20));
-        assert!(frame[0].contains(" egrep"), "{frame:#?}");
-        assert!(
-            frame[1].contains("grep, egrep \u{2014} Match lines."),
-            "{frame:#?}"
-        );
+        assert!(frame[0].starts_with(" egrep"), "{frame:#?}");
+        assert!(frame[0].ends_with("4 / 6"), "{frame:#?}");
         let text = frame.join("\n");
+        assert!(text.contains("grep, egrep \u{2014} Match lines."), "{text}");
         assert!(text.contains("USAGE AND OPTIONS"), "{text}");
         assert!(text.contains("Usage: grep [OPTION]... PATTERN"), "{text}");
-        assert!(!text.contains('│'), "one pane, no frames: {text}");
-        browser.key(Key::Tab);
+        assert!(!text.contains('│'), "the page alone: {text}");
+        // Up still chooses, and the page follows.
+        browser.key(Key::Up);
         let frame = plain(&browser.frame(60, 20));
-        assert!(frame[0].contains("Topics & commands"), "{frame:#?}");
+        assert!(frame[0].starts_with(" cd"), "{frame:#?}");
         assert!(frame.iter().all(|line| line.width() <= 60), "{frame:#?}");
+        browser.key(Key::Char('p'));
+        assert!(plain(&browser.frame(60, 20))[19].starts_with(" Filter: p"));
     }
 
     #[test]
-    fn keys_are_shown_on_a_question_mark_and_q_quits_the_page() {
+    fn f1_shows_the_keys() {
         let manual = manual();
         let mut browser = Browser::new(&manual, Some("cd"), false, |_| None);
-        browser.key(Key::Char('?'));
+        browser.key(Key::Keys);
         let frame = plain(&browser.frame(100, 24));
-        assert!(frame[0].contains("Keys"), "{frame:#?}");
+        assert!(frame[0].contains("┐┌ Keys ─"), "{frame:#?}");
         assert!(
             frame
                 .iter()
-                .any(|line| line.contains("find a word in every page")),
+                .any(|line| line.contains("its page shows at once")),
             "{frame:#?}"
         );
-        assert_eq!(browser.key(Key::Char('q')), Outcome::Quit);
+        browser.key(Key::Keys);
+        assert!(plain(&browser.frame(100, 24))[0].contains("┐┌ cd ─"));
     }
 
     #[test]

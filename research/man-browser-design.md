@@ -99,18 +99,20 @@ marked to be parsed only.
 
 ### Keys
 
+As the user set them on trying the first build (2026-10-18): Up and Down choose a
+topic and show it at once, no Enter; Page Up, Page Down, Home and End move in the
+page, Up and Down with a modifier a line; no panes taking turns, no Tab.
+
 | Key | Does |
 |---|---|
-| Esc | leave a search or filter being typed; otherwise, and pressed again, quit |
-| q | quit too, as in less |
-| ↑ ↓, PgUp PgDn, Home End | move in the pane with focus |
-| Tab, ← → | switch panes |
-| Enter (list) | open the page |
-| letters (list) | filter the list, fuzzily, as `croot` filters |
-| / (page) | find in the page; n and N next and previous; matches highlighted |
-| Ctrl-F | find in every page (full text), results in the left pane |
-| Enter (on a link) | follow a See-also link; Alt-← / Backspace back, Alt-→ forward |
-| 1 to 8, or [ ] | jump to a section, or the previous / next one |
+| Up Down | the topic before or after: its page shows at once |
+| PgUp PgDn, Home End | a screen up or down, the start or the end of the page |
+| Ctrl+Up Ctrl+Down (Shift too) | a line up or down in the page |
+| Ctrl+PgUp Ctrl+PgDn | the section before or after |
+| letters, Backspace | narrow the list: by name, then summary, then the pages' text |
+| Ctrl-F | find in the page as you type; F3, Shift-F3 and Enter go between matches |
+| F1 | the keys, or the page again |
+| Esc | leave the search, then the filter, then `man` |
 
 ### Search
 

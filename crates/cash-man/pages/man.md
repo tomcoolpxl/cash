@@ -35,8 +35,10 @@ Keep a page, or search it with the tools you know:
 ## How it works
 
 `man` opens a full-screen browser: cash's topics and every command on the left, the
-page on the right. Typing narrows the list, Enter opens a page, Tab moves between the
-two panes. In a terminal under 100 columns one pane fills the screen, and Tab switches.
+page of the one chosen on the right. Up and Down choose a topic, and its page shows at
+once; nothing is opened, and no pane takes the keys from another. Typing narrows the
+list, by name, then summary, then the pages' text. In a terminal under 100 columns
+the page fills the screen, and Up and Down still choose.
 
 Every command's page has the same sections in the same order: Syntax, Examples, How
 it works, Options, Advanced, Different in cash, See also. The section the top line of
@@ -44,21 +46,17 @@ the page is in stays on the top border while you scroll.
 
 ### Keys
 
-    Up Down PgUp PgDn     move in the pane
-    Home End              to the start or the end
-    Tab, Left Right       to the other pane
-    letters (list)        narrow the list, by name and summary
-    Enter (list)          open the page
-    Enter (page)          list its See-also pages on the left
-    / (page)              find a word in the page
-    n N                   the next or the previous match
-    Ctrl-F                find a word in every page
-    1 to 8, [ ]           a section, or the one before or after
-    Backspace, Alt-Left   the page before
-    Alt-Right             the page after
-    ?                     the keys, or the page again
-    Esc                   leave a search; pressed again, quit
-    q (page)              quit
+    Up Down                the topic before or after: its page shows at once
+    PgUp PgDn              a screen up or down in the page
+    Home End               the start or the end of the page
+    Ctrl+Up Ctrl+Down      a line up or down in the page; Shift too
+    Ctrl+PgUp Ctrl+PgDn    the section before or after
+    letters                narrow the list: by name, summary, then text
+    Backspace              take a letter off what is typed
+    Ctrl-F                 find in the page, as you type
+    F3 Shift-F3            the next or the previous match; Enter too
+    F1                     the keys, or the page again
+    Esc                    leave the search, then the filter, then man
 
 When `man`'s output is not a terminal, it prints the page as plain text, wrapped to
 `$COLUMNS` (80 without it), and returns. `help NAME` prints the short form of a page,
