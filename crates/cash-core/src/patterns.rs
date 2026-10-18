@@ -9,11 +9,13 @@ use std::{
 };
 
 /// A pattern compiled to match a whole text: a regular expression, or for a pattern
-/// with `!(…)`, which no regular expression can express, the backtracking matcher.
+/// with `!(…)`, which no regular expression can express, the backtracking matcher, or
+/// for one of characters, `?` and `*` alone, those, matched as Bash matches them.
 #[derive(Debug)]
 pub(crate) enum PatternMatcher {
     Regex(std::sync::Arc<fancy_regex::Regex>),
     Backtracking(backtracking::BacktrackingMatcher),
+    Wildcards(Vec<Wildcard>),
 }
 
 impl PatternMatcher {
@@ -22,8 +24,46 @@ impl PatternMatcher {
         match self {
             Self::Regex(regex) => Ok(regex.is_match(text)?),
             Self::Backtracking(matcher) => matcher.is_match(text),
+            Self::Wildcards(pattern) => Ok(wildcards_match(pattern, text)),
         }
     }
+}
+
+/// A piece of a pattern made of characters, `?` and `*` alone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Wildcard {
+    /// This character.
+    Char(char),
+    /// `?`: any one character.
+    Any,
+    /// `*`: any characters, none too.
+    Many,
+}
+
+/// Whether the whole of `text` matches `pattern`: each `*` takes as few characters as
+/// it can, and the last one more when what follows it fails.
+fn wildcards_match(pattern: &[Wildcard], text: &str) -> bool {
+    let text: Vec<char> = text.chars().collect();
+    let (mut p, mut t) = (0, 0);
+    let mut last_star: Option<(usize, usize)> = None;
+    while t < text.len() {
+        match pattern.get(p) {
+            Some(Wildcard::Any) => (p, t) = (p + 1, t + 1),
+            Some(Wildcard::Char(c)) if *c == text[t] => (p, t) = (p + 1, t + 1),
+            Some(Wildcard::Many) => {
+                last_star = Some((p, t));
+                p += 1;
+            }
+            _ => match last_star {
+                Some((star, taken)) => {
+                    last_star = Some((star, taken + 1));
+                    (p, t) = (star + 1, taken + 1);
+                }
+                None => return false,
+            },
+        }
+    }
+    pattern[p..].iter().all(|piece| *piece == Wildcard::Many)
 }
 
 /// A pattern compiled to find where it matches in a text, as `${x/pattern/…}` does: at
@@ -699,10 +739,42 @@ impl Pattern {
 
     /// The pattern compiled to match whole texts.
     pub(crate) fn matcher(&self) -> Result<PatternMatcher, error::Error> {
+        if let Some(wildcards) = self.wildcards() {
+            return Ok(PatternMatcher::Wildcards(wildcards));
+        }
         Ok(match self.backtracking_matcher()? {
             Some(matcher) => PatternMatcher::Backtracking(matcher),
             None => PatternMatcher::Regex(self.to_regex(true, true)?),
         })
+    }
+
+    /// The pattern as characters, `?` and `*`, when it holds nothing else and they match
+    /// as its regular expression would: across lines, with case as written. Read as
+    /// the regular expression is made from `glob_text`, a bracket, an extended pattern
+    /// and a last lone `\` left to it. A `case` of a few hundred options, as option
+    /// parsers have, compiled a regular expression for each pattern each time: the
+    /// cache keeps 64, and a cycle through more misses every one.
+    fn wildcards(&self) -> Option<Vec<Wildcard>> {
+        if self.case_insensitive || !self.multiline {
+            return None;
+        }
+        let text = self.glob_text();
+        let mut chars = text.chars().peekable();
+        let mut wildcards = Vec::with_capacity(text.len());
+        while let Some(c) = chars.next() {
+            let extended = self.enable_extended_globbing
+                && matches!(c, '+' | '@' | '!' | '?' | '*')
+                && chars.peek() == Some(&'(');
+            wildcards.push(match c {
+                _ if extended => return None,
+                '\\' => Wildcard::Char(chars.next()?),
+                '[' => return None,
+                '?' => Wildcard::Any,
+                '*' => Wildcard::Many,
+                c => Wildcard::Char(c),
+            });
+        }
+        Some(wildcards)
     }
 
     /// The pattern compiled to find matches in a text, starting at its start only, or
@@ -1372,5 +1444,142 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    /// Patterns for the wildcards' test, each one piece of pattern text.
+    const WILDCARD_PATTERNS: [&str; 35] = [
+        "",
+        "a",
+        "abc",
+        "*",
+        "**",
+        "?",
+        "??",
+        "a*",
+        "*a",
+        "*a*",
+        "a*b",
+        "a?c",
+        "*.txt",
+        "--color=*",
+        "--opt199",
+        "-[ab]",
+        "a\\*b",
+        "a\\?",
+        "\\\\",
+        "x\\",
+        "*(a)",
+        "+(a|b)",
+        "!(x)",
+        "@(a)",
+        "?(a)",
+        "a+b",
+        "a(b)",
+        "a.b",
+        "^$",
+        "日本*",
+        "?語",
+        "a*b*c",
+        "*ab*ab",
+        "a{b}",
+        "a|b",
+    ];
+
+    /// Texts for the wildcards' test.
+    const WILDCARD_TEXTS: [&str; 36] = [
+        "",
+        "a",
+        "b",
+        "ab",
+        "abc",
+        "aXc",
+        "a*b",
+        "a?",
+        "\\",
+        "x\\",
+        "x*",
+        "x\\y",
+        "a\nb",
+        "\n",
+        "--color=31",
+        "--color",
+        "--opt199",
+        "--opt19",
+        "-a",
+        "a.txt",
+        "atxt",
+        "日本語",
+        "本語",
+        "aabbcc",
+        "abab",
+        "ababab",
+        "xabyab",
+        "a{b}",
+        "a|b",
+        "a+b",
+        "a(b)",
+        "(a)",
+        "*a",
+        "[a]x",
+        "[a]",
+        "aa",
+    ];
+
+    /// Every pattern of characters, `?` and `*` matches as its regular expression does,
+    /// pieces quoted and not.
+    #[test]
+    fn wildcards_match_as_the_regular_expression_does() -> Result<()> {
+        let piece = |quoted: bool, text: &str| {
+            if quoted {
+                PatternPiece::Literal(text.to_owned())
+            } else {
+                PatternPiece::Pattern(text.to_owned())
+            }
+        };
+        let patterns = WILDCARD_PATTERNS
+            .iter()
+            .map(|text| vec![piece(false, text)])
+            .chain([
+                vec![piece(true, "a*"), piece(false, "?")],
+                vec![piece(false, "x\\"), piece(true, "*")],
+                vec![piece(false, "*"), piece(true, "(a)")],
+                vec![piece(true, "[a]"), piece(false, "*")],
+            ]);
+        for pieces in patterns {
+            for extended in [false, true] {
+                let pattern = Pattern::from(pieces.clone()).set_extended_globbing(extended);
+                let Some(wildcards) = pattern.wildcards() else {
+                    continue;
+                };
+                let regex = pattern.to_regex(true, true)?;
+                for text in WILDCARD_TEXTS {
+                    assert_eq!(
+                        wildcards_match(&wildcards, text),
+                        regex.is_match(text)?,
+                        "{pieces:?} (extglob {extended}) against {text:?}"
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Brackets, extended patterns, a last lone `\`, nocasematch and patterns that stop
+    /// at line ends are left to the regular expression.
+    #[test]
+    fn other_patterns_are_left_to_the_regular_expression() {
+        assert!(Pattern::from("-[ab]").wildcards().is_none());
+        let extended = Pattern::from("+(a)").set_extended_globbing(true);
+        assert!(extended.wildcards().is_none());
+        assert!(Pattern::from("+(a)").wildcards().is_some());
+        assert!(Pattern::from("x\\").wildcards().is_none());
+        let nocase = Pattern::from("a").set_case_insensitive(true);
+        assert!(nocase.wildcards().is_none());
+        assert!(
+            Pattern::from("a")
+                .set_multiline(false)
+                .wildcards()
+                .is_none()
+        );
     }
 }

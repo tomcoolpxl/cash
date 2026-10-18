@@ -64,6 +64,14 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **A `case` of more than 64 patterns with brackets or extended globs** compiles each
+  pattern again on every pass: compiled patterns are kept in an LRU of 64, which a
+  cycle through more misses every time. Patterns of characters, `?` and `*` match
+  without a regular expression since 2026-10-18, which covers option parsers; brackets
+  (`-[abc]`, `[Yy]*`) could be matched directly too, as Bash's strmatch does, if a
+  script shows the need. Small to medium; the bracket rules must stay exactly the
+  regular expression's (ranges by code point, ASCII classes, a lone `[` literal).
+
 - **A benchmark tool in the repo for all five shells** (the user, 2026-10-18): cash, Git
   Bash, PowerShell 7 and WSL2's bash on Windows, and bash on native Linux, the same
   machine rebooted, so the results make one comparison. `tests/shell-bench` has most of
