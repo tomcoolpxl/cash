@@ -346,10 +346,6 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         // Add in any open files provided.
         shell.open_files.update_from(options.fds.into_iter());
 
-        // TODO(patterns): Without this a script that sets extglob will fail because we
-        // parse the entire script with the same settings.
-        shell.options.extended_globbing = true;
-
         // If requested, seed parameters from environment.
         if !options.do_not_inherit_env {
             wellknownvars::inherit_env_vars(&mut shell)?;

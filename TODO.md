@@ -33,11 +33,7 @@ alias as it reads each command. The phases before, released as 1.22.0 to 1.26.0,
 DONE.md.
 
 1. **Two small fixes**: done (2026-10-18, DONE.md).
-2. **extglob is on from the start** (found 2026-10-18 by the corpus): `shopt extglob`
-   says `on`, and `+(x)` matches before `shopt -s extglob`, where Bash has it off. cash
-   parses a whole script with one set of options, so a script that turns extglob on
-   later would not parse otherwise (`shell.rs`, a TODO taken over from brush). Bash
-   parses a command at a time; so would cash.
+2. **extglob is on from the start**: done (2026-10-18, DONE.md).
 3. **An alias whose value holds an operator runs it as words** (found 2026-10-18 by the
    corpus): `alias multi='echo m1; echo m2'`, then `multi`, prints `m1 ; echo m2`; Bash
    runs both commands. Aliases such as `alias gs='git status && git diff'` are common

@@ -146,6 +146,12 @@ written.
   2026-10-10). Turned down: patched copies in `vendor/`, which is gone.
 
 ## 2. Paths, files and text
+- **Scripts are read a command at a time, as Bash reads them** (the user, 2026-10-18,
+  after 1.26.0): a script parsed whole runs one command at a time, and the rest is
+  parsed again when a command changes how text parses (an alias added, extglob
+  turned); aliases are expanded on the tokens, before parsing, so an alias's `&&` and
+  `;` are operators; extglob starts off. Turned down: fixing both at run time, where
+  `gs | less` pipes both commands of an alias and Bash only the last.
 
 ### D3 — Windows paths first-class, Unix spellings accepted
 

@@ -9,10 +9,11 @@
 
 use crate::common::{Scratch, run, run_in};
 
-/// Runs each script and checks its standard output and status against Bash's.
+/// Runs each script with extglob on, a line before it as Bash needs it, and checks its
+/// standard output and status against Bash's.
 fn check(cases: &[(&str, &str)]) {
     for &(script, expected) in cases {
-        let out = run(script);
+        let out = run(&format!("shopt -s extglob\n{script}"));
         assert_eq!(
             (out.stdout.as_str(), out.code),
             (expected, 0),
@@ -50,7 +51,7 @@ fn pathname_expansion_leaves_out_what_a_negation_names() {
     }
     let out = run_in(
         scratch.path(),
-        "echo !(*.tar|*.tar.gz); echo *.!(gz); echo @(!(a*)|ab)",
+        "shopt -s extglob\necho !(*.tar|*.tar.gz); echo *.!(gz); echo @(!(a*)|ab)",
     );
     assert_eq!(
         out.stdout, "ab b.txt c\na.tar a.tar.gz b.txt\nab b.txt c",
@@ -97,6 +98,29 @@ fn case_modification_tests_each_character() {
         "x=abc; echo ${x^^@(ab)} ${x^^!(b)} ${x^@(a|b)}",
         "abc AbC Abc",
     )]);
+}
+
+#[test]
+fn extglob_is_off_until_it_is_turned_on_but_never_in_double_brackets() {
+    // As Bash 5.3: off at the start, so a pattern is plain text and `case`'s is a syntax
+    // error; on from the line after `shopt -s extglob`; and `[[`'s patterns are extended
+    // whatever it is, so that a pattern there parses either way.
+    let out = run("shopt extglob; p=abc.def; echo \"${p//+([a-z])/x}\"; \
+         [[ abc == +([a-z]) ]] && echo brackets\nshopt -s extglob\necho \"${p//+([a-z])/x}\"");
+    assert_eq!(
+        (out.stdout.as_str(), out.code),
+        ("extglob             \toff\nabc.def\nbrackets\nx.x", 0),
+        "{}",
+        out.stderr
+    );
+    let out = run("case abc in +([a-z])) echo no;; esac");
+    assert_eq!(out.code, 2, "{}", out.stdout);
+    assert!(
+        out.stderr
+            .contains("syntax error near unexpected token `('"),
+        "{}",
+        out.stderr
+    );
 }
 
 #[test]

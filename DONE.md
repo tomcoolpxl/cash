@@ -2116,3 +2116,12 @@ each item's entry is under "Found along the way, done" below.
   clipboard of whoever ran them and put back its text alone, so an image, a file list or
   formatted text there was lost. They skip now unless the clipboard holds only text
   (`clipboard::holds_text_only`), as they skip while the session is locked.
+- **extglob was on from the start** (found 2026-10-18 by the corpus; the user's pick
+  after 1.26.0): `shopt extglob` said `on` and `+(x)` matched before `shopt -s
+  extglob`, a setting taken over from brush so that a script turning extglob on later
+  would parse, as cash parsed a script whole. It starts off now, as in Bash. A script
+  that turns it on fails to parse whole and is read a command at a time, each line
+  parsed as the one before it left the options, as Bash reads every script; `[[`'s
+  patterns are extended whatever extglob is, and the tokenizer reads them so inside
+  `[[ … ]]`, as Bash's does. Six of cash's own tests used extended patterns without
+  turning extglob on, which Bash refuses too; they turn it on, a line before.

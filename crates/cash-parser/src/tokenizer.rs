@@ -263,6 +263,9 @@ struct CrossTokenParseState {
     queued_tokens: Vec<TokenizeResult>,
     /// Are we in an arithmetic expansion?
     arithmetic_expansion: bool,
+    /// Whether the words since a `[[` have not yet reached its `]]`: there an extglob
+    /// pattern is read whether extglob is on or not, as in Bash.
+    in_double_brackets: bool,
 }
 
 /// Options controlling how the tokenizer operates.
@@ -608,6 +611,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                 current_here_tags: vec![],
                 queued_tokens: vec![],
                 arithmetic_expansion: false,
+                in_double_brackets: false,
             },
         }
     }
@@ -668,7 +672,17 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
     }
 
     pub fn next_token(&mut self) -> Result<TokenizeResult, TokenizerError> {
-        self.next_token_until(None, false /* include space? */)
+        let result = self.next_token_until(None, false /* include space? */)?;
+        match &result.token {
+            Some(Token::Word(word, _)) if word == "[[" => {
+                self.cross_state.in_double_brackets = true;
+            }
+            Some(Token::Word(word, _)) if word == "]]" => {
+                self.cross_state.in_double_brackets = false;
+            }
+            _ => {}
+        }
+        Ok(result)
     }
 
     /// Consumes a nested construct (e.g., `$((...))` or `$[...]`), handling nested delimiters
@@ -1230,7 +1244,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
             // unquoted start of an extglob pattern, *and* if the current character
             // is an open parenthesis, then this begins an extglob pattern.
             else if c == '('
-                && self.options.enable_extended_globbing
+                && (self.options.enable_extended_globbing || self.cross_state.in_double_brackets)
                 && state.unquoted()
                 && !state.in_operator()
                 && state

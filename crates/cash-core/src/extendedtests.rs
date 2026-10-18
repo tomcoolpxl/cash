@@ -615,11 +615,12 @@ async fn apply_binary_predicate(
         // operand (treated as a shell pattern).
         // TODO(test): implement case-insensitive matching if relevant via shopt options
         // (nocasematch).
+        // `[[`'s patterns are matched as if extglob were on, whatever it is, as in Bash.
         ast::BinaryPredicate::StringExactlyMatchesPattern => {
             let s = expansion::basic_expand_word(shell, params, left).await?;
             let pattern = expansion::basic_expand_pattern(shell, params, right)
                 .await?
-                .set_extended_globbing(shell.options().extended_globbing)
+                .set_extended_globbing(true)
                 .set_case_insensitive(shell.options().case_insensitive_conditionals);
 
             if shell.options().print_commands_and_arguments {
@@ -639,7 +640,7 @@ async fn apply_binary_predicate(
             let s = expansion::basic_expand_word(shell, params, left).await?;
             let pattern = expansion::basic_expand_pattern(shell, params, right)
                 .await?
-                .set_extended_globbing(shell.options().extended_globbing)
+                .set_extended_globbing(true)
                 .set_case_insensitive(shell.options().case_insensitive_conditionals);
 
             if shell.options().print_commands_and_arguments {
