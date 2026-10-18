@@ -6,9 +6,11 @@
 //! sections from [`Heading`] alone, in that order, each at most once, so a reader always
 //! knows where to look; a topic's sections are its own.
 
-/// The widest line of code a page may hold: code is drawn as written, never wrapped,
+/// The widest line of code a page may hold, its four spaces of markdown counted.
+///
+/// Code is drawn as written, never wrapped, eight columns in (`render::CODE_INDENT`),
 /// and a page must read in an 80-column terminal.
-pub const CODE_WIDTH: usize = 80;
+pub const CODE_WIDTH: usize = 76;
 
 /// What a page is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -366,14 +368,14 @@ mod tests {
     }
 
     #[test]
-    fn code_must_fit_eighty_columns() {
+    fn code_must_fit_eighty_columns_where_it_is_drawn() {
         let wide = format!("    {}", "x".repeat(CODE_WIDTH - 3));
         let page = command(&format!(
             "{FRONT}## Syntax\n\n{wide}\n    {}\n",
-            "y".repeat(76)
+            "y".repeat(CODE_WIDTH - 4)
         ));
         assert_eq!(page.problems().len(), 1, "{:?}", page.problems());
-        assert!(page.problems()[0].starts_with("Syntax: a line of code 81 columns wide"));
+        assert!(page.problems()[0].starts_with("Syntax: a line of code 77 columns wide"));
     }
 
     #[test]

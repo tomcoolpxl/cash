@@ -11,9 +11,9 @@ see: pwd pushd popd dirs prevd nextd cdh z croot winpath paths
 
     cd                    go to your home directory ($HOME)
     cd DIRECTORY          go to DIRECTORY: absolute, relative, or by CDPATH
-    cd -                  go back to the previous directory ($OLDPWD), printed
+    cd -                  go back to the last directory ($OLDPWD), printed
     cd -P DIRECTORY       go to DIRECTORY, with links and junctions resolved
-    cd -P -e DIRECTORY    the same, failing if the real directory has no name
+    cd -P -e DIRECTORY    the same, failing if its real name is not found
 
 ## Examples
 

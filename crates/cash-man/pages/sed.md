@@ -96,7 +96,7 @@ comment.
     /RE/          lines matching the regular expression RE
     \%RE%         the same, with % (or any character) as the delimiter
     5,10          lines 5 to 10
-    /A/,/B/       from a line matching A to the next one matching B, repeatedly
+    /A/,/B/       from a line matching A to the next matching B, repeatedly
     5,+3          line 5 and the 3 after it
     0,/RE/        from the start to the first match, which may be on line 1
     1~2           every second line from line 1 (odd lines)
@@ -120,16 +120,16 @@ newline, and `\U`, `\L`, `\u`, `\l`, `\E` change case.
     -i, --in-place[=SUFFIX]    Edit files in place. With SUFFIX, keep the
                                original as FILE+SUFFIX; a * in SUFFIX stands
                                for the file's name.
-    -s, --separate             Files are separate streams: $, line numbers and
-                               ranges start again in each.
+    -s, --separate             Files are separate streams: $, line
+                               numbers and ranges start again in each.
     -z, --null-data            Lines end with NUL rather than newline.
-    -l, --length N             Wrap the output of the l command at N characters.
+    -l, --length N             Wrap what the l command prints at N columns.
     -u, --unbuffered           Read and write as little as possible at once.
     --posix                    Turn off GNU extensions.
     --sandbox                  Refuse the e, r and w commands.
     --follow-symlinks          With -i, edit the file a link points to.
     --debug                    Print the script and each step.
-    -b, --binary               Carriage returns are data; only LF ends a line.
+    -b, --binary               A carriage return is data; LF ends a line.
 
 Exit status: 0 on success; 1 for a bad script or option; 2 when an input file could
 not be read; 4 for an input or output error. `q N` and `Q N` exit with N.
@@ -138,7 +138,7 @@ not be read; 4 for an input or output error. `q N` and `Q N` exit with N.
 
 ### Commands
 
-    s/RE/TEXT/FLAGS  substitute: flags g, N (the Nth), p, i/I, m/M, w FILE, e
+    s/RE/TEXT/FLAGS  substitute (flags: g, N, p, i/I, m/M, w FILE, e)
     y/abc/xyz/       translate characters one for one
     d                delete the pattern space; start the next cycle
     D                delete up to the first newline; restart without reading
@@ -148,7 +148,7 @@ not be read; 4 for an input or output error. `q N` and `Q N` exit with N.
     i TEXT           insert TEXT before the line
     c TEXT           change the selected lines to TEXT
     =                print the line number
-    l                print the pattern space unambiguously (\t, \r, $ at end)
+    l                print the pattern space with \t, \r shown, $ at end
     n                print, and read the next line into the pattern space
     N                append the next line to the pattern space
     h, H             copy, append the pattern space to the hold space
@@ -156,7 +156,7 @@ not be read; 4 for an input or output error. `q N` and `Q N` exit with N.
     x                exchange the pattern and hold spaces
     :LABEL           a place for b and t to jump to
     b LABEL          branch to LABEL (to the end without one)
-    t LABEL          branch if a substitution was made since the last line or t
+    t LABEL          branch if a substitution was made since a line or t
     T LABEL          branch if none was
     q [N], Q [N]     quit, printing (q) or not (Q) the pattern space
     r FILE           append FILE's contents after the line

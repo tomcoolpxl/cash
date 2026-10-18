@@ -2203,3 +2203,12 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   than 80 columns, as code is drawn as written. The pages are embedded deflated at
   build time. The first two are cd and sed, from the complete samples, with upper-case
   placeholders; the width check found four lines of them too wide.
+- **`man`, step 2: rendering** (2026-10-18): a page is drawn as lines of styled spans,
+  wrapped to a width, each line knowing its section (for the heading kept on the top
+  line) and each See-also name a link; colour is chosen only when a line is written,
+  so a search can mark the plain text. Code is drawn eight columns in, so the widest
+  line of code a page holds is 76 columns with its markdown indent (seven lines of cd
+  and sed shortened). In a table of forms or options the text after the gap is prose,
+  its code spans drawn as code, as are the lines continuing it at its column; other
+  code is what to type, a comment after two spaces grey. `cargo run -p cash-man
+  --example draw -- NAME` prints a page as drawn, for whoever writes them.

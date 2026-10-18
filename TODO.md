@@ -33,7 +33,7 @@ The phases before, released as 1.22.0 to 1.27.0, are in DONE.md.
 1. **`man`, cash's own manual** (the user, 2026-10-18): `research/man-browser-design.md`,
    in the steps of its section 7, each ending in a commit:
    1. the pages' model, in the crate `cash-man`: done (2026-10-18, DONE.md);
-   2. rendering;
+   2. rendering: done (2026-10-18, DONE.md);
    3. `help` on the new pages;
    4. the browser;
    5. the examples' test;

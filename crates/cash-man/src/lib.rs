@@ -8,6 +8,7 @@
 //! `research/man-browser-design.md`.
 
 pub mod page;
+pub mod render;
 
 use std::io::Read as _;
 use std::sync::LazyLock;
