@@ -51,7 +51,7 @@ page unless `-p`.
 
 ## Options
 
-    -b, --body-numbering=STYLE       Which lines: a, t (the default), n, pBRE.
+    -b, --body-numbering=STYLE       Which lines: a, t (default), n, pBRE.
     -n, --number-format=FORMAT       ln, rn (the default) or rz.
     -w, --number-width=N             The numbers' width: 6 without.
     -s, --number-separator=STRING    After each number: a tab without.

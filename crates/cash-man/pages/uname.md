@@ -54,7 +54,7 @@ version, the processor's kind and the operating system, such as
     -m, --machine              The processor's kind: x86_64.
     -p, --processor            The processor: unknown.
     -i, --hardware-platform    The hardware: unknown.
-    -o, --operating-system     The operating system: MS/Windows (Windows 11).
+    -o, --operating-system     The system: MS/Windows (Windows 11).
 
 Exit status: 0.
 

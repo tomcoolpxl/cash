@@ -87,13 +87,13 @@ realpath:
     -L, --logical                Take `..` away before following links.
     -P, --physical               Follow links as they come: the default.
     --relative-to=DIR            The path from DIR.
-    --relative-base=DIR          The path from DIR when under it, else absolute.
-    -q, --quiet                  Say nothing of a path that cannot be resolved.
+    --relative-base=DIR          From DIR when under it, else absolute.
+    -q, --quiet                  Say nothing of a path not resolved.
     -z, --zero                   End each with a NUL, not a newline.
 
 readlink:
 
-    -f, --canonicalize           Follow every link; all but the last part exist.
+    -f, --canonicalize           Follow every link; all but the last exist.
     -e, --canonicalize-existing  The same, and every part exists.
     -m, --canonicalize-missing   The same, and no part needs to.
     -n, --no-newline             No newline after it.

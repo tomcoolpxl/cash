@@ -47,7 +47,7 @@ lines on one line.
 
 ## Options
 
-    -d, --delimiters=LIST    Between fields, in turn; \n, \t, \\, and \0 for none.
+    -d, --delimiters=LIST    Between fields, in turn: \n, \t, \\, \0 none.
     -s, --serial             One file at a time, all its lines on one line.
     -z, --zero-terminated    Lines end with a NUL, not a newline.
 

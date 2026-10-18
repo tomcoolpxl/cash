@@ -11,7 +11,7 @@ see: sleep kill wait
 
     timeout 10 COMMAND        stop COMMAND after 10 seconds
     timeout 1.5m COMMAND      after a minute and a half
-    timeout -k 5 30 COMMAND   after 30 seconds, killed 5 later if still there
+    timeout -k 5 30 COMMAND   stop at 30 seconds, kill 5 later
 
 ## Examples
 
@@ -45,7 +45,7 @@ with the command's own status even when time ran out: 143 for TERM.
 
     -s, --signal=SIGNAL         The signal: TERM, INT, KILL, or a number.
     -k, --kill-after=DURATION   Kill it this long after, if still running.
-    -p, --preserve-status       Exit with the command's status, timed out or not.
+    -p, --preserve-status       The command's status, timed out or not.
     -f, --foreground            Leave the command in the foreground.
     -v, --verbose               Say on standard error when it stops one.
 
