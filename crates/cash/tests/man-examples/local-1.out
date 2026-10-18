@@ -1,0 +1,3 @@
+in f: inner
+after f: outer
+--- status 0

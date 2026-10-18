@@ -1,0 +1,4 @@
+verbose
+output: out.txt
+operands: one two
+--- status 0

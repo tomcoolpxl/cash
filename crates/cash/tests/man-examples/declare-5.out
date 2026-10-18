@@ -1,0 +1,2 @@
+declare -a list=([0]="one" [1]="two")
+--- status 0
