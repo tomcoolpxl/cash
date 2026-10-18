@@ -1,6 +1,7 @@
 ---
 names: nice renice
 summary: Run a command at a lower (or higher) priority, or print the current niceness.
+summary renice: Change the priority of running processes, by pid or by user.
 kind: Processes and network
 see: ps kill top
 draft: yes

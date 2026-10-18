@@ -1,6 +1,8 @@
 ---
 names: zstd unzstd zstdcat
 summary: Compress files to `.zst`, or uncompress or list them, with zstd's options.
+summary unzstd: Uncompress `.zst` files: `zstd -d`.
+summary zstdcat: Print `.zst` files uncompressed to standard output: `zstd -dcf`.
 kind: Text and file tools
 see: gzip bzip2 xz
 draft: yes

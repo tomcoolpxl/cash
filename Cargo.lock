@@ -637,6 +637,7 @@ dependencies = [
  "cash-archive",
  "cash-core",
  "cash-getopt",
+ "cash-man",
  "cash-parser",
  "cash-picker",
  "cash-sed",

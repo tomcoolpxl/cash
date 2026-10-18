@@ -1,6 +1,11 @@
 ---
 names: xz unxz xzcat lzma unlzma lzcat
 summary: Compress files to `.xz` in place, or uncompress or list them, with XZ Utils' options.
+summary unxz: Uncompress `.xz` files in place: `xz -d`.
+summary xzcat: Print `.xz` files uncompressed to standard output: `xz -dc`.
+summary lzma: Compress files to `.lzma` in place, or uncompress them: `xz --format=lzma`.
+summary unlzma: Uncompress `.lzma` files in place: `xz --format=lzma -d`.
+summary lzcat: Print `.lzma` files uncompressed to standard output: `xz --format=lzma -dc`.
 kind: Text and file tools
 see: gzip bzip2 zstd
 draft: yes

@@ -1,6 +1,7 @@
 ---
 names: rar unrar
 summary: Add to, list, test, extract or change a RAR archive, with rar's commands and switches.
+summary unrar: List, test or extract a RAR archive, with unrar's commands and switches.
 kind: Text and file tools
 see: 7z zip tar
 draft: yes

@@ -200,7 +200,7 @@ pub fn draw(page: &Page, manual: &Manual, width: usize) -> Drawn {
         let start = drawer.drawn.lines.len();
         drawer.wrap(
             Line::default(),
-            "A draft, made from the command's --help: this page is not written yet.",
+            "A draft: this page is not written in full yet.",
             0,
         );
         for line in drawer.drawn.lines.get_mut(start..).unwrap_or_default() {
@@ -363,17 +363,52 @@ enum Block {
 
 /// The cells of a markdown table row, `| a | b |`, or none when `line` is not one or is
 /// the `|---|---|` line under the header.
-fn table_row(line: &str) -> Option<Vec<String>> {
+#[must_use]
+pub fn table_row(line: &str) -> Option<Vec<&str>> {
     let inner = line.trim().strip_prefix('|')?;
     let inner = inner.strip_suffix('|').unwrap_or(inner);
-    let cells: Vec<String> = inner
-        .split('|')
-        .map(|cell| cell.trim().to_owned())
-        .collect();
+    let cells: Vec<&str> = inner.split('|').map(str::trim).collect();
     let separator = cells
         .iter()
         .all(|cell| !cell.is_empty() && cell.trim_matches([':', '-']).is_empty());
     (!separator).then_some(cells)
+}
+
+/// The pieces of `markdown` a search matches and shows, as plain text.
+///
+/// Each heading, each sentence of its prose, each line of code, each row of a table: a
+/// sentence rather than a source line, because the source is wrapped wherever its
+/// writer's editor wrapped it.
+#[must_use]
+pub fn search_texts(markdown: &str) -> Vec<String> {
+    let mut texts = Vec::new();
+    for block in blocks(markdown) {
+        match block {
+            Block::Subheading(text) => texts.push(text.replace('`', "")),
+            Block::Paragraph(text) | Block::Item(_, text) => {
+                let text = text.replace('`', "").replace("**", "");
+                let mut rest = text.as_str();
+                while let Some(at) = rest.find(". ") {
+                    texts.push(rest.get(..=at).unwrap_or_default().to_owned());
+                    rest = rest.get(at + 2..).unwrap_or_default();
+                }
+                if !rest.trim().is_empty() {
+                    texts.push(rest.to_owned());
+                }
+            }
+            Block::Code(lines) => texts.extend(
+                lines
+                    .into_iter()
+                    .filter(|line| !line.trim().is_empty())
+                    .map(|line| line.trim().to_owned()),
+            ),
+            // A row is one line: a search for `jq` shows its row whole.
+            Block::Table(rows) => {
+                texts.extend(rows.into_iter().map(|row| row.join("  ").replace('`', "")));
+            }
+        }
+    }
+    texts
 }
 
 /// The marker of an ordered item, `1. `, and its text.
@@ -429,7 +464,8 @@ fn blocks(body: &str) -> Vec<Block> {
             blocks.extend(open.take());
             open = Some(Block::Item(marker, text.to_owned()));
         } else if trimmed.starts_with('|') && !continues {
-            let row = table_row(trimmed);
+            let row: Option<Vec<String>> =
+                table_row(trimmed).map(|cells| cells.into_iter().map(str::to_owned).collect());
             match (&mut open, row) {
                 (Some(Block::Table(rows)), Some(row)) => rows.push(row),
                 (Some(Block::Table(_)), None) => {}
@@ -940,11 +976,11 @@ mod tests {
     fn a_table_is_aligned_and_a_draft_says_so() {
         let page = drawn(
             "---\nsummary: s\nkind: k\ndraft: yes\n---\n## Options\n\n| a | bb |\n|---|---|\n| `ccc` | d |\n",
-            40,
+            60,
         );
         let text = page.text(false);
         assert!(
-            text.contains("A draft, made from the command's --help"),
+            text.contains("A draft: this page is not written in full yet."),
             "{text}"
         );
         assert!(

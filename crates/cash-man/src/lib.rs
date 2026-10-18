@@ -9,6 +9,8 @@
 
 pub mod page;
 pub mod render;
+pub mod search;
+pub mod tools;
 
 use std::io::Read as _;
 use std::sync::LazyLock;
@@ -31,12 +33,26 @@ pub const KINDS: [&str; 8] = [
     "Bundled coreutils, from uutils",
 ];
 
+/// The order the topics are listed in; any other topic follows, by name.
+pub const TOPIC_ORDER: [&str; 10] = [
+    "paths",
+    "crlf",
+    "elevation",
+    "job-control",
+    "keys",
+    "config",
+    "installing",
+    "tools",
+    "vars",
+    "differences",
+];
+
 /// Every page of the manual.
 #[derive(Debug)]
 pub struct Manual {
     /// The commands' pages, by file name.
     pub pages: Vec<Page>,
-    /// The topics, by file name.
+    /// The topics, in [`TOPIC_ORDER`].
     pub topics: Vec<Page>,
 }
 
@@ -89,9 +105,19 @@ impl Manual {
 
 /// The manual, read once from what the build embedded.
 pub fn manual() -> &'static Manual {
-    static MANUAL: LazyLock<Manual> = LazyLock::new(|| Manual {
-        pages: read(embedded::PAGES, Subject::Command),
-        topics: read(embedded::TOPICS, Subject::Topic),
+    static MANUAL: LazyLock<Manual> = LazyLock::new(|| {
+        let mut topics = read(embedded::TOPICS, Subject::Topic);
+        topics.sort_by_key(|topic| {
+            let rank = TOPIC_ORDER
+                .iter()
+                .position(|name| *name == topic.file)
+                .unwrap_or(TOPIC_ORDER.len());
+            (rank, topic.file.clone())
+        });
+        Manual {
+            pages: read(embedded::PAGES, Subject::Command),
+            topics,
+        }
     });
     &MANUAL
 }
@@ -146,6 +172,23 @@ mod tests {
             .map(|page| (page.file.as_str(), page.kind.as_str()))
             .collect();
         assert_eq!(unknown, Vec::<(&str, &str)>::new());
+    }
+
+    #[test]
+    fn every_topic_has_a_title_and_a_summary_and_no_command_takes_its_name() {
+        let manual = manual();
+        assert_eq!(manual.topics.len(), TOPIC_ORDER.len());
+        for (topic, name) in manual.topics.iter().zip(TOPIC_ORDER) {
+            assert_eq!(topic.file, name, "the topics in their order");
+            assert!(
+                !topic.title.is_empty() && !topic.summary.is_empty(),
+                "{name}"
+            );
+            assert!(
+                manual.page(name).is_none() && !["topics", "search"].contains(&name),
+                "topic {name} is also a command's name, so `help {name}` could not reach it"
+            );
+        }
     }
 
     #[test]

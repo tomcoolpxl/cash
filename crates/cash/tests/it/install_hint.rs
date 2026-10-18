@@ -174,7 +174,7 @@ fn help_tools_opens_and_lists_jq_with_both_names() {
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
     assert!(
-        text.starts_with("TOOLS TO INSTALL: WINGET AND SCOOP NAMES FOR COMMON COMMANDS\n"),
+        text.starts_with("Tools to install: winget and Scoop names for common commands \u{2014} "),
         "{text}"
     );
     // The prose is wrapped where the width says, so the hint may span two lines.

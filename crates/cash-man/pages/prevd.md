@@ -1,6 +1,8 @@
 ---
 names: prevd nextd cdh
 summary: Go back through the directory history.
+summary nextd: Go forward through the directory history.
+summary cdh: Choose a recent directory to go to.
 kind: cash's shell commands
 see: cd pushd dirs z keys
 draft: yes

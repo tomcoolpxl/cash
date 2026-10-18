@@ -500,7 +500,7 @@ fn help_cites_nothing_internal() {
     );
     let out = cash("help nc");
     assert_eq!(out.code, 0, "{}", out.stderr);
-    assert!(out.stdout.contains("WINDOWS NOTES"), "{}", out.stdout);
+    assert!(out.stdout.contains("DIFFERENT IN CASH"), "{}", out.stdout);
 }
 
 #[test]

@@ -2223,3 +2223,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   put above their command, four lines rewritten. The renderer now wraps a long topic
   title, breaks a code span longer than a line at its spaces, and wraps a table's last
   column under itself when the table is wider than the pane (the tools table).
+- **`man`, step 3b: `help` on the manual** (2026-10-18): `help NAME` draws the
+  builtin's page as `man` will, starting with the name asked for and its own summary
+  (`help cmp` starts with cmp, and says the same page covers diff); a draft ends with
+  the builtin's own `--help` before its See also, a page written in full (cd, sed) has
+  its own Options. `help` alone lists the builtins by the pages' kinds, `help topics`
+  and `help search` read the manual, and the install hint and `cash doctor` take
+  package names from the manual's tools topic. A page covering several names keeps
+  each name's summary (`summary egrep:`), as the old index did. The old catalogue's
+  pages, topics, index and build script are gone; `helpdocs` keeps the F1 screen and
+  the helpers of `help`'s own lists.

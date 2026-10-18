@@ -1,6 +1,7 @@
 ---
 names: cashctl cashinfo
 summary: Inspect and configure the running shell.
+summary cashinfo: Inspect and configure the running shell (the same as `cashctl`).
 kind: cash's shell commands
 see: job-control config
 draft: yes

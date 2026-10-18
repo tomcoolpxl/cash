@@ -1,6 +1,8 @@
 ---
 names: bzip2 bunzip2 bzcat
 summary: Compress files to `.bz2` in place, or uncompress them, with bzip2's flags.
+summary bunzip2: Uncompress `.bz2` files in place: `bzip2 -d`.
+summary bzcat: Print `.bz2` files uncompressed to standard output: `bzip2 -dc`.
 kind: Text and file tools
 see: gzip xz zstd
 draft: yes

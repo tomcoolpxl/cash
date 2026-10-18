@@ -121,7 +121,12 @@ fn xdg_open_takes_one_target_and_exits_as_the_real_one_does() {
         "{}",
         page.stdout
     );
-    assert!(page.stdout.contains("EXIT CODES"), "{}", page.stdout);
+    // A subsection of How it works, now that the page has the manual's sections.
+    assert!(
+        page.stdout.contains("\n    Exit codes\n"),
+        "{}",
+        page.stdout
+    );
 }
 
 /// Runs `script` in `dir` with `stdin` fed to it; standard output byte for byte.

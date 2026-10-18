@@ -1,6 +1,7 @@
 ---
 names: fuser lsof
 summary: Show the processes using files or sockets.
+summary lsof: List the files and sockets processes have open.
 kind: Processes and network
 see: ss ps kill
 draft: yes

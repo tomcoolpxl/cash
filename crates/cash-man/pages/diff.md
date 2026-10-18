@@ -1,6 +1,7 @@
 ---
 names: diff cmp
 summary: Compare two files line by line, or two directories file by file.
+summary cmp: Compare two files byte by byte, and say where they first differ.
 kind: Text and file tools
 see: comm grep crlf
 draft: yes

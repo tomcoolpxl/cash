@@ -1,6 +1,7 @@
 ---
 names: pbcopy pbpaste
 summary: Copy standard input to the clipboard, as text.
+summary pbpaste: Write the clipboard's text to standard output.
 kind: Terminal and clipboard
 see: start crlf
 draft: yes

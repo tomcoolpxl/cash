@@ -153,10 +153,13 @@ fn help_diff_is_a_page_with_windows_notes_and_its_own_options() {
     let out = run("help diff");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
-    assert!(text.starts_with("NAME\n    diff - "), "{text}");
-    assert!(text.contains("\nWINDOWS NOTES\n"), "{text}");
+    assert!(text.starts_with("diff \u{2014} "), "{text}");
+    assert!(text.contains("\nDIFFERENT IN CASH\n"), "{text}");
     assert!(text.contains("--strip-trailing-cr"), "{text}");
-    assert!(text.contains("help crlf"), "{text}");
+    assert!(
+        text.contains("\nSEE ALSO\n") && text.contains("crlf"),
+        "{text}"
+    );
     // The options are diff's own `--help`, not a copy.
     assert!(text.contains("\nUSAGE AND OPTIONS\n"), "{text}");
     assert!(text.contains("--report-identical-files"), "{text}");
@@ -167,7 +170,13 @@ fn help_diff_is_a_page_with_windows_notes_and_its_own_options() {
     }
     let cmp = run("help cmp");
     assert_eq!(cmp.code, 0, "{}", cmp.stderr);
-    assert!(cmp.stdout.contains("byte by byte"), "{}", cmp.stdout);
+    // cmp's own summary, though the page is diff's.
+    assert!(
+        cmp.stdout
+            .starts_with("cmp \u{2014} Compare two files byte by byte"),
+        "{}",
+        cmp.stdout
+    );
     assert!(cmp.stdout.contains("--ignore-initial"), "{}", cmp.stdout);
 }
 

@@ -1,6 +1,8 @@
 ---
 names: gzip gunzip zcat
 summary: Compress files to `.gz` in place, or uncompress them, with GNU gzip's options.
+summary gunzip: Uncompress `.gz` files in place: `gzip -d`.
+summary zcat: Print `.gz` files uncompressed to standard output: `gzip -dc`.
 kind: Text and file tools
 see: cat crlf bzip2 xz zstd
 draft: yes

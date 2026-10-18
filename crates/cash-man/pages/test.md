@@ -1,6 +1,7 @@
 ---
 names: test [
 summary: Evaluate a conditional expression.
+summary [: Evaluate a conditional expression (the same as `test`, ended by `]`).
 kind: Bash builtins
 see: chmod ln paths
 draft: yes

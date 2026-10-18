@@ -1,6 +1,7 @@
 ---
 names: unzip zipinfo
 summary: List, test or extract a zip archive, with Info-ZIP's options.
+summary zipinfo: List a zip archive in detail, as `ls -l` does: `unzip -Z`.
 kind: Text and file tools
 see: zip tar
 draft: yes

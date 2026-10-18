@@ -1,6 +1,7 @@
 ---
 names: chown chgrp
 summary: Change a file's owner: nothing on Windows, said once, status 0.
+summary chgrp: Change a file's group: nothing on Windows, said once, status 0.
 kind: Coreutils written for Windows
 see: chmod id differences
 draft: yes

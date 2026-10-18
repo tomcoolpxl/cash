@@ -1,14 +1,16 @@
 //! `help`: the builtins by kind, a page for each, the topics, and a search over them all.
 //!
-//! What it says comes from the catalogue in `helpdocs`; the options of a builtin come
-//! from the builtin itself, so they are never copied. `cash help ...`, outside the
-//! shell, runs this builtin (`crates/cash/src/main.rs`).
+//! What it says comes from the manual's pages (`cash-man`); a page not yet written in
+//! full ends with the builtin's own `--help`, so its options are never copied. `cash
+//! help ...`, outside the shell, runs this builtin (`crates/cash/src/main.rs`).
 
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
 use itertools::Itertools;
 use std::fmt::Write as _;
 use std::io::Write;
+
+use cash_man::page::{Page, Subject};
 
 use crate::helpdocs::{self, render, render::Style};
 
@@ -185,7 +187,7 @@ impl HelpCommand {
                 }
             }
             if texts.is_empty()
-                && let Some(topic) = helpdocs::catalogue().topic(pattern)
+                && let Some(topic) = cash_man::manual().topic(pattern)
             {
                 texts.push(self.topic_text(topic, style));
             }
@@ -227,11 +229,11 @@ impl HelpCommand {
         builtin_page(name, registration, style)
     }
 
-    fn topic_text(&self, topic: &helpdocs::Topic, style: Style) -> String {
+    fn topic_text(&self, topic: &Page, style: Style) -> String {
         if self.short_description || self.short_usage {
-            format!("{} - {}\n", topic.name, render::plain(topic.summary))
+            format!("{} - {}\n", topic.file, render::plain(&topic.summary))
         } else {
-            topic_page(topic, style)
+            drawn(topic, style)
         }
     }
 }
@@ -295,13 +297,13 @@ fn builtins_by_name<'a, SE: cash_core::ShellExtensions>(
         .collect()
 }
 
-/// The builtin's one-line summary: the catalogue's, or failing that, its own.
+/// The builtin's one-line summary: its page's, or failing that, its own.
 fn summary_of<SE: cash_core::ShellExtensions>(
     name: &str,
     registration: &builtins::Registration<SE>,
 ) -> Result<String, cash_core::Error> {
-    if let Some(entry) = helpdocs::catalogue().entry(name) {
-        return Ok(render::plain(entry.summary));
+    if let Some(page) = cash_man::manual().page(name) {
+        return Ok(render::plain(page.summary_of(name)));
     }
     let own = (registration.content_func)(
         name,
@@ -378,36 +380,81 @@ fn hiding_note(name: &str, program: &std::path::Path) -> String {
     )
 }
 
-/// `help NAME`: the builtin's page, man-style.
+/// `help NAME`: the builtin's page, as the manual draws it, with what only `help`
+/// knows: that the name hides a Windows program, or that it is disabled. A draft page
+/// ends with the builtin's own `--help`, before its See also; a builtin with no page
+/// has only that.
 fn builtin_page<SE: cash_core::ShellExtensions>(
     name: &str,
     registration: &builtins::Registration<SE>,
     style: Style,
 ) -> Result<String, cash_core::Error> {
-    let catalogue = helpdocs::catalogue();
-    let indent = " ".repeat(render::INDENT);
-    let mut out = render::heading("Name", style);
-    let summary = summary_of(name, registration)?;
-    out.push_str(&render::wrap(
+    let manual = cash_man::manual();
+    let page = manual.page(name);
+    let drawn = page.map(|page| cash_man::render::draw(page, manual, style.width));
+    let lines = drawn
+        .as_ref()
+        .map_or(&[][..], |drawn| drawn.lines.as_slice());
+    let text = |lines: &[cash_man::render::Line]| -> String {
+        let mut text = String::new();
+        for line in lines {
+            text.push_str(line.ansi(style.colour).trim_end());
+            text.push('\n');
+        }
+        text
+    };
+    // The top: the name and summary, up to the first blank line.
+    let top = lines
+        .iter()
+        .position(|line| line.spans.is_empty())
+        .unwrap_or(lines.len());
+    let see_also = drawn
+        .as_ref()
+        .and_then(|drawn| {
+            drawn
+                .sections
+                .iter()
+                .find(|section| section.title == "SEE ALSO")
+        })
+        .map_or(lines.len(), |section| section.line.saturating_sub(1));
+
+    // The name asked for and its own summary, in place of the page's top, which names
+    // all it covers: `help cmp` starts with cmp.
+    let mut out = render::wrap(
         &format!(
-            "{} - {}",
+            "{} \u{2014} {}",
             render::paint(name, render::COMMAND, style.colour),
-            render::inline(&summary, style.colour)
+            render::inline(&summary_of(name, registration)?, style.colour)
         ),
         style.width,
-        &indent,
-        render::INDENT,
-    ));
-    if let Some(entry) = catalogue.entry(name) {
-        let _ = writeln!(out, "{indent}({})", entry.kind);
+        "",
+        2,
+    );
+    if let Some(page) = page {
+        let _ = writeln!(out, "({})", page.kind);
+        let others: Vec<&str> = page
+            .names
+            .iter()
+            .map(String::as_str)
+            .filter(|covered| *covered != name)
+            .collect();
+        if !others.is_empty() {
+            let list = others.iter().map(|other| format!("`{other}`")).join(", ");
+            out.push_str(&render::wrap(
+                &render::inline(&format!("The same page covers {list}."), style.colour),
+                style.width,
+                "",
+                0,
+            ));
+        }
     }
     if let Some(program) = hidden_windows_program(name) {
         out.push('\n');
         out.push_str(&render::wrap(
             &render::inline(&hiding_note(name, &program), style.colour),
             style.width,
-            &indent,
-            render::INDENT,
+            "",
+            0,
         ));
     }
     if registration.disabled {
@@ -419,62 +466,30 @@ fn builtin_page<SE: cash_core::ShellExtensions>(
                 style.colour,
             ),
             style.width,
-            &indent,
-            render::INDENT,
+            "",
+            0,
         ));
     }
+    out.push_str(&text(lines.get(top..see_also).unwrap_or_default()));
 
-    let page = catalogue.page(name);
-    if let Some(page) = page {
-        out.push('\n');
-        out.push_str(&render::markdown(page.body, style));
+    if page.is_none_or(|page| page.draft) {
+        let options = builtins::ContentOptions {
+            colorized: style.colour,
+        };
+        let own = (registration.content_func)(name, builtins::ContentType::DetailedHelp, &options)?;
+        if !own.trim().is_empty() {
+            out.push('\n');
+            out.push_str(&render::heading("Usage and options", style));
+            out.push_str(&render::indented(&own, render::INDENT));
+        }
     }
-
-    let options = builtins::ContentOptions {
-        colorized: style.colour,
-    };
-    let own = (registration.content_func)(name, builtins::ContentType::DetailedHelp, &options)?;
-    if !own.trim().is_empty() {
-        out.push('\n');
-        out.push_str(&render::heading("Usage and options", style));
-        out.push_str(&render::indented(&own, render::INDENT));
-    }
-
-    if let Some(page) = page {
-        see_also(&mut out, &page.see, style);
-    }
+    out.push_str(&text(lines.get(see_also..).unwrap_or_default()));
     Ok(out)
 }
 
-/// `help NAME` for a topic.
-fn topic_page(topic: &helpdocs::Topic, style: Style) -> String {
-    let indent = " ".repeat(render::INDENT);
-    let mut out = render::heading(topic.title, style);
-    out.push_str(&render::wrap(
-        &render::inline(topic.summary, style.colour),
-        style.width,
-        &indent,
-        render::INDENT,
-    ));
-    out.push('\n');
-    out.push_str(&render::markdown(topic.body, style));
-    see_also(&mut out, &topic.see, style);
-    out
-}
-
-fn see_also(out: &mut String, see: &[&str], style: Style) {
-    let indent = " ".repeat(render::INDENT);
-    if !see.is_empty() {
-        out.push('\n');
-        out.push_str(&render::heading("See also", style));
-        let list = see.iter().map(|name| format!("`help {name}`")).join(", ");
-        out.push_str(&render::wrap(
-            &render::inline(&list, style.colour),
-            style.width,
-            &indent,
-            render::INDENT,
-        ));
-    }
+/// A page whole, as the manual draws it: a topic's.
+fn drawn(page: &Page, style: Style) -> String {
+    cash_man::render::draw(page, cash_man::manual(), style.width).text(style.colour)
 }
 
 /// `help` alone: every builtin, grouped by kind, each with its summary.
@@ -482,7 +497,7 @@ fn general_help<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     style: Style,
 ) -> String {
-    let catalogue = helpdocs::catalogue();
+    let manual = cash_man::manual();
     let builtins = builtins_by_name(context);
     let mut out = String::new();
     if let Some(display) = context.shell.product_display_str() {
@@ -542,16 +557,12 @@ fn general_help<SE: cash_core::ShellExtensions>(
         ));
     };
 
-    for kind in &catalogue.kinds {
-        let members: Vec<_> = catalogue
-            .entries
+    for kind in cash_man::KINDS {
+        let members: Vec<_> = builtins
             .iter()
-            .filter(|entry| entry.kind == *kind)
-            .filter_map(|entry| {
-                builtins
-                    .iter()
-                    .find(|(name, _)| name.as_str() == entry.name)
-                    .map(|(_, registration)| (entry, registration.disabled))
+            .filter_map(|(name, registration)| {
+                let page = manual.page(name).filter(|page| page.kind == kind)?;
+                Some((name.as_str(), registration.disabled, page.summary_of(name)))
             })
             .collect();
         if members.is_empty() {
@@ -559,15 +570,19 @@ fn general_help<SE: cash_core::ShellExtensions>(
         }
         out.push('\n');
         out.push_str(&kind_heading(kind, style));
-        for (entry, disabled) in members {
-            line(&mut out, entry.name, disabled, entry.summary);
+        for (name, disabled, summary) in members {
+            line(&mut out, name, disabled, summary);
         }
     }
 
-    // A builtin the catalogue does not know yet still gets listed, with its own words.
+    // A builtin the manual has no page for yet still gets listed, with its own words.
     let unknown: Vec<_> = builtins
         .iter()
-        .filter(|(name, _)| catalogue.entry(name).is_none())
+        .filter(|(name, _)| {
+            manual
+                .page(name)
+                .is_none_or(|page| !cash_man::KINDS.contains(&page.kind.as_str()))
+        })
         .collect();
     if !unknown.is_empty() {
         out.push('\n');
@@ -618,11 +633,10 @@ fn kind_heading(kind: &str, style: Style) -> String {
 
 /// `help topics`.
 fn topic_list(style: Style) -> String {
-    let catalogue = helpdocs::catalogue();
-    let width = catalogue
-        .topics
+    let topics = &cash_man::manual().topics;
+    let width = topics
         .iter()
-        .map(|topic| topic.name.len())
+        .map(|topic| topic.file.len())
         .max()
         .unwrap_or_default();
     let mut out = render::wrap(
@@ -635,14 +649,14 @@ fn topic_list(style: Style) -> String {
         0,
     );
     out.push('\n');
-    for topic in &catalogue.topics {
+    for topic in topics {
         let first = format!(
             "  {}{}  ",
-            render::paint(topic.name, render::TOPIC, style.colour),
-            " ".repeat(width.saturating_sub(topic.name.len()))
+            render::paint(&topic.file, render::TOPIC, style.colour),
+            " ".repeat(width.saturating_sub(topic.file.len()))
         );
         out.push_str(&render::wrap(
-            &render::inline(topic.summary, style.colour),
+            &render::inline(&topic.summary, style.colour),
             style.width,
             &first,
             width + 4,
@@ -672,7 +686,7 @@ impl HelpCommand {
             )?;
             return Ok(ExecutionResult::general_error());
         }
-        let hits = helpdocs::search(&word);
+        let hits = cash_man::manual().search(&word);
         if hits.is_empty() {
             self.complain(
                 context,
@@ -741,10 +755,10 @@ fn picked_out(line: &str, word: &str, colour: bool) -> String {
 
 /// What `help search` prints for `hits`: each page's name, a topic's told from a
 /// builtin's by its colour, and the lines that matched, `word` picked out in them.
-fn search_results(hits: Vec<helpdocs::Hit>, word: &str, style: Style) -> String {
+fn search_results(hits: Vec<cash_man::search::Hit<'_>>, word: &str, style: Style) -> String {
     let mut out = String::new();
     for hit in hits {
-        let (what, colour) = if hit.topic {
+        let (what, colour) = if hit.page.subject == Subject::Topic {
             ("topic", render::TOPIC)
         } else {
             ("builtin", render::COMMAND)
@@ -753,7 +767,7 @@ fn search_results(hits: Vec<helpdocs::Hit>, word: &str, style: Style) -> String 
             &format!(
                 "{} ({what}) - {}",
                 render::paint(hit.name, colour, style.colour),
-                render::inline(hit.summary, style.colour)
+                render::inline(hit.page.summary_of(hit.name), style.colour)
             ),
             style.width,
             "",

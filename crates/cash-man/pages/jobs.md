@@ -1,6 +1,8 @@
 ---
 names: jobs fg bg
 summary: List the shell's jobs.
+summary fg: Bring a job to the foreground.
+summary bg: Resume a stopped job in the background.
 kind: Bash builtins
 see: kill wait disown detach job-control
 draft: yes

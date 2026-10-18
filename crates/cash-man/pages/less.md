@@ -1,6 +1,7 @@
 ---
 names: less more
 summary: Page through text.
+summary more: Page through text, with `more`'s defaults.
 kind: Text and file tools
 see: cat head tail
 draft: yes

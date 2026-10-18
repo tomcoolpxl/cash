@@ -1,6 +1,9 @@
 ---
 names: pgrep pkill pidof killall
 summary: Find processes by name and other attributes.
+summary pkill: Signal processes by name and other attributes.
+summary pidof: Print the process ids of programs by name.
+summary killall: Signal every process with a given name.
 kind: Processes and network
 see: kill ps job-control
 draft: yes

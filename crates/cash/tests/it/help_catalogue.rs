@@ -1,9 +1,8 @@
-//! `help` and `cash help`: the catalogue covers every builtin the shell registers, and
-//! what `help` prints from it, by kind, page, topic and search.
+//! `help` and `cash help`: what `help` prints from the manual, by kind, page, topic and
+//! search.
 //!
-//! The catalogue is `crates/cash-builtins/src/helpdocs`. The first test is the one that
-//! keeps it from drifting: a builtin added without an entry, or an entry left behind
-//! by a builtin removed, fails it.
+//! The pages are the manual's, `crates/cash-man`; `man_pages.rs` keeps them from
+//! drifting from the builtins the shell registers.
 
 #![allow(
     clippy::tests_outside_test_module,
@@ -12,7 +11,6 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::collections::BTreeSet;
 use std::process::Command;
 
 use cash_builtins::helpdocs;
@@ -20,39 +18,10 @@ use cash_builtins::helpdocs;
 use crate::common::{CASH, isolate, output_of, run};
 
 #[test]
-fn every_builtin_has_an_entry_and_every_entry_is_a_builtin() {
-    let out = run("compgen -b");
-    assert_eq!(out.code, 0, "{}", out.stderr);
-    let registered: BTreeSet<&str> = out.stdout.lines().map(str::trim).collect();
-    let catalogue = helpdocs::catalogue();
-    let listed: BTreeSet<&str> = catalogue.entries.iter().map(|entry| entry.name).collect();
-
-    let missing: Vec<_> = registered.difference(&listed).collect();
-    assert!(
-        missing.is_empty(),
-        "builtins with no entry in crates/cash-builtins/src/helpdocs/builtins.md: {missing:?}"
-    );
-    let stale: Vec<_> = listed.difference(&registered).collect();
-    assert!(
-        stale.is_empty(),
-        "entries in builtins.md that name no builtin: {stale:?}"
-    );
-    for page in &catalogue.pages {
-        for name in &page.names {
-            assert!(
-                registered.contains(name),
-                "pages/{}.md names `{name}`, which is not a builtin",
-                page.file
-            );
-        }
-    }
-}
-
-#[test]
 fn help_lists_the_builtins_by_kind_each_with_its_summary() {
     let out = run("help");
     assert_eq!(out.code, 0, "{}", out.stderr);
-    for kind in &helpdocs::catalogue().kinds {
+    for kind in cash_man::KINDS {
         assert!(
             out.stdout.contains(&format!("\n{kind}\n")),
             "no heading `{kind}`:\n{}",
@@ -86,8 +55,9 @@ fn help_marks_a_builtin_that_hides_a_windows_program() {
     );
     assert!(out.stdout.contains("sort.exe"), "{}", out.stdout);
     let page = run("help sort");
+    let words = page.stdout.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        page.stdout.contains("Inside cash, sort runs this builtin"),
+        words.contains("Inside cash, sort runs this builtin"),
         "{}",
         page.stdout
     );
@@ -98,13 +68,24 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
     let out = run("help sed");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
-    assert!(text.starts_with("NAME\n    sed - "), "{text}");
-    assert!(text.contains("\nLINE ENDINGS\n"), "{text}");
+    assert!(text.starts_with("sed \u{2014} "), "{text}");
+    assert!(text.contains("\nDIFFERENT IN CASH\n"), "{text}");
     assert!(text.contains("CASH_EOL=lf"), "{text}");
-    // The options are sed's own `--help`, not a copy.
-    assert!(text.contains("\nUSAGE AND OPTIONS\n"), "{text}");
+    // A page written in full has its own options, and no `--help` after them.
+    assert!(text.contains("\nOPTIONS\n"), "{text}");
     assert!(text.contains("--in-place"), "{text}");
-    assert!(text.contains("help crlf"), "{text}");
+    assert!(!text.contains("\nUSAGE AND OPTIONS\n"), "{text}");
+    assert!(
+        text.contains("\nSEE ALSO\n") && text.contains("crlf"),
+        "{text}"
+    );
+    // A draft ends with the builtin's own `--help`.
+    let draft = run("help grep");
+    assert!(
+        draft.stdout.contains("\nUSAGE AND OPTIONS\n"),
+        "{}",
+        draft.stdout
+    );
     // Help speaks to the user: no spec decision numbers, rows or section signs
     // (the user, 2026-10-05).
     for developer_note in [
@@ -127,7 +108,7 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
 /// numbers or file names of the project's own.
 #[test]
 fn the_f1_screen_is_not_a_topic_and_cites_no_developer_notes() {
-    assert!(helpdocs::catalogue().topic("f1").is_none());
+    assert!(cash_man::manual().topic("f1").is_none());
     let out = run("help f1");
     assert_eq!(out.code, 1);
 
@@ -159,17 +140,17 @@ fn the_f1_screen_is_not_a_topic_and_cites_no_developer_notes() {
 fn help_topics_lists_every_topic_and_each_one_opens() {
     let out = run("help topics");
     assert_eq!(out.code, 0, "{}", out.stderr);
-    for topic in &helpdocs::catalogue().topics {
+    for topic in &cash_man::manual().topics {
         assert!(
             out.stdout
                 .lines()
-                .any(|line| line.trim_start().starts_with(&format!("{} ", topic.name))),
+                .any(|line| line.trim_start().starts_with(&format!("{} ", topic.file))),
             "`{}` is not listed:\n{}",
-            topic.name,
+            topic.file,
             out.stdout
         );
-        let page = run(&format!("help {}", topic.name));
-        assert_eq!(page.code, 0, "help {}: {}", topic.name, page.stderr);
+        let page = run(&format!("help {}", topic.file));
+        assert_eq!(page.code, 0, "help {}: {}", topic.file, page.stderr);
         assert_ne!(page.stdout, "");
     }
     for name in [
@@ -184,10 +165,7 @@ fn help_topics_lists_every_topic_and_each_one_opens() {
         "vars",
         "differences",
     ] {
-        assert!(
-            helpdocs::catalogue().topic(name).is_some(),
-            "no topic {name}"
-        );
+        assert!(cash_man::manual().topic(name).is_some(), "no topic {name}");
     }
 }
 

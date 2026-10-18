@@ -1,6 +1,8 @@
 ---
 names: mktemp realpath readlink
 summary: Make a temporary file or directory and print its name.
+summary realpath: Print the resolved, absolute path.
+summary readlink: Print a link's target, or a canonical file name.
 kind: Bundled coreutils, from uutils
 see: paths
 draft: yes

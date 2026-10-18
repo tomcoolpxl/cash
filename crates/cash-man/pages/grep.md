@@ -1,6 +1,8 @@
 ---
 names: grep egrep fgrep
 summary: Print the lines of files that match a pattern, with GNU grep's options.
+summary egrep: Print the lines that match an extended regular expression: `grep -E`.
+summary fgrep: Print the lines that contain a fixed string: `grep -F`.
 kind: Text and file tools
 see: find sed crlf
 draft: yes

@@ -124,8 +124,12 @@ fn color_auto_colours_only_a_terminal_and_help_speaks_to_the_user() {
     let out = run("help grep");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
-    assert!(text.starts_with("NAME\n    grep - "), "{text}");
-    assert!(text.contains("\nWINDOWS NOTES\n"), "{text}");
+    assert!(text.starts_with("grep \u{2014} "), "{text}");
+    assert!(
+        text.contains("The same page covers egrep, fgrep."),
+        "{text}"
+    );
+    assert!(text.contains("\nDIFFERENT IN CASH\n"), "{text}");
     assert!(text.contains("CRLF"), "{text}");
     // The options are GNU grep's own text, which the page ends with.
     assert!(text.contains("--include=GLOB"), "{text}");

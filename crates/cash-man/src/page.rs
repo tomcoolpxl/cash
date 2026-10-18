@@ -103,11 +103,15 @@ pub struct Page {
     pub title: String,
     /// One line saying what it is.
     pub summary: String,
+    /// A line of its own for a name the page covers beside its first, from a
+    /// `summary NAME:` line: `egrep`'s is `grep -E`'s.
+    pub name_summaries: Vec<(String, String)>,
     /// A command's kind, as a reader would put it: "Bash builtin", "Text tool".
     pub kind: String,
     /// The pages to read next.
     pub see: Vec<String>,
-    /// Whether it is a draft, made from the command's `--help` and not yet written.
+    /// Whether it is a draft, not yet written in full; `help` then ends it with the
+    /// command's own `--help`.
     pub draft: bool,
     /// The markdown before the first section.
     pub intro: String,
@@ -130,6 +134,7 @@ impl Page {
             names: Vec::new(),
             title: String::new(),
             summary: String::new(),
+            name_summaries: Vec::new(),
             kind: String::new(),
             see: Vec::new(),
             draft: false,
@@ -151,7 +156,12 @@ impl Page {
                 "kind" => value.clone_into(&mut page.kind),
                 "see" => page.see = words(),
                 "draft" => page.draft = matches!(value, "true" | "yes"),
-                _ => page.unknown.push(line.to_owned()),
+                key => match key.strip_prefix("summary ") {
+                    Some(name) => page
+                        .name_summaries
+                        .push((name.trim().to_owned(), value.to_owned())),
+                    None => page.unknown.push(line.to_owned()),
+                },
             }
         }
         if page.names.is_empty() {
@@ -161,6 +171,16 @@ impl Page {
         page.intro = intro;
         page.sections = sections;
         page
+    }
+
+    /// The summary of `name`, one of the names the page covers: its own line, or the
+    /// page's.
+    #[must_use]
+    pub fn summary_of(&self, name: &str) -> &str {
+        self.name_summaries
+            .iter()
+            .find(|(covered, _)| covered == name)
+            .map_or(self.summary.as_str(), |(_, summary)| summary.as_str())
     }
 
     /// The section under `heading`, on a command's page.
@@ -184,6 +204,13 @@ impl Page {
             .collect();
         if self.summary.is_empty() {
             problems.push("front matter: no summary".to_owned());
+        }
+        for (name, _) in &self.name_summaries {
+            if !self.names.contains(name) {
+                problems.push(format!(
+                    "front matter: a summary for {name}, not a name it covers"
+                ));
+            }
         }
         match self.subject {
             Subject::Command => {
@@ -323,8 +350,17 @@ mod tests {
         let page = command("---\nsummary: s\nkind: k\ndraft: yes\n---\n## Syntax\n\n    cd\n");
         assert_eq!(page.names, ["cd"]);
         assert!(page.draft);
-        let page = command("---\nnames: 7z 7za\nsummary: s\nkind: k\n---\n");
+        let page = command("---\nnames: 7z 7za\nsummary: s\nsummary 7za: the same\nkind: k\n---\n");
         assert_eq!(page.names, ["7z", "7za"]);
+        assert_eq!(
+            (page.summary_of("7z"), page.summary_of("7za")),
+            ("s", "the same")
+        );
+        let stray = command("---\nsummary: s\nsummary zz: x\nkind: k\n---\n");
+        assert_eq!(
+            stray.problems(),
+            ["front matter: a summary for zz, not a name it covers"]
+        );
     }
 
     #[test]

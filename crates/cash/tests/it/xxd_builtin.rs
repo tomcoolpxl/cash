@@ -69,7 +69,7 @@ fn xxd_help_is_a_page_without_developer_notes() {
     let out = run("help xxd");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
-    assert!(text.starts_with("NAME\n    xxd - "), "{text}");
+    assert!(text.starts_with("xxd \u{2014} "), "{text}");
     assert!(text.contains("-r"), "{text}");
     for developer_note in ["D7", "(row", "§", "spec.md", "ROADMAP"] {
         assert!(!text.contains(developer_note), "{developer_note} in {text}");

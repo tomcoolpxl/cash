@@ -1,6 +1,7 @@
 ---
 names: dos2unix unix2dos
 summary: Convert CRLF line endings to LF.
+summary unix2dos: Convert LF line endings to CRLF.
 kind: Text and file tools
 see: sed awk crlf
 draft: yes

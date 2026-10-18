@@ -1,6 +1,7 @@
 ---
 names: clear reset
 summary: Clear the terminal screen and its scrollback.
+summary reset: Reset the terminal and the console modes cash relies on.
 kind: Terminal and clipboard
 see: keys
 draft: yes

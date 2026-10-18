@@ -1,6 +1,7 @@
 ---
 names: id groups
 summary: Print the user's and groups' identities.
+summary groups: Print the groups a user belongs to.
 kind: Coreutils written for Windows
 see: whoami logname su elevation
 draft: yes
