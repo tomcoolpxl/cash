@@ -1,0 +1,27 @@
+noclobber on
+errexit off
+nosuchoption is no option
+set_empty: -v
+set_value: -v
+unset_one: not -v
+arr[0]: -v
+arr[1]: -v
+arr[5]: not -v
+map[key]: -v
+map[none]: not -v
+nr: -v
+nr is a nameref
+set_value is not
+-z empty
+-n value
+-z unset
+=
+== with a pattern
+== with a quoted pattern is literal
+!=
+apple < banana
+banana > apple
+B < a in ASCII order
+[ \< ]
+[ = ]
+[ == ]

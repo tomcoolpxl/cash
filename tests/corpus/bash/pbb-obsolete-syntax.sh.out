@@ -1,0 +1,12 @@
+right wrong
+outer inner
+outer inner
+a\b
+a\\b
+dollar
+plain function
+function keyword with parens
+function keyword without parens
+declare -f do_other
+declare -f do_something
+declare -f do_third

@@ -201,8 +201,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // Restore the traps set aside on entry, unless the function set its own.
         for (signal, handler) in self.function_trap_stash.pop().unwrap_or_default() {
             if !self.traps.handles(signal) {
-                self.traps
-                    .register_handler(signal, handler.command, handler.source_info);
+                self.traps.restore_handler(signal, handler);
             }
         }
 

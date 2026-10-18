@@ -207,6 +207,10 @@ pub struct TrapHandler {
     pub command: String,
     /// Source information for where the trap handler was defined.
     pub source_info: crate::SourceInfo,
+    /// The depth of the copy of the shell that set the trap ([`crate::Shell::depth`]): a
+    /// subshell runs the traps it set itself, and of its parent's, which the copy carries,
+    /// only those Bash passes on (`set -E`, `set -T`); its `EXIT` trap, as it ends.
+    pub depth: usize,
 }
 
 /// Configuration for trap handlers in the shell.
@@ -246,19 +250,27 @@ impl TrapHandlerConfig {
     /// * `signal_type` - The type of signal to register a handler for.
     /// * `command` - The command to execute when the signal is trapped.
     /// * `source_info` - The source info for where the trap handler was defined.
+    /// * `depth` - The depth of the copy of the shell setting it ([`TrapHandler::depth`]).
     pub fn register_handler(
         &mut self,
         signal_type: TrapSignal,
         command: String,
         source_info: crate::SourceInfo,
+        depth: usize,
     ) {
         let _ = self.handlers.insert(
             signal_type,
             TrapHandler {
                 command,
                 source_info,
+                depth,
             },
         );
+    }
+
+    /// Puts back a handler that was set aside, as it was.
+    pub fn restore_handler(&mut self, signal_type: TrapSignal, handler: TrapHandler) {
+        let _ = self.handlers.insert(signal_type, handler);
     }
 
     /// Removes handlers for a trap signal.

@@ -555,7 +555,24 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
         command_line,
         simple,
         move |mut job_shell, job_params| {
-            tokio::runtime::Handle::current().block_on(ao_list.execute(&mut job_shell, &job_params))
+            tokio::runtime::Handle::current().block_on(async {
+                let result = ao_list.execute(&mut job_shell, &job_params).await?;
+                // Its own EXIT trap runs as it ends, unless `kill` ended it.
+                let killed = job_params
+                    .job_cancel
+                    .as_ref()
+                    .is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::SeqCst) != 0);
+                if killed {
+                    return Ok(result);
+                }
+                let status = job_shell
+                    .end_subshell(result.exit_code.into(), &job_params)
+                    .await;
+                Ok(ExecutionResult {
+                    exit_code: status.into(),
+                    ..result
+                })
+            })
         },
     )
     .await
@@ -1234,7 +1251,15 @@ async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
                 let _guard = slot_guard;
                 let _lowered = params.lower_if_asynchronous();
                 let rt = tokio::runtime::Handle::current();
-                let outcome = rt.block_on(compound.execute(&mut shell, &params));
+                let outcome = rt.block_on(async {
+                    let result = compound.execute(&mut shell, &params).await?;
+                    // The stage is a subshell: its own EXIT trap runs as it ends.
+                    let status = shell.end_subshell(result.exit_code.into(), &params).await;
+                    Ok(ExecutionResult {
+                        exit_code: status.into(),
+                        ..result
+                    })
+                });
                 commands::stage_result(&shell, &params, outcome)
             });
             Ok(ExecutionSpawnResult::StartedTask(join_handle))
@@ -1282,9 +1307,14 @@ impl Execute for ast::CompoundCommand {
                     }
                 };
 
+                // Its own EXIT trap runs as it ends, and an `exit` there sets its status.
+                let status = subshell
+                    .end_subshell(subshell_result.exit_code.into(), params)
+                    .await;
+
                 // Preserve the subshell's exit code, but don't honor any of its requests to exit
                 // the shell, break out of loops, etc.
-                Ok(ExecutionResult::from(subshell_result.exit_code))
+                Ok(ExecutionResult::from(ExecutionExitCode::from(status)))
             }
             Self::ForClause(f) => f.execute(shell, params).await,
             Self::SelectClause(sel) => sel.execute(shell, params).await,
@@ -2003,6 +2033,8 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         let mut assignments = vec![];
         let mut args: Vec<CommandArg> = vec![];
         let mut command_takes_assignments = false;
+        // Whether the next word may name an alias: after an alias that ends in a blank.
+        let mut next_word_alias_checked = false;
         // D81: who globs the words after the command is decided once it is known.
         let mut globbing = windows_programs::Globbing::Undecided;
 
@@ -2108,30 +2140,28 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                         .substitution_ends
                         .extend(context.shell.take_word_substitution_ends());
 
+                    // Aliases are only expanded when `expand_aliases` is enabled; it's enabled
+                    // by default for interactive shells. The command word may name one, and
+                    // the word after an alias that ends in a blank. Only a word as written,
+                    // which expanded to itself, may.
+                    //
+                    // TODO(#57): This is a total hack; aliases are supposed to be handled
+                    // much earlier in the process.
+                    let alias_checked = args.is_empty() || next_word_alias_checked;
+                    next_word_alias_checked = false;
+                    if alias_checked
+                        && context.shell.options().expand_aliases
+                        && next_args.len() == 1
+                        && next_args.first() == Some(&arg.value)
+                        && let Some((alias_words, then_next)) =
+                            alias_words(&context.shell, &arg.value)
+                    {
+                        next_args = expand_words(&mut context.shell, &params, alias_words).await?;
+                        next_word_alias_checked = then_next;
+                    }
+
                     if args.is_empty() {
-                        if let Some(cmd_name) = next_args.first() {
-                            // Aliases are only expanded when `expand_aliases` is enabled; it's
-                            // enabled by default for interactive shells.
-                            if context.shell.options().expand_aliases
-                                && let Some(alias_value) =
-                                    context.shell.aliases().get(cmd_name.as_str())
-                            {
-                                //
-                                // TODO(#57): This is a total hack; aliases are supposed to be
-                                // handled much earlier in the process.
-                                //
-                                // N.B. Tokenizing first releases our borrow of the shell's aliases,
-                                // so we can take a mutable borrow of the shell to expand the words.
-                                let alias_words = tokenize_alias_body(&context.shell, alias_value);
-                                let mut alias_pieces =
-                                    expand_words(&mut context.shell, &params, alias_words).await?;
-
-                                next_args.remove(0);
-                                alias_pieces.append(&mut next_args);
-
-                                next_args = alias_pieces;
-                            }
-
+                        if !next_args.is_empty() {
                             // Check if we're going to be invoking a special declaration builtin.
                             // That will change how we parse and process args. (An alias with an
                             // empty body leaves us with no words at all.)
@@ -2303,6 +2333,41 @@ async fn execute_command<T: Into<String>>(
 /// This only handles alias bodies that amount to a simple sequence of words; bodies containing
 /// operators (pipes, redirections, `&&`, ...) and recursive expansion of chained aliases require
 /// alias substitution to happen in the tokenizer instead (see issue #57).
+/// What a command word expands to as an alias, the tokens of the alias's body, and whether
+/// the word after it is checked too, as it is after an alias that ends in a blank; `None`
+/// when the word names no alias.
+///
+/// Bash expands an alias only for a word written with no quoting and nothing to expand
+/// (`\ls`, `'ls'` and `$cmd` never are), and expands the first word of the body again,
+/// unless it names an alias already being expanded (`alias ls='ls -F'`).
+fn alias_words(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    word: &str,
+) -> Option<(Vec<String>, bool)> {
+    let mut words = vec![word.to_owned()];
+    let mut expanded: Vec<String> = Vec::new();
+    let mut next_too = None;
+    while let Some(first) = words.first().cloned() {
+        if !may_name_an_alias(&first) || expanded.contains(&first) {
+            break;
+        }
+        let Some(value) = shell.aliases().get(first.as_str()).cloned() else {
+            break;
+        };
+        // The alias the word names says whether the word after it is checked.
+        next_too.get_or_insert_with(|| value.ends_with([' ', '\t']));
+        expanded.push(first);
+        words.splice(..1, tokenize_alias_body(shell, &value));
+    }
+    next_too.map(|next_too| (words, next_too))
+}
+
+/// Whether a word, as written, may name an alias: one with no quoting and nothing to
+/// expand in it.
+fn may_name_an_alias(word: &str) -> bool {
+    !word.is_empty() && !word.contains(['\\', '\'', '"', '$', '`'])
+}
+
 fn tokenize_alias_body(
     shell: &Shell<impl extensions::ShellExtensions>,
     alias_value: &str,

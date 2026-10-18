@@ -859,6 +859,22 @@ fn bash_53_bash_trapsig_and_trap_p() {
         output("trap 'echo exiting' EXIT; trap -P EXIT; trap -p EXIT; trap - EXIT"),
         (0, "echo exiting\ntrap -- 'echo exiting' EXIT".into())
     );
+    // As Bash 5.3 lists them: in signal order with EXIT first and DEBUG, ERR and RETURN
+    // last, a signal with its `SIG` prefix, a quote in the command quoted again.
+    assert_eq!(
+        output(
+            "trap 'echo r' RETURN; trap 'echo it'\\''s' ERR; trap 'echo t' TERM; trap '' 2; \
+             trap 'echo e' EXIT; trap 'echo h' SIGHUP; trap -p; trap -p SIGINT ERR 0; \
+             trap - RETURN ERR TERM INT EXIT HUP"
+        ),
+        (
+            0,
+            "trap -- 'echo e' EXIT\ntrap -- 'echo h' SIGHUP\ntrap -- '' SIGINT\n\
+             trap -- 'echo t' SIGTERM\ntrap -- 'echo it'\\''s' ERR\ntrap -- 'echo r' RETURN\n\
+             trap -- '' SIGINT\ntrap -- 'echo it'\\''s' ERR\ntrap -- 'echo e' EXIT"
+                .into()
+        )
+    );
 
     // BASH_TRAPSIG inside trap handler
     assert_eq!(
@@ -1020,6 +1036,55 @@ fn err_trap_scoping_follows_bash_function_rules() {
     assert_eq!(
         stdout,
         "f-after\ntrap -- 'echo top' ERR\ntop\nf-after\ng-own"
+    );
+}
+
+#[test]
+fn a_subshell_runs_the_traps_it_set_itself() {
+    // As Bash 5.3: a subshell, a command substitution, a compound pipeline stage and a
+    // background job run their own EXIT trap as they end, and an `exit` there sets the
+    // status; their own ERR and DEBUG traps run without errtrace or functrace. The
+    // parent's EXIT trap, which the copy carries, is not theirs to run.
+    let (code, stdout) = output(
+        "( trap 'echo own err' ERR; false; echo after ); \
+         ( trap 'echo own debug' DEBUG; : one ); \
+         x=$( trap 'echo cmdsub exit' EXIT; echo body ); echo \"[$x]\"; \
+         { trap 'echo brace exit' EXIT; echo brace; } | cat; trap - EXIT; \
+         ( trap 'echo status $?' EXIT; exit 4 ); echo \"st $?\"; \
+         ( trap 'exit 7' EXIT; exit 3 ); echo \"st $?\"; \
+         ( trap 'echo outer exit' EXIT; ( echo inner ); echo outer ); \
+         { trap 'echo job exit' EXIT; echo job; } & wait; \
+         trap 'echo parent exit' EXIT; ( echo child ); trap - EXIT; \
+         trap 'echo parent err' ERR; ( false; echo no errtrace ); trap - ERR",
+    );
+    assert_eq!(code, 0);
+    assert_eq!(
+        stdout,
+        "own err\nafter\nown debug\n[body\ncmdsub exit]\nbrace\nbrace exit\nstatus 4\nst 4\n\
+         st 7\ninner\nouter\nouter exit\njob\njob exit\nchild\nno errtrace"
+    );
+}
+
+#[test]
+fn an_alias_is_a_word_as_written_and_expands_as_bash_expands_it() {
+    // Any quoting keeps a word from naming an alias, and so does an expansion; an
+    // alias's first word is expanded again unless it names one being expanded, and the
+    // word after an alias that ends in a blank is expanded too.
+    let (_, stdout, stderr) = output_with_stderr(
+        "shopt -s expand_aliases\nalias say='echo aliased'\nsay one\n\\say two\n'say' three\n\
+         \"say\" four\ns\\ay five\nsa''y six\ncmd=say\n$cmd seven\n\
+         alias e1='echo first' e2='e1 second'\ne2 eight\n\
+         alias sp='echo spaced '\nsp say nine\n\
+         alias ls='ls -d'\nls / >/dev/null && echo stops\nX=1 say ten",
+    );
+    assert_eq!(
+        stdout,
+        "aliased one\nfirst second eight\nspaced echo aliased nine\nstops\naliased ten"
+    );
+    assert_eq!(
+        stderr.matches("say: command not found").count(),
+        6,
+        "{stderr}"
     );
 }
 

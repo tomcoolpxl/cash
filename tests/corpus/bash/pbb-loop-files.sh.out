@@ -1,0 +1,27 @@
+a.png
+b.txt
+c.png
+other
+sub
+png ./a.png
+png ./c.png
+dir ./other/
+dir ./sub/
+brace ./a.png
+brace ./b.txt
+brace ./sub/d.png
+deep ./a.png
+deep ./b.txt
+deep ./c.png
+deep ./other
+deep ./other/f.txt
+deep ./sub
+deep ./sub/d.png
+deep ./sub/deeper
+deep ./sub/deeper/e.png
+deep png a.png
+deep png c.png
+deep png sub/d.png
+deep png sub/deeper/e.png
+no globstar ./sub/d.png
+unmatched ./*.none

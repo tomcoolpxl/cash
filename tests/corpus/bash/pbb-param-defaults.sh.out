@@ -1,0 +1,25 @@
+[dflt]
+[dflt]
+[set]
+[dflt]
+[]
+[set]
+[]
+[]
+[alt]
+[]
+[alt]
+[alt]
+[assigned]
+[assigned]
+[]
+[]
+[now-set]
+[now-set]
+status 1
+e is set, so this runs
+status 0
+empty is set
+status 1
+[no first]
+[no elements]

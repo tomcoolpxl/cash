@@ -93,21 +93,35 @@ impl TrapCommand {
     fn display_all_handlers(
         context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
     ) -> Result<(), cash_core::Error> {
-        for (signal, _) in context.shell.traps().iter_handlers() {
+        let mut signals: Vec<TrapSignal> = context
+            .shell
+            .traps()
+            .iter_handlers()
+            .map(|(signal, _)| signal)
+            .collect();
+        signals.sort_by_key(|&signal| listing_order(signal));
+        for signal in signals {
             Self::display_handlers_for(context, signal)?;
         }
         Ok(())
     }
 
+    /// Prints a trap as Bash does, as a command that sets it again: the command
+    /// single-quoted, a signal with its `SIG` prefix.
     fn display_handlers_for(
         context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
         signal_type: TrapSignal,
     ) -> Result<(), cash_core::Error> {
         if let Some(handler) = context.shell.traps().get_handler(signal_type) {
+            let prefix = if matches!(signal_type, TrapSignal::Signal(_)) {
+                "SIG"
+            } else {
+                ""
+            };
             writeln!(
                 context.stdout(),
-                "trap -- '{}' {signal_type}",
-                handler.command
+                "trap -- {} {prefix}{signal_type}",
+                cash_core::escape::single_quote(&handler.command)
             )?;
         }
         Ok(())
@@ -131,13 +145,27 @@ impl TrapCommand {
         // TODO(source-info): Provide the location of the specific token that makes up
         // `self.args[0]`.
         let source_info = context.shell.call_stack().current_pos_as_source_info();
+        let depth = context.shell.depth();
 
         for signal in signals {
             context.shell.traps_mut().register_handler(
                 signal,
                 handler.to_owned(),
                 source_info.clone(),
+                depth,
             );
         }
+    }
+}
+
+/// Where `trap -p` lists a trap, as Bash numbers them: EXIT as signal 0, the signals by
+/// number, then DEBUG, ERR and RETURN after the last signal.
+const fn listing_order(signal: TrapSignal) -> i32 {
+    match signal {
+        TrapSignal::Exit => 0,
+        TrapSignal::Signal(signal) => signal.number(),
+        TrapSignal::Debug => 1000,
+        TrapSignal::Err => 1001,
+        TrapSignal::Return => 1002,
     }
 }

@@ -42,6 +42,24 @@ Released as 1.25.0. Then, for 1.26.0:
    real-world scripts run under cash and under Git Bash 5.3 with GNU sed and gawk; each
    mismatch fixed with a focused regression, or classified in its file's `# tags:` line.
 
+   The first round (2026-10-18): 23 new pure-bash-bible cases (MIT), the sections not
+   yet in the corpus, with `tests/corpus/SOURCES.md` for every source's terms. Done
+   (DONE.md): quoted alias names, aliases in aliases and after a blank, a subshell's own
+   traps, and `trap -p`'s listing. The `$OSTYPE` case is a known difference (spec §4
+   row 25). Left open from it:
+
+   - **An alias whose value holds an operator runs it as words**: `alias multi='echo
+     m1; echo m2'`, then `multi`, prints `m1 ; echo m2`; Bash runs both commands.
+     Aliases such as `alias gs='git status && git diff'` are common in a `.bashrc`.
+     cash expands an alias after the command's words are parsed (a TODO taken over
+     from brush, #57), so only words can come of it; Bash expands it as the line is
+     read, before parsing. The fix moves alias expansion into the parser. Large.
+   - **extglob is on from the start** (`shopt extglob` says `on`; `+(x)` matches before
+     `shopt -s extglob`), where Bash has it off: cash parses a whole script with one
+     set of options, so a script that turns extglob on later would not parse otherwise
+     (`shell.rs`, a TODO taken over from brush). Bash parses a command at a time. Only
+     scripts that rely on extglob being off see it.
+
 ## Left over from finished phases
 
 What the phases now in DONE.md left open, each where its phase says more. Not now

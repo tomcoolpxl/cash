@@ -2034,3 +2034,28 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   background loop alone is as fast as before (+1.2%, within the noise). The new test
   runs it on one processor (`start /affinity 1`): 12 to 14 s before, past its 8 s
   bound.
+- **The corpus's first pure-bash-bible round** (2026-10-18, the user's pick after
+  1.25.0): 23 cases from the sections the corpus lacked (strings, arrays, loops, files,
+  variables, parameter expansion, conditionals, arithmetic, traps, internal variables,
+  `printf %(…)T`, `read -t`, aliases), frozen against Git Bash 5.3.15, and
+  `tests/corpus/SOURCES.md` with the terms of every source the corpus copies from,
+  pure-bash-bible's MIT notice and Lucent's for the One True Awk among them, which were
+  nowhere before. What they found, each fixed as Bash 5.3 has it:
+  - **A quoted command name was alias-expanded**: cash looked the expanded word up, so
+    `\say`, `'say'`, `"say"`, `s\ay`, `sa''y` and even `$cmd` ran the alias `say`.
+    Only a word written with no quoting and nothing to expand may name an alias now.
+  - **An alias's value was not alias-expanded**, and **the word after an alias ending in
+    a blank was not either**: `alias e2='e1 second'` said "e1: command not found", and
+    `alias sp='echo spaced '` left `sp say` alone. The first word of a value is expanded
+    again unless it names an alias being expanded, and a blank at the end makes the next
+    word one that may name an alias.
+  - **A subshell never ran the traps it set itself**: `( trap … EXIT; … )`, `$( … )`, a
+    `{ …; } | cat` stage and a `{ …; } &` job ended without their EXIT trap, and a
+    subshell's own ERR and DEBUG traps were held back as if inherited. A trap now knows
+    the copy of the shell that set it; a subshell runs its own, its EXIT trap as it ends
+    (an `exit` there sets its status), and of its parent's only what `set -E` and
+    `set -T` pass on.
+  - **`trap -p` listed signals without `SIG`, out of order, and quoted nothing**:
+    `trap -- '' INT`, in the order of a hash map, and `'echo it's'`. It lists as Bash
+    does now: EXIT, the signals by number as `SIGINT`, then DEBUG, ERR and RETURN, each
+    command single-quoted so that the line sets the trap again.

@@ -1,0 +1,12 @@
+value
+value
+changed through the nameref
+value two
+<hello_planet>
+<hello_world>
+<hello_zzz>
+[hello_planet]
+[hello_world]
+[hello_zzz]
+{hello_planet,hello_world,hello_zzz}
+()

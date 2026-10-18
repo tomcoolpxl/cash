@@ -1,0 +1,10 @@
+type -p missing: 1
+hash missing: 1
+command -v missing: 1
+[] 0
+[printf] 0
+[] 0
+[f] 0
+[alias ll='ls -l'] 0
+[builtin function alias keyword ]
+error: no_such_program_x is not installed

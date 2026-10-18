@@ -2085,9 +2085,15 @@ async fn run_substitution_command(
     let _nested = shell.enter_nested_text();
 
     // Handle the parse result using default shell behavior.
-    shell
+    let result = shell
         .run_parsed_result(parse_result, &source_info, &params)
-        .await
+        .await?;
+    // Its own EXIT trap runs as it ends, into the output taken, as in Bash.
+    let status = shell.end_subshell(result.exit_code.into(), &params).await;
+    Ok(ExecutionResult {
+        exit_code: status.into(),
+        ..result
+    })
 }
 
 // Detects a subshell command that consists solely of a single input redirection

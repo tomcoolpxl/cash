@@ -1,0 +1,12 @@
+in subshell
+subshell exit
+trap -- '' SIGINT
+debug ran 3 times
+in f
+in f
+returned from f
+sourced
+returned from a file
+in f
+end
+exit trap

@@ -15,6 +15,26 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Ok(())
     }
 
+    /// Ends a subshell (`( … )`, a command substitution, a compound pipeline stage, a
+    /// background job) that ended with `status`: runs its `EXIT` trap, under `params`, if
+    /// it set one itself, as Bash does as the subshell exits. The parent's, which the copy
+    /// carries, is not its to run. Returns the subshell's status, which an `exit` in the
+    /// trap changes.
+    pub(crate) async fn end_subshell(&mut self, status: u8, params: &ExecutionParameters) -> u8 {
+        let set_here = self
+            .traps
+            .get_handler(TrapSignal::Exit)
+            .is_some_and(|handler| handler.depth == self.depth());
+        if !set_here {
+            return status;
+        }
+        self.last_exit_status = status;
+        match self.invoke_trap_handler(TrapSignal::Exit, params).await {
+            Ok(result) if result.is_exit() => result.exit_code.into(),
+            _ => status,
+        }
+    }
+
     /// Runs the trap for a signal the shell sent itself (`kill -TERM $$`), if one is set:
     /// `None` when there is none, so the caller applies the signal's default action.
     pub async fn raise_signal_trap(
@@ -84,19 +104,21 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             return Ok(ExecutionResult::success());
         }
 
-        // A sourced file is also a nested DEBUG scope in Bash: the caller's DEBUG
-        // trap is temporarily hidden unless functrace (`set -T`) is enabled.
-        // Functions need no check here: `enter_function` sets aside the traps they
-        // do not inherit, so a trap the function sets itself still fires.
-        let inheritance_required =
-            self.is_subshell() || (self.in_sourced_script() && matches!(signal, TrapSignal::Debug));
-        if inheritance_required && !self.is_trap_inherited_in_current_scope(signal) {
-            return Ok(ExecutionResult::success());
-        }
-
         let Some(handler) = self.traps.get_handler(signal).cloned() else {
             return Ok(ExecutionResult::success());
         };
+
+        // A subshell runs the traps it set itself; of its parent's, which the copy
+        // carries, only those passed on. A sourced file is also a nested DEBUG scope in
+        // Bash: the caller's DEBUG trap is temporarily hidden unless functrace (`set -T`)
+        // is enabled. Functions need no check here: `enter_function` sets aside the
+        // traps they do not inherit, so a trap the function sets itself still fires.
+        let inherited_from_a_parent = self.is_subshell() && handler.depth != self.depth();
+        let inheritance_required = inherited_from_a_parent
+            || (self.in_sourced_script() && matches!(signal, TrapSignal::Debug));
+        if inheritance_required && !self.is_trap_inherited_in_current_scope(signal) {
+            return Ok(ExecutionResult::success());
+        }
 
         let mut params = params.clone();
         params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;

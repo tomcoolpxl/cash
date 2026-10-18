@@ -27,6 +27,10 @@ use crate::common::{Scratch, cash_command};
 /// match the oracle fails the test until it is taken off the list.
 const KNOWN_DIFFERENT: &[(&str, &str)] = &[
     (
+        "bash/pbb-internal-variables.sh",
+        "spec §4 row 25: `$OSTYPE` is `windows`, which the case's `cygwin | msys | win32` misses",
+    ),
+    (
         "bash/pitfall-read-arith-injection.sh",
         "spec §4 row 27: arithmetic never runs `$(...)` from a variable's value",
     ),

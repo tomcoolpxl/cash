@@ -984,3 +984,8 @@ that changes overnight surprises script authors; a paid certificate or SignPath.
   where one CI run's starved runner killed one at 45 s. They only start processes and
   cannot hang, so the longer allowance hides nothing, and a test that finishes takes the
   same time.
+- **The corpus copies only from sources whose terms allow it** (2026-10-18): each
+  source and its terms are in `tests/corpus/SOURCES.md`, with the notices they ask to
+  be kept (pure-bash-bible's MIT, Lucent's for the One True Awk). Greg's Wiki states no
+  licence, so its snippets stay as they are and no more are taken; the Advanced
+  Bash-Scripting Guide's licence restricts modified copies, so none are taken from it.

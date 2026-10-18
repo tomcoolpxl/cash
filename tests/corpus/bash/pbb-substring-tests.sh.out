@@ -1,0 +1,22 @@
+sub_string is in var.
+var does not start with sub_string.
+var does not end with sub_string.
+case: sub_string
+sub_string is in var.
+var starts with sub_string.
+var does not end with sub_string.
+case: sub_string
+sub_string is in var.
+var does not start with sub_string.
+var ends with sub_string.
+case: sub_string
+sub_string is in var.
+var does not start with sub_string.
+var does not end with sub_string.
+case: sub_string2
+sub_string is not in var.
+var does not start with sub_string.
+var does not end with sub_string.
+case: else
+sub_string is in array.
+not in the second array.

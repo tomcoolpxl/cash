@@ -1,0 +1,8 @@
+aliased one
+no command named say
+quoted say is no alias either
+aliased-echo four
+five
+function: six
+command: seven
+end
