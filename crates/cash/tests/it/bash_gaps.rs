@@ -2291,3 +2291,42 @@ false | true; (( 1 )); echo "((: ${PIPESTATUS[*]}""#;
         )
     );
 }
+
+/// `-x` on a directory, `-O` and `-G` on the user's own file, and `-N`, as Bash answers
+/// them: `-x .` was false, `-O` and `-G` compared a uid of 0 with the account's, and
+/// `-N` was "not yet implemented". A true `-N` is not asked: Defender reads a new file
+/// and moves its access time when it likes.
+#[test]
+fn test_reads_directories_owners_and_reads_as_bash_does() {
+    let scratch = Scratch::new("test-predicates");
+    let script = r#"echo hi > own.txt; mkdir sub
+for op in -x -O -G; do
+  for f in own.txt sub nosuch; do
+    if [ $op "$f" ]; then a=yes; else a=no; fi
+    if eval "[[ $op \"$f\" ]]"; then b=yes; else b=no; fi
+    echo "$op $f $a $b"
+  done
+done
+[ -N nosuch ]; echo "nosuch -N $?"
+touch -d 2020-01-01 old.txt; [ -N old.txt ]; echo "old -N $?""#;
+    assert_eq!(
+        output_in(scratch.path(), script),
+        (
+            0,
+            [
+                "-x own.txt no no",
+                "-x sub yes yes",
+                "-x nosuch no no",
+                "-O own.txt yes yes",
+                "-O sub yes yes",
+                "-O nosuch no no",
+                "-G own.txt yes yes",
+                "-G sub yes yes",
+                "-G nosuch no no",
+                "nosuch -N 1",
+                "old -N 1",
+            ]
+            .join("\n")
+        )
+    );
+}

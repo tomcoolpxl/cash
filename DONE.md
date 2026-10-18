@@ -2273,3 +2273,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   typed, F3 and Shift-F3 go between matches; F1 shows the keys; Esc leaves the search,
   then the filter, then `man`. Under 100 columns the page fills the screen and Up and
   Down still choose.
+- **`test -x DIR`, `-O`, `-G` and `-N`** (2026-10-18, found writing test's man page):
+  `[ -x . ]` was false; `-O` and `-G` compared a stub uid of 0 with the account's and
+  were false for the user's own files; `-N` stopped with "not yet implemented". A
+  directory is now executable, `-O` and `-G` compare the file's owner and group with
+  the process token's user (or default owner) and primary group by SID, and `-N` asks
+  whether the last write is newer than the last access. Git Bash calls every file yours
+  (its drives are mounted `noacl`); cash answers as `ls -l` shows.

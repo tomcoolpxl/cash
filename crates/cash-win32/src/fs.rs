@@ -63,6 +63,58 @@ pub fn get_file_owner_info(path: &Path) -> Option<FileOwner> {
     owner_of(&mut buffer)
 }
 
+/// Whether a file is this process's own, as `test -O` and `test -G` ask.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Ownership {
+    /// Its owner is this process's user, or the default owner it gives new files
+    /// (Administrators, for an elevated administrator): a file it creates is its own.
+    pub mine: bool,
+    /// Its primary group is this process's primary group.
+    pub my_group: bool,
+}
+
+/// [`Ownership`] of the file at `path`, its owner and group compared with this process's
+/// token by SID; `None` when its security descriptor cannot be read.
+#[must_use]
+pub fn ownership(path: &Path) -> Option<Ownership> {
+    use crate::account::Sid;
+
+    let mut buffer = security_descriptor(
+        path,
+        OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION,
+    )?;
+    let descriptor = buffer.as_mut_ptr().cast();
+    let mut owner = std::ptr::null_mut();
+    let mut group = std::ptr::null_mut();
+    let mut defaulted = 0;
+    // SAFETY: `descriptor` is the descriptor `GetFileSecurityW` filled, with its owner.
+    let owner =
+        if unsafe { GetSecurityDescriptorOwner(descriptor, &raw mut owner, &raw mut defaulted) }
+            == 0
+        {
+            None
+        } else {
+            Sid::copy_of(owner)
+        };
+    // SAFETY: as above, with its group.
+    let group =
+        if unsafe { GetSecurityDescriptorGroup(descriptor, &raw mut group, &raw mut defaulted) }
+            == 0
+        {
+            None
+        } else {
+            Sid::copy_of(group)
+        };
+    let mine = owner.is_some_and(|owner| {
+        crate::account::current_user().is_some_and(|user| user == owner)
+            || crate::account::current_default_owner().is_some_and(|default| default == owner)
+    });
+    let my_group = group.is_some_and(|group| {
+        crate::account::current_primary_group().is_some_and(|own| own == group)
+    });
+    Some(Ownership { mine, my_group })
+}
+
 /// What `ls -l` shows of a file's security: its owner and group, and whether this
 /// process may write to it (for a directory, create files in it) by its access list.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

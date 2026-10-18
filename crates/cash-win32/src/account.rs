@@ -53,7 +53,7 @@ impl Eq for Sid {}
 
 impl Sid {
     /// A copy of the SID at `sid`, or `None` when it is null or not a valid SID.
-    fn copy_of(sid: PSID) -> Option<Self> {
+    pub(crate) fn copy_of(sid: PSID) -> Option<Self> {
         // SAFETY: `IsValidSid` accepts any pointer obtained as a PSID, and rejects null.
         if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
             return None;
@@ -233,6 +233,38 @@ pub fn current_user() -> Option<Sid> {
     // SAFETY: the buffer holds a TOKEN_USER, aligned for one by construction.
     let user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
     Sid::copy_of(user.User.Sid)
+}
+
+/// The owner this process gives the files it creates: its user, or Administrators for an
+/// elevated administrator, unless `set_default_owner` changed it.
+#[must_use]
+pub fn current_default_owner() -> Option<Sid> {
+    use windows_sys::Win32::Security::{TOKEN_OWNER, TOKEN_QUERY, TokenOwner};
+
+    let token = process_token(TOKEN_QUERY)?;
+    let buffer = token_information(&token, TokenOwner)?;
+    if buffer.len() * 8 < size_of::<TOKEN_OWNER>() {
+        return None;
+    }
+    // SAFETY: the buffer holds a TOKEN_OWNER, aligned for one by construction.
+    let owner = unsafe { &*buffer.as_ptr().cast::<TOKEN_OWNER>() };
+    Sid::copy_of(owner.Owner)
+}
+
+/// The primary group this process gives the files it creates: `None` on a local machine,
+/// `Domain Users` in a domain.
+#[must_use]
+pub fn current_primary_group() -> Option<Sid> {
+    use windows_sys::Win32::Security::{TOKEN_PRIMARY_GROUP, TOKEN_QUERY, TokenPrimaryGroup};
+
+    let token = process_token(TOKEN_QUERY)?;
+    let buffer = token_information(&token, TokenPrimaryGroup)?;
+    if buffer.len() * 8 < size_of::<TOKEN_PRIMARY_GROUP>() {
+        return None;
+    }
+    // SAFETY: the buffer holds a TOKEN_PRIMARY_GROUP, aligned for one by construction.
+    let group = unsafe { &*buffer.as_ptr().cast::<TOKEN_PRIMARY_GROUP>() };
+    Sid::copy_of(group.PrimaryGroup)
 }
 
 /// Whether this process's account is a member of Administrators, elevated or not.

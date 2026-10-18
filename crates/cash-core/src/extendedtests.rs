@@ -4,10 +4,7 @@ use std::path::Path;
 use crate::{
     ExecutionParameters, Shell, ShellFd, arithmetic, env, error, escape, expansion, extensions,
     namedoptions, patterns,
-    sys::{
-        fs::{MetadataExt, PathExt},
-        users,
-    },
+    sys::fs::PathExt,
     variables::{self, ArrayLiteral},
 };
 
@@ -159,28 +156,28 @@ pub(crate) async fn apply_unary_predicate_to_str(
                 return Ok(shell.builtins().get(&tool).is_some_and(|r| !r.disabled));
             }
             let path = shell.absolute_path(Path::new(operand));
-            Ok(path.executable(&shell.pathext()))
+            // A directory may be entered, as Linux's search permission says, and Windows
+            // lets every account pass through one.
+            Ok(path.is_dir() || path.executable(&shell.pathext()))
         }
         ast::UnaryPredicate::FileExistsAndOwnedByEffectiveGroupId => {
+            // cash: the file's group and the process's primary group, compared by SID;
+            // file metadata carries no gid on Windows.
             let path = shell.absolute_path(Path::new(operand));
-            if !path.exists() {
-                return Ok(false);
-            }
-
-            let md = path.metadata()?;
-            Ok(md.gid() == users::get_effective_gid()?)
+            Ok(cash_win32::fs::ownership(&path).is_some_and(|own| own.my_group))
         }
         ast::UnaryPredicate::FileExistsAndModifiedSinceLastRead => {
-            error::unimp("unary extended test predicate: FileExistsAndModifiedSinceLastRead")
+            // Written after it was last read, as Bash's timespec comparison says.
+            let path = shell.absolute_path(Path::new(operand));
+            Ok(path.metadata().is_ok_and(|metadata| {
+                matches!((metadata.modified(), metadata.accessed()),
+                    (Ok(written), Ok(read)) if written > read)
+            }))
         }
         ast::UnaryPredicate::FileExistsAndOwnedByEffectiveUserId => {
+            // cash: the file's owner and the process's user, compared by SID.
             let path = shell.absolute_path(Path::new(operand));
-            if !path.exists() {
-                return Ok(false);
-            }
-
-            let md = path.metadata()?;
-            Ok(md.uid() == users::get_effective_uid()?)
+            Ok(cash_win32::fs::ownership(&path).is_some_and(|own| own.mine))
         }
         ast::UnaryPredicate::FileExistsAndIsSocket => {
             let path = shell.absolute_path(Path::new(operand));

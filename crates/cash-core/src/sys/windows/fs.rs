@@ -6,9 +6,6 @@ use std::path::{Path, PathBuf};
 use crate::ShellFd;
 use crate::error;
 
-// Selectively re-export items from stubs that we don't override.
-pub(crate) use crate::sys::stubs::fs::MetadataExt;
-
 /// Returns the stem of a PATHEXT entry (with any leading `.` removed).
 ///
 /// `PATHEXT` canonically stores entries like `.EXE`, but tolerant parsing
