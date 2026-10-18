@@ -1333,6 +1333,22 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
 
 ---
 
+## The phase after 1.24.0 and 1.25.0: the DLLs, busy jobs, and the corpus
+
+The user's picks after 1.24.0 and 1.25.0 (decisions.md), released as 1.25.0 and 1.26.0;
+each item's entry is under "Found along the way, done" below.
+
+1. **Command completion offered DLLs**: done, 1.25.0.
+2. **Busy background jobs starved the foreground**: done, 1.25.0, taken in when
+   1.24.0's release gate timed out on it four times.
+3. **Grow the differential corpus**: four rounds, 1.26.0. 47 new cases: pure-bash-bible
+   and pure-sh-bible (MIT), semver-tool (Apache-2.0), JSON.sh (MIT), spark (MIT),
+   getoptions (CC0), and seven of cash's own on the Bash manual, with
+   `tests/corpus/SOURCES.md` for every source's terms. They found eight differences,
+   all fixed: quoted alias names, aliases in aliases and after a blank, a subshell's own
+   traps, `trap -p`'s listing, `.` taking the script's options, its usage's name,
+   `GLOBIGNORE`, and a last `**`. Three were left for the next phase.
+
 ## Found along the way, done
 
 - **cash's `printf` writes a line's end in a write of its own** (found on 2026-10-09

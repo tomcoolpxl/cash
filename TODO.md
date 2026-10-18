@@ -27,48 +27,34 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ## Picked by the user (the current phase, 2026-10-18)
 
-The user's picks after 1.24.0 (decisions.md, "The phase after 1.24.0" and "The phase
-after 1.25.0"), in this order. The phases before, released as 1.22.0 to 1.24.0, are in
+The user's picks after 1.26.0 (decisions.md, "The phase after 1.26.0"), in this order;
+items 2 and 3, both changes to how a script is read, go together, as Bash expands an
+alias as it reads each command. The phases before, released as 1.22.0 to 1.26.0, are in
 DONE.md.
 
-1. **Command completion offered DLLs**: done (2026-10-18, DONE.md).
-2. **Busy background jobs starved the foreground**: done (2026-10-18, DONE.md). Picked
-   for the phase after 1.25.0 and taken into 1.25.0, as 1.24.0's release gate timed out
-   on it four times.
-
-Released as 1.25.0. Then, for 1.26.0:
-
-3. **Grow the differential corpus** (`tests/corpus`, ROADMAP.md section 6): new
-   real-world scripts run under cash and under Git Bash 5.3 with GNU sed and gawk; each
-   mismatch fixed with a focused regression, or classified in its file's `# tags:` line.
-
-   The first round (2026-10-18): 23 new pure-bash-bible cases (MIT), the sections not
-   yet in the corpus, with `tests/corpus/SOURCES.md` for every source's terms. Done
-   (DONE.md): quoted alias names, aliases in aliases and after a blank, a subshell's own
-   traps, and `trap -p`'s listing. The `$OSTYPE` case is a known difference (spec §4
-   row 25). The second round: 10 pure-sh-bible cases (MIT), all as Bash has them, and
-   semver-tool 3.4.0 (Apache-2.0) run whole, which found `.` taking `--help` and `--`
-   after the script as its own (done, DONE.md). The third: JSON.sh (MIT), spark (MIT)
-   and getoptions (CC0) run whole, all three as Bash has them. The fourth: seven cases
-   of cash's own, the Bash manual as their spec (`${var@…}`, `declare -p`, `getopts`,
-   `case` fall-through, `mapfile` and `read`, here-documents, glob options), which found
-   `GLOBIGNORE` unread and a last `**` short of its folder (done, DONE.md). Left open:
-
-   - **An alias whose value holds an operator runs it as words**: `alias multi='echo
-     m1; echo m2'`, then `multi`, prints `m1 ; echo m2`; Bash runs both commands.
-     Aliases such as `alias gs='git status && git diff'` are common in a `.bashrc`.
-     cash expands an alias after the command's words are parsed (a TODO taken over
-     from brush, #57), so only words can come of it; Bash expands it as the line is
-     read, before parsing. The fix moves alias expansion into the parser. Large.
-   - **extglob is on from the start** (`shopt extglob` says `on`; `+(x)` matches before
-     `shopt -s extglob`), where Bash has it off: cash parses a whole script with one
-     set of options, so a script that turns extglob on later would not parse otherwise
-     (`shell.rs`, a TODO taken over from brush). Bash parses a command at a time. Only
-     scripts that rely on extglob being off see it.
-   - **`GLOBIGNORE` does not show in `shopt dotglob`**: a glob finds dot files while it is
-     set, as in Bash, but Bash also turns the dotglob option itself on when `GLOBIGNORE`
-     is set and off when it is unset, so `shopt dotglob` says `on`, and a dotglob turned
-     on by hand ends with the unset. cash has no hook from a variable to an option. Small.
+1. **Two small fixes**:
+   - **`GLOBIGNORE` does not show in `shopt dotglob`** (found 2026-10-18 by the corpus):
+     a glob finds dot files while it is set, as in Bash, but Bash also turns the dotglob
+     option itself on when `GLOBIGNORE` is set and off when it is unset, so `shopt
+     dotglob` says `on`, and a dotglob turned on by hand ends with the unset. cash has no
+     hook from a variable to an option.
+   - **The clipboard's unit test puts back only text** (found 2026-10-18 in the quick
+     lane): `cash-win32`'s `text_round_trips_and_an_empty_text_empties_the_clipboard`
+     runs in every quick lane on the developer's own clipboard, saves its text and puts
+     it back, but an image or a file list there is replaced by the text it saved.
+2. **extglob is on from the start** (found 2026-10-18 by the corpus): `shopt extglob`
+   says `on`, and `+(x)` matches before `shopt -s extglob`, where Bash has it off. cash
+   parses a whole script with one set of options, so a script that turns extglob on
+   later would not parse otherwise (`shell.rs`, a TODO taken over from brush). Bash
+   parses a command at a time; so would cash.
+3. **An alias whose value holds an operator runs it as words** (found 2026-10-18 by the
+   corpus): `alias multi='echo m1; echo m2'`, then `multi`, prints `m1 ; echo m2`; Bash
+   runs both commands. Aliases such as `alias gs='git status && git diff'` are common
+   in a `.bashrc`. cash expands an alias after the command's words are parsed (#57, from
+   brush), so only words can come of it; Bash expands it as the line is read, before
+   parsing, which also keeps an alias defined on a line from applying later on it.
+4. **More corpus rounds**: permissively licensed real scripts and cases of cash's own
+   with the Bash manual as their spec, as in the last phase (`tests/corpus/SOURCES.md`).
 
 ## Left over from finished phases
 
@@ -90,12 +76,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   the standard handles, would lift the limit.
 
 ## Found along the way
-
-- **The clipboard's unit test puts back only text** (2026-10-18, seen in the quick
-  lane): `cash-win32`'s `text_round_trips_and_an_empty_text_empties_the_clipboard` runs
-  in every quick lane on the developer's own clipboard, saves its text and puts it back,
-  but an image or a file list there is replaced by the text it saved (none). Small: save
-  and restore every format, or skip unless the clipboard holds text only.
 
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,

@@ -824,6 +824,11 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   Scoop once CI is green, as 1.24.0 was. Turned down for now: taking lzma-rust2 in for
   7z's and xz's speed and a prompt stop, zstd's real levels, the winget submission, and
   the four leftovers.
+- **The phase after 1.26.0** (the user, 2026-10-18): the corpus's three open findings,
+  aliases with operators, extglob on from the start, and `GLOBIGNORE` in `shopt
+  dotglob`, with the clipboard test that puts back only text, and more corpus rounds.
+  1.26.0 is tagged and taken to Scoop once CI is green. Still turned down for now:
+  lzma-rust2, zstd's levels, the winget submission, the four leftovers.
 
 ## 8. Archives and compression
 
