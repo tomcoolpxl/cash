@@ -125,26 +125,17 @@ fn every_example_of_a_page_written_in_full_gives_git_bash_s_output() {
 /// removed, its carriage returns shown as `\r`.
 fn record(command: &mut Command, fixture: &Path) -> String {
     let scratch = Scratch::new("man-example");
-    let files = |dir: &Path| -> Vec<(String, Vec<u8>)> {
-        let mut files: Vec<(String, Vec<u8>)> = std::fs::read_dir(dir)
-            .expect("read a directory")
-            .flatten()
-            .filter(|entry| entry.path().is_file())
-            .map(|entry| {
-                let bytes = std::fs::read(entry.path()).unwrap_or_default();
-                (entry.file_name().to_string_lossy().into_owned(), bytes)
-            })
-            .collect();
-        files.sort();
-        files
-    };
-    let before = files(fixture);
+    let before = files_below(fixture);
     for (name, bytes) in &before {
-        std::fs::write(scratch.path().join(name), bytes).expect("copy a fixture");
+        let path = scratch.path().join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("make a fixture's directory");
+        }
+        std::fs::write(path, bytes).expect("copy a fixture");
     }
     let (stdout, status) = run(command, scratch.path());
     let mut out = format!("{stdout}--- status {status}\n");
-    let after = files(scratch.path());
+    let after = files_below(scratch.path());
     for (name, bytes) in &after {
         if before.iter().all(|(was, old)| was != name || old != bytes) {
             let text = String::from_utf8_lossy(bytes).replace('\r', "\\r");
@@ -160,6 +151,25 @@ fn record(command: &mut Command, fixture: &Path) -> String {
         }
     }
     out
+}
+
+/// Every file in `dir` and below, by its path from `dir` with `/` between the parts,
+/// and what it holds, in the order of the paths.
+fn files_below(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut files = Vec::new();
+    let mut pending = vec![(dir.to_path_buf(), String::new())];
+    while let Some((at, prefix)) = pending.pop() {
+        for entry in std::fs::read_dir(&at).expect("read a directory").flatten() {
+            let name = format!("{prefix}{}", entry.file_name().to_string_lossy());
+            if entry.path().is_dir() {
+                pending.push((entry.path(), format!("{name}/")));
+            } else {
+                files.push((name, std::fs::read(entry.path()).unwrap_or_default()));
+            }
+        }
+    }
+    files.sort();
+    files
 }
 
 /// Runs `command` in `dir` with no standard input: its standard output and status, or

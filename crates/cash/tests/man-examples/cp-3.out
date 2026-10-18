@@ -1,0 +1,5 @@
+'config.ini' -> 'config.copy'
+--- status 0
+--- file config.copy
+url=http://example.com
+mirror=http://mirror.example.com

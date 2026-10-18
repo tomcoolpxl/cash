@@ -91,6 +91,29 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **`cp` keeps the source's modification time without `-p`** (2026-10-18, found
+  writing cp's man page): `touch -d 2020-01-02 old; cp old new` gives `new` the time of
+  2020, as Windows' `CopyFileExW` (under `std::fs::copy`, under `uu_cp`) copies it;
+  GNU's `cp`, and Git Bash's, give the copy the time it was made unless `-p`, `-a` or
+  `--preserve=timestamps` asks otherwise. A build that copies a file and compares times
+  (`make`) sees the copy as old. The fix sets the copy's time to now after the copy
+  when timestamps are not to be kept, in cash's own copy of `uu_cp`. Medium; it goes
+  with the error texts below. With it: `cp -p` of a read-only file makes the copy and
+  then fails, `cp: Access is denied. (os error 5)`, status 1, as it sets the copy's
+  times after making it read-only; Git Bash's `cp -p` succeeds.
+
+- **uutils' tools speak Windows' error texts, and `cp` names no file** (2026-10-18,
+  found writing the man pages, against Git Bash 5.3): `cp nosuch x` says `cp: The
+  system cannot find the file specified. (os error 2)` where GNU says `cp: cannot stat
+  'nosuch': No such file or directory`; `cat nosuch` says `cat: nosuch: The system
+  cannot find the file specified.` (GNU: `No such file or directory`); `mkdir docs`
+  over a directory says `mkdir: docs: File exists` (GNU: `cannot create directory
+  'docs': File exists`); `ln nosuch z` says `failed to create hard link 'z' =>
+  'nosuch'` (GNU: `failed to access 'nosuch'`). The statuses agree. They come from
+  `uu_cp`, `uu_cat`, `uu_mkdir` and `uu_ln` as crates; the fix is cash's own copy of
+  each (as `rm` and `sort` are) or a wrapper that puts uucore's Windows errors in
+  POSIX's words. Medium.
+
 - **A `case` of more than 64 patterns with brackets or extended globs** compiles each
   pattern again on every pass: compiled patterns are kept in an LRU of 64, which a
   cycle through more misses every time. Patterns of characters, `?` and `*` match
