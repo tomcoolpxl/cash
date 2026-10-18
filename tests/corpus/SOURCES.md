@@ -11,6 +11,9 @@ What each source allows, and the notices its terms ask to be kept with the copie
 | `bash/json-sh.sh` and `fixtures/JSON.sh` | [JSON.sh](https://github.com/dominictarr/JSON.sh), Dominic Tarr, unchanged | MIT or Apache License 2.0, at the user's choice; taken under MIT: Copyright (c) 2011 Dominic Tarr, under the MIT notice below |
 | `bash/spark.sh` and `fixtures/spark` | [spark](https://github.com/holman/spark), Zach Holman, unchanged | MIT: Copyright (c) Zach Holman, https://zachholman.com, under the MIT notice below |
 | `bash/getoptions.sh` and `fixtures/getoptions_*.sh` | [getoptions](https://github.com/ko1nksm/getoptions)' `lib/`, unchanged, and its `examples/basic.sh` definition | CC0 1.0, as each file's header says: no conditions |
+| `bash/mo-templates.sh` and `fixtures/mo` | [mo](https://github.com/tests-always-included/mo) 3.1.0, unchanged | MIT style with a non-advertising clause and an acknowledgment, below |
+| `bash/ansi-codes.sh` and `fixtures/ansi` | [ansi](https://github.com/fidian/ansi), © 2015 Tyler Akins, unchanged | the same terms as mo's, below |
+| `bash/nvm-helpers.sh` and `fixtures/nvm.sh` | [nvm](https://github.com/nvm-sh/nvm)'s `nvm.sh`, unchanged | MIT: Copyright (c) 2010 Tim Caswell, Copyright (c) 2014 Jordan Harband, under the MIT notice below |
 | `bash/semver-tool.sh` and `fixtures/semver` | [semver-tool](https://github.com/fsaintjacques/semver-tool) 3.4.0's `src/semver`, unchanged | Apache License 2.0, as the script's SPDX line says; the text is in [`licenses/`](../../licenses/) (`*-Apache-2.0.txt`) |
 | `awk/*` citing `onetrueawk` | [The One True Awk](https://github.com/onetrueawk/awk)'s `testdir`, the test programs of *The AWK Programming Language* | Lucent's permission notice, below |
 | `sed/pement-*`, `awk/pement-*` | Eric Pement's one-liners, [sed](https://www.pement.org/sed/sed1line.txt) and [awk](https://www.pement.org/awk/awk1line.txt) | No licence stated; one-liners, cited by URL |
@@ -23,8 +26,8 @@ New cases come from sources whose terms allow copying, and the table says which.
 
 ## pure-bash-bible
 
-The notice JSON.sh and spark are under is the same, with their own copyright lines in the
-table.
+The notice JSON.sh, spark and nvm are under is the same, with their own copyright lines in
+the table.
 
 The MIT License (MIT)
 
@@ -47,6 +50,33 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## mo and ansi
+
+This product includes software developed by contributors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to deal in the Software
+without restriction, including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
+to whom the Software is furnished to do so, subject to the following conditions:
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+Except as contained in this notice, the name(s) of the above copyright holders shall not
+be used in advertising or otherwise to promote the sale, use or other dealings in this
+Software without prior written authorization.
+
+The end-user documentation included with the redistribution, if any, must include the
+following acknowledgment: "This product includes software developed by contributors", in
+the same place and form as other third-party acknowledgments. Alternately, this
+acknowledgment may appear in the software itself, in the same form and location as other
+such third-party acknowledgments.
 
 ## The One True Awk
 

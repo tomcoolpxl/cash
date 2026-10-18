@@ -38,6 +38,10 @@ DONE.md.
    DONE.md).
 4. **More corpus rounds**: permissively licensed real scripts and cases of cash's own
    with the Bash manual as their spec, as in the last phase (`tests/corpus/SOURCES.md`).
+   The first round (2026-10-18): the alias case, and mo, ansi and nvm run from
+   fixtures, nvm's 5,642 lines one `{ }` command. All as Bash has them but nvm's
+   `nvm_strip_path`, which met D3's `C:/` spelling of `$PWD` in a colon-separated list:
+   noted under "Found along the way".
 
 ## Left over from finished phases
 
@@ -59,6 +63,16 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   the standard handles, would lift the limit.
 
 ## Found along the way
+
+- **A `C:/` folder put into `PATH` breaks a colon-separated split** (2026-10-18, found
+  by the corpus's nvm case): `PATH="$PWD/bin:$PATH"` works for running programs, as
+  cash's own search knows a drive, but the value keeps `C:/…` (D3's spelling of `$PWD`),
+  so a script that splits `PATH` on `:` (`IFS=: read -ra`, `${PATH%%:*}`, awk with
+  `RS=:` as nvm's `nvm_strip_path` does) gets `C` as an entry. D5 has scripts see `PATH`
+  as `/c/…`, colon-separated, which a `C:/` entry assigned by a script breaks. In Git
+  Bash `$PWD` is `/c/…`, so the list stays whole. A fix would spell a `C:/` entry `/c/`
+  as `PATH` is assigned, as D5 spells the inherited value. Medium; decision needed on
+  whether other colon lists (`CDPATH`, `MANPATH`) follow.
 
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,

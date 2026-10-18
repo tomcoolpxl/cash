@@ -2145,5 +2145,13 @@ each item's entry is under "Found along the way, done" below.
   109.6); 100 aliases and 2,000 lines using them 31.8 ms (Bash 51.4; 1.26.0 took 13.9 s
   and failed it, an alias holding an assignment run as a command not found); 30
   functions of 100 lines 44.9 ms (43.8, 51.6).
+- **The corpus's fifth round** (2026-10-18, the user's pick after 1.26.0): the alias
+  case of cash's own, and three more real scripts run whole from fixtures: mo 3.1.0 (a
+  Mustache template engine in Bash), ansi (option parsing and escape tables; its
+  `ANSI_FORCE_SUPPORT` keeps `tput` out) and nvm's `nvm.sh`, 5,642 lines that are one
+  `{ }` command, read in 74 ms (Git Bash 99, 1.26.0 69). All as Git Bash 5.3 has them
+  but `nvm_strip_path`, a known difference (D3): its awk splits a list on `:` that holds
+  `$PWD`, which cash spells `C:/…`. The same spelling in a `PATH` a script assigns
+  splits there too; noted in TODO.md.
   Left as is: Bash expands the last word of an alias's own text once more, as its reader
   lets go of the text before it looks the word up (`alias echo='echo -n x; echo'`).
