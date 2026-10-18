@@ -32,9 +32,8 @@ The phases before, released as 1.22.0 to 1.27.0, are in DONE.md.
 
 After 1.28.0 (decisions.md, "The phase after 1.28.0"): first the four findings picked
 to be fixed, as they change pages already written: the case of a Windows variable's
-name, uutils' error texts and `cp`'s copy time (all three done, DONE.md), and the alias
-read as text (under "Found along the way"); then the man batches straight on (step 7),
-before items 2 to 5.
+name, uutils' error texts, `cp`'s copy time and the alias read as text (all four done,
+DONE.md); then the man batches straight on (step 7), before items 2 to 5.
 
 1. **`man`, cash's own manual** (the user, 2026-10-18): `research/man-browser-design.md`,
    in the steps of its section 7, each ending in a commit:
@@ -96,13 +95,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   the standard handles, would lift the limit.
 
 ## Found along the way
-
-- **An alias is not text: a quote it leaves open does not go on into the line**
-  (2026-10-18, found writing alias's man page): with `alias q="echo it's"`, Bash reads
-  `q quoted'` as `echo it's quoted'` and prints `its quoted`; cash stops with
-  "unexpected EOF while looking for matching `''". Bash substitutes an alias's text and
-  reads on; cash's parser takes it as words of its own. Rare in practice (an alias
-  that opens a quote); the fix is in the tokenizer's alias expansion. Medium.
 
 - **A `case` of more than 64 patterns with brackets or extended globs** compiles each
   pattern again on every pass: compiled patterns are kept in an LRU of 64, which a

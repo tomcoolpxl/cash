@@ -154,7 +154,9 @@ fn expand_into(
         match &token {
             Token::Operator(operator, _) => read_operator(operator, reading),
             Token::Word(word, span) => {
-                if let Some(text) = alias_text(word, aliases, reading, expanding) {
+                if let Some(text) = alias_text(word, aliases, reading, |name| {
+                    expanding.iter().any(|open| open == name)
+                }) {
                     let ends_in_blank = text.ends_with([' ', '\t']);
                     let alias_tokens: Vec<Token> = tokenize_str_with_options(&text, options)
                         .map(|tokens| tokens.into_iter().map(|token| at(token, span)).collect())
@@ -184,12 +186,62 @@ fn expand_into(
     }
 }
 
+/// The reading of a command line's tokens as they come, for which words name an alias:
+/// what [`expand`] does once the tokens are read, done while they are read, so that an
+/// alias's text goes back into the input (`Tokenizer::push_alias`) as Bash reads it.
+pub(crate) struct Expander<'a> {
+    aliases: &'a Aliases,
+    reading: Reading,
+}
+
+impl<'a> Expander<'a> {
+    pub(crate) fn new(aliases: &'a Aliases) -> Self {
+        Self {
+            aliases,
+            reading: Reading::start(),
+        }
+    }
+
+    /// The text of the alias `token` names, when it is a word Bash looks up here and not an
+    /// alias whose text is being read; otherwise `None`, and the token is read on.
+    /// `after_blank` says an alias's text that ended in a blank was read just before it,
+    /// which has the word looked up wherever it is.
+    pub(crate) fn alias_for<'b>(
+        &mut self,
+        token: &Token,
+        after_blank: bool,
+        mut being_read: impl Iterator<Item = &'b str>,
+    ) -> Option<String> {
+        if after_blank {
+            self.reading.check_next = true;
+        }
+        match token {
+            Token::Operator(operator, _) => {
+                read_operator(operator, &mut self.reading);
+                None
+            }
+            Token::Word(word, _) => {
+                let text = alias_text(word, self.aliases, &self.reading, |name| {
+                    being_read.any(|reading| reading == name)
+                });
+                if text.is_some() {
+                    // The first word of an alias's text is looked up in its turn.
+                    self.reading.check_next = true;
+                } else {
+                    read_word(word, &mut self.reading);
+                }
+                text
+            }
+        }
+    }
+}
+
 /// The text the word stands for, when it is one Bash looks up as an alias here.
 fn alias_text(
     word: &str,
     aliases: &Aliases,
     reading: &Reading,
-    expanding: &[String],
+    expanding: impl FnOnce(&str) -> bool,
 ) -> Option<String> {
     let looked_up = reading.check_next
         || (reading.command_position
@@ -201,7 +253,7 @@ fn alias_text(
     if !looked_up || !may_name_an_alias(word) || is_assignment(word) {
         return None;
     }
-    if expanding.iter().any(|name| name == word) {
+    if expanding(word) {
         return None;
     }
     aliases.get(word).map(str::to_owned)

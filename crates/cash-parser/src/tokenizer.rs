@@ -294,6 +294,20 @@ pub(crate) struct Tokenizer<'a, R: ?Sized + std::io::BufRead> {
     char_reader: itertools::PeekNth<utf8_chars::Chars<'a, R>>,
     cross_state: CrossTokenParseState,
     options: TokenizerOptions,
+    /// The texts of aliases being read, read before the input, the last pushed first
+    /// ([`Tokenizer::push_alias`]).
+    pending: Vec<PendingAlias>,
+    /// Whether an alias's text that ended in a blank was read to its end since
+    /// [`Tokenizer::take_blank_end`] was last asked.
+    blank_end: bool,
+}
+
+/// An alias's text read back into the input, as Bash reads it: a quote it opens is
+/// closed by what follows it on the line.
+struct PendingAlias {
+    name: String,
+    chars: std::collections::VecDeque<char>,
+    ends_in_blank: bool,
 }
 
 /// Encapsulates the current token parsing state.
@@ -613,6 +627,63 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                 arithmetic_expansion: false,
                 in_double_brackets: false,
             },
+            pending: vec![],
+            blank_end: false,
+        }
+    }
+
+    /// Reads `text`, the alias `name` stands for, before the rest of the input, as Bash
+    /// reads an alias: its characters join what comes after, so an alias that opens a
+    /// quote has it closed by the line (`alias q="echo it's"; q quoted'`).
+    ///
+    /// `blank_after` is the blank that ended the alias's word, which the word took with it
+    /// and which comes after the text again. A word that came out of the tokens queued
+    /// behind a here-document has its text read alone and queued in its place, as aliases
+    /// were expanded on the tokens; the alias is still taken for one being read.
+    pub fn push_alias(&mut self, name: &str, text: &str, blank_after: Option<char>) {
+        let ends_in_blank = text.ends_with([' ', '\t']);
+        let mut chars: std::collections::VecDeque<char> = text.chars().collect();
+        if !self.cross_state.queued_tokens.is_empty() {
+            let tokens = tokenize_str_with_options(text, &self.options).unwrap_or_default();
+            let queued = tokens.into_iter().map(|token| TokenizeResult {
+                reason: TokenEndReason::Other,
+                token: Some(token),
+            });
+            self.cross_state.queued_tokens.splice(0..0, queued);
+            chars.clear();
+        } else if let Some(blank) = blank_after {
+            chars.push_back(blank);
+        }
+        self.pending.push(PendingAlias {
+            name: name.to_owned(),
+            chars,
+            ends_in_blank,
+        });
+    }
+
+    /// The aliases whose text is still being read, which are not looked up again.
+    pub fn aliases_being_read(&self) -> impl Iterator<Item = &str> {
+        self.pending.iter().map(|pending| pending.name.as_str())
+    }
+
+    /// Whether an alias's text that ended in a blank was read to its end since this was
+    /// last asked: the word after it is looked up as an alias too.
+    pub const fn take_blank_end(&mut self) -> bool {
+        std::mem::replace(&mut self.blank_end, false)
+    }
+
+    /// The `n`th character still to read, an alias's or the input's, without reading it.
+    fn peek_nth_char(&mut self, mut n: usize) -> Result<Option<char>, TokenizerError> {
+        for pending in self.pending.iter().rev() {
+            if let Some(c) = pending.chars.get(n) {
+                return Ok(Some(*c));
+            }
+            n -= pending.chars.len();
+        }
+        match self.char_reader.peek_nth(n) {
+            Some(Ok(c)) => Ok(Some(*c)),
+            Some(Err(_)) => Err(TokenizerError::FailedDecoding),
+            None => Ok(None),
         }
     }
 
@@ -622,6 +693,16 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
     }
 
     fn next_char(&mut self) -> Result<Option<char>, TokenizerError> {
+        // An alias's text is read first; it has no place of its own in the input, so the
+        // cursor stays where the alias's word ended.
+        while let Some(pending) = self.pending.last_mut() {
+            if let Some(c) = pending.chars.pop_front() {
+                return Ok(Some(c));
+            }
+            if let Some(done) = self.pending.pop() {
+                self.blank_end |= done.ends_in_blank;
+            }
+        }
         let c = self
             .char_reader
             .next()
@@ -653,22 +734,12 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
     }
 
     fn peek_char(&mut self) -> Result<Option<char>, TokenizerError> {
-        match self.char_reader.peek() {
-            Some(result) => match result {
-                Ok(c) => Ok(Some(*c)),
-                Err(_) => Err(TokenizerError::FailedDecoding),
-            },
-            None => Ok(None),
-        }
+        self.peek_nth_char(0)
     }
 
     /// The character after the next one, without consuming either.
     fn peek_second_char(&mut self) -> Result<Option<char>, TokenizerError> {
-        match self.char_reader.peek_nth(1) {
-            Some(Ok(c)) => Ok(Some(*c)),
-            Some(Err(_)) => Err(TokenizerError::FailedDecoding),
-            None => Ok(None),
-        }
+        self.peek_nth_char(1)
     }
 
     pub fn next_token(&mut self) -> Result<TokenizeResult, TokenizerError> {

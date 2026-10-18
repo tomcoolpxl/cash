@@ -83,7 +83,5 @@ The text is read again at each use, so `alias now='date +%T'` gives the time it 
 run, and an alias may name another: `alias l=ll` runs `ls -l`. An alias is not looked
 up inside its own text, so `alias ls='ls -A'` does not loop.
 
-## Different in cash
-
-- An alias is read as words, not as text: one that leaves a quote open (`alias
-  q="echo it's"`) does not join with the rest of the line, as Bash's does.
+The text joins the line it is read into: with `alias q="echo it's"`, the line
+`q quoted'` reads as `echo it's quoted'`, its quote closed by the line.

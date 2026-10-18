@@ -2457,3 +2457,48 @@ pwd extra >/dev/null; echo "pwd $?""#;
         "{stderr}"
     );
 }
+
+/// An alias is read as text, as Bash reads it: a quote its text opens is closed by the
+/// line, the blank after its word stays, and an alias at the end of the input still
+/// expands. cash expanded aliases on the tokens after the line was read, so `q quoted'`
+/// was an unterminated quote. Each line is Git Bash 5.3's.
+#[test]
+fn an_alias_is_read_as_text_into_the_line() {
+    let script = "shopt -s expand_aliases
+alias q=\"echo it's\"
+alias greet='echo hello,'
+alias e='echo '
+alias x='echo chained'
+alias tabbed='echo a\t'
+q quoted'
+q joined' 'here'
+greet world
+greet 2>/dev/null; echo after
+e x
+tabbed b
+cat <<EOF; x
+body
+EOF
+x";
+    assert_eq!(
+        output(script),
+        (
+            0,
+            [
+                "its quoted",
+                "its joined here",
+                "hello, world",
+                // `2>` sends standard error away, not the greeting.
+                "hello,",
+                "after",
+                // `e`'s text ends in a blank, so `x` is an alias too: `echo echo chained`.
+                "echo chained",
+                "a b",
+                "body",
+                "chained",
+                "chained",
+            ]
+            .join("\n")
+        )
+    );
+}

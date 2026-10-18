@@ -148,8 +148,11 @@ impl<R: std::io::BufRead> Parser<R> {
         //   * https://aosabook.org/en/v1/bash.html
         //   * https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html
         //
-        let tokens = self.tokenize()?;
-        parse_tokens(&tokens, &self.options)
+        // Aliases are read back into the input as the tokens are read, as Bash reads them,
+        // so they are not expanded again here.
+        let tokens = self.tokenize(true)?;
+        let parse_result = peg::token_parser::program(&Tokens { tokens: &tokens }, &self.options);
+        parse_result_to_error(parse_result, &tokens)
     }
 
     /// Parses a function definition body from the input. The body is expected to be
@@ -157,15 +160,24 @@ impl<R: std::io::BufRead> Parser<R> {
     pub fn parse_function_parens_and_body(
         &mut self,
     ) -> Result<ast::FunctionBody, crate::error::ParseError> {
-        let tokens = self.tokenize()?;
+        let tokens = self.tokenize(false)?;
         let parse_result =
             peg::token_parser::function_parens_and_body(&Tokens { tokens: &tokens }, &self.options);
         parse_result_to_error(parse_result, &tokens)
     }
 
-    fn tokenize(&mut self) -> Result<Vec<Token>, crate::error::ParseError> {
+    /// The input's tokens; with `expand_aliases`, each alias read back into the input as
+    /// Bash reads it, its text joining what follows (an alias that opens a quote has it
+    /// closed by the line), where they were expanded on the tokens after.
+    fn tokenize(&mut self, expand_aliases: bool) -> Result<Vec<Token>, crate::error::ParseError> {
         // First we tokenize the input, according to the policy implied by provided options.
         let mut tokenizer = Tokenizer::new(&mut self.reader, &self.options.tokenizer_options());
+        let aliases = self
+            .options
+            .aliases
+            .as_ref()
+            .filter(|aliases| expand_aliases && !aliases.is_empty());
+        let mut expander = aliases.map(crate::alias::Expander::new);
 
         tracing::debug!(target: "tokenize", "Tokenizing...");
 
@@ -183,6 +195,22 @@ impl<R: std::io::BufRead> Parser<R> {
 
             let reason = result.reason;
             if let Some(token) = result.token {
+                if let Some(expander) = expander.as_mut() {
+                    let after_blank = tokenizer.take_blank_end();
+                    let text =
+                        expander.alias_for(&token, after_blank, tokenizer.aliases_being_read());
+                    if let (Some(text), Token::Word(name, _)) = (text, &token) {
+                        // The alias's word goes; its text is read in its place, followed by
+                        // the blank that ended the word, the end of the input not yet
+                        // reached.
+                        let blank = match reason {
+                            TokenEndReason::NonNewLineBlank(blank) => Some(blank),
+                            _ => None,
+                        };
+                        tokenizer.push_alias(name, &text, blank);
+                        continue;
+                    }
+                }
                 tracing::debug!(target: "tokenize", "TOKEN {}: {:?} {reason:?}", tokens.len(), token);
                 tokens.push(token);
             }
@@ -233,7 +261,7 @@ pub(crate) fn parse_compound_assignment_value(
     options: &ParserOptions,
 ) -> Option<Vec<String>> {
     let mut parser = Parser::new(input.as_bytes(), options);
-    let tokens = parser.tokenize().ok()?;
+    let tokens = parser.tokenize(false).ok()?;
     let tokens = Tokens { tokens: &tokens };
     let elements = peg::token_parser::compound_assignment_value(&tokens, options).ok()?;
     Some(elements.into_iter().cloned().collect())

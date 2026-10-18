@@ -2347,3 +2347,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   of a read-only file made the copy and failed with `Access is denied`, as Windows sets
   no time on a read-only file; the times are set with the attribute lifted for the
   moment. Each case was checked against Git Bash.
+- **An alias is read as text into the line** (2026-10-18, found writing alias's man
+  page): aliases were expanded on the tokens after a line was read, each alias's text
+  tokenized alone, so `alias q="echo it's"; q quoted'` stopped with an unterminated
+  quote where Bash prints `its quoted`. The tokenizer now reads an alias's text back into
+  its input as Bash does (`Tokenizer::push_alias`), the blank after the alias's word
+  kept, while the parser reads the tokens as they come (`alias::Expander`); an alias
+  whose text is being read is not looked up again, and a text ending in a blank has
+  the next word looked up. An alias after a here-document's `<<EOF` on its line, whose
+  tokens wait behind the body, has its text tokenized alone as before. Chained aliases,
+  keywords, `case`, here-documents, functions and the end of the input were each
+  checked against Git Bash.
