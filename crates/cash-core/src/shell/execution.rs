@@ -338,12 +338,16 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Ok(result)
     }
 
-    /// Runs `text` as Bash runs a script, a sourced file, a `-c` string or `eval`'s:
-    /// as parsed when `whole`, its parse, succeeded, which is the common case
-    /// ([`Self::run_parsed_text`]); when it did not, a complete command at a time, as Bash
-    /// reads it, so the commands before the error run and a payload after an `exit` is
-    /// never read (EXE-07). A command a line before it changed, as `shopt -s extglob`
-    /// does, parses as that command left it.
+    /// Runs `text` as Bash runs a script, a sourced file, a `-c` string or `eval`'s, from
+    /// `whole`, its parse: as parsed when it succeeded, which is the common case, a command
+    /// at a time, and a command at a time as Bash reads it when it did not, so the commands
+    /// before the error run and a payload after an `exit` is never read (EXE-07).
+    ///
+    /// A command that changes how text parses (an alias defined, extglob turned) has the
+    /// rest read as Bash reads it after that command ran: the next command by itself, a
+    /// line at a time ([`Self::run_lines`]), and once a command leaves it unchanged, the
+    /// rest parsed whole again ([`Self::run_parsed_text`]). A block of aliases is a line
+    /// parsed for each, not the rest of the text for each.
     ///
     /// The syntax error is reported where it is reached, as [`Self::report_syntax_error`]
     /// reports it with `fatal`.
@@ -356,14 +360,51 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         params: &ExecutionParameters,
         fatal: bool,
     ) -> Result<ExecutionResult, error::Error> {
-        let lines_run = match self
-            .run_parsed_text(text, whole, source_info, params)
-            .await?
-        {
-            Ok(result) => return Ok(result),
-            Err(lines_run) => lines_run,
-        };
+        let mut parsed = Some(whole);
+        let mut lines_run = 0;
+        loop {
+            let mut reading = Reading::WholeDidNotParse;
+            if let Some(parsed) = parsed.take() {
+                match self
+                    .run_parsed_text(parsed, lines_run, source_info, params)
+                    .await?
+                {
+                    Ok(result) => return Ok(result),
+                    Err(Some(lines)) => {
+                        lines_run = lines;
+                        reading = Reading::AfterAChange;
+                    }
+                    Err(None) => {}
+                }
+            }
+            match self
+                .run_lines(text, lines_run, reading, origin, source_info, params, fatal)
+                .await?
+            {
+                Ok(result) => return Ok(result),
+                Err(lines) => {
+                    lines_run = lines;
+                    parsed = Some(self.parse(after_lines(text, lines_run)));
+                }
+            }
+        }
+    }
 
+    /// Runs `text` from line `lines_run` on a command at a time, as Bash reads it: the
+    /// lines a command takes are read until they parse. `Err` with the lines run when the
+    /// rest may be parsed whole again: `reading` after a change, and a command left the
+    /// options as it found them.
+    #[expect(clippy::too_many_arguments)]
+    async fn run_lines(
+        &mut self,
+        text: &[u8],
+        lines_run: usize,
+        reading: Reading,
+        origin: TextOrigin,
+        source_info: &crate::SourceInfo,
+        params: &ExecutionParameters,
+        fatal: bool,
+    ) -> Result<Result<ExecutionResult, usize>, error::Error> {
         // A last line ends as the others do, as Bash ends a `-c` or `eval` string: `echo (`
         // is wrong at its newline, not at the end of the text.
         let mut ended;
@@ -426,17 +467,18 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                 Prefix::Complete(program) | Prefix::NeedsMore(Ok(program)) => program,
                 Prefix::NeedsMore(Err(err)) | Prefix::Wrong(err) => {
                     let err = counted_from_the_start(err, lines_before);
-                    return Ok(self.report_syntax_error(
+                    return Ok(Ok(self.report_syntax_error(
                         err,
                         text,
                         origin,
                         source_info,
                         params,
                         fatal,
-                    ));
+                    )));
                 }
             };
 
+            let parsed_as = self.parser_options();
             self.call_stack.increment_current_line_offset(lines_before);
             let ran = self
                 .run_parsed_result(Ok(program), source_info, params)
@@ -453,8 +495,14 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             lines_before += pending_lines;
             pending_lines = 0;
             pending.clear();
+            if matches!(reading, Reading::AfterAChange)
+                && lines.peek().is_some()
+                && self.parser_options() == parsed_as
+            {
+                return Ok(Err(lines_before));
+            }
         }
-        Ok(result)
+        Ok(Ok(result))
     }
 
     /// A syntax error in the text a script, `eval` or `source` was given: reported, and
@@ -582,53 +630,48 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         message
     }
 
-    /// Runs `text` from `whole`, its parse, a command at a time: when a command leaves the
-    /// rest to be parsed otherwise (an alias defined, extglob turned), the rest is parsed
-    /// again from the line the next command starts on, as Bash reads a command after the
-    /// one before it ran. `Err` with the lines of `text` run when the rest does not parse,
-    /// for [`Self::run_text`] to read it a command at a time from there.
+    /// Runs `parsed`, the parse of a text from its line `lines_run` on, a command at a
+    /// time. `Err(Some(lines))`, with the lines of the text run, when a command left the
+    /// rest to be parsed otherwise (an alias defined, extglob turned); `Err(None)` when
+    /// `parsed` is an error, for [`Self::run_text`] to read the text a line at a time.
     async fn run_parsed_text(
         &mut self,
-        text: &[u8],
-        whole: Result<cash_parser::ast::Program, cash_parser::ParseError>,
+        parsed: Result<cash_parser::ast::Program, cash_parser::ParseError>,
+        lines_run: usize,
         source_info: &crate::SourceInfo,
         params: &ExecutionParameters,
-    ) -> Result<Result<ExecutionResult, usize>, error::Error> {
+    ) -> Result<Result<ExecutionResult, Option<usize>>, error::Error> {
         use cash_parser::ast::SourceLocation as _;
 
-        // The lines of `text` before the part `parsed` is a parse of.
-        let mut lines_run = 0;
-        let mut parsed = whole;
-        while let Ok(program) = parsed {
-            let parsed_as = self.parser_options();
+        let Ok(program) = parsed else {
+            return Ok(Err(None));
+        };
+        let parsed_as = self.parser_options();
+        self.call_stack.increment_current_line_offset(lines_run);
+        let ran = self
+            .run_program_watching(&program, params, &parsed_as)
+            .await;
+        self.call_stack.decrement_current_line_offset(lines_run);
+        let (result, next) = ran?;
+        let Some(next) = next else {
+            return Ok(Ok(result));
+        };
+        let Some(line) = program
+            .complete_commands
+            .get(next)
+            .and_then(|command| command.location())
+            .map(|span| span.start.line)
+        else {
+            // No line to start from: the rest runs as it was parsed.
+            let rest = cash_parser::ast::Program {
+                complete_commands: program.complete_commands[next..].to_vec(),
+            };
             self.call_stack.increment_current_line_offset(lines_run);
-            let ran = self
-                .run_program_watching(&program, params, &parsed_as)
-                .await;
+            let ran = self.run_parsed_result(Ok(rest), source_info, params).await;
             self.call_stack.decrement_current_line_offset(lines_run);
-            let (result, next) = ran?;
-            let Some(next) = next else {
-                return Ok(Ok(result));
-            };
-            let Some(line) = program
-                .complete_commands
-                .get(next)
-                .and_then(|command| command.location())
-                .map(|span| span.start.line)
-            else {
-                // No line to start from: the rest runs as it was parsed.
-                let rest = cash_parser::ast::Program {
-                    complete_commands: program.complete_commands[next..].to_vec(),
-                };
-                self.call_stack.increment_current_line_offset(lines_run);
-                let ran = self.run_parsed_result(Ok(rest), source_info, params).await;
-                self.call_stack.decrement_current_line_offset(lines_run);
-                return ran.map(Ok);
-            };
-            lines_run += line - 1;
-            parsed = self.parse(after_lines(text, lines_run));
-        }
-        Ok(Err(lines_run))
+            return ran.map(Ok);
+        };
+        Ok(Err(Some(lines_run + line - 1)))
     }
 
     /// Runs `program`, parsed with `parsed_as`, as [`Self::run_parsed_result`] runs a
@@ -719,6 +762,16 @@ pub(crate) enum TextOrigin {
         /// That line.
         line: usize,
     },
+}
+
+/// Why [`crate::Shell::run_text`] reads a text a line at a time from somewhere on.
+#[derive(Clone, Copy)]
+enum Reading {
+    /// The rest did not parse: it is read so to its end.
+    WholeDidNotParse,
+    /// A command changed how text parses: once one leaves that as it was, the rest is
+    /// parsed whole again.
+    AfterAChange,
 }
 
 /// The line Bash names for a here-document left open at the end: the line before its

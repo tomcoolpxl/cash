@@ -1190,6 +1190,26 @@ fn an_alias_is_a_word_as_written_and_expands_as_bash_expands_it() {
 }
 
 #[test]
+fn an_alias_is_read_before_its_line_is_parsed() {
+    // As Bash 5.3: an alias's text is read in place of its word before the line is
+    // parsed, so its `&&` and `;` are operators and a pipe after it takes its last
+    // command; it may open a loop; one defined on a line applies from the next; a case
+    // pattern is no command; and a function keeps the alias it was defined with.
+    let (code, stdout) = output(
+        "shopt -s expand_aliases\nalias both='echo first && echo second' up='tr a-z A-Z'\n\
+         both | up\nalias loop3='for i in 1 2 3; do'\nloop3 echo \"i=$i\"; done\n\
+         alias same='echo same'; same 2>/dev/null || echo not-yet\nsame\n\
+         alias say='echo said'\ncase say in say) echo pattern;; esac\nf() { say in-f; }\n\
+         alias say='echo changed'\nf\nsay now",
+    );
+    assert_eq!(code, 0);
+    assert_eq!(
+        stdout,
+        "first\nSECOND\ni=1\ni=2\ni=3\nnot-yet\nsame\npattern\nsaid in-f\nchanged now"
+    );
+}
+
+#[test]
 fn return_trap_fires_for_source_traced_functions_and_functrace() {
     let root = source_fixture("return-trap");
     std::fs::write(root.join("rt.sh"), "echo in\n").unwrap();

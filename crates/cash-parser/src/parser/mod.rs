@@ -27,6 +27,9 @@ pub struct ParserOptions {
     /// Whether an unquoted word that starts with a drive and a backslash (`C:\`) keeps
     /// the backslashes in its leading unquoted run (cash's `winpaths`, D53).
     pub windows_drive_paths: bool,
+    /// The aliases to expand as the tokens are read, as Bash expands them before parsing
+    /// (`crate::alias`); `None` when aliases are not expanded.
+    pub aliases: Option<crate::alias::Aliases>,
 }
 
 impl Default for ParserOptions {
@@ -39,6 +42,7 @@ impl Default for ParserOptions {
             tilde_expansion_after_colon: false,
             tilde_expansion_in_assignment_words: false,
             windows_drive_paths: false,
+            aliases: None,
         }
     }
 }
@@ -130,6 +134,7 @@ impl<R: std::io::BufRead> Parser<R> {
             tilde_expansion_after_colon,
             tilde_expansion_in_assignment_words: false,
             windows_drive_paths,
+            aliases: None,
         };
         Self { reader, options }
     }
@@ -203,6 +208,15 @@ pub fn parse_tokens(
     tokens: &[Token],
     options: &ParserOptions,
 ) -> Result<ast::Program, crate::error::ParseError> {
+    // Aliases are expanded on the tokens, before they are parsed, as Bash expands them.
+    let expanded;
+    let tokens = match &options.aliases {
+        Some(aliases) if !aliases.is_empty() => {
+            expanded = crate::alias::expand(tokens, aliases, &options.tokenizer_options());
+            expanded.as_slice()
+        }
+        _ => tokens,
+    };
     let parse_result = peg::token_parser::program(&Tokens { tokens }, options);
     parse_result_to_error(parse_result, tokens)
 }

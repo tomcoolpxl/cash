@@ -256,7 +256,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             local_option_snapshots: Vec::new(),
             function_trap_stash: Vec::new(),
             jobs: jobs::JobManager::default(),
-            aliases: HashMap::default(),
+            aliases: cash_parser::alias::Aliases::default(),
             last_exit_status: 0,
             last_exit_status_change_count: 0,
             status_before_return: None,

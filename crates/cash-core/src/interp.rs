@@ -2062,8 +2062,6 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         let mut assignments = vec![];
         let mut args: Vec<CommandArg> = vec![];
         let mut command_takes_assignments = false;
-        // Whether the next word may name an alias: after an alias that ends in a blank.
-        let mut next_word_alias_checked = false;
         // D81: who globs the words after the command is decided once it is known.
         let mut globbing = windows_programs::Globbing::Undecided;
 
@@ -2161,33 +2159,13 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                     }
                 }
                 CommandPrefixOrSuffixItem::Word(arg) => {
-                    let mut next_args =
+                    let next_args =
                         expand_command_word(&mut context.shell, &params, arg, &args, &mut globbing)
                             .await?;
                     // A process substitution inside the word lasts as long as the command.
                     params
                         .substitution_ends
                         .extend(context.shell.take_word_substitution_ends());
-
-                    // Aliases are only expanded when `expand_aliases` is enabled; it's enabled
-                    // by default for interactive shells. The command word may name one, and
-                    // the word after an alias that ends in a blank. Only a word as written,
-                    // which expanded to itself, may.
-                    //
-                    // TODO(#57): This is a total hack; aliases are supposed to be handled
-                    // much earlier in the process.
-                    let alias_checked = args.is_empty() || next_word_alias_checked;
-                    next_word_alias_checked = false;
-                    if alias_checked
-                        && context.shell.options().expand_aliases
-                        && next_args.len() == 1
-                        && next_args.first() == Some(&arg.value)
-                        && let Some((alias_words, then_next)) =
-                            alias_words(&context.shell, &arg.value)
-                    {
-                        next_args = expand_words(&mut context.shell, &params, alias_words).await?;
-                        next_word_alias_checked = then_next;
-                    }
 
                     if args.is_empty() {
                         if !next_args.is_empty() {
@@ -2354,66 +2332,6 @@ async fn execute_command<T: Into<String>>(
     // Execute (the DEBUG trap ran before the words were expanded).
     // TODO(jobs): do we need to move self back to foreground on error here?
     cmd.execute().await
-}
-
-/// Tokenizes the body of an alias into the unexpanded words that should replace the aliased command
-/// name.
-///
-/// This only handles alias bodies that amount to a simple sequence of words; bodies containing
-/// operators (pipes, redirections, `&&`, ...) and recursive expansion of chained aliases require
-/// alias substitution to happen in the tokenizer instead (see issue #57).
-/// What a command word expands to as an alias, the tokens of the alias's body, and whether
-/// the word after it is checked too, as it is after an alias that ends in a blank; `None`
-/// when the word names no alias.
-///
-/// Bash expands an alias only for a word written with no quoting and nothing to expand
-/// (`\ls`, `'ls'` and `$cmd` never are), and expands the first word of the body again,
-/// unless it names an alias already being expanded (`alias ls='ls -F'`).
-fn alias_words(
-    shell: &Shell<impl extensions::ShellExtensions>,
-    word: &str,
-) -> Option<(Vec<String>, bool)> {
-    let mut words = vec![word.to_owned()];
-    let mut expanded: Vec<String> = Vec::new();
-    let mut next_too = None;
-    while let Some(first) = words.first().cloned() {
-        if !may_name_an_alias(&first) || expanded.contains(&first) {
-            break;
-        }
-        let Some(value) = shell.aliases().get(first.as_str()).cloned() else {
-            break;
-        };
-        // The alias the word names says whether the word after it is checked.
-        next_too.get_or_insert_with(|| value.ends_with([' ', '\t']));
-        expanded.push(first);
-        words.splice(..1, tokenize_alias_body(shell, &value));
-    }
-    next_too.map(|next_too| (words, next_too))
-}
-
-/// Whether a word, as written, may name an alias: one with no quoting and nothing to
-/// expand in it.
-fn may_name_an_alias(word: &str) -> bool {
-    !word.is_empty() && !word.contains(['\\', '\'', '"', '$', '`'])
-}
-
-fn tokenize_alias_body(
-    shell: &Shell<impl extensions::ShellExtensions>,
-    alias_value: &str,
-) -> Vec<String> {
-    // Tokenize the body the same way the shell would tokenize any other input it's given.
-    let options = shell.parser_options().tokenizer_options();
-
-    // If we can't tokenize the body, fall back to naively splitting it on whitespace.
-    cash_parser::tokenize_str_with_options(alias_value, &options).map_or_else(
-        |_| {
-            alias_value
-                .split_ascii_whitespace()
-                .map(str::to_owned)
-                .collect()
-        },
-        |tokens| tokens.iter().map(|t| t.to_str().to_owned()).collect(),
-    )
 }
 
 /// Expands the given words, with splitting enabled, yielding the fields they expand to.

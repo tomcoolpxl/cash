@@ -34,12 +34,8 @@ DONE.md.
 
 1. **Two small fixes**: done (2026-10-18, DONE.md).
 2. **extglob is on from the start**: done (2026-10-18, DONE.md).
-3. **An alias whose value holds an operator runs it as words** (found 2026-10-18 by the
-   corpus): `alias multi='echo m1; echo m2'`, then `multi`, prints `m1 ; echo m2`; Bash
-   runs both commands. Aliases such as `alias gs='git status && git diff'` are common
-   in a `.bashrc`. cash expands an alias after the command's words are parsed (#57, from
-   brush), so only words can come of it; Bash expands it as the line is read, before
-   parsing, which also keeps an alias defined on a line from applying later on it.
+3. **An alias whose value holds an operator runs it as words**: done (2026-10-18,
+   DONE.md).
 4. **More corpus rounds**: permissively licensed real scripts and cases of cash's own
    with the Bash manual as their spec, as in the last phase (`tests/corpus/SOURCES.md`).
 

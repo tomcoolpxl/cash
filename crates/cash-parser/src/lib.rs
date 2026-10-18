@@ -1,5 +1,6 @@
 //! Implements a tokenizer and parsers for POSIX / bash shell syntax.
 
+pub mod alias;
 pub mod arithmetic;
 pub mod ast;
 pub mod memo;

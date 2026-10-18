@@ -90,8 +90,8 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     #[cfg_attr(feature = "serde", serde(skip))]
     jobs: jobs::JobManager,
 
-    /// Shell aliases.
-    aliases: HashMap<String, String>,
+    /// Shell aliases, which a parse takes a copy of while `expand_aliases` is on.
+    aliases: cash_parser::alias::Aliases,
 
     /// The status of the last completed command.
     last_exit_status: u8,
@@ -727,13 +727,13 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     }
 
     /// Returns the shell's aliases.
-    pub fn aliases(&self) -> &HashMap<String, String> {
-        &self.aliases
+    pub fn aliases(&self) -> &std::collections::BTreeMap<String, String> {
+        self.aliases.names()
     }
 
     /// Returns a mutable reference to the shell's aliases.
-    pub fn aliases_mut(&mut self) -> &mut HashMap<String, String> {
-        &mut self.aliases
+    pub fn aliases_mut(&mut self) -> &mut std::collections::BTreeMap<String, String> {
+        self.aliases.names_mut()
     }
 
     /// Returns the shell's job manager.

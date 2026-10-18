@@ -159,7 +159,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                 }
             }
             ("BASH_ALIASES", Some(alias)) => {
-                self.aliases.insert(alias.to_owned(), value.clone());
+                self.aliases
+                    .names_mut()
+                    .insert(alias.to_owned(), value.clone());
             }
             ("BASH_CMDS", Some(command)) => {
                 self.program_location_cache

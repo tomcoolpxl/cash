@@ -2125,3 +2125,25 @@ each item's entry is under "Found along the way, done" below.
   patterns are extended whatever extglob is, and the tokenizer reads them so inside
   `[[ … ]]`, as Bash's does. Six of cash's own tests used extended patterns without
   turning extglob on, which Bash refuses too; they turn it on, a line before.
+- **An alias whose value held an operator ran it as words** (found 2026-10-18 by the
+  corpus; the user's pick after 1.26.0, by reading a command at a time): `alias
+  multi='echo m1; echo m2'` printed `m1 ; echo m2`, as cash expanded an alias after a
+  command's words were parsed (a TODO taken over from brush). Aliases are expanded on
+  the tokens now, before parsing, as Bash expands them as it reads (`cash_parser::alias`):
+  their `&&`, `;` and `|` are operators, so `gs | less` pipes only the alias's last
+  command, as in Bash; an alias may open a loop or an `if`; the first word of its text is
+  looked up again, and the word after a text ending in a blank; patterns, `for`'s words,
+  here-documents and a redirection's target are not. A script parsed whole runs a
+  command at a time and has the rest parsed again when a command changes the aliases or
+  extglob (`Shell::run_text`), so an alias defined on a line applies from the next, and a
+  function keeps the alias it was defined with, as in Bash. The aliases go to the parser
+  as a shared copy named by a number, so a memo's lookup hashes the number, not the table.
+  After a change the next command is read by itself, and the rest parsed whole again once
+  a command leaves the options as they were, so a block of aliases is a line's parse
+  each; parsing the rest again for each had a `.bashrc` of 100 aliases at 265 ms. Timed
+  (bench build, against 1.26.0's and Git Bash 5.3): 20,000 commands 106.5 ms (104.3,
+  109.6); 100 aliases and 2,000 lines using them 31.8 ms (Bash 51.4; 1.26.0 took 13.9 s
+  and failed it, an alias holding an assignment run as a command not found); 30
+  functions of 100 lines 44.9 ms (43.8, 51.6).
+  Left as is: Bash expands the last word of an alias's own text once more, as its reader
+  lets go of the text before it looks the word up (`alias echo='echo -n x; echo'`).

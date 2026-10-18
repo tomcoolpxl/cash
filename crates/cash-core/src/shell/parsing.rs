@@ -106,7 +106,18 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
 
     /// Returns the options that should be used for parsing shell programs; reflects
     /// the current configuration state of the shell and may change over time.
-    pub const fn parser_options(&self) -> cash_parser::ParserOptions {
+    pub fn parser_options(&self) -> cash_parser::ParserOptions {
+        cash_parser::ParserOptions {
+            // Aliases are expanded as the text is read, while `expand_aliases` is on.
+            aliases: (self.options.expand_aliases && !self.aliases.is_empty())
+                .then(|| self.aliases.clone()),
+            ..self.word_parser_options()
+        }
+    }
+
+    /// The options a word is parsed with, which are [`Self::parser_options`] without the
+    /// aliases, as a word expands none: for each word expanded.
+    pub const fn word_parser_options(&self) -> cash_parser::ParserOptions {
         cash_parser::ParserOptions {
             enable_extended_globbing: self.options.extended_globbing,
             posix_mode: self.options.posix_mode,
@@ -115,6 +126,7 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
             tilde_expansion_after_colon: false,
             tilde_expansion_in_assignment_words: false,
             windows_drive_paths: self.options.windows_drive_paths,
+            aliases: None,
         }
     }
 }

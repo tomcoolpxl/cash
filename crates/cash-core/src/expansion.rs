@@ -903,7 +903,7 @@ enum LiteralQuotes {
 
 impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     pub const fn new(shell: &'a mut Shell<SE>, params: &'a ExecutionParameters) -> Self {
-        let parser_options = shell.parser_options();
+        let parser_options = shell.word_parser_options();
         Self {
             shell,
             params,
@@ -922,7 +922,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         params: &'a ExecutionParameters,
         options: &ExpanderOptions,
     ) -> Self {
-        let mut parser_options = shell.parser_options();
+        let mut parser_options = shell.word_parser_options();
 
         if !options.tilde_expand {
             parser_options.tilde_expansion_at_word_start = false;

@@ -2,7 +2,6 @@
 
 use std::{
     borrow::Cow,
-    collections::HashMap,
     path::{Path, PathBuf},
 };
 
@@ -48,10 +47,10 @@ pub trait ShellState {
     fn options_mut(&mut self) -> &mut RuntimeOptions;
 
     /// Returns the shell's aliases.
-    fn aliases(&self) -> &HashMap<String, String>;
+    fn aliases(&self) -> &std::collections::BTreeMap<String, String>;
 
     /// Returns a mutable reference to the shell's aliases.
-    fn aliases_mut(&mut self) -> &mut HashMap<String, String>;
+    fn aliases_mut(&mut self) -> &mut std::collections::BTreeMap<String, String>;
 
     /// Returns the shell's job manager.
     fn jobs(&self) -> &jobs::JobManager;
