@@ -1,0 +1,22 @@
+[package]
+name = "cash-man"
+description = "man: cash's own manual, its pages, and the browser over them"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# The pages are stored deflated; miniz_oxide, pure Rust, as `gzip` uses it.
+flate2 = { workspace = true, features = ["rust_backend"] }
+
+[build-dependencies]
+flate2 = { workspace = true, features = ["rust_backend"] }
+
+[lints]
+workspace = true

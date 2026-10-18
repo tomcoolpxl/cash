@@ -843,6 +843,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "cash-man"
+version = "1.27.0"
+dependencies = [
+ "flate2",
+]
+
+[[package]]
 name = "cash-parser"
 version = "1.27.0"
 dependencies = [
