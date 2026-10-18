@@ -1,0 +1,18 @@
+apple: starts with a
+apple: has an e (or fell through)
+apple: other
+Banana: capital
+cherry: has an e (or fell through)
+cherry: other
+42: digits or empty
+: digits or empty
+no match status 0
+matched status 1
+nocasematch case
+nocasematch [[ ]]
+quoted bar is literal
+unquoted variable is a pattern
+quoted variable is literal
+bracket in a class
+dash at the end of a class
+negated bang class

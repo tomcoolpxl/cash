@@ -1,0 +1,18 @@
+B.txt a.txt c.log sub with space.txt
+*.none
+nullglob: []
+failglob status 1
+.hidden B.txt a.txt c.log sub with space.txt
+.hidden
+B.txt
+B.txt a.txt c.log
+c.log sub
+a.txt c.log
+B.txt a.txt
+c.log
+a.txt
+B.txt a.txt sub/d.txt sub/deep/e.txt with space.txt
+sub/ sub/d.txt sub/deep sub/deep/e.txt
+.hidden a.txt sub with space.txt
+with space.txt
+[with space.txt]

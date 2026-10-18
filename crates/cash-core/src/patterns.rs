@@ -308,6 +308,14 @@ impl Pattern {
         self.pieces.iter().all(|p| p.as_str().is_empty())
     }
 
+    /// Whether the pattern has something to match with, so that expanding it globs.
+    pub(crate) fn globs(&self) -> bool {
+        self.pieces.iter().any(|piece| {
+            matches!(piece, PatternPiece::Pattern(_))
+                && requires_expansion(piece.as_str(), self.enable_extended_globbing)
+        })
+    }
+
     /// Placeholder function that always returns true.
     pub(crate) const fn accept_all_expand_filter(_path: &Path) -> bool {
         true
@@ -452,14 +460,37 @@ impl Pattern {
         };
 
         let component_count = components.len();
+        let starts_at_a_root = prefix_to_remove.is_none();
+        // Whether the folders reached so far were written out, not found by a pattern.
+        let mut written_out = true;
         for (component_index, component) in components.into_iter().enumerate() {
             if self.enable_globstar && is_globstar_component(&component) {
                 let include_files = component_index + 1 == component_count;
+                // A last `**` after a folder matches the folder too, as Bash has it:
+                // `sub/` when the folder is written out, `sub` when a pattern found it.
+                let folders_too: Vec<PathBuf> =
+                    if include_files && (component_index > 0 || starts_at_a_root) {
+                        paths_so_far
+                            .iter()
+                            .filter(|path| path.is_dir())
+                            .cloned()
+                            .collect()
+                    } else {
+                        Vec::new()
+                    };
                 paths_so_far = expand_globstar_paths(
                     paths_so_far,
                     include_files,
                     options.require_dot_in_pattern_to_match_dot_files,
                 );
+                paths_so_far.extend(
+                    folders_too.into_iter().map(
+                        |folder| {
+                            if written_out { folder.join("") } else { folder }
+                        },
+                    ),
+                );
+                written_out = false;
                 continue;
             }
 
@@ -483,6 +514,7 @@ impl Pattern {
                     // trailing slash makes lstat fail with ENOTDIR for a regular file.
                     p.symlink_metadata().is_ok()
                 });
+                written_out = true;
                 continue;
             }
 
@@ -525,6 +557,7 @@ impl Pattern {
                     }
                 }
             }
+            written_out = false;
         }
 
         let mut results: Vec<_> = paths_so_far
@@ -550,7 +583,9 @@ impl Pattern {
                     path_ref = stripped;
                 }
 
-                Some(path_ref.to_string())
+                // The working folder itself, which `**/` reaches, has no name to give:
+                // Bash leaves it out.
+                (!path_ref.is_empty()).then(|| path_ref.to_string())
             })
             .collect();
 

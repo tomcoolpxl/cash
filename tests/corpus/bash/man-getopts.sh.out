@@ -1,0 +1,26 @@
+opt=a arg=[unset] ind=2
+opt=b arg=[val] ind=4
+opt=c arg=[unset] ind=5
+rest: [file1] [file2] (end 0)
+opt=a arg=[unset] ind=1
+opt=c arg=[unset] ind=1
+opt=b arg=[attached] ind=3
+rest: [] (end 0)
+opt=a arg=[unset] ind=1
+opt=b arg=[--] ind=3
+opt=c arg=[unset] ind=4
+rest: [] (end 0)
+rest: [-a] (end 0)
+opt=? arg=[unset] ind=2
+rest: [] (end 0)
+opt=? arg=[unset] ind=2
+rest: [] (end 0)
+opt a []
+unknown [z]
+missing for [b]
+opt b [a]
+opt=? arg=[unset] ind=2
+rest: [] (end 0)
+from $@: a 
+from $@: b positional
+OPTIND=4

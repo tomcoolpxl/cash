@@ -1,0 +1,30 @@
+declare -- a="plain"
+declare -- b="with space"
+declare -- c=$'new\nline'
+declare -- d="it's"
+declare -- e="\$dollar \`tick\` \"quote\""
+declare -i i="7"
+declare -l lo="mixed"
+declare -u up="MIXED"
+declare -r ro="constant"
+declare -x ex="value"
+declare -a arr=([0]="zero" [1]="" [2]="two words")
+declare -A one=([key]="value" )
+declare -n nref="a"
+declare -t traced="t"
+declare -ix both="3"
+declare -- unset_but_declared
+status 1
+declare -a sparse=([1]="a" [3]="c")
+declare -- x="1"
+declare -i y="2"
+declare -a z=([0]="q")
+g () 
+{ 
+    echo "$1"
+}
+g
+f
+g () 
+declare -- ex="value"
+declare -i i="7"

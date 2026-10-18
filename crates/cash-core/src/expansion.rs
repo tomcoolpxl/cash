@@ -1238,20 +1238,55 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             .set_globstar(self.shell.options().enable_star_star_glob)
             .set_case_insensitive(self.shell.options().case_insensitive_pathname_expansion);
 
+        // A GLOBIGNORE that is set and not empty takes the names its patterns match out of
+        // what a glob finds, `.` and `..` always, and lets a glob find dot files, as dotglob
+        // does, as in Bash.
+        let ignored: Vec<IgnoredNames> = self
+            .shell
+            .env_str("GLOBIGNORE")
+            .map(|value| {
+                value
+                    .split(':')
+                    .filter(|pattern| !pattern.is_empty())
+                    .map(|pattern| {
+                        IgnoredNames::new(pattern, |part| {
+                            patterns::Pattern::from(part)
+                                .set_extended_globbing(self.parser_options.enable_extended_globbing)
+                                .set_case_insensitive(
+                                    self.shell.options().case_insensitive_pathname_expansion,
+                                )
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let globignore = !ignored.is_empty() && pattern.globs();
+
         let options = patterns::FilenameExpansionOptions {
-            require_dot_in_pattern_to_match_dot_files: !self.shell.options().glob_matches_dotfiles,
-            include_dot_and_dotdot: !self.shell.options().glob_skip_dots,
+            require_dot_in_pattern_to_match_dot_files: !self.shell.options().glob_matches_dotfiles
+                && !globignore,
+            include_dot_and_dotdot: !self.shell.options().glob_skip_dots && !globignore,
         };
 
         // On error (e.g. malformed pattern), default to NoGlob so the field
         // passes through as a literal rather than triggering failglob.
-        let expansion = pattern
+        let mut expansion = pattern
             .expand(
                 self.shell.working_dir(),
                 Some(&patterns::Pattern::accept_all_expand_filter),
                 &options,
             )
             .unwrap_or_default();
+        if globignore && let patterns::PatternExpansionResult::Expanded(paths) = &mut expansion {
+            paths.retain(|path| {
+                let name = path
+                    .trim_end_matches('/')
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(path);
+                name != "." && name != ".." && !ignored.iter().any(|names| names.matches(path))
+            });
+        }
 
         if expansion.is_unmatched_glob()
             && self.shell.options().fail_expansion_on_globs_without_match
@@ -2984,6 +3019,40 @@ fn may_contain_braces_to_expand(s: &str) -> bool {
     }
 
     saw_opening_brace && saw_closing_brace
+}
+
+/// One of `GLOBIGNORE`'s patterns, matched as Bash matches it against what a glob found: a
+/// part of the pattern for each part of the path, `*` and `?` never a `/`, but a pattern
+/// that ends in `*` takes any parts after its own too. So `*.log` leaves `sub/x.log`, and
+/// `s*` takes `s/b` with `s`.
+struct IgnoredNames {
+    parts: Vec<patterns::Pattern>,
+    takes_further_parts: bool,
+}
+
+impl IgnoredNames {
+    fn new(pattern: &str, make: impl Fn(&str) -> patterns::Pattern) -> Self {
+        let takes_further_parts = pattern.ends_with('*') && !pattern.ends_with("\\*");
+        Self {
+            parts: pattern.split('/').map(make).collect(),
+            takes_further_parts,
+        }
+    }
+
+    fn matches(&self, path: &str) -> bool {
+        let names: Vec<&str> = path.trim_end_matches('/').split('/').collect();
+        let parts_fit = if self.takes_further_parts {
+            names.len() >= self.parts.len()
+        } else {
+            names.len() == self.parts.len()
+        };
+        parts_fit
+            && self
+                .parts
+                .iter()
+                .zip(&names)
+                .all(|(part, name)| part.exactly_matches(name).unwrap_or(false))
+    }
 }
 
 #[expect(clippy::panic_in_result_fn)]

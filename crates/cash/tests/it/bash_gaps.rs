@@ -617,6 +617,52 @@ fn disabling_globskipdots_exposes_dot_and_dotdot() {
 }
 
 #[test]
+fn globignore_and_a_last_globstar_match_as_in_bash() {
+    // As Bash 5.3: GLOBIGNORE takes out what its patterns match, a part of a pattern for
+    // each part of a path but a last `*` taking any parts after, never `.` or `..`, and lets
+    // a glob find dot files; a last `**` matches its folder too, `sub/` as written, `sub`
+    // as a pattern found it, and `**/` leaves the working folder out.
+    let root = Scratch::new("globignore");
+    for folder in ["s", "sub/deep"] {
+        std::fs::create_dir_all(root.join(folder)).unwrap();
+    }
+    for file in [
+        ".hid",
+        "a.log",
+        "a.txt",
+        "s/b.log",
+        "s/c.txt",
+        "sub/d.txt",
+        "sub/deep/e.txt",
+    ] {
+        std::fs::write(root.join(file), "").unwrap();
+    }
+    let path = root.as_script_path();
+    let (code, stdout) = output(&format!(
+        "cd '{path}'; for p in '*.log' 's*' '*/b.log' '?/*' 's/*' '.*:*.txt'; do \
+         GLOBIGNORE=$p; echo \"[$p]\" * s/*; done; GLOBIGNORE=a.txt; echo a.txt a.tx?; \
+         unset GLOBIGNORE; echo *; shopt -s globstar; echo sub/**; echo ./s/**; echo */**; \
+         echo **/"
+    ));
+    assert_eq!(code, 0);
+    assert_eq!(
+        stdout,
+        "[*.log] .hid a.txt s sub s/b.log s/c.txt\n\
+         [s*] .hid a.log a.txt s/*\n\
+         [*/b.log] .hid a.log a.txt s sub s/c.txt\n\
+         [?/*] .hid a.log a.txt s sub s/*\n\
+         [s/*] .hid a.log a.txt s sub s/*\n\
+         [.*:*.txt] a.log s sub s/b.log s/c.txt\n\
+         a.txt a.tx?\n\
+         a.log a.txt s sub\n\
+         sub/ sub/d.txt sub/deep sub/deep/e.txt\n\
+         ./s/ ./s/b.log ./s/c.txt\n\
+         s s/b.log s/c.txt sub sub/d.txt sub/deep sub/deep/e.txt\n\
+         s/ sub/ sub/deep/"
+    );
+}
+
+#[test]
 fn associative_unset_at_and_star_are_literal_keys() {
     assert_eq!(
         output("declare -A a=([@]=at [*]=star [x]=other); unset 'a[@]'; declare -p a"),

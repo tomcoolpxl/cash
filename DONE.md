@@ -2077,3 +2077,15 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   `(( ))`, arrays of multibyte ticks) and getoptions (CC0; an option parser generated
   as shell text and `eval`'d, compared to the byte with the generated code, sixteen
   command lines through it, abbreviations, and help from a quoted heredoc).
+- **The corpus's fourth round** (2026-10-18): seven cases of cash's own with the Bash
+  manual as their spec: `${var@Q}` and the other transformations, `declare -p` for every
+  kind, `getopts`, `case` with `;&` and `;;&`, `mapfile` and `read` options,
+  here-documents, and the glob options. It found, each fixed as Bash 5.3 has it:
+  - **`GLOBIGNORE` was not read**: cash had no trace of it. A set, non-empty
+    `GLOBIGNORE` takes out what a glob found that its patterns match, a part of a
+    pattern for each part of the path but a pattern ending in `*` taking any parts
+    after (`*.log` leaves `sub/x.log`, `s*` takes `s/b`), never `.` or `..`, and lets a
+    glob find dot files, as dotglob does. A word with nothing to glob is left alone.
+  - **A last `**` did not match its own folder, and `**/` gave an empty word**:
+    `sub/**` gives `sub/` first, `./**` gives `./`, `*/**` the folders found without
+    the slash, as in Bash; the working folder `**/` reaches is left out.

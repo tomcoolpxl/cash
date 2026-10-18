@@ -49,7 +49,10 @@ Released as 1.25.0. Then, for 1.26.0:
    row 25). The second round: 10 pure-sh-bible cases (MIT), all as Bash has them, and
    semver-tool 3.4.0 (Apache-2.0) run whole, which found `.` taking `--help` and `--`
    after the script as its own (done, DONE.md). The third: JSON.sh (MIT), spark (MIT)
-   and getoptions (CC0) run whole, all three as Bash has them. Left open from them:
+   and getoptions (CC0) run whole, all three as Bash has them. The fourth: seven cases
+   of cash's own, the Bash manual as their spec (`${var@…}`, `declare -p`, `getopts`,
+   `case` fall-through, `mapfile` and `read`, here-documents, glob options), which found
+   `GLOBIGNORE` unread and a last `**` short of its folder (done, DONE.md). Left open:
 
    - **An alias whose value holds an operator runs it as words**: `alias multi='echo
      m1; echo m2'`, then `multi`, prints `m1 ; echo m2`; Bash runs both commands.
@@ -62,6 +65,10 @@ Released as 1.25.0. Then, for 1.26.0:
      set of options, so a script that turns extglob on later would not parse otherwise
      (`shell.rs`, a TODO taken over from brush). Bash parses a command at a time. Only
      scripts that rely on extglob being off see it.
+   - **`GLOBIGNORE` does not show in `shopt dotglob`**: a glob finds dot files while it is
+     set, as in Bash, but Bash also turns the dotglob option itself on when `GLOBIGNORE`
+     is set and off when it is unset, so `shopt dotglob` says `on`, and a dotglob turned
+     on by hand ends with the unset. cash has no hook from a variable to an option. Small.
 
 ## Left over from finished phases
 

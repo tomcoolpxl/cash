@@ -1,0 +1,17 @@
+plain world sub 3 $escaped \ backslash
+quoted $name $(echo sub) \$ \\
+spaced delimiter $name
+tabs stripped world
+both tabs stripped
+first
+second
+in a function: arg
+[inside a substitution]
+PIPED WORLD
+read: r1
+read: r2
+line with trailing backslash joined
+no join \
+here
+here-string world
+quoted here-string $name
