@@ -17,7 +17,7 @@ idx=(x y)
 printf '[%s]\n' "${idx[@]@K}"
 empty=
 printf '[%s]\n' "${empty@Q}" "${unset_v@Q}" "${unset_v@a}" "${empty@a}"
-PS1_like='\u-not-expanded \$ \\'
+PS1_like='\u-not-expanded \\ \a'
 printf '[%s]\n' "${PS1_like@P}" 2>/dev/null | sed 's/^\[[^-]*-/[USER-/'
 set -- 'a b' c
 printf '[%s]\n' "${@@Q}" "${1@U}"

@@ -30,7 +30,7 @@
 []
 []
 []
-[USER-not-expanded $ \]
+[USER-not-expanded \ ]
 ['a b']
 ['c']
 [A B]
