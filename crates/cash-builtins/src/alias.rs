@@ -37,6 +37,18 @@ impl builtins::Command for AliasCommand {
                 if let Some((name, unexpanded_value)) = alias.split_once('=')
                     && !name.is_empty()
                 {
+                    // Bash refuses a name with a blank, a quote, `/`, `$` or one of
+                    // `()<>;&|`, which could never be typed as a command word; cash took
+                    // `alias 'a b=1'`.
+                    if !valid_alias_name(name) {
+                        writeln!(
+                            context.error_stream(),
+                            "{}: `{name}': invalid alias name",
+                            context.command_name
+                        )?;
+                        exit_code = ExecutionResult::general_error();
+                        continue;
+                    }
                     context
                         .shell
                         .aliases_mut()
@@ -56,4 +68,29 @@ impl builtins::Command for AliasCommand {
 
         Ok(exit_code)
     }
+}
+
+/// Whether `name` may be an alias, as Bash's `legal_alias_name` decides: none of the
+/// characters that end a word, quote, or start an expansion, and no `/`.
+fn valid_alias_name(name: &str) -> bool {
+    !name.chars().any(|c| {
+        matches!(
+            c,
+            ' ' | '\t'
+                | '\n'
+                | '('
+                | ')'
+                | '<'
+                | '>'
+                | ';'
+                | '&'
+                | '|'
+                | '"'
+                | '\''
+                | '\\'
+                | '`'
+                | '$'
+                | '/'
+        )
+    })
 }

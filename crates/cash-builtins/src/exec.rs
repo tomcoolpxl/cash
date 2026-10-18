@@ -108,12 +108,20 @@ impl builtins::Command for ExecCommand {
         let status = match cmd.status() {
             Ok(status) => status,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                writeln!(
-                    context.error_stream(),
-                    "{}: {}: not found",
-                    context.command_name,
-                    self.args[0]
-                )?;
+                // A name is searched for and not found; a path is a file that is not
+                // there, said as Bash's `file_error` says it.
+                let program = &self.args[0];
+                if program.contains(['/', '\\']) {
+                    context
+                        .error_stream()
+                        .write_unnamed(&format!("{program}: No such file or directory"))?;
+                } else {
+                    writeln!(
+                        context.error_stream(),
+                        "{}: {program}: not found",
+                        context.command_name
+                    )?;
+                }
 
                 // POSIX: when `exec` cannot run the command, a non-interactive shell
                 // exits. Without this, `exec missing; echo x` would print `x` — the

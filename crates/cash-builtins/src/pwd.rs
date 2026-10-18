@@ -16,6 +16,11 @@ pub(crate) struct PwdCommand {
     /// Print the directory in Windows form, which cash always does (MSYS2 Bash's -W).
     #[arg(short = 'W')]
     windows: bool,
+
+    /// Operands, which Bash's `pwd` takes and ignores; cash refused `pwd extra` as an
+    /// invalid option.
+    #[arg(hide = true)]
+    ignored: Vec<String>,
 }
 
 impl builtins::Command for PwdCommand {

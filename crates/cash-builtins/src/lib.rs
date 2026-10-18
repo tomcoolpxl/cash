@@ -299,9 +299,12 @@ fn write_alias_definition(
     name: &str,
     value: &str,
 ) -> std::io::Result<()> {
+    // A name starting with `-` is listed after `--`, as Bash lists it, so the line reads
+    // back as a definition and not as options.
+    let dashes = if name.starts_with('-') { "-- " } else { "" };
     writeln!(
         writer,
-        "alias {name}={}",
+        "alias {dashes}{name}={}",
         cash_core::escape::single_quote(value)
     )
 }

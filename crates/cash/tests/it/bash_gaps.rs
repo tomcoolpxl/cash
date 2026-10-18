@@ -2330,3 +2330,130 @@ touch -d 2020-01-01 old.txt; [ -N old.txt ]; echo "old -N $?""#;
         )
     );
 }
+
+/// `export` as Bash has it, found writing its man page: a name not yet set is made
+/// exported, so a later value is passed on; `-p` quotes a value to be read back and
+/// writes an array whole; `-f` and `-pf` list the exported functions; a word that is
+/// no name is refused with status 1; an array is never passed to a program.
+#[test]
+fn export_marks_unset_names_quotes_its_listing_and_refuses_bad_names() {
+    let script = r#"export U; U=5; printenv U
+export -p | grep ' U='
+Q='a"b$c`d\e'; export Q; export -p | grep ' Q='
+arr=(x y); export arr; export -p | grep ' arr='
+printenv arr || echo 'arr not passed'
+greet() { echo hi; }; export -f greet; export -pf
+export 1bad=x ok=1 'sp ace' 'a[1]=2'; echo "status $?"; printenv ok
+export -f nosuchfn; echo "no function $?"
+set -o posix; export -p | grep ' ok='"#;
+    let result = cash_command()
+        .args(["--noprofile", "--norc", "-c", script])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    let stderr = String::from_utf8(result.stderr).unwrap();
+    assert_eq!(
+        stdout.replace("\r\n", "\n").trim_end(),
+        [
+            "5",
+            "declare -x U=\"5\"",
+            r#"declare -x Q="a\"b\$c\`d\\e""#,
+            r#"declare -ax arr=([0]="x" [1]="y")"#,
+            "arr not passed",
+            "greet () ",
+            "{ ",
+            "    echo hi",
+            "}",
+            "declare -fx greet",
+            "status 1",
+            "1",
+            "no function 1",
+            "export ok=\"1\"",
+        ]
+        .join("\n")
+    );
+    for refused in ["`1bad=x'", "`sp ace'", "`a[1]'"] {
+        assert!(
+            stderr.contains(&format!("export: {refused}: not a valid identifier")),
+            "{refused}: {stderr}"
+        );
+    }
+}
+
+/// `read -t 0` only asks whether input waits: on a closed standard input it is status 1
+/// with no message, as in Bash; cash said "read error: Bad file descriptor".
+#[test]
+fn read_t_0_on_closed_input_is_quiet() {
+    let result = cash_command()
+        .args([
+            "--noprofile",
+            "--norc",
+            "-c",
+            "read -t 0 <&-; echo \"status $?\"",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(result.stdout).unwrap().trim_end(),
+        "status 1"
+    );
+    assert_eq!(String::from_utf8(result.stderr).unwrap(), "");
+}
+
+/// `alias` refuses a name no command word could be, and lists a name starting with `-`
+/// after `--`, as Bash does; cash took `alias 'a b=1'` and listed `alias -x=...`.
+#[test]
+fn alias_refuses_bad_names_and_lists_dashed_ones_after_two_dashes() {
+    let script = r"alias 'a b=1' ok='echo ok' 'x/y=2'; echo status $?
+alias -- -x='echo dash'; alias -- -x; alias ok";
+    let result = cash_command()
+        .args(["--noprofile", "--norc", "-c", script])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    let stderr = String::from_utf8(result.stderr).unwrap();
+    assert_eq!(
+        stdout.replace("\r\n", "\n").trim_end(),
+        "status 1\nalias -- -x='echo dash'\nalias ok='echo ok'"
+    );
+    assert!(
+        stderr.contains("alias: `a b': invalid alias name")
+            && stderr.contains("alias: `x/y': invalid alias name"),
+        "{stderr}"
+    );
+}
+
+/// What `command` and `exec` say of a program that is not there, and `pwd` with an
+/// operand, as Bash: `command x` names `x` alone, not `command: x: ...`; `exec ./x`
+/// says the file is not there; `pwd extra` ignores the operand. Found writing alias's
+/// and pwd's man pages.
+#[test]
+fn command_exec_and_pwd_speak_as_bash_does() {
+    let script = r#"command nosuchcmd; echo "command $?"
+(exec ./nosuch); echo "exec $?"
+pwd extra >/dev/null; echo "pwd $?""#;
+    let result = cash_command()
+        .args(["--noprofile", "--norc", "-c", script])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    let stderr = String::from_utf8(result.stderr)
+        .unwrap()
+        .replace("\r\n", "\n");
+    assert_eq!(
+        stdout.replace("\r\n", "\n").trim_end(),
+        "command 127\nexec 127\npwd 0"
+    );
+    let messages: Vec<&str> = stderr
+        .lines()
+        .map(|line| line.split_once(": line ").map_or(line, |(_, rest)| rest))
+        .collect();
+    assert_eq!(
+        messages,
+        [
+            "1: nosuchcmd: command not found",
+            "2: ./nosuch: No such file or directory"
+        ],
+        "{stderr}"
+    );
+}

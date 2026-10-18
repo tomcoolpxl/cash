@@ -184,14 +184,17 @@ impl ReadCommand {
         let mut progress = Progress::new();
         let read_result = loop {
             // A descriptor `-u` names must be open; standard input closed (`<&-`) is read,
-            // as Bash reads it, and fails as a read.
-            let input_stream = context.try_fd(fd_num).ok_or_else(|| {
+            // as Bash reads it, and fails as a read. `-t 0` only asks whether input waits,
+            // and on a closed standard input none does: status 1 and no message, as Bash.
+            let Some(input_stream) = context.try_fd(fd_num) else {
                 if self.fd_num_to_read.is_some() {
-                    ErrorKind::InvalidFileDescriptor(fd_num)
-                } else {
-                    ErrorKind::ClosedDescriptorRead(fd_num)
+                    return Err(ErrorKind::InvalidFileDescriptor(fd_num).into());
                 }
-            })?;
+                if timeout == Some(Duration::ZERO) {
+                    return Ok(cash_core::ExecutionResult::general_error());
+                }
+                return Err(ErrorKind::ClosedDescriptorRead(fd_num).into());
+            };
             let attempt = self.read_line(
                 input_stream,
                 context.error_stream(),

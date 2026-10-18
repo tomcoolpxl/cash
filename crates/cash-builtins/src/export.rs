@@ -3,10 +3,10 @@ use itertools::Itertools;
 use std::io::Write;
 
 use cash_core::{
-    ExecutionExitCode, ExecutionResult, builtins,
-    env::{EnvironmentLookup, EnvironmentScope},
+    ExecutionResult, builtins,
+    env::{self, EnvironmentLookup, EnvironmentScope},
     parser::ast,
-    variables,
+    variables::{self, ShellValue, ShellValueUnsetType, ShellVariable},
 };
 
 /// Add or update exported shell variables.
@@ -46,7 +46,11 @@ impl builtins::Command for ExportCommand {
         mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         if self.declarations.is_empty() {
-            display_all_exported_vars(&context)?;
+            if self.names_are_functions {
+                display_exported_functions(&context)?;
+            } else {
+                display_all_exported_vars(&context)?;
+            }
             return Ok(ExecutionResult::success());
         }
 
@@ -86,8 +90,19 @@ impl ExportCommand {
                             "{}: {s}: not a function",
                             context.command_name
                         )?;
-                        return Ok(ExecutionExitCode::InvalidUsage.into());
+                        return Ok(ExecutionResult::general_error());
                     }
+                }
+                // Bash refuses a word that is no name, `1bad=x` or `a b`, and goes on with
+                // the rest; cash took it and did nothing. An array element, `a[1]=2`, is
+                // named without its value, as Bash names it.
+                else if let Some(refused) = refused_name(s) {
+                    writeln!(
+                        context.error_stream(),
+                        "{}: `{refused}': not a valid identifier",
+                        context.command_name
+                    )?;
+                    return Ok(ExecutionResult::general_error());
                 }
                 // A word such as `export "X=1 2"` or `export $spec` is still an
                 // assignment; its value was already expanded.
@@ -108,13 +123,29 @@ impl ExportCommand {
                         variable.export();
                     }
                 }
+                // A name not set yet is made, unset and exported, as Bash makes it
+                // (`declare -x U`): a later `U=5` is passed on. cash made nothing, and
+                // the later value stayed in the shell.
+                else if !self.unexport {
+                    let mut variable =
+                        ShellVariable::new(ShellValue::Unset(ShellValueUnsetType::Untyped));
+                    variable.export();
+                    context
+                        .shell
+                        .env_mut()
+                        .add(s.as_str(), variable, EnvironmentScope::Global)?;
+                }
             }
             cash_core::CommandArg::Assignment(assignment) => {
                 let name = match &assignment.name {
                     ast::AssignmentName::VariableName(name) => name,
-                    ast::AssignmentName::ArrayElementName(_, _) => {
-                        writeln!(context.error_stream(), "not a valid variable name")?;
-                        return Ok(ExecutionExitCode::InvalidUsage.into());
+                    ast::AssignmentName::ArrayElementName(name, index) => {
+                        writeln!(
+                            context.error_stream(),
+                            "{}: `{name}[{index}]': not a valid identifier",
+                            context.command_name
+                        )?;
+                        return Ok(ExecutionResult::general_error());
                     }
                 };
 
@@ -180,6 +211,21 @@ impl ExportCommand {
     }
 }
 
+/// What `export` names in refusing `word`, when the name in it is not valid: the
+/// element for `a[1]=2`, the whole word otherwise.
+fn refused_name(word: &str) -> Option<&str> {
+    let lhs = word.split_once('=').map_or(word, |(lhs, _)| lhs);
+    let name = lhs.strip_suffix('+').unwrap_or(lhs);
+    if env::valid_variable_name(name) {
+        return None;
+    }
+    let element = name
+        .strip_suffix(']')
+        .and_then(|rest| rest.split_once('['))
+        .is_some_and(|(array, _)| env::valid_variable_name(array));
+    Some(if element { name } else { word })
+}
+
 /// Splits `name=value` or `name+=value` into its parts, if `name` is a valid identifier.
 fn split_string_assignment(s: &str) -> Option<(&str, bool, &str)> {
     let (lhs, value) = s.split_once('=')?;
@@ -194,18 +240,47 @@ fn split_string_assignment(s: &str) -> Option<(&str, bool, &str)> {
     valid.then_some((name, append, value))
 }
 
+/// `export -p`: each exported variable as `declare -p` writes it, its value quoted to be
+/// read back and an array whole (`declare -ax a=([0]="x")`), or `export NAME="v"` in
+/// POSIX mode. cash wrote the value bare, `"` and `$` unescaped, and an array's first
+/// element.
 fn display_all_exported_vars(
     context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
 ) -> Result<(), cash_core::Error> {
-    // Enumerate variables, sorted by key.
+    let posix = context.shell.options().posix_mode;
     for (name, variable) in context.shell.env().iter().sorted_by_key(|v| v.0) {
-        if variable.is_exported() {
-            let value = variable.value().try_get_cow_str(context.shell);
-            if let Some(value) = value {
-                writeln!(context.stdout(), "declare -x {name}=\"{value}\"")?;
-            } else {
-                writeln!(context.stdout(), "declare -x {name}")?;
-            }
+        if !variable.is_exported() {
+            continue;
+        }
+        let value = variable.value();
+        let assigned = if matches!(value, ShellValue::Unset(_)) {
+            String::new()
+        } else {
+            format!(
+                "={}",
+                value.format(variables::FormatStyle::DeclarePrint, context.shell)?
+            )
+        };
+        if posix {
+            writeln!(context.stdout(), "export {name}{assigned}")?;
+        } else {
+            let flags = variable.attribute_flags(context.shell);
+            writeln!(context.stdout(), "declare -{flags} {name}{assigned}")?;
+        }
+    }
+
+    Ok(())
+}
+
+/// `export -f` or `export -pf` with no names: each exported function's definition and a
+/// `declare -fx NAME` after it, as Bash writes them. cash listed the variables.
+fn display_exported_functions(
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+) -> Result<(), cash_core::Error> {
+    for (name, registration) in context.shell.funcs().iter().sorted_by_key(|v| v.0) {
+        if registration.is_exported() {
+            writeln!(context.stdout(), "{}", registration.definition())?;
+            writeln!(context.stdout(), "declare -fx {name}")?;
         }
     }
 

@@ -435,9 +435,13 @@ impl BuiltinError for Error {
     }
 
     fn names_its_builtin(&self) -> bool {
+        // A command that `command` runs and cannot find is named alone, as Bash's
+        // executor names it: `x: command not found`, not `command: x: ...`.
         !matches!(
             self.kind,
-            ErrorKind::FailedSourcingFile(..) | ErrorKind::AssignmentError(_)
+            ErrorKind::FailedSourcingFile(..)
+                | ErrorKind::AssignmentError(_)
+                | ErrorKind::CommandNotFound(_)
         )
     }
 

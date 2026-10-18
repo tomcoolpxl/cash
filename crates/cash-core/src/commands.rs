@@ -63,6 +63,21 @@ impl ErrorStream {
         }
         std::io::Write::write_all(&mut self.file, &line)
     }
+
+    /// Writes `message` as a line of its own, the location before it but not the
+    /// builtin's name, as Bash's `file_error` writes `./x: No such file or directory`.
+    ///
+    /// # Errors
+    ///
+    /// When standard error cannot be written.
+    pub fn write_unnamed(&mut self, message: &str) -> std::io::Result<()> {
+        if !self.line.is_empty() {
+            self.write_line()?;
+        }
+        std::io::Write::write_all(&mut self.file, self.prefix.as_bytes())?;
+        std::io::Write::write_all(&mut self.file, message.as_bytes())?;
+        std::io::Write::write_all(&mut self.file, b"\n")
+    }
 }
 
 impl std::io::Write for ErrorStream {
@@ -809,8 +824,9 @@ pub fn exported_environment(
         .iter_exported()
         // NOTE: To match bash behavior, we only include exported variables
         // that are set (i.e., have a value). This means a variable that
-        // shows up in `declare -p` but has no *set* value will be omitted.
-        .filter(|(_, v)| v.value().is_set())
+        // shows up in `declare -p` but has no *set* value will be omitted. An array is
+        // not passed either, as Bash passes none; cash passed its first element.
+        .filter(|(_, v)| v.value().is_set() && !v.value().is_array())
         .map(|(k, v)| {
             let value = v.value().to_cow_str(shell);
 

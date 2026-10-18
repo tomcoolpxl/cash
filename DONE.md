@@ -2280,3 +2280,33 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   the process token's user (or default owner) and primary group by SID, and `-N` asks
   whether the last write is newer than the last access. Git Bash calls every file yours
   (its drives are mounted `noacl`); cash answers as `ls -l` shows.
+- **`export` as Bash has it** (2026-10-18, found writing export's man page): `export U`
+  on a name not yet set made nothing, so a later `U=5` stayed in the shell; it now makes
+  the name exported and unset (`declare -x U`). `export -p` wrote values bare, `"` and
+  `$` unescaped, and an array as its first element; it now writes what `declare -p`
+  writes, or `export NAME="v"` in POSIX mode. `export -f` and `export -pf` with no names
+  listed the variables; they list the exported functions. `export 1bad=x`, `'a b'` and
+  `a[1]=2` were taken and dropped; they are refused, status 1, the rest still exported.
+  `export -f nosuch` exits 1, not 2. An exported array no longer reaches a program as its
+  first element: Bash passes none.
+- **`read -t 0` on a closed standard input** (2026-10-18, found writing read's man
+  page): it said "read error: Bad file descriptor"; `-t 0` only asks whether input
+  waits, and Bash answers 1 with no message.
+- **`alias` names as Bash checks and lists them** (2026-10-18, found writing alias's man
+  page): `alias 'a b=1'` and `alias x/y=2` were taken; Bash refuses a name with a blank,
+  a quote, `/`, `$` or one of `()<>;&|`, "invalid alias name", status 1, and so does
+  cash. A name starting with `-` lists as `alias -- -x='...'`, so it reads back.
+- **`command`, `exec` and `pwd` in Bash's words** (2026-10-18, found writing the alias
+  and pwd pages): `command nosuch` said `command: nosuch: command not found`; Bash names
+  the program alone, as for any command not found. `exec ./nosuch` said `exec: ./nosuch:
+  not found`; for a path Bash says `./nosuch: No such file or directory` (a name not
+  found is still `exec: x: not found`). `pwd extra` was refused as an invalid option,
+  status 2; Bash ignores the operand.
+- **The manual's first twenty pages written in full** (2026-10-18, man step 6): cd, sed,
+  man, ls, grep, find, cp, mv, rm, cat, echo, printf, test, read, export, alias, pwd,
+  mkdir, tar and awk, each with Syntax, Examples, How it works, Options, Advanced and
+  Different in cash. Every example runs against Git Bash 5.3 with the GNU tools and its
+  output is frozen in `tests/man-examples`; an archive the example makes is named, not
+  shown, as its bytes hold the fixture's new times. Writing them found and fixed bugs
+  in find, rm, test, export, read, alias, command, exec and pwd, and filed the rest in
+  TODO.md.
