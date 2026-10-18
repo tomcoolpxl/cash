@@ -1972,7 +1972,7 @@ impl Execute for ast::FunctionDefinition {
     async fn execute(
         &self,
         shell: &mut Shell<impl extensions::ShellExtensions>,
-        _params: &ExecutionParameters,
+        params: &ExecutionParameters,
     ) -> Result<ExecutionResult, error::Error> {
         let func_name = self.fname.value.clone();
 
@@ -1989,6 +1989,20 @@ impl Execute for ast::FunctionDefinition {
                 })
                 .into_fatal(),
             );
+        }
+
+        // A read-only function (`readonly -f f`) keeps its definition, as in Bash: the
+        // definition fails with status 1, and the line goes on.
+        if shell
+            .funcs()
+            .get(&func_name)
+            .is_some_and(crate::functions::Registration::is_readonly)
+        {
+            let err = error::ErrorKind::ReadonlyFunction(func_name).into();
+            let _ = shell.display_error(&mut params.stderr(shell), &err);
+            let result = ExecutionResult::general_error();
+            shell.set_last_exit_status(result.exit_code.into());
+            return Ok(result);
         }
 
         // The function definition's source context should be the same as the current frame

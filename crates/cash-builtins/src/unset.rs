@@ -111,8 +111,25 @@ impl builtins::Command for UnsetCommand {
                 }
             }
 
-            // TODO(unset): Deal with readonly functions
             if unspecified || self.name_interpretation.shell_functions {
+                if context
+                    .shell
+                    .funcs()
+                    .get(name)
+                    .is_some_and(cash_core::functions::Registration::is_readonly)
+                {
+                    let refused = cash_core::Error::from(ErrorKind::BuiltinError(
+                        Box::new(cash_core::Error::from(
+                            ErrorKind::CannotUnsetReadonlyFunction(name.clone()),
+                        )),
+                        context.command_name.clone(),
+                    ));
+                    let _ = context
+                        .shell
+                        .display_error(&mut context.params.stderr(context.shell), &refused);
+                    failed = true;
+                    continue;
+                }
                 if context.shell.undefine_func(name) {
                     continue;
                 }

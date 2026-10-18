@@ -186,11 +186,19 @@ impl builtins::Command for DeclareCommand {
                 self.display_matching_env_declarations(&context, verb)?;
             }
 
-            // Do the same for functions.
-            if !matches!(verb, DeclareVerb::Local | DeclareVerb::Readonly)
-                && (!self.print || self.function_names_only || self.function_names_or_defs_only)
-            {
-                self.display_matching_functions(&context)?;
+            // Do the same for functions: `declare` alone lists them, `declare -x` and
+            // `declare -p` not; `readonly -f` lists the read-only ones.
+            let functions_too = match verb {
+                DeclareVerb::Local => false,
+                DeclareVerb::Readonly => self.function_names_or_defs_only,
+                DeclareVerb::Declare => {
+                    self.function_names_only
+                        || self.function_names_or_defs_only
+                        || (!self.print && !self.any_attribute_given())
+                }
+            };
+            if functions_too {
+                self.display_matching_functions(&context, verb)?;
             }
         }
 
@@ -221,14 +229,18 @@ impl DeclareCommand {
 
         if self.function_names_only || self.function_names_or_defs_only {
             if let Some(func_registration) = context.shell.funcs().get(name) {
+                let flags = func_registration.attribute_flags();
                 if self.function_names_only {
                     if self.print {
-                        writeln!(context.stdout(), "declare -f {name}")?;
+                        writeln!(context.stdout(), "declare -f{flags} {name}")?;
                     } else {
                         writeln!(context.stdout(), "{name}")?;
                     }
                 } else {
                     writeln!(context.stdout(), "{}", func_registration.definition())?;
+                    if self.print && !flags.is_empty() {
+                        writeln!(context.stdout(), "declare -f{flags} {name}")?;
+                    }
                 }
                 Ok(true)
             } else {
@@ -262,21 +274,34 @@ impl DeclareCommand {
     }
 
     /// `declare -f` with attribute flags applies them to the named function rather than
-    /// displaying it (e.g. `declare -ft name`, `declare -fx name`).
+    /// displaying it (e.g. `declare -ft name`, `declare -fx name`), as `readonly -f name`
+    /// makes it read-only.
     fn apply_function_attributes(
         &self,
         context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
         declaration: &cash_core::CommandArg,
-    ) -> bool {
+        verb: DeclareVerb,
+    ) -> Result<bool, cash_core::Error> {
         let func = match declaration {
             cash_core::CommandArg::String(name) => context.shell.func_mut(name),
             cash_core::CommandArg::Assignment(_) => None,
         };
 
-        // As with display, bash reports failure without printing an error message here.
+        // As with display, bash reports failure without printing an error message here;
+        // `readonly` says so.
         let Some(func) = func else {
-            return false;
+            if matches!(verb, DeclareVerb::Readonly) {
+                writeln!(
+                    context.error_stream(),
+                    "readonly: {declaration}: not a function"
+                )?;
+            }
+            return Ok(false);
         };
+
+        if matches!(verb, DeclareVerb::Readonly) || self.make_readonly.to_bool() == Some(true) {
+            func.set_readonly();
+        }
 
         match self.make_exported.to_bool() {
             Some(true) => func.export(),
@@ -288,7 +313,7 @@ impl DeclareCommand {
             func.set_traced(traced);
         }
 
-        true
+        Ok(true)
     }
 
     /// Whether `declare -n name=name` may stand.
@@ -395,9 +420,12 @@ impl DeclareCommand {
                 && !self.create_global);
 
         if (self.function_names_or_defs_only || self.function_names_only)
-            && (self.make_traced.to_bool().is_some() || self.make_exported.to_bool().is_some())
+            && (self.make_traced.to_bool().is_some()
+                || self.make_exported.to_bool().is_some()
+                || self.make_readonly.to_bool() == Some(true)
+                || matches!(verb, DeclareVerb::Readonly))
         {
-            return Ok(self.apply_function_attributes(context, declaration));
+            return self.apply_function_attributes(context, declaration, verb);
         }
 
         if self.function_names_or_defs_only || self.function_names_only {
@@ -878,19 +906,55 @@ impl DeclareCommand {
         Ok(())
     }
 
+    /// The functions, each with its attributes (`declare -frx f`); only those with the
+    /// attributes asked for (`declare -Fx`, `readonly -f`).
     fn display_matching_functions(
         &self,
         context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+        verb: DeclareVerb,
     ) -> Result<(), cash_core::Error> {
+        let readonly =
+            matches!(verb, DeclareVerb::Readonly) || self.make_readonly.to_bool() == Some(true);
+        let traced = self.make_traced.to_bool() == Some(true);
+        let exported = self.make_exported.to_bool() == Some(true);
         for (name, registration) in context.shell.funcs().iter().sorted_by_key(|v| v.0) {
+            if (readonly && !registration.is_readonly())
+                || (traced && !registration.is_traced())
+                || (exported && !registration.is_exported())
+            {
+                continue;
+            }
+            let flags = registration.attribute_flags();
             if self.function_names_only {
-                writeln!(context.stdout(), "declare -f {name}")?;
+                writeln!(context.stdout(), "declare -f{flags} {name}")?;
             } else {
                 writeln!(context.stdout(), "{}", registration.definition())?;
+                // `declare` alone gives the definitions only.
+                if self.function_names_or_defs_only && !flags.is_empty() {
+                    writeln!(context.stdout(), "declare -f{flags} {name}")?;
+                }
             }
         }
 
         Ok(())
+    }
+
+    /// Whether an attribute option was given, `-x` or `+x` and the rest.
+    fn any_attribute_given(&self) -> bool {
+        [
+            self.make_indexed_array.to_bool(),
+            self.make_associative_array.to_bool(),
+            self.capitalize_value_on_assignment.to_bool(),
+            self.make_integer.to_bool(),
+            self.lowercase_value_on_assignment.to_bool(),
+            self.make_nameref.to_bool(),
+            self.make_readonly.to_bool(),
+            self.make_traced.to_bool(),
+            self.uppercase_value_on_assignment.to_bool(),
+            self.make_exported.to_bool(),
+        ]
+        .iter()
+        .any(Option::is_some)
     }
 
     #[expect(clippy::unnecessary_wraps)]

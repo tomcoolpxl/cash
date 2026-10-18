@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::io::Write;
 
 use cash_core::{ExecutionExitCode, ExecutionResult, builtins};
 
@@ -6,6 +7,7 @@ use cash_core::{ExecutionExitCode, ExecutionResult, builtins};
 #[derive(Parser)]
 pub(crate) struct ShiftCommand {
     /// Number of positions to shift the arguments by (defaults to 1).
+    #[arg(allow_negative_numbers = true)]
     n: Option<i32>,
 }
 
@@ -18,15 +20,18 @@ impl builtins::Command for ShiftCommand {
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         let n = self.n.unwrap_or(1);
 
+        // A count out of range fails with 1, as in Bash, so `shift 2 || usage` reads as
+        // it does there; a negative one says so.
         if n < 0 {
-            return Ok(ExecutionExitCode::InvalidUsage.into());
+            writeln!(context.stderr(), "shift: {n}: shift count out of range")?;
+            return Ok(ExecutionExitCode::GeneralError.into());
         }
 
         #[expect(clippy::cast_sign_loss)]
         let n = n as usize;
 
         if n > context.shell.current_shell_args().len() {
-            return Ok(ExecutionExitCode::InvalidUsage.into());
+            return Ok(ExecutionExitCode::GeneralError.into());
         }
 
         if n == 0 {

@@ -785,6 +785,51 @@ fn readonly_prevents_mutation() {
     assert_eq!(out.stdout, "protected: immutable");
 }
 
+#[test]
+fn a_readonly_function_cannot_be_defined_again_or_unset() {
+    // `readonly -f f` printed f and left it writable: it was read as `declare -f f`.
+    let out = cash(
+        r#"
+        f() { echo one; }; g() { :; }
+        readonly -f f
+        f() { echo two; }; echo "define: $?"
+        unset -f f; echo "unset: $?"
+        f
+        readonly -f
+        export -f g; declare -F
+        readonly -f nosuch; echo "nosuch: $?"
+        "#,
+    );
+    assert_eq!(
+        out.stdout,
+        "define: 1\nunset: 1\none\nf () \n{ \n    echo one\n}\ndeclare -fr f\n\
+         declare -fr f\ndeclare -fx g\nnosuch: 1"
+    );
+    assert!(
+        out.stderr.contains("f: readonly function"),
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr
+            .contains("unset: f: cannot unset: readonly function"),
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("readonly: nosuch: not a function"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn declare_with_an_attribute_lists_no_functions() {
+    // `declare -x` listed every function's definition among the exported variables.
+    let out = cash("f() { :; }; declare -x | grep -c '^f ()'; declare | grep -c '^f ()'");
+    assert_eq!(out.stdout, "0\n1");
+}
+
 // ===========================================================================
 // 19. printf and echo formatting specifiers
 // ===========================================================================
@@ -1070,6 +1115,18 @@ fn set_positional_parameters_and_shift() {
     assert_eq!(
         out.stdout,
         "count=4 1=apple 2=banana\nafter_shift: count=2 1=cherry 2=date"
+    );
+}
+
+#[test]
+fn shift_past_the_end_fails_with_one_and_shifts_nothing() {
+    // It failed with 2, a usage error, where Bash fails with 1.
+    let out = cash("set -- a b; shift 3; echo \"$? $#\"; shift -1; echo \"$? $#\"");
+    assert_eq!(out.stdout, "1 2\n1 2");
+    assert!(
+        out.stderr.contains("shift: -1: shift count out of range"),
+        "{}",
+        out.stderr
     );
 }
 

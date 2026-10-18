@@ -73,6 +73,10 @@ pub struct Registration {
     /// `DEBUG` and `RETURN` traps as if `functrace` were set.
     #[cfg_attr(feature = "serde", serde(default))]
     traced: bool,
+    /// Whether the function is read-only (`readonly -f`): it cannot be defined again or
+    /// unset.
+    #[cfg_attr(feature = "serde", serde(default))]
+    readonly: bool,
 }
 
 impl From<cash_parser::ast::FunctionDefinition> for Registration {
@@ -82,6 +86,7 @@ impl From<cash_parser::ast::FunctionDefinition> for Registration {
             source_info: crate::SourceInfo::default(),
             exported: false,
             traced: false,
+            readonly: false,
         }
     }
 }
@@ -102,6 +107,7 @@ impl Registration {
             source_info: source_info.clone(),
             exported: false,
             traced: false,
+            readonly: false,
         }
     }
 
@@ -138,5 +144,28 @@ impl Registration {
     /// Returns whether the function has the trace attribute.
     pub const fn is_traced(&self) -> bool {
         self.traced
+    }
+
+    /// Makes the function read-only; nothing makes it writable again.
+    pub const fn set_readonly(&mut self) {
+        self.readonly = true;
+    }
+
+    /// Returns whether the function is read-only.
+    pub const fn is_readonly(&self) -> bool {
+        self.readonly
+    }
+
+    /// The function's attributes as `declare` lists them after `-f`, in Bash's order:
+    /// `r` read-only, `t` traced, `x` exported (`declare -frtx f`).
+    pub fn attribute_flags(&self) -> String {
+        [
+            (self.readonly, 'r'),
+            (self.traced, 't'),
+            (self.exported, 'x'),
+        ]
+        .into_iter()
+        .filter_map(|(set, flag)| set.then_some(flag))
+        .collect()
     }
 }

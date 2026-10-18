@@ -283,6 +283,14 @@ pub enum ErrorKind {
     #[error("{0}: cannot unset: readonly variable")]
     CannotUnsetReadonly(String),
 
+    /// A definition of a read-only function (`readonly -f`).
+    #[error("{0}: readonly function")]
+    ReadonlyFunction(String),
+
+    /// `unset` of a read-only function.
+    #[error("{0}: cannot unset: readonly function")]
+    CannotUnsetReadonlyFunction(String),
+
     /// The given open file cannot be read from.
     #[error("cannot read from {0}")]
     OpenFileNotReadable(&'static str),
