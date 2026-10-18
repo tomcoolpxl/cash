@@ -1,8 +1,9 @@
 # `man`: cash's own manual and its browser
 
-Status: design, 2026-10-18. Decided so far: `man` is new and explicitly not compatible
-with man(1); `help` stays as the short, printed view of the same pages; F1 keeps its
-own screen. Open questions are marked **Open** and go to the user as pick lists.
+Status: designed, 2026-10-18; every question the design raised has the user's answer
+(section 6), and section 7 is the order of the work. `man` is new and explicitly not
+compatible with man(1); `help` stays as the short, printed view of the same pages; F1
+keeps its own screen.
 
 ## 1. What it is
 
@@ -180,8 +181,8 @@ page, every page's sections are in order, and every example runs.
 the new structure; the other ~160 start as drafts made from each command's `--help`
 (syntax and options filled in, examples empty), marked as drafts in the list, and are
 written in batches, most used first. Writing a batch runs its examples against Git Bash
-and the real tools, and files what they find in `TODO.md`. **Open**: the order of the
-batches.
+and the real tools, and files what they find in `TODO.md`. The batches go most used
+first (section 6).
 
 ## 6. Decided (the user, 2026-10-18)
 
@@ -210,3 +211,32 @@ batches.
 - Under about 80 columns one pane fills the screen, Tab switching to the list.
 - The list starts with "Getting started" and cash's topics, a rule, then every
   command A to Z, as the user asked from the start.
+
+## 7. The order of the work
+
+Each step ends with its tests passing and a commit; the first release with `man` comes
+after step 6, so the browser ships with pages worth reading.
+
+1. **`cash-man`, the pages' model**: the crate, the front matter and the fixed
+   headings parsed into a page, and the checks: every builtin has a page or a draft,
+   every page's sections are known and in order, every See-also names a page. The
+   pages embedded compressed at build time, and the size of `cash.exe` measured
+   against the budget.
+2. **Rendering**: `render.rs` moved in and grown for the page model: sections,
+   wrapping to a width, syntax lines in columns, examples, tables, links, plain text
+   without colour.
+3. **`help` on the new pages**: the short view (summary, syntax, examples, a pointer to
+   `man NAME`), `help` alone listing the commands, Bash's `-s`, `-d` and `-m`; the
+   current pages converted, so nothing is lost on the way.
+4. **The browser**: the two panes on `cash-picker`'s terminal layer, the keys, the list
+   filter, find in page, find everywhere, links with back and forward, the heading kept
+   on the top line, one pane under ~80 columns, plain output when not a terminal, and
+   `man -k`. Tested on a pseudo console as `croot` is.
+5. **The examples' test**: each page's examples run in a scratch directory set up by
+   the page's fixture, under cash and, where it exists, under Git Bash or the real tool,
+   and the outputs and statuses compared; an example marked parse-only is parsed.
+6. **The first batch**: about 20 pages at full depth, the most used (cd, ls, grep,
+   find, sed, cp, mv, rm, cat, echo, printf, test, read, export, alias, history, jobs,
+   kill, tar, ...), and drafts from `--help` for the rest, marked as drafts. What the
+   examples find goes to `TODO.md` or is fixed.
+7. **The next batches**, about 20 pages each, each released when done.
