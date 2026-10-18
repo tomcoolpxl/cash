@@ -64,15 +64,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
-- **"folder" everywhere, where the word is "directory"** (the user, 2026-10-18,
-  emphatic): "folder" is a GUI construct; the file system and Bash say directory. About
-  3,300 lines in about 300 files say folder: ~100 strings in cash's output (messages,
-  `croot`, `--help` text), 165 lines of the help pages, the docs (README, spec,
-  decisions, DONE, TODO, ROADMAP, research), comments, identifiers (`folder_facts`) and
-  test names. All of it becomes directory; a Windows API name keeps its spelling
-  (`FOLDERID_*`, `SHGetKnownFolderPath`). The tests that match output change with it.
-  Large but mechanical; each crate a commit, its tests run.
-
 - **A benchmark tool in the repo for all five shells** (the user, 2026-10-18): cash, Git
   Bash, PowerShell 7 and WSL2's bash on Windows, and bash on native Linux, the same
   machine rebooted, so the results make one comparison. `tests/shell-bench` has most of
@@ -80,7 +71,7 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   WSL, so it runs on Linux as it is. What it lacks: an entry point for Linux (`run.sh`
   assumes Git Bash and `cygpath`), each run's results written into the repo
   (`tests/shell-bench/results/<date>-<os>/`, hyperfine's JSON and the machine: CPU,
-  OS, shell versions), and `table.py` reading every results folder into one table. Not
+  OS, shell versions), and `table.py` reading every results directory into one table. Not
   too complex: bash and hyperfine on both systems, Python only for the table. Small.
 
 - **ROADMAP.md section 6 says cash's sed lacks `\b` and labels ended by a space**
@@ -91,11 +82,11 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 - **Three `cd` gaps against Git Bash 5.3** (2026-10-18, found writing the man page
   samples): `cd C:` sets `$PWD` to `C:`, where Git Bash goes to the drive's root
   (`/c`); `shopt -s cdable_vars` has no effect, so `cd src` with `src=C:/Windows` says
-  "No such file or directory" where Git Bash goes to the folder the variable names; and
+  "No such file or directory" where Git Bash goes to the directory the variable names; and
   `cd -@` says "not yet implemented" with status 99, where Git Bash refuses `-@` as an
   invalid option with its usage line and status 2. Small each.
 
-- **A `C:/` folder put into `PATH` breaks a colon-separated split** (2026-10-18, found
+- **A `C:/` directory put into `PATH` breaks a colon-separated split** (2026-10-18, found
   by the corpus's nvm case): `PATH="$PWD/bin:$PATH"` works for running programs, as
   cash's own search knows a drive, but the value keeps `C:/…` (D3's spelling of `$PWD`),
   so a script that splits `PATH` on `:` (`IFS=: read -ra`, `${PATH%%:*}`, awk with

@@ -57,12 +57,12 @@ program cache: those showed no cost worth taking.
 | `local -i x=1` | 1.29 | 0.31 | |
 | `[ ]` | 0.80 | 0.57 | 0.61 |
 
-- **Globbing** made the pattern and its matcher again in every folder, read each name
-  twice and sorted each folder's matches as paths, which compare part by part, before
+- **Globbing** made the pattern and its matcher again in every directory, read each name
+  twice and sorted each directory's matches as paths, which compare part by part, before
   the whole expansion was sorted again as strings. Now once per component, the name read
   once, and the one sort.
 - **A PATH search** looked at the name twice and at the name with each PATHEXT extension
-  in every folder, about fifteen calls a folder. One directory query for the names that
+  in every directory, about fifteen calls a directory. One directory query for the names that
   begin with the command's now tells which are there; what it finds is checked as
   before, and a name it cannot stand for is looked for as before. The first run of each
   command, `command -v` and `which` gain the same.
@@ -92,9 +92,9 @@ program cache: those showed no cost worth taking.
   expansion, over 101 distinct ones, took 776 ms, now 647 ms, as fast as over 40,
   which the LRU held (Git Bash: 529 ms). A hit still copies its value: the expansion
   takes the pieces it is given, and an `Arc` would mean reworking it.
-- `cd` took 62 µs, against 2 to 4 for most builtins. It tells a folder with
+- `cd` took 62 µs, against 2 to 4 for most builtins. It tells a directory with
   `GetFileAttributesW` now, without the handle `std::fs::metadata` opened, and renders
   its path once (2026-10-17): 40,000 calls took 2.349 s, now 2.224 s (55.6 µs a call),
   against 9.3 s for Git Bash's bash. The rest is Windows': one attribute query costs
   43 to 48 µs on this machine outside cash too (PowerShell's `File.GetAttributes`), as
-  `[ -d . ]` does in cash, and `cd` must ask once to know the folder is there.
+  `[ -d . ]` does in cash, and `cd` must ask once to know the directory is there.

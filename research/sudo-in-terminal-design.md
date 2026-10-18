@@ -75,7 +75,7 @@ another way, and everything else as cash's `sudo` does it now.
    caller passes the handle values. Nothing is relayed, so nothing is slower and no
    byte is translated. (gsudo's Attached mode has no redirection, and its Piped mode
    relays.)
-4. **Environment and folder.** The caller's folder (a mapped drive's by its UNC path,
+4. **Environment and directory.** The caller's directory (a mapped drive's by its UNC path,
    as now: an elevated process has no drive letters) and the variables cash's `sudo`
    passes now: `NAME=value` words, and the exported ones with `-E`. They go through a
    handle as well (an anonymous pipe the caller writes and the elevated cash reads), so
@@ -139,7 +139,7 @@ the mechanism of section 3 built into a debug cash (`cash_win32::elevate`):
   administrator was declined`, with 1.
 - **The console**: the elevated cash attaches to the caller's pseudo console; output
   and errors show in it.
-- **The folder**: the command starts in the shell's folder.
+- **The directory**: the command starts in the shell's directory.
 - **Handles**: a file given as standard input and one as standard output
   (`sudo sort < in > out`) reach the command through `DuplicateHandle`; nothing is
   relayed.
@@ -184,7 +184,7 @@ relayed:
    documents the need). The grant is put back when the command ends.
 4. It starts `cash --invoke-bundled --sudo-owner - COMMAND` as USER with
    `CreateProcessWithLogonW` (`LOGON_WITH_PROFILE`, USER's own environment), in the shell's
-   folder, and wipes the password. Each standard handle is handed over by its kind: a
+   directory, and wipes the password. Each standard handle is handed over by its kind: a
    redirected file or pipe is made inheritable and passed (`STARTF_USESTDHANDLES`), reaching
    the command as its own; a console handle becomes an anonymous pipe, USER's cash holding
    the pipe end and this process relaying the bytes to and from the real console on threads
@@ -207,7 +207,7 @@ ordinary output and input work; a full-screen console app (one that drives the s
 VT or the console API) does not get a true console and loses that fidelity.
 
 Limits: Windows takes a command line of 1,024 characters here, which `-E` can fill;
-USER must be able to read cash.exe (refused with a message). The shell's folder is often
+USER must be able to read cash.exe (refused with a message). The shell's directory is often
 under the caller's profile, which USER cannot enter, and `CreateProcessWithLogonW` then
 fails with `ERROR_DIRECTORY`; cash falls back to the system temp (`%SystemRoot%\Temp`, the
 Windows directory read from the OS, not an env variable or a hard-coded path), else the

@@ -49,8 +49,8 @@ Every shell splits the same way: small, instant tools inside, the rest processes
 
 ## What a process gives cash today
 
-- **Its own folder and environment**: the child starts in the shell's folder with the
-  exported variables (`commands.rs:713-733`). cash never changes its own process folder
+- **Its own directory and environment**: the child starts in the shell's directory with the
+  exported variables (`commands.rs:713-733`). cash never changes its own process directory
   (D10) and never writes shell variables into its process environment.
 - **Ctrl-C, Ctrl-Z and kill**: a foreground child gets Ctrl-C itself; job objects end or
   suspend whole trees (D6, D13, D19, D21, D22); `kill $!` reaches a real pid.
@@ -95,10 +95,10 @@ and swallows every console event; `tee -i` switches Ctrl-C off for good; cash's 
 - **Stack overflow, abort, out-of-memory** end the shell and, through the session job,
   everything it started.
 - **Every path** must go through `shell.absolute_path` and every variable through the
-  shell's environment, or relative operands resolve against the folder cash started in.
+  shell's environment, or relative operands resolve against the directory cash started in.
 
-One thing gets better: `rm -rf "$d"` of the shell's own folder (spec §4 #13) would work,
-as cash's process never sits in that folder. The spec's "cannot be fixed by running the
+One thing gets better: `rm -rf "$d"` of the shell's own directory (spec §4 #13) would work,
+as cash's process never sits in that directory. The spec's "cannot be fixed by running the
 builtin in-process" (spec.md:411) is wrong.
 
 ## The tools, by what they would risk

@@ -1,7 +1,7 @@
 # Shared parts for the builtins: options, inputs, walks
 
 The question (2026-10-16): cash's own builtins each parse their options, open their
-files and walk their folders themselves. Should those be parts they share? Three surveys
+files and walk their directories themselves. Should those be parts they share? Three surveys
 of every builtin (option parsing, input opening, directory walks) answered yes for all
 three. The user chose all three: **a GNU option parser, an input opener and a directory
 walker**. This note comes before any code. It covers what each tool does today, the bugs
@@ -50,8 +50,8 @@ user picks goes into `decisions.md`.
   worded through `os_error_text`, then the next file.
 - **A builtin cannot open `/dev` names.** The hook that serves them is installed only in
   bundled tools' processes, and only tar matches the exact strings.
-- **A folder reads as "Permission denied"** wherever no stat comes first. `CreateFileW`
-  refuses a folder opened without backup semantics.
+- **A directory reads as "Permission denied"** wherever no stat comes first. `CreateFileW`
+  refuses a directory opened without backup semantics.
 - **Process substitution:** a builtin gets a `<(…)` as a named pipe that can be opened
   twice. Tools that stat and then open use both opens, and bzip2's `-f` passthrough opens
   a third time.
@@ -59,19 +59,19 @@ user picks goes into `decisions.md`.
 - **Duplicates:**
   - five pipe and device checks that disagree on case;
   - two copies of the Windows-message helper;
-  - seven ways to word a folder.
+  - seven ways to word a directory.
 
 ### Walks
 
 - 15 walks in the builtins, plus globstar, `rm`, `diff` and the picker outside them.
-- Eleven are recursive Rust functions. None opens a folder once.
+- Eleven are recursive Rust functions. None opens a directory once.
 - **Loops:** only `find -L` detects them. grep -R, gzip -r, zstd -r, zip, rar a and 7z a
   (all three by default), tar -h and diff -r follow links with no loop check.
 - **What counts as a link differs:**
-  - tree and 7z test the reparse-point attribute, so a OneDrive or dedup folder is a
+  - tree and 7z test the reparse-point attribute, so a OneDrive or dedup directory is a
     "link" to them (tree counts it as a file);
   - every other walk uses std's name-surrogate test (symlinks and junctions).
-- **Unreadable folders are silent** in chmod -R (status 0), where -r, zstd -r, zip, rar,
+- **Unreadable directories are silent** in chmod -R (status 0), where -r, zstd -r, zip, rar,
   fileuse, `ls --tree` and globstar.
 - **Names:**
   - gzip, zstd, tar, zip, rar and 7z rebuild child paths from lossy strings, so a name
@@ -137,9 +137,9 @@ It lives in cash-core, beside `Shell::open_file`, whose `/dev` handling it share
 `/dev/tcp` and `/dev/udp` stay for redirections only.
 
 ```rust
-pub struct Open { pub dash: Dash, pub folders: Folders }
+pub struct Open { pub dash: Dash, pub directories: Directories }
 pub enum Dash { Stdin, File }               // `-`: standard input, or a file named `-`
-pub enum Folders { Refuse, Allow }          // Refuse: IsADirectory, not "Permission denied"
+pub enum Directories { Refuse, Allow }          // Refuse: IsADirectory, not "Permission denied"
 
 pub struct Input {
     pub shown: String,                      // the name as the script gave it
@@ -157,7 +157,7 @@ impl InputError { pub fn reason(&self) -> String }  // strerror words, as os_err
 ```
 
 - **One open, then the handle's metadata.** A failed open with PermissionDenied is
-  stat'ed once to tell a folder apart. The happy path costs nothing extra, and a
+  stat'ed once to tell a directory apart. The happy path costs nothing extra, and a
   substitution pipe is opened once.
 - **`/dev` names:**
   - null reads as empty;
@@ -165,7 +165,7 @@ impl InputError { pub fn reason(&self) -> String }  // strerror words, as os_err
   - zero, random and urandom open the endless device;
   - `stdin`, `stdout`, `stderr` and `fd/N` open the shell's own descriptor N.
 - **Names resolved with `absolute_path`, always.** This fixes 7z's list files, which
-  resolve against the folder cash started in.
+  resolve against the directory cash started in.
 - **The reader always goes through the stop token**, standard input included.
 - **What stays the tool's own:**
   - the wording of every message and status;
@@ -191,7 +191,7 @@ every option the survey lists:
 - `same_file_system`;
 - `skip_current_dir` for pruning;
 - lossless `PathBuf`s;
-- the free metadata of a folder listing.
+- the free metadata of a directory listing.
 
 Writing a walker of cash's own would mean writing all of that again. cash adds a thin
 layer:
@@ -208,28 +208,28 @@ pub struct Entry {
     pub shown: String,           // the root as given, then `/name`s, no doubled `/`
     pub path: PathBuf,           // absolute, lossless
     pub depth: usize,
-    pub kind: Kind,              // File | Folder | Link | Other
+    pub kind: Kind,              // File | Directory | Link | Other
 }
 pub enum WalkError {
-    Open { shown, error },       // a folder that cannot be listed
+    Open { shown, error },       // a directory that cannot be listed
     Entry { shown, error },      // an entry that cannot be looked at
-    Loop { shown, ancestor },    // a followed link back to a folder above it
+    Loop { shown, ancestor },    // a followed link back to a directory above it
 }
 impl Iterator for Walk { type Item = Result<Entry, WalkError>; }   // `Stopped` at a stop
-impl Walk { pub fn skip_folder(&mut self); }                       // prune, as find -prune
+impl Walk { pub fn skip_directory(&mut self); }                       // prune, as find -prune
 ```
 
 - **One answer to what a link is:** a symlink or junction (a name surrogate), as std and
   walkdir have it. A cloud placeholder, a dedup file or an AppExecLink is an ordinary
-  file or folder. That changes tree and 7z, which today treat every reparse point as a
+  file or directory. That changes tree and 7z, which today treat every reparse point as a
   link.
 - **The stop token** is checked for every entry.
 - **Every error goes to the tool** to word, status and continue. None is silent unless
   the tool chooses silence, as upstream does.
 - **Shown names** are joined in one place. That fixes `ls -R foo/`.
 - **What stays the tool's own:**
-  - ls -R's listing per folder (the walker gives the folders, ls lists each);
-  - where's and rar open's two passes, files and then folders (a `By` order with files
+  - ls -R's listing per directory (the walker gives the directories, ls lists each);
+  - where's and rar open's two passes, files and then directories (a `By` order with files
     first);
   - the archivers' filters, which become prune calls;
   - the picker, which uses the `ignore` crate for `.gitignore`.
@@ -239,8 +239,8 @@ The order for walks:
 2. find (its loop code goes, its message stays);
 3. tree;
 4. gzip -r and zstd -r (links as GNU gzip and zstd treat them);
-5. chmod -R (an unreadable folder stops being silent);
-6. where -r (each folder listed once) and fileuse;
+5. chmod -R (an unreadable directory stops being silent);
+6. where -r (each directory listed once) and fileuse;
 7. tar, zip, rar and 7z last, since they have the most options: walking, loops and
    stops come from the walker, archive reading stays theirs.
 
@@ -252,12 +252,12 @@ The order for walks:
   are.
 - The walker gets a unit test on a temporary tree with:
   - a junction loop, a symlink to a file and a broken link;
-  - an unreadable folder;
+  - an unreadable directory;
   - a name with a lone surrogate;
   - each order.
 - The opener gets one for:
   - each `/dev` name;
-  - a folder;
+  - a directory;
   - a substitution pipe opened once;
   - a stop in the middle of a read.
 
@@ -265,14 +265,14 @@ The order for walks:
 
 1. **The walker's basis.**
    - Proposed: walkdir, already in the tree, with cash's layer on top.
-   - The alternative: a walker of cash's own. It gives full control (opening each folder
+   - The alternative: a walker of cash's own. It gives full control (opening each directory
      once, handle-relative reads) at the cost of writing loop detection, link following
      and ordering again.
 2. **Which part first.**
    - Proposed: options, inputs, then walks. The parser exists, so the `ls` alias failure
      and basename land in the first commits.
    - Walks first would end the link loops in eight tools sooner.
-   - Inputs first would fix `/dev/stdin` and folder messages sooner.
+   - Inputs first would fix `/dev/stdin` and directory messages sooner.
 3. **The archivers.**
    - Proposed: tar, zip, rar and 7z move onto the walker last. Their link loops and stops
      come from it, and their own options become prune calls.

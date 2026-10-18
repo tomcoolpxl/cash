@@ -81,8 +81,8 @@ only `printf` is level with it (1.04), and every other one is ahead.
 | program | 18.14 ms | 19.64 ms | 8% slower | 38.95 ms | 39.47 ms |
 | pipe | 24.73 ms | 18.73 ms | 24% faster | 45.31 ms | 48.70 ms |
 
-The first run had no `ls -la` row; in the A/B below, 1.18.0 took 4.2 s for it (the folder
-link count read the temporary folder's subfolders, fixed on 2026-10-16), 1.23.0 0.8 s.
+The first run had no `ls -la` row; in the A/B below, 1.18.0 took 4.2 s for it (the directory
+link count read the temporary directory's subdirectories, fixed on 2026-10-16), 1.23.0 0.8 s.
 
 ## The two that went backwards, A/B in one sitting
 

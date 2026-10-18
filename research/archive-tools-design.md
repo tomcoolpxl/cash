@@ -33,7 +33,7 @@ From a survey of the code on 2026-10-07 (file references as of `17d79882`).
 | Replacing a file in place (temporary name beside it, rename, times and read-only kept) | three copies: gzip's `Target`, `dos2unix`'s `write_replacing`, sed `-i` | one helper |
 | A file's Unix face: mode bits, owner and group, ids, times, link count, identity | `ls` and `stat` each compute a mode, and **disagree** (`ls` asks the access list for `w`; `stat` looks at read-only and the extension); no group is ever read, `ls` shows the owner twice; `id` maps the process to its RID (0 when elevated); `cash-win32::fs` has owner, RID, access check, link count, file identity | one place, which `ls`, `stat` and the archives share |
 | Applying one `s/re/repl/flags` (`tar --transform`) | cash-sed compiles it (`compile`), but the input type has no public constructor, the apply loop is private, and tar's own flags (`r` `s` `h` `x` and capitals) are refused | a small public API in cash-sed |
-| Name patterns with GNU's flags | cash-core's `Pattern` (Bash's matching) has case folding, but `*` always crosses `/`, and there is no leading-folder rule; grep and diff use the `glob` crate instead | flags added to `Pattern` |
+| Name patterns with GNU's flags | cash-core's `Pattern` (Bash's matching) has case folding, but `*` always crosses `/`, and there is no leading-directory rule; grep and diff use the `glob` crate instead | flags added to `Pattern` |
 | Making links, setting times and attributes, checking names | none in cash-win32: no symbolic-link maker, no hard-link wrapper (the binary crate has one), no time or attribute setter beyond std, reserved names (`CON` …) known but used only in tests, nothing for `<>:"|?*` or a trailing dot or space | added to cash-win32 |
 | A buffered pull reader for streaming codecs | gzip's `Input` | moves with gzip's codec |
 | Registration, help, doctor | the gzip trio is one module with three names (`command!`); pages are found by `build.rs`; `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS` are hand lists; `cash --link-tools` links every new builtin by itself; `help tools` has GnuWin32 rows for `zip` and `unzip`, to go when cash carries them | the same for every new tool |
@@ -138,7 +138,7 @@ method and comment) travels beside it.
 
 ### 3.4 `walk`
 
-Operands in order, with `-C`-style folder changes as steps; recursion; an exclusion
+Operands in order, with `-C`-style directory changes as steps; recursion; an exclusion
 predicate the front end supplies (`--exclude*`, zip's `-x`); dereferencing rules; hard
 links found by file identity (`cash-win32::fs::file_info`), so a second name is stored as
 a link; sort orders; "changed as we read it" by size and time before and after. Mode,
@@ -155,18 +155,18 @@ cash-sed, 3.10).
 
 ### 3.6 `extract`
 
-One safe writer: folders, files streamed from the member, hard links to what was already
+One safe writer: directories, files streamed from the member, hard links to what was already
 extracted, symbolic links when Windows allows them (Developer Mode or an elevated shell)
 and a typed refusal otherwise; an overwrite policy (keep, skip, keep newer, overwrite,
-unlink first, ask); times; read-only; folder times set after their contents. It never
+unlink first, ask); times; read-only; directory times set after their contents. It never
 writes through a link that leads out of the target. `tar -O` and `unzip -p` are the same
 writer aimed at standard output.
 
 ### 3.7 `select`, `listing`, `formats`
 
 - **select**: an operand or pattern against member names with the flags the tools
-  differ on: literal or wildcards, anchored, case, whether `*` crosses `/`, a folder
-  naming what is under it (tried by `select` itself, folder by folder). The matching is
+  differ on: literal or wildcards, anchored, case, whether `*` crosses `/`, a directory
+  naming what is under it (tried by `select` itself, directory by directory). The matching is
   a trait the front end fills with cash-core's `Pattern` (3.9), so cash-archive needs
   no shell crate.
 - **listing**: mode strings, dates in the shell's `TZ` (the front end passes the zone),
@@ -191,7 +191,7 @@ pub fn unix_view(path: &Path, follow: bool) -> io::Result<UnixView>;
 pub fn replace(target: &Path) -> io::Result<Replacement>;   // gzip's Target, for everyone
 pub fn symlink(target: &Path, link: &Path, kind: LinkKind) -> io::Result<()>;
 pub fn hard_link(existing: &Path, new: &Path) -> io::Result<()>;
-pub fn set_times(path: &Path, times: &Times) -> io::Result<()>;   // folders too
+pub fn set_times(path: &Path, times: &Times) -> io::Result<()>;   // directories too
 pub fn set_attributes(path: &Path, attributes: Attributes) -> io::Result<()>;
 pub fn check_name(component: &OsStr) -> Result<(), NameProblem>; // reserved, <>:"|?*, trailing . or space
 ```
@@ -271,9 +271,9 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   for each prefix, a hard link known on first sight, "file is the archive". A library
   for them would have one user and an interface shaped by tar's messages. Phase 30 moves
   into cash-archive what zip shares with them, when there are two users to shape it.
-- **`select` has its own `fnmatch`** (glibc's, with GNU tar's leading-folder, case and
+- **`select` has its own `fnmatch`** (glibc's, with GNU tar's leading-directory, case and
   unanchored retry), not cash-core's `Pattern` with new flags (3.9 is not done): the
-  retry after each `/` and the leading-folder rule live in the same function as the
+  retry after each `/` and the leading-directory rule live in the same function as the
   wildcards.
 - **`--transform`** (`tar/transform.rs`) reads its regular expressions through
   cash-sed's translation of GNU's syntax, with tar's own `s///` parser and flags (`r`,
@@ -346,7 +346,7 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   `md-5`, `sha1`, `sha2`, `sha3` (in the tree already) and `blake2s_simd` (new).
 - **Links**: `-snl` stores a symbolic link or a junction as a link, not followed (in 7z
   and zip, the reparse attribute and, for a file, its reparse data, as 7-Zip on Windows;
-  in tar, a symbolic link member relative to its folder); `-snh` stores hard links as
+  in tar, a symbolic link member relative to its directory); `-snh` stores hard links as
   links in tar, while 7z and zip, which have no record for one, get the file, as 7-Zip
   does. A tar's links are made on extraction after the rest, weighed by `-snld` as 7-Zip
   weighs them; symbolic links where Windows allows them.
@@ -361,7 +361,7 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   question and `-ao`, `-o`, `-p` (asked at the console when needed), `-r`, `-y`, `-so`,
   `-si`, `-sdel`, `-stl`, `-spf`, `-spe`, `-snz`, `-ssc`, `-w`, `-bb`, `-bs`, `-bd`,
   `-bt`, the progress line on a console, `-slt`. Archives are found by the scan `a`
-  uses, folders entered. `i` lists what cash has, shorter than 7-Zip's list of formats
+  uses, directories entered. `i` lists what cash has, shorter than 7-Zip's list of formats
   and codecs cash has not.
 - **Oracle**: `tests/oracle/7z_cases.sh`, made by Scoop's 7-Zip 26.03 under a cash that
   has no `7z` builtin, CRLF and `\` turned to LF and `/`. Archives made with `-mx0
@@ -419,23 +419,23 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
   volumes from `.rev` files), `ch`, `i`, `-ag`, `-as`, `-dr`, `-dw`, `-sc` and `-log`.
   Refused with rar's words in every set: SFX (`s`, `-sfx`), `rv` (rars writes no
   `.rev`), `-ieml`, `-ioff`, `-isnd`, `-ri`, `-vp`, `-om`, `-oc`.
-- **What `a` puts in, and in what order** (observed 2026-10-08): a folder is walked in the
-  file system's own order, files and folders as they come, and its folders are written
+- **What `a` puts in, and in what order** (observed 2026-10-08): a directory is walked in the
+  file system's own order, files and directories as they come, and its directories are written
   after every file, deepest first. A mask takes files only; with `-r` it also takes the
-  folders it matches, without their contents. An update keeps the archive's files where
-  they are (a replaced one in its place), puts new files after them, then every folder,
+  directories it matches, without their contents. An update keeps the archive's files where
+  they are (a replaced one in its place), puts new files after them, then every directory,
   the new before the old, deepest first. `m`, `mf` and `-df` delete in the walk's
-  reverse; a folder still holding something is "NOT DELETED", with status 0. RAR 5's
+  reverse; a directory still holding something is "NOT DELETED", with status 0. RAR 5's
   quick-open record covers files packed to more than 4,096 bytes (`-qo+` all, `-qo-`
   none).
 - **Solid order** (the user's pick, 2026-10-08): a compressed solid archive's new files
   sorted by extension, then name, as `Rar.exe` does with no `rarfiles.lst`; a
   `rarfiles.lst` in `%APPDATA%\WinRAR` orders them, as `Rar.txt` says it may. rar 7.23
-  reads that list only from its own folder, where WinRAR ships one; cash has no such
-  folder, so the oracle's solid case uses extensions both orders agree on. Stored (`-m0`)
+  reads that list only from its own directory, where WinRAR ships one; cash has no such
+  directory, so the oracle's solid case uses extensions both orders agree on. Stored (`-m0`)
   archives are never sorted.
 - **Spool files first**: TODO's item on rars' spool files (deleted on close, in the temp
-  folder cash names) is fixed before `rar a` is built, since rar's writes are the path
+  directory cash names) is fixed before `rar a` is built, since rar's writes are the path
   that spools.
 - **Oracle**: Scoop's WinRAR 7.23. `tests/oracle/rar_cases.sh` and
   `unrar_cases.sh`, made under the originals and checked in. As 7z's are, they run under
@@ -446,7 +446,7 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
 
 - **No C.** Every backend is Rust; `cargo deny` and the release's license list stay the
   gate (bzip2-1.0.6 accepted on 2026-10-07).
-- **Libraries know no shell**: no current folder (front ends resolve operands with the
+- **Libraries know no shell**: no current directory (front ends resolve operands with the
   shell's), no terminal, no printing. They take `Read`/`Write` streams, a probe for
   Ctrl-C (the front end passes the shell's pending-interrupt flag, as `watch` and
   `flock` poll it), and an observer for `-v` lines, so they interleave with errors in

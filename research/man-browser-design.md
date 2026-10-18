@@ -71,28 +71,29 @@ marked to be parsed only.
 
 ## 3. The browser
 
-    ┌ Topics & commands ───┐┌ cd ─ Change the shell's working directory ────────────────┐
-    │ ▸ Getting started    ││ SYNTAX                                                 │
-    │   Paths on Windows   ││     cd                go to your home directory           │
-    │   Line endings       ││     cd directory         go to directory                     │
-    │   Keys               ││     cd -              go back to the previous directory   │
-    │   Differences        ││                                                        │
-    │ ──────────────────── ││ EXAMPLES                                               │
-    │   alias              ││   Go to a directory, by any spelling:                     │
-    │   awk                ││       cd C:/src/cash                                   │
-    │ ▸ cd                 ││   Go up one directory, or two:                            │
-    │   chmod              ││       cd ..                                            │
-    │   ...                ││ ...                                                    │
-    └──────────────────────┘└────────────────────────────────────────────────────────┘
+    ┌ Topics & commands ───┐┌ cd ─ Change the shell's working directory ───────────────┐
+    │ ▸ Getting started    ││ SYNTAX                                                   │
+    │   Paths on Windows   ││     cd                go to your home directory          │
+    │   Line endings       ││     cd directory      go to directory                    │
+    │   Keys               ││     cd -              go back to the previous directory  │
+    │   Differences        ││                                                          │
+    │ ──────────────────── ││ EXAMPLES                                                 │
+    │   alias              ││   Go to a directory, by any spelling:                    │
+    │   awk                ││       cd C:/src/cash                                     │
+    │ ▸ cd                 ││   Go up one directory, or two:                           │
+    │   chmod              ││       cd ..                                              │
+    │   ...                ││ ...                                                      │
+    └──────────────────────┘└──────────────────────────────────────────────────────────┘
      /find  Tab pane  ↑↓ PgUp PgDn  Enter open  Alt-← back  ? keys  Esc quit    3 / 12
 
 - **Left pane**: one flat list, cash's topics first, a rule, then every command A to Z.
   The command or topic open is marked.
 - **Right pane**: the page, wrapped to the pane's width; section headings stay
-  recognisable as you scroll (a sticky heading line, **Open**).
+  recognisable as you scroll: the section's heading stays on the pane's top line.
 - **Bottom line**: the keys that matter now, and where you are (`line 3 of 120`, or the
   search's `3 / 12`).
-- **Narrow terminals** (under ~80 columns): one pane at a time, Tab switching.
+- **Narrow terminals** (under ~80 columns): the page fills the screen; Tab shows the
+  list in its place, Enter opens a page and goes back to it.
 
 ### Keys
 
@@ -136,7 +137,7 @@ prompt:
 | section headings | bold blue (the prompt's accent) |
 | what you type: commands, examples, code | green; a command's name bold green |
 | topics | bold cyan |
-| placeholders in syntax (`directory`) | italic or underlined (**Open**) |
+| placeholders in syntax (`DIRECTORY`) | upper case, plain, as `--help` writes them |
 | notes and marks | yellow |
 | search matches | reverse video; the current one bold reverse |
 | the list's selection | reverse video in the pane with focus, dim in the other |
@@ -200,5 +201,12 @@ batches.
 - No mouse: the terminal's own selection keeps working.
 - The word is "directory", never "folder", in every page.
 
-Still open: the placeholders' style in syntax lines, the order the pages are written in,
-a sticky heading while scrolling, narrow terminals, and the topics at the top of the list.
+- Placeholders are upper case (`cd [DIRECTORY]`), as `--help` and Bash's help write
+  them: they read the same piped, copied, or without colour.
+- The pages are written most-used first, in batches of about 20 (cd, ls, grep, find,
+  sed, cp, mv, rm, cat, ...), each batch with its examples' tests and fixes for the
+  bugs they find, and released when done.
+- The section's heading stays on the top line while the page scrolls.
+- Under about 80 columns one pane fills the screen, Tab switching to the list.
+- The list starts with "Getting started" and cash's topics, a rule, then every
+  command A to Z, as the user asked from the start.

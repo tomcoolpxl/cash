@@ -45,7 +45,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 17 | 1.3.18 | `lsof` lists everything |
 | 18 | 1.3.18 | `ss` as iproute2 7.2 has it |
 | 19 | 1.3.19 | `ss -i` and `dev`, and the vi fix |
-| 20 | 1.4.0 | `croot`: a built-in file and folder picker on Alt-E |
+| 20 | 1.4.0 | `croot`: a built-in file and directory picker on Alt-E |
 | 21 | 1.5.0 | Console, clipboard and the remaining small tools |
 | 22 | 1.6.0 | A per-user installer, `cash --update`, and winget |
 | 23 | 1.7.0 | `grep`, `diff` and `cmp`: the standing rule reversed |
@@ -74,8 +74,8 @@ Found writing the help catalogue (2026-10-04); all fixed, released as 1.3.17.
 Chosen by the user on 2026-10-04, after 1.3.17:
 
 Bare `lsof` and the open files of `-p`/`-c`/`-u` come from the handle walk
-(`cash_win32::handles`, spec D50) since 2026-10-05, and so do `+D`, `+d` and a folder
-named: `lsof +D /tmp` over `TEMP`'s 87,411 folders took over two minutes asking the
+(`cash_win32::handles`, spec D50) since 2026-10-05, and so do `+D`, `+d` and a directory
+named: `lsof +D /tmp` over `TEMP`'s 87,411 directories took over two minutes asking the
 Restart Manager file by file, and takes under two seconds. Done.
 
 ---
@@ -109,23 +109,23 @@ patch 8):
 
 ---
 
-## Phase 20. `croot`: a built-in file and folder picker on Alt-E
+## Phase 20. `croot`: a built-in file and directory picker on Alt-E
 
 The user used broot on Alt-E for two weeks (set up 2026-09-27 in `~/.bashrc` and broot's
 `cash-cd.hjson`) and wants it built in, as a picker only: no search language, no
 editor integration, no verbs. Broot takes up to two seconds to open, being a separate
-program; built in, the first frame comes from one folder read. Chosen on 2026-10-05:
+program; built in, the first frame comes from one directory read. Chosen on 2026-10-05:
 
 - **Inline, below the prompt** (as fzf's `--height`): 40% of the window, at least 8
   rows, `CASH_PICKER_HEIGHT=50%` or `=15`; the scrollback above stays visible, the
   screen scrolls up when the prompt is near the bottom, a tiny window gets full screen.
 - **Broot's tree**: several levels open, trimmed to fit with `… N more`; Right makes the
-  selected folder the root, Left goes to the parent; at a drive's root, Left shows the
+  selected directory the root, Left goes to the parent; at a drive's root, Left shows the
   drives (C:, D:, mapped drives, `~`).
 - **Typing is a fuzzy filter that also searches deeper**, in the background, best
   matches first, capped in time and entries; Esc clears it, then closes.
 - **Context from the command line**:
-  - folders only for an empty line, `cd`, `pushd`, `rmdir`, `mkdir -p`; folders and
+  - directories only for an empty line, `cd`, `pushd`, `rmdir`, `mkdir -p`; directories and
     files for any other command; Alt-F switches;
   - the word at the cursor, when it is part of a path, sets the start (`cd ~/src/fo`
     starts in `~/src` filtered by `fo`) and is replaced by the pick;
@@ -134,10 +134,10 @@ program; built in, the first frame comes from one folder read. Chosen on 2026-10
   - a command that takes several paths (`cp`, `mv`, `diff`, …) keeps the picker open
     for the next argument; one known to take one closes it; unknown commands stay open.
     Esc, or picking with Ctrl-Enter, closes.
-- **Path form**: relative below the current folder, `~/…` under home, else `C:/…`;
-  quoted only when needed; folders end in `/`.
-- **Extras in v1**: drives above `C:/`; a folder-history view (Alt-H) from cash's own
-  folder history (`cdh`); hidden entries (dotfiles, the hidden attribute) and
+- **Path form**: relative below the current directory, `~/…` under home, else `C:/…`;
+  quoted only when needed; directories end in `/`.
+- **Extras in v1**: drives above `C:/`; a directory-history view (Alt-H) from cash's own
+  directory history (`cdh`); hidden entries (dotfiles, the hidden attribute) and
   .gitignored ones left out by default, Alt-. and Alt-I show them.
 - **Colours**: entries as `ls` colours them (`LS_COLORS`); the picker's parts from
   `CASH_PICKER_COLORS` (`sel=…:match=…:frame=…`).
@@ -156,7 +156,7 @@ line editor (`cash-picker`), the `croot` builtin, `help croot`; ConPTY tests for
 pick and an inserted file. The broot block is out of the user's `~/.bashrc`, at their
 request (backup `~/.bashrc.before-croot`).
 
-After the user's first use: 1.4.1 lets Down and PgDn scroll through a long folder,
+After the user's first use: 1.4.1 lets Down and PgDn scroll through a long directory,
 1.4.2 shows each pick on the command line while picking, 1.4.3 stops the flicker while a
 search runs. Then (2026-10-06): the first frame measured at a median of 17-19 ms
 (`tests/croot_latency.rs`, spec D73), a resize works the height out again, and Alt-S
@@ -259,19 +259,19 @@ later").
    `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`, `/DIR=` and `/TASKS=`.
 2. **Layout as Scoop's**: `%LOCALAPPDATA%\Programs\cash\<version>\cash.exe` and a
    `current` junction, so an upgrade never overwrites a running `cash.exe`; open windows
-   keep the old file and new tabs get the new one. Inno copies into the version folder
+   keep the old file and new tabs get the new one. Inno copies into the version directory
    and runs `cash --install-finish` (new), which moves the junction, writes the Terminal
    profile, refreshes the tool links, runs `--init-rc --once`, and sweeps old version
-   folders nothing runs. `CloseApplications=no`: never Ctrl-C the user's shells.
+   directories nothing runs. `CloseApplications=no`: never Ctrl-C the user's shells.
 3. **Tool links on PATH by default**: the install task "Make the tools programs on PATH"
    is on, so `ls.exe`, `sed.exe`, `awk.exe`, … are on the user PATH ahead of Git's;
    a checkbox and `/TASKS=` turn it off. `cash.exe` itself goes on the user PATH always.
    PATH is written by cash (`--link-tools --add-to-path`), never by Inno's `[Registry]`.
 4. **Uninstall** (Apps & features entry, per-user): `cash --unlink-tools`,
-   `--remove-terminal-profile`, the PATH entries, the folder; the user's `~/.bashrc`,
+   `--remove-terminal-profile`, the PATH entries, the directory; the user's `~/.bashrc`,
    history and config stay.
 5. **`cash --update`**: asks GitHub's releases API for the latest version, downloads the
-   zip, verifies its `.sha256`, unpacks into a new version folder, moves the junction and
+   zip, verifies its `.sha256`, unpacks into a new version directory, moves the junction and
    runs the same finish step; `--check` only reports. A cash installed by Scoop says
    `scoop update cash` instead (its exe lives under `scoop\apps`). No background polling
    and nothing automatic: a shell that changes itself overnight surprises script authors.
@@ -313,11 +313,11 @@ later").
     started interactively by a script sees the question once.
 11. **`cash doctor` says when cash itself is not on PATH** (the user, 2026-10-06): its
     `cash` line only reports in-shell resolution, which is always cash, so a portable
-    cash whose folder is on no PATH still reads `ok`. Add a `path` line: `ok` when the
-    folder of the running `cash.exe` (`current` for an installed one, Scoop's shims for
+    cash whose directory is on no PATH still reads `ok`. Add a `path` line: `ok` when the
+    directory of the running `cash.exe` (`current` for an installed one, Scoop's shims for
     Scoop's) is on the user or machine PATH, else `note  path  C:\…\cash.exe is not on
     your PATH: new windows will not find cash` with the fix `cash --add-to-path`. That
-    command (and `--remove-from-path`) adds or removes the exe's own folder on the user
+    command (and `--remove-from-path`) adds or removes the exe's own directory on the user
     PATH, the same writer the offer and the installer use, and the offer's first
     question calls it.
 12. **F1: a one-screen help** (the user, 2026-10-06, by pick list). For Windows users
@@ -343,19 +343,19 @@ the installer): `packaging/inno/cash.iss` and its step in the release workflow;
 `cash --install-finish`, `--install-remove` and `--update [--check]`
 (`crates/cash/src/installer.rs`, junctions in `cash-win32/src/junction.rs`); the
 `installing` and `tools` help topics; the hint in the shell's error formatter; doctor's
-`install` line. Two details differ from the plan above: Windows renames a folder whose
-exe is running (only the delete fails), so a version folder is judged in use by a
+`install` line. Two details differ from the plan above: Windows renames a directory whose
+exe is running (only the delete fails), so a version directory is judged in use by a
 write-open of its `cash.exe` before anything is touched; and `ln -s DIR` makes a real
 symbolic link, which needs a privilege, so the `current` junction is set by
 `FSCTL_SET_REPARSE_POINT` in place, never half-moved. The installer compiles here (Inno
 Setup 6.7.3 from Scoop, 11.7 MB from the 1.5.0 files); an end-to-end silent install,
 `--update --check` and uninstall were exercised with HOME, LOCALAPPDATA and the registry
-key for the user PATH pointed at a scratch folder, since this machine's cash is Scoop's
+key for the user PATH pointed at a scratch directory, since this machine's cash is Scoop's
 and the installer refuses to run beside one. Found there: Inno's uninstaller runs with
 Windows' redirection-trust mitigation, inherited by what it starts, so no process of its
 may cross the `current` junction ("the path cannot be traversed because it contains an
 untrusted mount point"); the uninstaller therefore runs `--install-remove` from a version
-folder it finds itself. Windows Terminal, the shell and every ordinary process cross the
+directory it finds itself. Windows Terminal, the shell and every ordinary process cross the
 junction as before. For item 6, `packaging/winget` holds the three manifest templates and
 RELEASING step 8 the procedure; `scripts/sync-bucket.py` copies the Scoop manifest's notes
 and hooks into the bucket (step 7). Later the same day: the bucket pushed at 1.5.0 with
@@ -435,7 +435,7 @@ family only; `xz` and `bzip2` stay with `tar.exe`. On this tooled machine `gunzi
    files replaced in place with the `.gz` suffix added or removed, times and modes kept
    where Windows has them, the original name and time in the header (`-N`), `-l`'s
    table, `-t`, stdin and stdout, a refusal to write compressed data to a terminal
-   without `-f`, `-r` over folders, the `.tgz`/`.taz` suffix rules, `GZIP` environment
+   without `-f`, `-r` over directories, the `.tgz`/`.taz` suffix rules, `GZIP` environment
    variable accepted with GNU's warning. Pure Rust: `flate2` with `miniz_oxide` (already
    in the dependency tree). CRLF: bytes are bytes. Oracle: GNU gzip 1.14 in WSL
    (`gzip_cases`), byte-for-byte on the compressed output where gzip's output is
@@ -498,7 +498,7 @@ prerelease without a Rust API), `xz2` and `liblzma` (C).
 1. **cash-win32**: `unix_view` (mode, owner and group with their RIDs, link count,
    times to the nanosecond, identity), with `ls`'s rule for the mode (the access list
    decides `w`); `replace` (gzip's `Target`); `symlink` (Developer Mode or elevated, a
-   typed refusal otherwise), `hard_link`, `set_times` (folders too), `set_attributes`;
+   typed refusal otherwise), `hard_link`, `set_times` (directories too), `set_attributes`;
    `check_name` (reserved names, `<>:"|?*`, a trailing dot or space).
 2. **Onto it**: `ls` (the group read for the first time, not the owner again), `stat`
    (its mode follows `ls`'s rule, so it changes for some files), `dos2unix` (gains the
@@ -590,7 +590,7 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    `CPercentPrinter` and its hooks in scanning, opening, extracting, adding and `h`,
    matched against `-bsp1` into a pipe), `-si` reading (done with step 4), `-bt`,
    `-spe`, `-snz`, `-ai`/`-ax` beyond names (all done 2026-10-07: archives are found by
-   the scan `a` uses, folders entered, `-air`/`-ax` honoured, "Cannot find archive" when
+   the scan `a` uses, directories entered, `-air`/`-ax` honoured, "Cannot find archive" when
    none; `-bt` reports the command's own times and cycles, the shell process's memory
    peaks), and `i`'s listing is cash's own short one, on purpose: 7-Zip's lists formats
    and codecs cash does not have.
@@ -629,14 +629,14 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    directory, "Local" in Characteristics), split zips, Unix-made zips' names and modes.
 5. **Volumes, `h` and `-scrc`, links, `-sns`/`-sni`**. `h` and `-scrc` done 2026-10-07:
    7-Zip's ten hashes (BLAKE2sp from `blake2s_simd`), its columns and its sums for data
-   and for data and names, `-ba`, `-si`; `t` and `x` sum what they read (`t` folders
+   and for data and names, `-ba`, `-si`; `t` and `x` sum what they read (`t` directories
    too, as 26.03 does). Volumes done 2026-10-07: `-v` writes `NAME.001` and on in every
    format (7z, zip and tar to 7-Zip's bytes), "Volumes: N"; `NAME.001` reads as 7-Zip's
    "Split" level over the archive inside, the volumes not opened again, their sizes in
    the totals. The spanning is cash-archive's `volumes` (`Spanned`, `numbered`,
    `SpannedWriter`), which zip's split parts use too. Links and `-sns`/`-sni` done
    2026-10-07: `-snl` keeps a junction or a symbolic link as one (not entered, its
-   reparse data read: a symbolic link in tar, relative to its folder; in 7z and zip the
+   reparse data read: a symbolic link in tar, relative to its directory; in 7z and zip the
    reparse attribute, and for a file the data as 7-Zip passes it; `h` hashes the data);
    `-snh` makes a file met again under another name a tar hard link; extraction makes a
    tar's links after every item, from empty placeholders, with 7-Zip's `-snld` danger
@@ -802,21 +802,21 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      the newer naming's last four bytes are a CRC32 of the rest (and the three before
      them its counts and number), which `t` checks; the older naming's are not tested
      by rar, nor by cash (`rar_reconstruct.sh`).
-   - Extraction: `-f`/`-u`, `-ad1`/`-ad2`, folders' times and attributes (`-ai`
+   - Extraction: `-f`/`-u`, `-ad1`/`-ad2`, directories' times and attributes (`-ai`
      keeping the times only), and one summary for the archives a wildcard matches,
      their errors added up: done 2026-10-09 (`rar_extract_switches.sh`, 363 lines; this
-     line said "built" of them, but extraction read none, set no folder's time, and
+     line said "built" of them, but extraction read none, set no directory's time, and
      summed up each archive alone). `-ts`, `-tsc`, `-tsa` and `-tsm-` on extraction:
      compared with Rar.exe by hand, not in the oracle.
    - Links on extraction: done 2026-10-09 (`rar_links.sh`, 176 lines; extraction wrote
      each link as an empty file, saying OK). Hard links, file references, `-ol-`, and
      symbolic links skipped as unsafe (absolute, or more `..` than the link's own
-     folders) are in the oracle, with two archives of cash's own fixtures
+     directories) are in the oracle, with two archives of cash's own fixtures
      (`crates/cash/tests/fixtures/rar`: `copies.rar` made by Rar.exe `-oi`,
      `links_unsafe.rar` rars' `symlink.rar` with its targets changed). Left out of it,
      compared by hand: a symbolic link Windows refuses for want of the right ("Cannot
-     create symbolic link ... You may need to run RAR as administrator", a folder's
-     link leaving an empty folder, as rar's does) and one it makes, which needs that
+     create symbolic link ... You may need to run RAR as administrator", a directory's
+     link leaving an empty directory, as rar's does) and one it makes, which needs that
      right.
    - A file reference whose file is not asked for: done 2026-10-09 (in
      `rar_links.sh`, now 319 lines). The file is unpacked first to a temporary
@@ -832,28 +832,28 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      is read after the last file asked for; with none asked for, every file is skipped,
      as rar does.
    - Junctions on extraction: done 2026-10-09 (in `rar_links.sh`, now 226 lines).
-     cash made a junction a plain folder, whatever the switches. Now a junction is a
+     cash made a junction a plain directory, whatever the switches. Now a junction is a
      link: skipped as unsafe (its target is absolute) without `-ola`, left out with
      `-ol-` ("No files to extract", rc 10), and made a junction with `-ola`, its line
-     ending in rar's "   ? " after the line of the folder made for it. A link's folder
+     ending in rar's "   ? " after the line of the directory made for it. A link's directory
      is made only once the link is to be made, after its line, as rar does.
    - `-ol` on `a`: done 2026-10-09 (in `rar_add_links.sh`, now 613 lines). A junction
      is followed without it (its target's files under its name, its own entry a plain
-     folder with its own time), left out with `-ol-`, and with `-ol` or `-ola` stored as
-     a type-3 link: a folder entry with the reparse attribute (0x410), the substitute
+     directory with its own time), left out with `-ol-`, and with `-ol` or `-ola` stored as
+     a type-3 link: a directory entry with the reparse attribute (0x410), the substitute
      name its reparse data holds (`\??\C:\...`) with `/`, flag 1, taken by a mask
      without `-r` as a file is. A tree holding a junction used to fail whole ("Access
      is denied"). `lt` named a junction "Windows junction", where rar says "NTFS
-     junction point", and gave a folder link sizes, which rar leaves out. Symbolic
+     junction point", and gave a directory link sizes, which rar leaves out. Symbolic
      links (type 2, the substitute name likewise) are not observed: making one needs a
      right this desktop lacks; rar's word for them, "Windows symbolic link", was seen by
      listing a junction archive retyped to 2.
    - `-oh`, hard links: done 2026-10-09 (in `rar_add_links.sh`, now 422 lines). A
      file's other names put in after its first are type-4 links to it, their sizes not
-     padded, with the times the folder's entry gives (a name not used since the file
+     padded, with the times the directory's entry gives (a name not used since the file
      changed keeps old ones there, and rar stores those). `-oi` counts them among the
      identical files, and they stay hard links. A file's own size and times are now
-     taken from the file opened, not its folder's entry, as rar's are.
+     taken from the file opened, not its directory's entry, as rar's are.
    - `-oi`, identical files as references: done 2026-10-09 (`rar_add_links.sh`, 328
      lines, the archives WinRAR's byte for byte). Files of the least size or more
      (64 KB, or `-oi:SIZE` with rar's units) with the same size and the same bytes,
@@ -912,9 +912,9 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      `times_rar4.rar`): Rar.exe lists them as "Created" and "Accessed" and restores
      them with `-tsc`, `-tsa` and `-ts`, local DOS times to the 100 ns; rars decoded
      only the modification time. rars' RAR 1.5 to 4 header has `ctime` and `atime`.
-   - `-df`, `m` and `mf` with a folder left holding files left out ("NOT DELETED",
+   - `-df`, `m` and `mf` with a directory left holding files left out ("NOT DELETED",
      "Cannot delete ... The directory is not empty."), and `-r` with a plain file name,
-     looked for in every folder below its own as a mask is (not with `-r0`, and a name
+     looked for in every directory below its own as a mask is (not with `-r0`, and a name
      found nowhere is then no error): done 2026-10-09 (`rar_add_names.sh`, 152 lines;
      the first was already rar's, the second is new).
    - The locator's padding when an archive is changed: done 2026-10-09 (in
@@ -940,7 +940,7 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      quick-open record. The quick-open room kept for a file going in is its header and
      18 bytes, for each earlier one in the volume its header and 16 (seen in twelve
      `-rr` sets and a `-p` one, all WinRAR's to the byte). A volume's number has the
-     digits of the volumes foreseen from the bound, as Rar.exe's. A folder among
+     digits of the volumes foreseen from the bound, as Rar.exe's. A directory among
      encrypted files has no encryption record, in volumes and single archives alike, as
      WinRAR writes it (it was 49 bytes larger).
    - `-hp`'s quick-open block: done 2026-10-09 (`rar_volumes.sh`, now 162 lines;
@@ -972,7 +972,7 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      `rar_agname.sh` and unit tests from the names Rar.exe gave; `-as` done
      2026-10-09: what no name gives taken out, its "Deleting" lines in their places; and
      `-dw` and
-     `-dr` done 2026-10-09: `-dw` in `rar_add_names.sh`; `-dr`, a folder archived whole
+     `-dr` done 2026-10-09: `-dw` in `rar_add_names.sh`; `-dr`, a directory archived whole
      recycled whole and lines without a share, compared with Rar.exe by hand, out of
      the oracle not to fill the Recycle Bin);
      `-md` done 2026-10-09 (in `rar_add_names.sh`): the dictionary asked
@@ -1032,7 +1032,7 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      before; cash's heeded all.
    - `-ams`, `-tl` and `ch -amr`: done 2026-10-09 (in `rar_modify.sh`, now 981 lines,
      WinRAR's byte for byte but a recovery record's bytes). `-ams` saves the archive's
-     file name and the time it is written (with `-tl` its newest file's, folders left
+     file name and the time it is written (with `-tl` its newest file's, directories left
      out) in its main header, for `a`, `u`, `f`, `m`, `d`, `c`, `k`, `rn`, `ch` and `rr`;
      cash saved neither. `-tl` sets the archive's own time to its newest file's after
      every one of them; cash did it for `ch` only. `ch -amr` sets the archive's
@@ -1114,8 +1114,8 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    reads RAR.
 4. **rar's spool files outlive a killed process**: done 2026-10-08. Spools and reader
    scratch files are opened delete-on-close, a spool keeping that handle while it lives,
-   and a writer with no temp folder named spools in the system's, not the process's
-   working folder. `rar a` passes `-w`'s folder when given.
+   and a writer with no temp directory named spools in the system's, not the process's
+   working directory. `rar a` passes `-w`'s directory when given.
 5. **rar's AES key schedules are not wiped**: done 2026-10-10, the user's pick (a
    download of `zeroize`, in the end found in cargo's cache). The `aes` crate's
    `zeroize` feature is on, so `Aes128`/`Aes256` wipe their round keys when dropped,
@@ -1132,22 +1132,22 @@ day (spec D79, D80). In order:
 
 1. **Ctrl-R: a history picker** (D79, done 2026-10-10): Alt-E's inline list over the
    history, fuzzy, newest first, Enter to the line and Tab to run, Ctrl-R again for what
-   ran in this folder (a folder record of cash's own beside the history file,
-   `%LOCALAPPDATA%\cash\history-folders`; `CASH_NO_RECORDS` keeps none, and the tests set
+   ran in this directory (a directory record of cash's own beside the history file,
+   `%LOCALAPPDATA%\cash\history-directories`; `CASH_NO_RECORDS` keeps none, and the tests set
    it). Keys typed straight after Ctrl-R or Alt-E now reach the picker, not the line
-   after it (reedline patch 10). The folder list shows only commands still in the
+   after it (reedline patch 10). The directory list shows only commands still in the
    history, so `history -c` empties it too. `reverse-search-history` is Reedline's search
    again, which `bind` can put back on Ctrl-R. Help: `keys`, `history`, `vars`,
    `differences`, F1, README.
-2. **`z`: the folder jump** (D80, done 2026-10-10): every change of folder ranked across
+2. **`z`: the directory jump** (D80, done 2026-10-10): every change of directory ranked across
    sessions as zoxide ranks, `z WORDS`, `z -l`, `z -i`, Tab, and Alt-E's Alt-H (and
-   `croot`'s) on the same record, `%LOCALAPPDATA%\cash\folders`. A gone folder is
+   `croot`'s) on the same record, `%LOCALAPPDATA%\cash\directories`. A gone directory is
    skipped and forgotten after 90 days without a visit, as zoxide does, rather than at
-   once (an unplugged drive keeps its folders). Tab replaces all the words typed, since
+   once (an unplugged drive keeps its directories). Tab replaces all the words typed, since
    a full path would not match them in turn. Tests: `it/z_jump.rs`, and two sessions in
-   `conpty_z_jumps_to_folders_a_session_before_went_to`.
+   `conpty_z_jumps_to_directories_a_session_before_went_to`.
 3. **Every way of writing a path, everywhere** (done 2026-10-10): `it/path_spellings.rs`
-   runs a folder named `my dir` in ten spellings (`C:/`, `c:/`, `C:\`, mixed, `/c/`,
+   runs a directory named `my dir` in ten spellings (`C:/`, `c:/`, `C:\`, mixed, `/c/`,
    `~/`, relative, `./`, `//localhost/C$/…`, `\\localhost\C$\…`) through 17 places
    (`cd`, `pushd`, `cdh`, `CDPATH`, `z`, `<`, `>`, `>>`, `source`, `test`, `ls`, globs,
    a script by its path, `PATH`, `cat`, `git`); Tab and Alt-E's start have tables of
@@ -1164,11 +1164,11 @@ day (spec D79, D80). In order:
    in the job summary; over a limit stops the release. The local release build of
    2026-10-07: 50.8 MB, 27.9 ms.
 5. **`rm -rf` on junctions** (done 2026-10-10), from "Found along the way": a junction
-   inside a folder gave "Permission denied", and one whose target went first failed
+   inside a directory gave "Permission denied", and one whose target went first failed
    too. `rm` (cash's own since item 6, from `uu_rm` 0.12.0) now takes `RemoveDirectoryW`
-   where it removed a folder link as a file (`DeleteFileW`): the link goes, never
+   where it removed a directory link as a file (`DeleteFileW`): the link goes, never
    followed. Tests: `it/rm_links.rs` (junctions to
-   a folder inside and outside, and a dangling one). `rar_add_links.sh` still takes its
+   a directory inside and outside, and a dangling one). `rar_add_links.sh` still takes its
    junction away with `cmd /c rmdir`, which it may now leave to `rm`.
 6. **The five patched uutils tools become cash's own code** (the user, 2026-10-10, by
    pick list; done the same day): `rm`, `tee`, `sort`, `uniq` and `shuf` moved from
@@ -1208,7 +1208,7 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    path); either take it (cash's paths are Windows paths already) or drop it from the
    usage.
    Done 2026-10-10: `pwd -W` is taken and prints what `pwd` prints, with `-L` and `-P` as
-   before. `pwd -P` printed the resolved folder as `\\?\C:\…`; it is `C:/…` now, as every
+   before. `pwd -P` printed the resolved directory as `\\?\C:\…`; it is `C:/…` now, as every
    path cash prints. Tests: `it/pwd_forms.rs`.
 
 2. **`sort` never asks Windows how much memory there is** (found 2026-10-10, making it
@@ -1225,30 +1225,30 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    `buffer_hint.rs`, and `ctrl_c::tee_i_lives_through_ctrl_c`, where `tee -i` keeps what
    the shell before it writes after a Ctrl-C ended its `ping`.
 
-3. **A `TEMP` in 8.3 short form is not under the home folder** (found 2026-10-10 by CI,
+3. **A `TEMP` in 8.3 short form is not under the home directory** (found 2026-10-10 by CI,
    run 38043418786): Windows sets `TEMP` to `C:\Users\RUNNER~1\AppData\Local\Temp` for
-   a long user name, while `HOME` is `C:/Users/runneradmin`. A folder under `TEMP` then
+   a long user name, while `HOME` is `C:/Users/runneradmin`. A directory under `TEMP` then
    shows whole in `z -i`, the pickers and `tilde_shorten`, never as `~/…`, and two
-   spellings of one folder count as two in the records. Taking `TEMP` and `TMP` to their
+   spellings of one directory count as two in the records. Taking `TEMP` and `TMP` to their
    long form (`GetLongPathNameW`) as cash starts would mend both; check what a program
    started by cash then gets, and Git Bash's own `TEMP`.
    Done 2026-10-10: cash takes `TEMP` and `TMP` to their long form (`GetLongPathNameW`,
    `cash_win32::path::long_form`) first thing in `main`, so `/tmp`, its temporary files,
    `$TEMP`, `$TMPDIR` and the programs it starts all see the long form. Git Bash shows
    `$TEMP` as `/tmp`, which `pwd -W` gives in long form, and hands programs the short form
-   it was given; the long one names the same folder. Test: `it/long_temp.rs`, a folder's
+   it was given; the long one names the same directory. Test: `it/long_temp.rs`, a directory's
    8.3 name as `TEMP`, under a `HOME` in long form.
 
 4. **CI's annotations show four `ENOENT ... opendir 'D:\a\cash\cash\target\doc\cash_core\tests\trybuild'`**
    (and `...\tests\target`) errors on every green run, 1.8.0's and 1.8.1's included
    (seen 2026-10-06). The job passes; the cleanup of the Rust Cache step
    (`Swatinem/rust-cache`, `.github/workflows/ci.yml`) walks `target\doc` and trips on
-   folders that are gone. Find what makes `target\doc\cash_core\tests` and keep it out of
+   directories that are gone. Find what makes `target\doc\cash_core\tests` and keep it out of
    the documentation, or exclude `target\doc` from the cache.
    Done 2026-10-10: `cash_core::tests`, the `test` builtin's expressions, was a public
-   module named `tests`, whose rustdoc folder the cache's cleanup took for a build folder
+   module named `tests`, whose rustdoc directory the cache's cleanup took for a build directory
    and looked for `target` and `trybuild` in; it is `cash_core::test_expr` now. As a
-   restored cache still holds the old folder, the quick job removes `target\doc` before
+   restored cache still holds the old directory, the quick job removes `target\doc` before
    the cache is saved. Found in the same annotations: crossterm's console tests
    (`*_winapi`) each make a screen buffer the console's active one, and two failed on a
    first try in CI; their `#[serial]` orders one process only, so they share a nextest
@@ -1296,11 +1296,11 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    ordinary program to the shell, which asks UAC (`ShellExecuteExW`, `runas`, its window
    hidden) for `cash --invoke-bundled --sudo-attach`; that one attaches to the caller's
    console, takes its other standard handles with `DuplicateHandle`, changes to its
-   folder, ends when the caller ends, and runs the command under `--sudo-owner` as before.
+   directory, ends when the caller ends, and runs the command under `--sudo-owner` as before.
    Declined, `sudo: not run: the request to run it as an administrator was declined`, 1.
    Windows' sudo and UAC's new window are no longer used by `sudo`; `sudo -n` fails unless
    elevated; `cash doctor`, `sudo -l`, the help pages and the spec say so. Seen by hand,
-   with the user at UAC's prompts: the status, the console, the folder, files in and out,
+   with the user at UAC's prompts: the status, the console, the directory, files in and out,
    Ctrl-C, and keys (`it/sudo_in_terminal.rs`, ignored in the suites as they ask UAC).
    Not built: the environment through a handle; `-E` still passes `NAME=value` words.
 
@@ -1315,14 +1315,14 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
    gsudo does. It is put in a kill-on-close job before it runs, so a shell killed mid-run
    takes it too (seen); and USER is granted the window station and desktop while the command
    runs (`winstation.rs`), put back after, so a windowed program can show. When the shell's
-   folder is under the caller's profile, which USER cannot enter, the command runs from the
+   directory is under the caller's profile, which USER cannot enter, the command runs from the
    system temp instead, with a note. gsudo and `runas` are no longer used; `cash_win32::gsudo`
    is gone; `sudo -v`, `-k` and `-K` are kept for scripts with no cache behind them. Tests:
    `sudo_in_terminal::ctrl_c_at_the_password_prompt_runs_nothing` (in the suites),
    `::sudo_u_runs_the_command_as_the_account`, `::sudo_u_shows_console_output_in_this_terminal`
    and `::sudo_u_dies_when_the_shell_is_killed` (ignored; a second account and its password).
 
-9. **`net user NAME * /add` fails: the star becomes the folder's files** (the user,
+9. **`net user NAME * /add` fails: the star becomes the directory's files** (the user,
    2026-10-11, by pick list; built the same day): a line that works in cmd and PowerShell
    failed in cash as it fails in Git Bash. `shopt winglob` (D81), on at the prompt and off
    in scripts like `winpaths`: when the command resolves to a program under `System32` or
@@ -1357,7 +1357,7 @@ each item's entry is under "Found along the way, done" below.
   password. Each pass of the format is now held and written at once, as bash's printf
   writes it (a Python reader sees `v\n` whole; unit test in `printf.rs`).
 - **WinRAR matches an archived name typed with `/` to nothing** (found on 2026-10-09
-  with `rar d`): Rar.exe 7.23 on Windows takes `\` alone between folders in the names
+  with `rar d`): Rar.exe 7.23 on Windows takes `\` alone between directories in the names
   after the archive's, so `t`, `p`, `e`, `x` and `d` given `src/a.txt`, `*/a.txt` or
   `src/*` say no files and return 10, where `src\a.txt` works. cash's rar takes both,
   which in a shell where `/` is typed is what a user means. Kept so, the user's pick
@@ -1373,9 +1373,9 @@ each item's entry is under "Found along the way, done" below.
   with seems not to be zeros. Larger archives' records are the same each run, and
   cash's match them; the oracles show a small archive's record by its size.
 - **`rm -rf` stops at a junction** (found on 2026-10-09 with `rar_add_links.sh`; done
-  2026-10-10, phase 34 item 5): a folder holding a junction gave "rm: cannot remove 'top\junc': Permission denied",
+  2026-10-10, phase 34 item 5): a directory holding a junction gave "rm: cannot remove 'top\junc': Permission denied",
   rc 1, in 1.10.0 too. It does not follow the junction (the target's files survive); it
-  fails to take away the link itself, which a folder link needs `RemoveDirectoryW` for.
+  fails to take away the link itself, which a directory link needs `RemoveDirectoryW` for.
   `rm` is uutils' `uu_rm` 0.12.0 from crates.io: the fix means a near-upstream copy in
   `vendor/uutils` (as `uu_sort` and the others), or seeing whether a newer uutils has it.
   The oracle takes its junction away with `cmd /c rmdir` meanwhile.
@@ -1383,8 +1383,8 @@ each item's entry is under "Found along the way, done" below.
   on 2026-10-07, each right after a build, and passed alone and in seven runs after,
   three of them beside the other three oracle scripts; the difference was not caught.
   Run it with `--failure-output final` until it fails, and see what moved.
-  Settled 2026-10-10: `7z u` took `d/` as changed when the folder's time fell
-  near the end of a second; the folders now get whole seconds (see the 1.12.0
+  Settled 2026-10-10: `7z u` took `d/` as changed when the directory's time fell
+  near the end of a second; the directories now get whole seconds (see the 1.12.0
   gate item).
 - **7z asks for a password before extracting, 7-Zip when it gets to the first
   encrypted item** (found on 2026-10-07 with RAR, true of zip too): with no password to
@@ -1415,22 +1415,22 @@ each item's entry is under "Found along the way, done" below.
   (pushed 2026-10-07).
 - **`rm -rf` fails on a junction whose target it removed first** (found 2026-10-07,
   phase 31; done 2026-10-10, phase 34 item 5, though `rm`'s other messages still name
-  a path inside the folder with `\`): in `t/` holding `sub/` and `jn` (a junction to `sub`), `rm -rf t` removes
+  a path inside the directory with `\`): in `t/` holding `sub/` and `jn` (a junction to `sub`), `rm -rf t` removes
   `sub` and then says `rm: cannot remove 't\jn': Permission denied`, leaving `t` and the
   dangling junction (status 1). `rm -rf t/jn` alone works and keeps `sub`. A junction
   left dangling seems to be removed as a file (`DeleteFileW`, refused) where it is a
-  folder link (`RemoveDirectoryW`). Its `\` in the message is not cash's `/` either.
+  directory link (`RemoveDirectoryW`). Its `\` in the message is not cash's `/` either.
 - **The vendored uutils print message ids in a release** (found 2026-10-10; done the
   same day, phase 34 item 6): Scoop's
   1.10.0 says `sort: sort-cannot-read`, `Usage: tee-usage`, `Usage: shuf-usage`,
   `Usage: uniq-usage`. uucore's build script embeds a tool's messages from the
-  `uu_<tool>-<version>/locales` folders it finds beside itself in the cargo registry;
+  `uu_<tool>-<version>/locales` directories it finds beside itself in the cargo registry;
   a tool built from `vendor/` is never unpacked there on a clean machine (CI, the
   release job), so its messages are missing. A local build looks right only because
   this machine's registry still holds the upstream copies. No test checks those
   messages.
 - **Two tests were made robust in the 1.12.0 gate**: the 7z oracle's `u` of `h.tar`
-  took `d/` as changed when its time fell near a second's end (the folders now get whole
+  took `d/` as changed when its time fell near a second's end (the directories now get whole
   seconds), and `watch -e`'s key, typed as soon as the message showed, could be lost on a
   busy machine (the test now types until `watch` ends).
 - **LZMA2's `c=` sets the block size, as in 7-Zip** (2026-10-11, from the 1.10.0
@@ -1587,40 +1587,40 @@ each item's entry is under "Found along the way, done" below.
 
 - **Shared parts for the builtins, 2: inputs** (done 2026-10-17):
   `ExecutionContext::open_input` (`cash_core::input`) opens a name as the shell's `<`
-  does: the shell's folder, the devices, `/dev/stdin` and `/dev/fd/N` as the shell's
-  descriptors; one open, the handle's metadata, "Is a directory" for a folder, the read
+  does: the shell's directory, the devices, `/dev/stdin` and `/dev/fd/N` as the shell's
+  descriptors; one open, the handle's metadata, "Is a directory" for a directory, the read
   through the stop token; `Input::rewinder` reads a file again without opening it again.
   A read the stop fails, passed up with `?`, ends a builtin as stopped, in silence.
   - grep, rev, column, hexdump, xxd, iconv, logger and the pagers read `/dev/stdin` and
-    the rest, and word a folder as their upstreams do (checked against WSL);
+    the rest, and word a directory as their upstreams do (checked against WSL);
   - gzip, bzip2, xz and zstd open once and decide from the handle; bzip2 `-f` no longer
     opens a process substitution's pipe a third time; dos2unix calls a device's name no
     regular file;
   - tar reads cash's spellings (`/c/x`) for names, `-C`, `-T` and `-X`, and devices for
-    its lists and archive; 7z reads its list files from the shell's folder;
+    its lists and archive; 7z reads its list files from the shell's directory;
   - `< dir`, `> dir` and `source dir` say "Is a directory".
 
 - **Shared parts for the builtins, 3: walks** (done 2026-10-17): `cash_builtins::walk`,
   on walkdir. Names shown as typed and joined once; one answer to what a link is (a
-  symlink or junction; a cloud placeholder is the file or folder it holds); the stop
-  token asked for each entry; every error handed to the tool, a folder that could not
+  symlink or junction; a cloud placeholder is the file or directory it holds); the stop
+  token asked for each entry; every error handed to the tool, a directory that could not
   be listed apart from a name that is not there. Links below a root are followed by the
-  layer, a loop found by the identity of the folders above: walkdir's own following
-  opened each folder to read, and lost one that could not be read.
+  layer, a loop found by the identity of the directories above: walkdir's own following
+  opened each directory to read, and lost one that could not be read.
   - grep -r/-R, find (`-H` real, its loop message kept, a name it cannot read quoted),
-    tree (a cloud folder is a folder, a linked root listed), gzip -r and zstd -r (links
-    as upstream), chmod -R (a folder it cannot list is said), where (where.exe's order,
-    through junctions, each folder listed once, one walk for every pattern), lsof +D
+    tree (a cloud directory is a directory, a linked root listed), gzip -r and zstd -r (links
+    as upstream), chmod -R (a directory it cannot list is said), where (where.exe's order,
+    through junctions, each directory listed once, one walk for every pattern), lsof +D
     and fuser;
   - tar, zip, rar and 7z: through links where upstream goes, each file stored once at a
-    junction back to a folder above (upstream goes round until the path is too long,
-    or, GNU tar, until its stack overflows); tar's and rar's words for a folder that
+    junction back to a directory above (upstream goes round until the path is too long,
+    or, GNU tar, until its stack overflows); tar's and rar's words for a directory that
     cannot be listed; rar's archive masks in Rar.exe's order; 7z takes only symlinks
     and junctions as links; a stop in a walk fails the run, never an archive that looks
     whole;
-  - 7z x -o makes its folder when nothing is extracted, as 7-Zip does (the old find
+  - 7z x -o makes its directory when nothing is extracted, as 7-Zip does (the old find
     had hidden it from the oracle);
-  - ls -R joins names once (`ls -R foo/`), and ls --tree says a folder it cannot open.
+  - ls -R joins names once (`ls -R foo/`), and ls --tree says a directory it cannot open.
 
 - **Shared parts for the builtins, 4: the parts called most** (the user, 2026-10-17;
   done the same day, `research/hot-paths.md`). 30 loops timed with hyperfine against
@@ -1628,7 +1628,7 @@ each item's entry is under "Found along the way, done" below.
   `[[ ]]`, starting programs). What was behind, and now (seconds, before / after / bash):
   - a glob of System32's DLLs, 200 times: 2.20 / 0.92 / 1.08 (the pattern made once per
     component, each name read once, one sort);
-  - `type -P cmd`, 2,000 times: 6.17 / 1.33 / 3.23 (one directory query per PATH folder
+  - `type -P cmd`, 2,000 times: 6.17 / 1.33 / 3.23 (one directory query per PATH directory
     where each name it could have was looked for);
   - `while read -r l` over 100,000 lines: 3.23 / 1.27 / 1.70 (a block of a disk file and
     the rest given back, as Bash's `lseek`, and the parse of a line seen kept);
@@ -1646,7 +1646,7 @@ each item's entry is under "Found along the way, done" below.
   (`-RL` says a junction loop, status 2). `-C` lays columns out as GNU does, each as wide
   as its widest name, where every column took the widest name's width; the width is
   `COLUMNS`, the terminal's, or 80 into a pipe, where the console's was taken. `ls -l` on
-  a link to a folder shows the link, as GNU's does. `help ls` gives `ls --help`'s options.
+  a link to a directory shows the link, as GNU's does. `help ls` gives `ls --help`'s options.
 
 - **The clipboard test failed while another program held the clipboard** (found
   2026-10-16, done 2026-10-17): an open of the clipboard tried for 200 ms, ten times
@@ -1671,9 +1671,9 @@ each item's entry is under "Found along the way, done" below.
 
 - **`d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"` left `$d` behind** (spec §4 #13;
   the spec's claim that an in-process `rm` could not fix it was found wrong 2026-10-16,
-  done 2026-10-17): the bundled `rm` ran in the shell's folder, which Windows will not
+  done 2026-10-17): the bundled `rm` ran in the shell's directory, which Windows will not
   let a process remove. cash's own `rm` moves to the volume's root before it removes a
-  folder that holds its own; a relative operand after that names nothing, as on Linux,
+  directory that holds its own; a relative operand after that names nothing, as on Linux,
   and `..` is still refused. §4 #13 now names the other bundled tools (`rmdir`), and
   spec §8 says why an in-process tool would have fixed it.
 
@@ -1724,7 +1724,7 @@ each item's entry is under "Found along the way, done" below.
   said "failed to parse parameter", status 1.
 
 - **`cd` took 62 µs** (found 2026-10-17 in the hot-paths survey, done the same day): it
-  tells a folder with `GetFileAttributesW`, without the handle `std::fs::metadata` opens
+  tells a directory with `GetFileAttributesW`, without the handle `std::fs::metadata` opens
   (a link or a junction still goes through `metadata`), and renders its path once:
   55.6 µs a call, against 233 µs in Git Bash. The rest is Windows': one attribute query
   costs 43 to 48 µs on this machine outside cash too, and `cd` must ask once.
@@ -1743,8 +1743,8 @@ each item's entry is under "Found along the way, done" below.
   copies it then: a `( : )` took 20.1 µs, now 15.7, and a `$(true)` 4.4 µs less of its
   74. `enable -n` in a subshell stays in it, as in Bash; a test says so.
 
-- **Command completion listed each PATH folder whole** (from the 2026-10-16 survey, done
-  2026-10-17): each folder is asked for the names beginning with the prefix
+- **Command completion listed each PATH directory whole** (from the 2026-10-16 survey, done
+  2026-10-17): each directory is asked for the names beginning with the prefix
   (`FindFirstFileExW`), the long names still compared, and a prefix with a wildcard
   character lists it whole as before: `compgen -c no` took 24 ms, now 17.7, the same
   names for every prefix tried, the empty one's 7,963 among them.
@@ -1791,7 +1791,7 @@ each item's entry is under "Found along the way, done" below.
     right after the step before had run that freshly copied exe, something still held
     it (Defender's scan of a new executable, or the image's teardown). The test waits,
     up to 20 s, until it can open it as the sweep does. A real upgrade sweeps such a
-    folder the next time.
+    directory the next time.
   - **A cash-sed test timed out once in CI** (run 39024431762): it starts 14 small
     seds and cannot hang; half a dozen other sed tests passed 15 s in the same minute
     on a starved runner. uutils' sed tests get a 30 s period, an exception the user
@@ -1799,7 +1799,7 @@ each item's entry is under "Found along the way, done" below.
   - **The ConPTY tests that run PowerShell timed out now and then**: the script compiled
     its C# console helper with `Add-Type` on every start, 0.4 to 1 s here and, with
     Roslyn cold on a fresh runner, plausibly past the 30 s the tests wait. The helper is
-    compiled once, before the ConPTY starts, into a DLL in the temporary folder named
+    compiled once, before the ConPTY starts, into a DLL in the temporary directory named
     by its source and PowerShell, with its time printed; the script loads it.
 
 - **Two costs paid on every call** (the user's pick of 2026-10-17, from the 2026-10-16
@@ -1807,9 +1807,9 @@ each item's entry is under "Found along the way, done" below.
   - **A missing command given arguments probed PATH twice**, at the prompt where
     `winglob` is on: the decision of who globs (D81) looks the name up as the second word
     is expanded, and the dispatch looked again. The first used the search that tries
-    every `PATHEXT` extension in every folder, about 39 ms; it now uses the dispatch's,
-    which reads each folder once, and remembers a miss, which the dispatch takes while
-    `PATH`, `PATHEXT`, the working folder and the count of exit statuses are as they were
+    every `PATHEXT` extension in every directory, about 39 ms; it now uses the dispatch's,
+    which reads each directory once, and remembers a miss, which the dispatch takes while
+    `PATH`, `PATHEXT`, the working directory and the count of exit statuses are as they were
     (a command substitution in a later word can make the program, and it is found).
     `nosuchcommand x` 200 times with `winglob` on: 9.2 s, now 1.4 s; the first run of a
     program given arguments at the prompt saves the same.
@@ -1854,13 +1854,13 @@ each item's entry is under "Found along the way, done" below.
 - **GNU ls's script helpers** (the user's pick of 2026-10-17, the third group): checked
   against GNU coreutils 9.10 in WSL, and `-i` against Git Bash's ls.
   - `--zero` ends each line of entries with NUL in every layout, the totals too, while
-    headers and the blank lines between folders keep their newline; it makes names
+    headers and the blank lines between directories keep their newline; it makes names
     literal, one to a line unless long, and colourless, each of which an option after
     it can undo, as GNU's does.
   - `-i` shows each entry's file index, NTFS's file ID, the number Git Bash's `ls -i`
     and `stat` show, padded as GNU pads it (`-m` not), before `-s`'s blocks.
   - `-H` follows the links named on the command line, and
-    `--dereference-command-line-symlink-to-dir` those to folders, even with `-l`; the
+    `--dereference-command-line-symlink-to-dir` those to directories, even with `-l`; the
     last of them and `-L` wins.
   - `-T` is checked as GNU's `xstrtoumax` reads it (decimal, hex, octal; GNU's errors,
     status 2) and changes nothing: cash writes spaces, never tabs.
@@ -1878,7 +1878,7 @@ each item's entry is under "Found along the way, done" below.
   - `--author` shows the owner again after the group with `-l`, as on Linux, and not
     where `-g` leaves the owner out.
   - `-D` (`--dired`) is `-l` for Emacs: each line indented by two spaces, then
-    `//DIRED//` with each name's start and end, `//SUBDIRED//` with each folder
+    `//DIRED//` with each name's start and end, `//SUBDIRED//` with each directory
     header's, in bytes from the start of the output, escapes not counted, and
     `//DIRED-OPTIONS// --quoting-style=…`; a later `-C`, `-x` or `-m`, or
     `--hyperlink`, turns it off, and with `--zero` it is refused, as in GNU ls.
@@ -1942,9 +1942,9 @@ each item's entry is under "Found along the way, done" below.
   own read, as Git Bash's ls does; GNU's reads no file. The read now goes through a
   handle opened with `FILE_WRITE_ATTRIBUTES` and told to keep the access time
   (`SetFileTime` with all ones). Where the access list lends no such handle, the read
-  is as before, and the rest of that folder is not asked again: asking each file of
+  is as before, and the rest of that directory is not asked again: asking each file of
   `C:/Windows/System32` made `ls -l` 40% slower (520 ms to 715 ms in a debug build),
-  and with the folder remembered it is as before (530 ms).
+  and with the directory remembered it is as before (530 ms).
 - **`stat`'s blocks were the size's, not the allocation's** (the user's pick after
   1.22.0): `%b` and the report's `Blocks:` count the blocks of 512 bytes (`%B`) the
   volume gives the file, from the facts stat reads for the change time anyway, so `%b`
@@ -1960,10 +1960,10 @@ each item's entry is under "Found along the way, done" below.
 - **The PATH search that checked each extension was slow** (the user's pick after
   1.22.0, found with the missing-command lookup): the search for every match
   (`pathsearch::search_for_executable`, under `type -a`, `which -a`, `hash NAME` and
-  carapace's first look for itself) checked each `PATHEXT` extension in each folder, a
-  file check each. It looks at each folder once now, as running a command does
+  carapace's first look for itself) checked each `PATHEXT` extension in each directory, a
+  file check each. It looks at each directory once now, as running a command does
   (`listed_names`, `resolve_executable_among`), and finds the same files: `type -a cmd`
-  and `which -a cmd` take 8.5 ms where they took 43 over 79 folders, `hash cmd` 1.3 ms
+  and `which -a cmd` take 8.5 ms where they took 43 over 79 directories, `hash cmd` 1.3 ms
   where it took 3.8 (debug build).
 - **`ls -la` was 12% slower for keeping the access time** (found 2026-10-17 by the
   benchmark at 1.23.0, `research/benchmarks-1.23.0.md`; the user's pick of 2026-10-18):
@@ -1973,15 +1973,15 @@ each item's entry is under "Found along the way, done" below.
   one, and needs that open), so `ls` reads as Git Bash's ls does again, the access time
   moving, and `stat`, which reads one file at a time, keeps it
   (`is_executable_keeping_access_time`), as the user chose.
-- **`ls -l`'s file facts from the folder listing** (found by the same benchmark; the
+- **`ls -l`'s file facts from the directory listing** (found by the same benchmark; the
   user's pick of 2026-10-18): the change time, allocation and file ID `-l`'s totals,
   `-s`, `-c` and `-i` need were asked of each file, two calls more in `-l`'s open of it
-  and a query or an open of its own otherwise, 7% of `ls -la`. One query of the folder
-  (`cash_win32::fs::folder_facts`, `FileIdBothDirectoryInfo`, as Cygwin reads a folder)
+  and a query or an open of its own otherwise, 7% of `ls -la`. One query of the directory
+  (`cash_win32::fs::directory_facts`, `FileIdBothDirectoryInfo`, as Cygwin reads a directory)
   gives them for every entry now; a link `-L` goes through is still asked for what it
   names. The numbers are Git Bash's (`ls -is` the same). With both fixes `ls -la` of 210
   entries 50 times takes 697 ms, where 1.23.0 took 809 and the build before the
-  regression 676 (the rest is the second query of the folder and the new options'
+  regression 676 (the rest is the second query of the directory and the new options'
   bookkeeping).
 - **A TERM trap never ran on cash's own `kill -TERM`** (found 2026-10-17 with `timeout`;
   the user's pick after 1.23.0): settled as a limitation. `kill -TERM` from another
@@ -2001,14 +2001,14 @@ each item's entry is under "Found along the way, done" below.
   spins two threads per processor does.
 - **`which <builtin>` walked all of PATH** (the user's pick after 1.23.0, from the
   2026-10-16 survey): for a bundled tool `which` looks along PATH for a `cash
-  --link-tools` link to this cash. The search for every match looks at each folder once
+  --link-tools` link to this cash. The search for every match looks at each directory once
   since the PATH search above (`which ls` 96 ms, now 16, bench builds), and the first
   link found ends it now, where every match was gathered before any was compared.
-  Without a link the whole of PATH is still looked at once: a link can be in any folder.
+  Without a link the whole of PATH is still looked at once: a link can be in any directory.
 - **Each `.ps1` run searched PATH for pwsh** (the user's pick after 1.23.0, from the
   same survey): one walk for `pwsh`, then `powershell`, before each script. The one
-  found is remembered with the `PATH` and folder it was found for, and found again only
-  when either changes or it has gone (a script run with Windows PowerShell's folder alone
+  found is remembered with the `PATH` and directory it was found for, and found again only
+  when either changes or it has gone (a script run with Windows PowerShell's directory alone
   on `PATH` gets that one).
 - **`HISTCONTROL=erasedups` scanned the whole history after each command** (the user's
   pick after 1.23.0, from the 2026-10-16 survey): measured in a release build with
@@ -2021,11 +2021,11 @@ each item's entry is under "Found along the way, done" below.
   move: 98 µs after a command whose line was there, nothing when it was not.
 - **The completion menu scanned PATH on each keystroke** (the user's pick after 1.23.0,
   from the 2026-10-16 survey): while the menu is open, each keystroke asked every PATH
-  folder for the names beginning with the prefix, 17.7 ms for `compgen -c no`. The
-  background index of PATH (`PathIndex`) keeps each folder's names as spelled too, sorted
+  directory for the names beginning with the prefix, 17.7 ms for `compgen -c no`. The
+  background index of PATH (`PathIndex`) keeps each directory's names as spelled too, sorted
   by their folded form, and the menu takes the prefix's range from it, a name running by
   a `PATHEXT` extension, a file of the name with one beside it, or its contents, read
-  once and remembered until the folder changes; until the index is ready, the scan
+  once and remembered until the directory changes; until the index is ready, the scan
   answers as before. `compgen -c no` takes 1.9 ms (debug build), and gives the same
   names as 1.23.0 for `no`, `a`, `g` and `s` (17, 355, 180, 765).
 - **Command completion offered DLLs** (found 2026-10-18 with the menu's index; the
@@ -2102,9 +2102,9 @@ each item's entry is under "Found along the way, done" below.
     pattern for each part of the path but a pattern ending in `*` taking any parts
     after (`*.log` leaves `sub/x.log`, `s*` takes `s/b`), never `.` or `..`, and lets a
     glob find dot files, as dotglob does. A word with nothing to glob is left alone.
-  - **A last `**` did not match its own folder, and `**/` gave an empty word**:
-    `sub/**` gives `sub/` first, `./**` gives `./`, `*/**` the folders found without
-    the slash, as in Bash; the working folder `**/` reaches is left out.
+  - **A last `**` did not match its own directory, and `**/` gave an empty word**:
+    `sub/**` gives `sub/` first, `./**` gives `./`, `*/**` the directories found without
+    the slash, as in Bash; the working directory `**/` reaches is left out.
 - **`GLOBIGNORE` did not show in `shopt dotglob`** (found 2026-10-18 by the corpus; the
   user's pick after 1.26.0): Bash turns dotglob on as `GLOBIGNORE` is given patterns
   and off as it is unset. cash has no hook from a variable to an option, so the shell
@@ -2155,3 +2155,15 @@ each item's entry is under "Found along the way, done" below.
   splits there too; noted in TODO.md.
   Left as is: Bash expands the last word of an alias's own text once more, as its reader
   lets go of the text before it looks the word up (`alias echo='echo -n x; echo'`).
+- **"directory", never "folder"** (2026-10-18, the user, emphatic: a folder is a GUI
+  construct; the file system and Bash say directory): the word is swapped in 329 files,
+  cash's messages, `--help` texts and help pages, the docs, comments, identifiers and
+  test names, and three test files are renamed. The records in `%LOCALAPPDATA%\cash`
+  are `history-directories` and `directories` now; a shell renames the old files once,
+  when no record has the new name yet, so an older cash run afterwards starts records of
+  its own. `7z` says directory where 7-Zip says folder too (the user's pick):
+  `Directories: 2`, `Directory = +` with `-slt`; the oracle's recordings stay as 7-Zip
+  wrote them, put in cash's words by the tests, which fail if a "folder" is left. Kept
+  as they are: the 7z format's own term (`kFolder`, a group of coders), Windows
+  Terminal's menu folders (a UI construct), the `notify` crate's `CreateKind::Folder`,
+  the corpus's fixtures (others' scripts), and file names in recorded output.

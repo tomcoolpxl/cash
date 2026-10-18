@@ -149,8 +149,8 @@ someone who expected bash, so additions need to earn their place.
 | 42 | The children's CPU time `time` and `times` report counts a child that is still running, such as a background job running through the `time`d command | Windows has no `getrusage(RUSAGE_CHILDREN)`; the session job's accounting counts every process it has held, cash's own share taken out (the user, 2026-10-02; EXE-11) | D6 |
 | 43 | With `HISTSIZE` and `HISTFILESIZE` unset, history is not cut: every line is kept, in memory and in `~/.cash_history`, until one of them is set | Bash sets both to 500 when they are unset; following it would cut an existing long `~/.cash_history` to 500 entries at the next start (the user, 2026-10-03) | — |
 | 44 | `\v` and `\V` in a prompt give cash's version (`1.3`, `1.3.13`), as `\s` gives `cash`, while `$BASH_VERSION` says `5.3.15(1)-release` | A prompt in cash is about cash; Bash's give Bash's version (the user, 2026-10-03) | — |
-| 45 | In a folder whose path is longer than 258 characters, a program starts in the folder's 8.3 short name, and sees that as its working directory; with no short name that fits, it fails with status 126 | Windows starts no process in a longer one; Git Bash's native programs fail there (the user, 2026-10-04) | D29 |
-| 46 | At the interactive prompt, the words after a program in System32 or SysWOW64 are not globbed (`shopt winglob`, off in scripts): `net user NAME * /add` reaches `net` as typed | cmd never globs, so every program Windows ships reads `*` itself or means something else by it; bash's globbing handed `net` the folder's file names (the user, 2026-10-11) | D81 |
+| 45 | In a directory whose path is longer than 258 characters, a program starts in the directory's 8.3 short name, and sees that as its working directory; with no short name that fits, it fails with status 126 | Windows starts no process in a longer one; Git Bash's native programs fail there (the user, 2026-10-04) | D29 |
+| 46 | At the interactive prompt, the words after a program in System32 or SysWOW64 are not globbed (`shopt winglob`, off in scripts): `net user NAME * /add` reaches `net` as typed | cmd never globs, so every program Windows ships reads `*` itself or means something else by it; bash's globbing handed `net` the directory's file names (the user, 2026-10-11) | D81 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with
@@ -409,9 +409,9 @@ directory, which Windows refuses. bash-on-Windows succeeds because Cygwin emulat
 unlink semantics.
 
 Running the builtin in-process would fix it, since cash's own process never sits in the
-shell's folder (D10); it is not done because re-entry is exactly what makes redirections
+shell's directory (D10); it is not done because re-entry is exactly what makes redirections
 and pipes work for uutils. Since 2026-10-17 `rm`, cash's own code, moves its process to
-the volume's root before it removes a folder that holds it, and the idiom works; a
+the volume's root before it removes a directory that holds it, and the idiom works; a
 relative operand after that names nothing, as on Linux once the working directory is
 gone. The other bundled tools still cannot (`rmdir "$d"` from inside `$d`). The form
 `trap 'cd /; rm -rf "$d"' EXIT` is good practice anyway, and is asserted by a test so it

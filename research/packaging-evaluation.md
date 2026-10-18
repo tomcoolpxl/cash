@@ -3,7 +3,7 @@
 ## Status
 
 **Decided 2026-09-28** (ROADMAP item 18, refining spec D38 and D65). The question
-started as "is `cash --link-tools` tested, and should cash put its folder on PATH?" and
+started as "is `cash --link-tools` tested, and should cash put its directory on PATH?" and
 widened to how cash gets installed at all, as a normal user without admin. Decided with
 the user by pick list, and again on 2026-10-06 (DONE.md phase 22) with Velopack and a
 per-user MSI weighed; the decisions are in [decisions.md](../decisions.md) (D38, D65,
@@ -22,7 +22,7 @@ bucket from Scoop's template, and a release that carries these commands.
 - `release.yml` builds `cash.exe` on `windows-latest`, zips it with `README.md` and
   `LICENSE`, and publishes the zip and its SHA-256 on the GitHub release.
 - `cash --link-tools [DIR]` (D65) makes 126 hard links to `cash.exe`. Run from the
-  release `cash.exe` on 2026-09-27 into a scratch folder: all 126 made, and `sort.exe`
+  release `cash.exe` on 2026-09-27 into a scratch directory: all 126 made, and `sort.exe`
   sorted from PowerShell, outside cash.
 
 Found while checking, all to fix whatever the channel:
@@ -45,7 +45,7 @@ Found while checking, all to fix whatever the channel:
 ### `--link-tools` and its tests
 
 Eight integration tests (`crates/cash/tests/link_tools.rs`) and one unit test. Not
-covered: the default folder (every test names DIR), the "already on PATH" message, links
+covered: the default directory (every test names DIR), the "already on PATH" message, links
 removed for tools cash no longer carries, and the System32 note.
 
 One real gap: a link that `remove_file` cannot delete stopped the whole refresh halfway,
@@ -56,7 +56,7 @@ when the old `cash.exe` is itself gone (`scoop cleanup`, a deleted `cash.exe.old
 program outside cash still runs one of its links: whichever link is replaced last is
 the file's last name. Such a link can be renamed aside and deleted by a later run.
 
-The PowerShell line it prints to add the folder to PATH is harmful: .NET reads the user
+The PowerShell line it prints to add the directory to PATH is harmful: .NET reads the user
 `Path` with `GetValue`, which expands `%VAR%` entries, and writes it with `SetValue`,
 which stores a plain `REG_SZ`
 ([dotnet/runtime#1442](https://github.com/dotnet/runtime/issues/1442), closed as not
@@ -75,7 +75,7 @@ On the author's machine, 95 of the 126 tool names already exist on PATH:
   more ping reset sort timeout tree where whoami`, and nvm's `elevate` and `install`;
 - 82 in `scoop\shims`, all BusyBox applets (`ls.shim` is `busybox.exe` with `args = ls`).
 
-Appended to the end of the user `Path`, as the printed line does, the links folder would
+Appended to the end of the user `Path`, as the printed line does, the links directory would
 give programs outside cash only about 31 of cash's tools; at the front, all but the 13.
 Inside cash none of this matters: cash answers for its own tools first. `link.exe` is
 also the MSVC linker's name, one more reason the links stay opt-in.
@@ -95,14 +95,14 @@ also the MSVC linker's name, one more reason the links stay opt-in.
 - `bin: "cash.exe"` puts a `cash` shim in `~\scoop\shims`. The tools must **not** be
   declared as shims: BusyBox owns 82 of those names on the author's machine, and two apps
   claiming a shim overwrite each other.
-- Each version is unpacked in its own folder and `current` is a junction to it, so an
+- Each version is unpacked in its own directory and `current` is a junction to it, so an
   upgrade never overwrites a running `cash.exe`. Scoop still refuses by default ("The
   following instances … are still running"); `scoop config ignore_running_processes true`
   lets it proceed ([PR #4713](https://github.com/ScoopInstaller/Scoop/pull/4713); a
   kill option is only requested, [#5617](https://github.com/ScoopInstaller/Scoop/issues/5617)).
-- `persist: "bin"` keeps a `bin` folder in `~\scoop\persist\cash` across versions and
-  junctions it into each version folder. That is where "`bin` next to `cash.exe`" lands,
-  so the links folder, and a PATH entry for it, survive upgrades; `post_install`
+- `persist: "bin"` keeps a `bin` directory in `~\scoop\persist\cash` across versions and
+  junctions it into each version directory. That is where "`bin` next to `cash.exe`" lands,
+  so the links directory, and a PATH entry for it, survive upgrades; `post_install`
   refreshes the links when a manifest (`.cash-links`) is there.
 
 ### winget
@@ -182,12 +182,12 @@ For cash itself:
 1. Link the C runtime statically; check in CI that `cash.exe` imports no `VCRUNTIME140.dll`.
 2. An icon and a version resource in `cash.exe`.
 3. `--link-tools` renames a link Windows will not delete aside instead of stopping; an
-   option to put the links folder at the front of the user `Path`, keeping
+   option to put the links directory at the front of the user `Path`, keeping
    `REG_EXPAND_SZ` and `%VAR%` entries, adding it once, and announcing the change
    (`WM_SETTINGCHANGE`); and an undo that removes the links, the entry, and nothing else.
 4. A command that writes, and one that removes, the Windows Terminal fragment in
    `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\cash\`, pointing at the
-   `cash.exe` it was run as (Scoop's `current` path, not a version folder).
+   `cash.exe` it was run as (Scoop's `current` path, not a version directory).
 5. The zip carries `NOTICE`, `licenses/` and the third-party licences.
 6. `Cargo.toml`'s repository URL.
 

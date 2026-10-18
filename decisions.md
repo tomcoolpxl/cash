@@ -17,7 +17,7 @@ the user's answers, with their dates. A new decision goes here, under its topic.
 | D7 | No modes: compatibility behaviours are always on | Scope and foundation |
 | D8 | Command resolution is cash's own | Running programs and the environment |
 | D9 | brush is absorbed, not vendored | Scope and foundation |
-| D10 | The shell's folder is the shell's; paths render at two chokepoints | Paths, files and text |
+| D10 | The shell's directory is the shell's; paths render at two chokepoints | Paths, files and text |
 | D11 | cash owns job control | Processes, jobs and signals |
 | D13 | Ctrl-C is graceful first; the job object is the backstop | Processes, jobs and signals |
 | D14 | `trap EXIT` runs to completion; a second Ctrl-C forces teardown | Processes, jobs and signals |
@@ -32,7 +32,7 @@ the user's answers, with their dates. A new decision goes here, under its topic.
 | D24 | `~/.bashrc` is read, then `~/.cashrc` | Startup files, help and messages |
 | D25 | Scoop shims are run, not resolved through | Running programs and the environment |
 | D26 | Descriptors above 2 work where cash holds both ends | Processes, jobs and signals |
-| D27 | `ln -s`: a symlink, a junction for folders, else an error | Paths, files and text |
+| D27 | `ln -s`: a symlink, a junction for directories, else an error | Paths, files and text |
 | D28 | Reserved names stay devices | Paths, files and text |
 | D29 | Paths of any length | Paths, files and text |
 | D31 | Variable names are case-insensitive; POSIX names upper-cased | Running programs and the environment |
@@ -66,7 +66,7 @@ the user's answers, with their dates. A new decision goes here, under its topic.
 | D59 | Syntax highlighting is on, and never waits on the disk | The prompt, editing and completion |
 | D60 | `abbr`: fish's abbreviations | The prompt, editing and completion |
 | D61 | `CASH_TRANSIENT_PS1` collapses the prompt after Enter | The prompt, editing and completion |
-| D62 | Folder history: `prevd`, `nextd`, `cdh`, Alt-← and Alt-→ | The prompt, editing and completion |
+| D62 | Directory history: `prevd`, `nextd`, `cdh`, Alt-← and Alt-→ | The prompt, editing and completion |
 | D63 | Completions from carapace, when it is installed | The prompt, editing and completion |
 | D64 | `CHLD` is cash's own event | Processes, jobs and signals |
 | D65 | `cash --link-tools`: hard links programs outside cash can run | Packaging, installing and updating |
@@ -77,14 +77,14 @@ the user's answers, with their dates. A new decision goes here, under its topic.
 | D70 | Background jobs and subshells run inside the shell, on threads | Processes, jobs and signals |
 | D71 | A writer whose reader went away ends as SIGPIPE ends it, if it is cash's | Processes, jobs and signals |
 | D72 | `help` from one catalogue | Startup files, help and messages |
-| D73 | `croot`: a file and folder picker on Alt-E | The prompt, editing and completion |
+| D73 | `croot`: a file and directory picker on Alt-E | The prompt, editing and completion |
 | D74 | Small tools: only what nothing else answers | Builtins and bundled tools |
 | D75 | A per-user installer, `cash --update`, and winget | Packaging, installing and updating |
 | D76 | `grep`, `diff` and `cmp` are carried after all | Builtins and bundled tools |
 | D77 | The compatibility corners follow Bash and fish | Archives and compression |
 | D78 | Archive and compression tools, on shared parts | Archives and compression |
 | D79 | Ctrl-R: a history picker | The prompt, editing and completion |
-| D80 | `z`: the folder jump | The prompt, editing and completion |
+| D80 | `z`: the directory jump | The prompt, editing and completion |
 | D81 | `winglob`: at the prompt, a Windows program globs for itself | Paths, files and text |
 
 ## 1. Scope and foundation
@@ -168,11 +168,11 @@ A child gets exactly the string a variable holds; cash never guesses which argum
 paths. `winpath` converts on request; quoting for `cmd.exe` (D32) is escaping, not
 rewriting. Turned down: MSYS2's argument conversion and its `MSYS2_ARG_CONV_EXCL`.
 
-### D10 — The shell's folder is the shell's; paths render at two chokepoints
+### D10 — The shell's directory is the shell's; paths render at two chokepoints
 
 cash's `cd` stores the canonical `C:/` form in the shell's own state, without moving the
-process's folder, so `$PWD` follows and every path cash resolves is against the shell's
-folder; the file-open boundary takes the Unix spellings and converts them (D29). A path
+process's directory, so `$PWD` follows and every path cash resolves is against the shell's
+directory; the file-open boundary takes the Unix spellings and converts them (D29). A path
 the core computes itself (a glob, a tilde) is fixed where it arises. Turned down:
 rewriting the core's path handling.
 
@@ -196,9 +196,9 @@ starts with `#!`. `chmod +x` changes nothing and returns 0, so `chmod +x x.sh &&
 works. Turned down: ACLs alone, which call every profile file executable; the extension
 alone, which invents a permission model.
 
-### D27 — `ln -s`: a symlink, a junction for folders, else an error
+### D27 — `ln -s`: a symlink, a junction for directories, else an error
 
-With privilege (admin or Developer Mode) a real symlink; without, a junction for a folder
+With privilege (admin or Developer Mode) a real symlink; without, a junction for a directory
 and an error naming Developer Mode for a file. Turned down: hard links for files, which are
 not symlinks and give scripts wrong answers.
 
@@ -212,8 +212,8 @@ arguments is what D4 forbids.
 ### D29 — Paths of any length
 
 File operations take paths of any length, whatever the long-path registry setting.
-Windows starts no program in a folder over 258 characters, so one is started in the
-folder's 8.3 short name, and fails saying why when none fits. Turned down: a clear error
+Windows starts no program in a directory over 258 characters, so one is started in the
+directory's 8.3 short name, and fails saying why when none fits. Turned down: a clear error
 alone, as Git Bash gives.
 
 ### D33 — Files are opened fully shared, deleted with POSIX semantics
@@ -507,8 +507,8 @@ command paths (D3).
 
 ### D39 — Terminal shell integration is on by default
 
-cash emits prompt, command and exit-status marks and its folder (OSC 133, 9;9, 633, 7), so
-Windows Terminal and VS Code get command blocks, jumps and new tabs in the same folder.
+cash emits prompt, command and exit-status marks and its directory (OSC 133, 9;9, 633, 7), so
+Windows Terminal and VS Code get command blocks, jumps and new tabs in the same directory.
 
 ### D40 — Completion ignores case and quotes as it goes
 
@@ -540,9 +540,9 @@ into abbreviations; aliases stay as they are.
 
 A variable, read like `PS1` and set in one `.bashrc` line. Turned down: a function hook.
 
-### D62 — Folder history: `prevd`, `nextd`, `cdh`, Alt-← and Alt-→
+### D62 — Directory history: `prevd`, `nextd`, `cdh`, Alt-← and Alt-→
 
-fish's model: the last 25 folders left; Alt-← and Alt-→ walk them on an empty line and
+fish's model: the last 25 directories left; Alt-← and Alt-→ walk them on an empty line and
 move a word otherwise. Readline binds nothing to Alt-arrows, so nothing of Bash is lost.
 
 ### D63 — Completions from carapace, when it is installed
@@ -558,25 +558,25 @@ no longer breaks the tab: before every prompt cash restores the console modes, i
 settings and UTF-8 code page, and after a program ran resets the terminal, but not
 colours or the palette.
 
-### D73 — `croot`: a file and folder picker on Alt-E
+### D73 — `croot`: a file and directory picker on Alt-E
 
-Built in and drawn inline below the command line from one folder read, so the first frame
+Built in and drawn inline below the command line from one directory read, so the first frame
 comes within 30 ms; broot's tree, `ls`'s colours, a fuzzy filter, and the command line
-deciding folders or files. Keyboard only. Turned down: broot on Alt-E, a separate program
+deciding directories or files. Keyboard only. Turned down: broot on Alt-E, a separate program
 up to two seconds to open; a search language, previews, file operations and mouse input.
 
 ### D79 — Ctrl-R: a history picker
 
 Ctrl-R opens the history in D73's picker: each command once, newest first, fuzzy-filtered;
 Enter puts the command on the line, Tab runs it, and Ctrl-R again limits it to this
-folder's history. Bash's reverse search stays a Readline function `bind` can put back.
+directory's history. Bash's reverse search stays a Readline function `bind` can put back.
 Turned down: deleting entries, previews, statistics and sync.
 
-### D80 — `z`: the folder jump
+### D80 — `z`: the directory jump
 
-Every change of folder counts a visit; ranking and ageing are zoxide's. A folder that is
+Every change of directory counts a visit; ranking and ageing are zoxide's. A directory that is
 gone is forgotten only after 90 days without a visit, so an unplugged drive keeps its
-folders. A `z` function, zoxide's included, comes before the builtin.
+directories. A `z` function, zoxide's included, comes before the builtin.
 
 ### Decided in working sessions
 
@@ -747,11 +747,11 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   error, a read of its input, a program or command it runs, and when it returns. `top`, `watch`, `nc`, `free`, the pagers and
   `croot` stream; a test lists them. `stdbuf -oL` and `-o0` make any builtin stream.
   Turned down: each builtin buffering on its own (opting in), which `ls` did first.
-- **A folder's link count is 1 in `ls -l`, counted in `stat`** (the user, 2026-10-16):
+- **A directory's link count is 1 in `ls -l`, counted in `stat`** (the user, 2026-10-16):
   1 is Git Bash's figure and the "not counted" of Cygwin, btrfs and CIFS; counting means
-  listing every folder shown, which made `ls -la` in TEMP list 164,757 folders for `..`.
-  `stat`, where one goes to find the number, counts 2 plus the subfolders, as Linux has
-  it, and `ls --count-links` counts in a listing too. Turned down: 2 for every folder.
+  listing every directory shown, which made `ls -la` in TEMP list 164,757 directories for `..`.
+  `stat`, where one goes to find the number, counts 2 plus the subdirectories, as Linux has
+  it, and `ls --count-links` counts in a listing too. Turned down: 2 for every directory.
 - **A file's link count and identity are asked by name** (the user, 2026-10-16):
   `GetFileInformationByName` (Windows 11 24H2) gives them without opening the file; an
   open is the fallback, also where Windows leaves the volume's serial number out.
@@ -759,7 +759,7 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   `cash_win32::facts`): the account, the machine's name, account names by SID, and a
   Terminal profile's font, each with its own rule for going stale. Turned down: a cache
   beside each caller.
-- **Builtins share their option parsing, input opening and folder walks** (the user,
+- **Builtins share their option parsing, input opening and directory walks** (the user,
   2026-10-16; `research/central-components-design.md`):
   - **Options:** cash-getopt, finished with `POSIXLY_CORRECT`, a hook for `-9` and `-10`
     words, and one usage-error line with each upstream's style. A repeated option
@@ -818,7 +818,7 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   down: a channel of cash's own (a named event per cash process) to carry signals
   between cash processes.
 - **`ls -la`'s 20% at 1.23.0 is won back first** (the user, 2026-10-17, after the
-  benchmark, `research/benchmarks-1.23.0.md`): the file facts are taken from the folder
+  benchmark, `research/benchmarks-1.23.0.md`): the file facts are taken from the directory
   listing (one directory query) instead of a call for each file; and for keeping the
   access time while reading for `#!`, a cheaper way is looked for before it is kept.
   Turned down: leaving the 7% of the per-file facts; reverting the access time unseen.
@@ -908,7 +908,7 @@ elevation; ending the program by pid at exit, which cannot cross the boundary.
   `sudo bash`; UAC's new window.
 - **`sudo -u USER` and `su USER` are cash's own too** (the user, 2026-10-11): cash asks
   USER's password and starts as USER with `CreateProcessWithLogonW`, relaying the console,
-  in the system temp folder when USER cannot enter the shell's. `-v`, `-k` and `-K` are
+  in the system temp directory when USER cannot enter the shell's. `-v`, `-k` and `-K` are
   accepted with no credentials cache behind them. Turned down: gsudo and `runas`.
 - **Files an elevated `sudo` makes are yours, and an approver who is not you is named**
   (the user, 2026-10-04): approved with your own account, your account owns what the
@@ -919,9 +919,9 @@ elevation; ending the program by pid at exit, which cannot cross the boundary.
 - **Doctor's fix for a cash other accounts cannot read is a grant, not a reinstall** (the
   user, 2026-10-12): a cash under the profile (Scoop's, the installer's) is readable by
   you and administrators only, so `su USER` and `sudo -u USER` cannot start it. Doctor
-  suggests `icacls` granting Users read and execute on the folder that holds every
+  suggests `icacls` granting Users read and execute on the directory that holds every
   version, inherited, so each update keeps it: no administrator needed. Tried with a
-  standard test account: refused before, run after, and a version folder made later
+  standard test account: refused before, run after, and a version directory made later
   inherits it. Turned down: a machine-wide `scoop install -g`, which needs an
   administrator and moves cash out of the profile.
 
@@ -946,7 +946,7 @@ Turned down: printing a PowerShell line, which rewrote the user `Path` as `REG_S
 
 cash installs as a complete Bash with its tools, without Scoop: a per-user Inno Setup
 installer (unsigned), winget made from it, and a portable zip share one tested finishing
-step. Each version has its own folder behind a `current` junction, so an upgrade never
+step. Each version has its own directory behind a `current` junction, so an upgrade never
 overwrites a running `cash.exe`; tool links go on the user `PATH` by default; uninstalling
 keeps the rc file, history and config. `cash --update` upgrades only on request. A
 portable cash offers once to set itself up and changes nothing without a yes. At an

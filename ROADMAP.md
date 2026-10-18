@@ -27,14 +27,14 @@ Feature work follows the sequence below.
 | 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | **Complete** | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | **Complete** (cash reports `BASH_VERSION=5.3.15`) | Section 15 below |
 | 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | **Complete** | Section 16 below; spec D65 |
-| 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, folder history, carapace completions | **Complete** | Section 17 below; spec D59–D63 |
+| 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, directory history, carapace completions | **Complete** | Section 17 below; spec D59–D63 |
 | 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** (Scoop since 1.1.0; the per-user installer, the portable zip's first-prompt offer and `cash --update` since 1.6.0; winget manifests validated, submission to come) | [Packaging evaluation and decisions](research/packaging-evaluation.md); section 18 below; spec D38, D65 |
 | 19 | Console, clipboard and the remaining small tools: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `xdg-open`, `pbcopy`/`pbpaste`, `watch`, `free`, `nice`/`renice`, `flock`, `nc` | **Complete** (1.5.0, 2026-10-06) | Section 19 below; spec D74; DONE.md phase 21 |
 | 20 | `grep`, `diff` and `cmp`: the standing rule reversed under "install cash, have everything" | **Complete** (1.7.0, 2026-10-06) | DONE.md phase 23; spec D76 |
 | 21 | `gzip`, `gunzip` and `zcat` in pure Rust | **Complete** (1.8.0, 2026-10-06) | DONE.md phase 24; spec D77 |
 | 22 | Compatibility corners: `/dev/tcp`, `command_not_found_handle`, kept `abbr`, kinder refusals, `getconf`, `locale` | **Complete** (1.8.0, 2026-10-06) | DONE.md phase 25; spec D77 |
 | 23 | Archive and compression tools on shared parts: `bzip2`, `xz`, `zstd` and their names, `tar`, `zip`/`unzip`/`zipinfo` | **Complete** (1.9.0, 2026-10-07: the compressors, `tar`, and `zip`, `unzip`, `zipinfo`) | [Design](research/archive-tools-design.md); DONE.md phases 29–30; spec D78 |
-| 24 | The prompt and paths: a Ctrl-R history picker, the `z` folder jump, every path spelling everywhere, and a guard on size and speed | **Complete** (1.12.0, 2026-10-10) | [Design](research/prompt-history-and-jump-design.md); DONE.md phase 34; spec D79, D80 |
+| 24 | The prompt and paths: a Ctrl-R history picker, the `z` directory jump, every path spelling everywhere, and a guard on size and speed | **Complete** (1.12.0, 2026-10-10) | [Design](research/prompt-history-and-jump-design.md); DONE.md phase 34; spec D79, D80 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -344,7 +344,7 @@ D58's `C:/…/cash.exe/ls` runs only inside cash; Python's `subprocess` or a `.b
 can start only a real file. `cash --link-tools [DIR]` makes hard links to `cash.exe`,
 one per tool (`ls.exe`, `grep.exe`, …), and cash started under a tool's name runs as
 that tool, as BusyBox does. A hard link is the same file, so it costs no space and needs
-no admin on a folder the user can write. Under AppLocker or App Control, only an
+no admin on a directory the user can write. Under AppLocker or App Control, only an
 installer running as admin can put the links where they may run, next to `cash.exe` in
 `Program Files`. The links have the same hash and signature as `cash.exe`, so rules
 allowing cash by hash or signer allow its links.
@@ -353,8 +353,8 @@ Decided: D65 in [decisions.md](decisions.md); `PATH` was at first never changed,
 later changed on request and by the installer's default (D75).
 
 Done as decided. Two things surfaced on the way. Windows looks for a program
-started by a bare name in the starting exe's own folder first, so cash, coming up as any
-tool in a links folder, started the `whoami.exe` beside it for the user's SID, which was
+started by a bare name in the starting exe's own directory first, so cash, coming up as any
+tool in a links directory, started the `whoami.exe` beside it for the user's SID, which was
 cash again: every start started another. cash now starts the Windows programs it uses by
 their System32 path. And a linked tool that re-enters its own exe (a bundled tool, `sh`)
 would take the child for the tool again; the child knows it by an environment variable
@@ -366,7 +366,7 @@ attached, as the command to run.
 A comparison with fish (Garuda's default interactive shell) listed what it offers at the
 prompt that cash did not. Decided, in this order: syntax highlighting on by default
 (D59); Bash's own Alt-. and Ctrl-X Ctrl-E, bound; `abbr` (D60); a collapsing prompt
-(D61); folder history on Alt-← and Alt-→ (D62); completions from carapace (D63), all in
+(D61); directory history on Alt-← and Alt-→ (D62); completions from carapace (D63), all in
 [decisions.md](decisions.md). A carapace Tab measured 85–100 ms for its static
 completers and 220–450 ms where it runs the tool, no slower than the tools' own scripts.
 
@@ -385,7 +385,7 @@ Closed by item 18: the Scoop manifest offers carapace at install time through `s
 
 ## 18. Installing cash: Scoop now, winget later
 
-The question began with `cash --link-tools`: is it tested, and should cash put its folder
+The question began with `cash --link-tools`: is it tested, and should cash put its directory
 on PATH? It widened to installing cash as a normal user, without admin. The research,
 with sources, is in [the packaging evaluation](research/packaging-evaluation.md).
 Decided with the user on 2026-09-28 and again on 2026-10-06: D38, D65 and D75 in
@@ -415,7 +415,7 @@ new files belong to Administrators; two tests that assumed a normal user failed 
 only, and now expect either.
 
 Found on the way: Windows deletes a name of a running program while the file has others,
-and refuses only the last; the tests had been leaving 126 links per folder behind, until
+and refuses only the last; the tests had been leaving 126 links per directory behind, until
 `cash.exe` reached NTFS's 1023 names; and Scoop's `suggest` now offers carapace at install
 time, the gap left open in item 17.
 

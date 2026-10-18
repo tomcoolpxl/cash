@@ -101,7 +101,7 @@ The prompt borrows what fish does well, without giving up Bash's language:
 - **Suggestions from history** appear dimmed as you type; → accepts one.
 - **A history picker**: Ctrl-R lists the history below the line, each command once,
   newest first; typing filters it, Enter puts the command on the line and Tab runs it.
-  Ctrl-R again shows what ran in the current folder (D79).
+  Ctrl-R again shows what ran in the current directory (D79).
 - **Alt-.** inserts the previous command's last argument (again: the one before), and
   **Ctrl-X Ctrl-E** opens the line in `$VISUAL`/`$EDITOR` and runs what you save, as in
   Bash.
@@ -112,12 +112,12 @@ The prompt borrows what fish does well, without giving up Bash's language:
   command's prompt shrinks to it once the line is entered, so scrollback shows commands,
   not status blocks (D61). With Starship:
   `CASH_TRANSIENT_PS1='$(starship module character --status="$STARSHIP_CMD_STATUS")'`.
-- **Folder history**: on an empty line, Alt-← and Alt-→ step back and forward through the
-  folders you have been in; `prevd`, `nextd` and `cdh` do it by name (D62).
-- **A folder jump**: `z cash` goes to the folder matching `cash` you go to most, ranked
+- **Directory history**: on an empty line, Alt-← and Alt-→ step back and forward through the
+  directories you have been in; `prevd`, `nextd` and `cdh` do it by name (D62).
+- **A directory jump**: `z cash` goes to the directory matching `cash` you go to most, ranked
   across sessions as zoxide ranks them; `z -i` picks from a list, Tab after `z` offers
-  the matches, and Alt-E's Alt-H lists the same folders (D80).
-- **croot, a file and folder picker**: Alt-E opens a tree below the command line. Typing
+  the matches, and Alt-E's Alt-H lists the same directories (D80).
+- **croot, a file and directory picker**: Alt-E opens a tree below the command line. Typing
   filters it, the arrows walk it, and Enter picks: on an empty line or after `cd` it
   goes there, after any other command it inserts the path. `croot` does the same from
   scripts (`cd "$(croot)"`); `help croot` says more (D73).
@@ -190,12 +190,12 @@ scoop install cash
 
 Scoop puts `cash` on PATH, and Windows Terminal lists a `cash` profile from its next
 start. If you have neither a `~/.bashrc` nor a `~/.cashrc`, the first install writes a
-starter `~/.bashrc`, read by cash and by Git Bash: a prompt with the folder and git
+starter `~/.bashrc`, read by cash and by Git Bash: a prompt with the directory and git
 branch, a large shared history, the usual aliases and `ls` with icons. `cash --init-rc`
 writes it later, when there is still neither file. `cash.exe` carries its own C runtime, so nothing else needs installing. Scoop will
 not upgrade an app while it runs: close the cash windows first, or run `scoop config
 ignore_running_processes true`. With that set, Scoop still lists the running cash, your
-own window among them, before it goes on. Each version gets a folder of its own, so a
+own window among them, before it goes on. Each version gets a directory of its own, so a
 running `cash.exe` is never overwritten: an open window keeps the old version until it
 closes.
 
@@ -245,10 +245,10 @@ Build output is disposable, and each checkout and worktree has its own `target\`
   quickly; `dist`, fat LTO with one codegen unit, is what the release workflow ships.
 - **The shell you use** is a released one, installed by Scoop (above). Nothing runs from
   `target\`, so any of it can be deleted at any time.
-- **Cleanup.** `scripts\tidy.ps1` deletes build folders not built for a week, what removed
+- **Cleanup.** `scripts\tidy.ps1` deletes build directories not built for a week, what removed
   worktrees leave behind, and old installed copies, skipping anything in use; `-All`
-  takes every build folder. Claude Code runs it when a session starts
-  (`.claude\settings.json`). Do not point worktrees at one shared target folder: cargo
+  takes every build directory. Claude Code runs it when a session starts
+  (`.claude\settings.json`). Do not point worktrees at one shared target directory: cargo
   locks it, so builds queue behind each other, and it can mix up the worktrees' crates
   ([cargo#12516](https://github.com/rust-lang/cargo/issues/12516)).
 - **Features.** Local builds use the default features, so that clippy and the tests share
@@ -306,7 +306,7 @@ same in `defaultProfile`, a `name`, and `commandline` set to that `cash.exe`. Th
 colours come from the prompt, which has to send Microsoft's
 [shell-integration sequences](https://learn.microsoft.com/windows/terminal/tutorials/shell-integration):
 `OSC 133;A` and `B` around `PS1`, `C` in `PS0`, `D;$?` when a command ends, and `OSC 9;9`
-with the folder in Windows form so that a new tab or split pane opens where you are. In
+with the directory in Windows form so that a new tab or split pane opens where you are. In
 `~/.bashrc`, set from `PROMPT_COMMAND` so the exit status is the last command's:
 
 ```bash
@@ -317,7 +317,7 @@ __wt_prompt() {
 [[ -n $WT_SESSION ]] && { PROMPT_COMMAND=__wt_prompt; PS0='\[\e]133;C\e\\\]'; }
 ```
 
-The folder's backslashes are doubled because in `PS1` a lone backslash starts an escape
+The directory's backslashes are doubled because in `PS1` a lone backslash starts an escape
 (`\t` would print the time). Git Bash, whose `$PWD` is `/c/...`, needs it turned into
 `C:\...` first.
 
@@ -329,13 +329,13 @@ name resolves to something worse there: `find` and `xargs`, `ps`, `pgrep`, `pstr
 `which`, `where`, `chmod`, `hostname`, and `coolfetch`.
 
 `where` is Windows' `where.exe` with options spelled with dashes: `where git` lists every
-`git` along the current folder and PATH, `where -r . '*.log'` searches a tree, and
+`git` along the current directory and PATH, `where -r . '*.log'` searches a tree, and
 `-q`, `-f`, `-t` and `where -?` work as `/q`, `/f`, `/t` and `/?` do there. Paths print
 as `C:/…`, like everything else cash prints.
 
 `ls` takes what lsd adds to it: `ls --icons` puts a Nerd Font glyph before each name
 when Windows Terminal draws the tab in a Nerd Font, and no icon anywhere else, so never
-an empty box (`--icons-theme=fancy` for the glyphs regardless), `--tree` draws folders
+an empty box (`--icons-theme=fancy` for the glyphs regardless), `--tree` draws directories
 as a tree,
 names are coloured by kind and extension from `LS_COLORS` or `dircolors`' defaults, and
 `--group-directories-first`, `-X`, `-v` and `-U` sort as in GNU ls. `ls -l` colours
@@ -348,7 +348,7 @@ hidden and system stay out of a listing without `-a`, as in Explorer.
 Inside cash, `which ls` prints `C:/…/cash.exe/ls`, a path only cash can run. For programs
 outside cash (Python's `subprocess`, a `.bat` file, an editor), `cash --link-tools [DIR]`
 makes a hard link to `cash.exe` for each tool, `ls.exe`, `sort.exe` and so on, in DIR or
-in `bin` next to `cash.exe`. The links take no space. With `--add-to-path` the folder
+in `bin` next to `cash.exe`. The links take no space. With `--add-to-path` the directory
 goes at the front of your user PATH, which Windows puts after the machine's, so
 System32's own `find` and `sort` still win for `.bat` files; `%VAR%` entries already
 there stay as they are. Re-run it after upgrading cash, which `cash doctor` reminds you
@@ -428,7 +428,7 @@ themselves.
 `C:\WINDOWS\system32\bash.exe`, which is the WSL launcher: without this, a script
 running `bash helper.sh` would silently continue under Linux. A real bash is still
 reachable by full path. `cash` resolves to itself too, so `cash doctor` works inside cash
-even when a terminal profile starts it by full path and its folder is not on `PATH`.
+even when a terminal profile starts it by full path and its directory is not on `PATH`.
 
 Worth knowing: the answer depends on which shell launched cash, because it inherits that
 shell's `PATH`.

@@ -82,7 +82,7 @@ Six things stand out.
    relative `Path` gets the *process's* cwd and environment. It finds the wrong file,
    misses an exported variable, or runs the wrong program. This one cause produces
    about a dozen findings, from `./tool.exe` after `cd` (which runs the copy in the
-   start folder) to `xargs` and `find -exec` losing `export`, and PATHEXT changes being
+   start directory) to `xargs` and `find -exec` losing `export`, and PATHEXT changes being
    ignored (§4.1).
 2. **Some crashes bypass the panic recovery.** A recursion only 200 deep, or about 20
    deep inside a pipeline, overflows a 2 MiB tokio worker stack and kills the shell. A
@@ -185,10 +185,10 @@ design (D10), but every site below uses the process's copy instead:
 
 | ID | Site | What happens | Mark |
 | --- | --- | --- | --- |
-| EXE-01 | `cash-core/src/commands.rs:420-425`, `:1000` | `cd sub && ./tool.exe` runs `tool.exe` from the folder cash started in. With none there, it is "command not found". `Command::new(relative)` resolves against the process cwd although `candidate` was already joined to the shell's. | ✅ |
+| EXE-01 | `cash-core/src/commands.rs:420-425`, `:1000` | `cd sub && ./tool.exe` runs `tool.exe` from the directory cash started in. With none there, it is "command not found". `Command::new(relative)` resolves against the process cwd although `candidate` was already joined to the shell's. | ✅ |
 | XC-1, BI-01 | `xargs.rs:206-230`, `find.rs:692-731` | `xargs` and `find -exec` lose `export`ed variables and PATH changes. They do not find `npm` (a `.cmd`), cannot run a shebang script, and print `find -exec` output past a redirection. xargs' child also reads cash's stdin. | 🔁 |
-| BI-02 | `nohup.rs` | `nohup sh -c …` is refused (`-c`). The child runs in the process cwd, inherits process stdout past `> file`, and `nohup.out` lands in the wrong folder. | 🔁 |
-| BI-08 | `win.rs:245-256` | `detach` passes a null cwd and environment: `cd proj; detach code .` opens the wrong folder. | 🔁 |
+| BI-02 | `nohup.rs` | `nohup sh -c …` is refused (`-c`). The child runs in the process cwd, inherits process stdout past `> file`, and `nohup.out` lands in the wrong directory. | 🔁 |
+| BI-08 | `win.rs:245-256` | `detach` passes a null cwd and environment: `cd proj; detach code .` opens the wrong directory. | 🔁 |
 | BI-06 | `win.rs:120-131` | `start report.pdf` after `cd` resolves against the process cwd (see also §4.5). | 📖 |
 | BI-07 | `install.rs` | Every operand is relative to the process cwd. `-m` knows four literal modes. | 🔁 |
 | BI-12 | `find.rs:488-493` | `-newer FILE` is relative to the process cwd. | 🔁 |
@@ -408,7 +408,7 @@ is a duplicate of a row above.
 | BIN-06 | Low | **`cash doctor` always says "inside another job object".** It asks after cash made its own. | 🔁 |
 | BIN-07 | Low | **A path-rendering bundled tool runs twice if reading its output fails.** A second `mktemp` file is created. | 📖 |
 | BIN-09 | Low | **`CASH_LINKED_TOOL_EXE` is inherited by every descendant.** | 📖 |
-| BIN-10, BIN-11, BIN-12 | Low | **Settings and links can be left half-done on error.** A symlinked settings.json becomes a file; a failed folder delete leaves the menu entry; links made before an error are not recorded. | 📖 |
+| BIN-10, BIN-11, BIN-12 | Low | **Settings and links can be left half-done on error.** A symlinked settings.json becomes a file; a failed directory delete leaves the menu entry; links made before an error are not recorded. | 📖 |
 | BIN-13 | Low | **`--enable-highlighting` cannot override `false` in config.toml**, and its test asserts the default. | 📖 |
 | BIN-14 | Low | **A recovered panic still prints "cash had a problem and crashed"** and writes a crash report to `%TEMP%`. | 📖 |
 | W32-11, W32-12 | Low | **Unused code in `cash-win32`.** `spawn::spawn`, `build_cmd_command_line`, `path::to_extended` and `lexically_normalize` (which keeps `C:/..`) are not used in production. `conpty` and `vtscreen` are test-only but public. | 📖 |
@@ -437,7 +437,7 @@ is a duplicate of a row above.
 | ARCH-17, ARCH-16 | Info | **Dependency versions.** External versions are repeated per crate and drift (regex, serde_json, fancy-regex). Actionable duplicates: `check_elevation` pulls `windows` 0.51 (replace it with a TokenElevation call in cash-win32, ARCH-07); `human-panic` pulls `sysinfo` and `windows` 0.62; cash-awk uses rand 0.8. |
 | ARCH-07 | Low | **The user identity is found by running `whoami.exe /user /fo csv` and scraping its output.** Done twice, at every start, while cash-win32 already reads the token SID. |
 | ARCH-13, EXE-17, W32-09, BI-22 | Low | **The spec describes old code.** D1 says Bash 5.2.37 (it is 5.3.15). §1 and §4 row 19 say `stat` is not carried (it is). §5 still draws brush crates. D6 and §6 say the spawn race is open (it was closed by `CREATE_SUSPENDED`). The D9 table names cash crates as their own upstream. |
-| ARCH-14 | Low | **README and RELEASING are out of date.** The README Layout omits five crates and three folders. The RELEASING crate list omits awk, bc and sed. The toolchain version is hard-coded in five places. |
+| ARCH-14 | Low | **README and RELEASING are out of date.** The README Layout omits five crates and three directories. The RELEASING crate list omits awk, bc and sed. The toolchain version is hard-coded in five places. |
 | BIN-21, ARCH-19 | Info | **CI hides flaky tests.** CI runs nextest with `retries = 3`, while the local rule is `--retries 0`, so flakes pass silently there. A `ci` profile that fails or reports on FLAKY would show them. |
 
 ### 5.4 Tests
@@ -447,7 +447,7 @@ is a duplicate of a row above.
 | BIN-05 | Medium | **The language-conformance basis D43 rests on is nearly empty.** `cases/brush` holds 46 cases and none of them test the language. The 209-case `tests/corpus` and the awk/sed/git-prompt differential scripts run only by hand (`results.json` is from 2026-09-27). Only 3 of 8 GNU `.tests` files are used. |
 | PI-09 | Medium | **The vendored reedline and crossterm tests, including those for cash's own patches, never run in CI.** |
 | BIN-18 | Low | **Test helpers are duplicated across `it/`.** 60 of 62 modules declare their own `CASH`; 43 their own run helper; 36 their own output struct. An `it/common.rs` would hold them. |
-| BIN-19 | Low | **About 19 tests use fixed-name `%TEMP%` folders and `remove_dir_all` them first.** Two runs delete each other's. That is shared-state flakiness, not timing. |
+| BIN-19 | Low | **About 19 tests use fixed-name `%TEMP%` directories and `remove_dir_all` them first.** Two runs delete each other's. That is shared-state flakiness, not timing. |
 | BIN-20 | Low | **Some tests test the wrong thing or depend on the machine.** One test skips unless an external awk exists, though cash runs its own. One needs the author's `kali-linux` WSL. 14 tests pass silently when skipped. `it` tests inherit the developer's config.toml and `BASH_ENV`. |
 | BIN-17, PI-14 | Low | **No fuzzing or property testing.** The parser's `Arbitrary` derives are unused, and the absorbed harness carries unreachable oracle machinery. |
 
@@ -554,7 +554,7 @@ one is a group of items in `TODO.md` phase 8.
    the tag on dispatch; tag input through `env:`; pre-release from the tag; a nextest
    `ci` profile that shows flakes; the vendored crates' tests in `xtask ci full`.
 10. **R10. Tests** (§5.4). Freeze the corpus and differential outputs as goldens in
-    `it`, add `it/common.rs`, unique temp folders, and isolate the user's config in
+    `it`, add `it/common.rs`, unique temp directories, and isolate the user's config in
     every `it` test.
 11. **R11. Records and leftovers.** Bring `spec.md` (D1, §1, §4 row 19, §5, D6, D9,
     D23, D36) and README/RELEASING up to date. Remove brush strings, dead code
