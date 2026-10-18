@@ -1,0 +1,7 @@
+first
+status 3
+--- status 0
+--- file part.sh
+echo first
+return 3
+echo never

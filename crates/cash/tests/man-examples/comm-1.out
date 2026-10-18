@@ -1,0 +1,13 @@
+apple
+		banana
+		cherry
+	date
+--- status 0
+--- file mine.txt
+apple
+banana
+cherry
+--- file yours.txt
+banana
+cherry
+date

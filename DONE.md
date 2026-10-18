@@ -2380,3 +2380,15 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   mapfile, printenv, rmdir, basename, dirname, seq, sleep and du. Every option the pages
   list was run in cash and in Git Bash, and every example runs against Git Bash, its
   output frozen. `less` lists only the options cash's pager has.
+- **The manual's fourth twenty pages written in full** (2026-10-19, batch 4): readonly,
+  return, shift, break, continue, command, exec, let, pushd, popd, dirs, umask, mktemp
+  (with realpath and readlink), stat, timeout, nl, paste, tac, comm and uname. Every
+  option the pages list was run in cash and in Git Bash, and every example runs against
+  Git Bash, its output frozen. Two options did not work and now do: `readonly -f`
+  printed the function and left it writable, and makes it read-only, as `declare -rf`
+  does (defining it again or `unset -f` fails, and `declare -F` lists it `-fr`, an
+  exported one `-fx`); `declare -x` listed every function among the exported variables,
+  and lists none. `shift` past the end failed with 2, where Bash fails with 1. The `ln`
+  page's last example linked to a target that was not there, which only a shell with
+  the symlink privilege can do, so it passed here and failed on CI; it points a link
+  at another directory, and is only parsed.
