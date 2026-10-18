@@ -1,0 +1,6 @@
+renamed 'config.ini' -> 'settings.ini'
+--- status 0
+--- file settings.ini
+url=http://example.com
+mirror=http://mirror.example.com
+--- gone config.ini

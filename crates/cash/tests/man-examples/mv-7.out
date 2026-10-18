@@ -1,0 +1,14 @@
+--- status 0
+--- file docs/paths.txt
+C:/old/a
+C:/old/b
+D:/elsewhere
+--- file docs/report.txt
+intro
+BEGIN
+body one
+body two
+END
+outro
+--- gone paths.txt
+--- gone report.txt

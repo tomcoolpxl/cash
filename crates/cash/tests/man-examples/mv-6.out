@@ -1,0 +1,12 @@
+--- status 0
+--- file list.txt
+hello world
+foo bar
+single
+--- file list.txt~
+apple
+
+banana
+cherry
+
+--- gone pairs.txt
