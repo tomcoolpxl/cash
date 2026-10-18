@@ -30,6 +30,20 @@ fn ls_is_a_builtin() {
 }
 
 #[test]
+fn dir_and_vdir_are_this_ls_with_gnus_options() {
+    // They were uutils' own `ls`, whose modes are not this one's: `vdir` showed every
+    // file `-rwxrwxrwx` where `ls -l` shows `-rw-rw-r--`.
+    let scratch = Scratch::new("dir-vdir");
+    std::fs::write(scratch.path().join("a b"), b"").unwrap();
+    std::fs::write(scratch.path().join("c"), b"").unwrap();
+    let out = ls_in(
+        scratch.path(),
+        "dir; [ \"$(vdir | cut -c1-10)\" = \"$(ls -l -b | cut -c1-10)\" ] && echo same",
+    );
+    assert_eq!(out.stdout, "a\\ b  c\nsame", "{}", out.stderr);
+}
+
+#[test]
 fn ls_resolves_dot_and_relative_paths_from_the_shell_working_directory() {
     let scratch = Scratch::new("shell-cwd");
     let child = scratch.path().join("child");

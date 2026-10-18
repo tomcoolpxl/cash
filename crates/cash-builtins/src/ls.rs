@@ -1456,7 +1456,19 @@ impl builtins::Command for LsCommand {
         // `POSIXLY_CORRECT`, a variable of the shell's, says where the options end. The
         // command's own standard output, which a pipeline or a redirection replaces even
         // though the shell's is still the terminal, says whether `--classify=auto` marks.
-        let mut command = Self::parse(&self.raw, options::gnu_order(&context));
+        // `dir` is `ls -C -b`, and `vdir` `ls -l -b`, as GNU has them; what follows on the
+        // command line can still change them.
+        let preset: &[&str] = match context.command_name.as_str() {
+            "dir" => &["-C", "-b"],
+            "vdir" => &["-l", "-b"],
+            _ => &[],
+        };
+        let raw: Vec<String> = preset
+            .iter()
+            .map(|option| (*option).to_owned())
+            .chain(self.raw.iter().cloned())
+            .collect();
+        let mut command = Self::parse(&raw, options::gnu_order(&context));
         command.tty = context.try_fd(1).is_some_and(|f| f.is_terminal());
         command.list(context).await
     }

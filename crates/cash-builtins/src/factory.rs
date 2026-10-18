@@ -493,6 +493,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("who".into(), builtin::<identity::WhoCommand, SE>());
     m.insert("pinky".into(), builtin::<identity::PinkyCommand, SE>());
     m.insert("ls".into(), builtin::<ls::LsCommand, SE>());
+    // GNU's `dir` and `vdir` are `ls -C -b` and `ls -l -b`: this `ls`, so they show what it
+    // shows, not uutils' modes.
+    m.insert("dir".into(), builtin::<ls::LsCommand, SE>());
+    m.insert("vdir".into(), builtin::<ls::LsCommand, SE>());
     m.insert("tty".into(), builtin::<tty::TtyCommand, SE>());
     m.insert("stat".into(), builtin::<stat::StatCommand, SE>());
     m.insert(
