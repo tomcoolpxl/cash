@@ -1,0 +1,7 @@
+--- status 0
+--- file config.ini
+url=https://example.com
+mirror=https://mirror.example.com
+--- file config.ini.bak
+url=http://example.com
+mirror=http://mirror.example.com

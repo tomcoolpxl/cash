@@ -23,6 +23,9 @@ crates/cash-archive/tests/fixtures/rar/** -text
 *.bom   -text
 # Git Bash's output, byte for byte, CRs included (tests/git-prompt-differential.sh --freeze).
 tests/git-prompt/** -text
+# The man pages' examples: their files (windows.txt is CRLF) and what Git Bash gave for
+# each, byte for byte (CASH_MAN_EXAMPLES_FREEZE=1, crates/cash/tests/it/man_examples.rs).
+crates/cash/tests/man-examples/** -text
 
 # Binaries
 # A sixel picture is ASCII, but one line of escape sequences that no diff can show.

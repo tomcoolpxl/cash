@@ -19,6 +19,8 @@ see: pwd pushd popd dirs prevd nextd cdh z croot winpath paths
 
 Go to a directory, by any spelling:
 
+<!-- parse only: names directories of the reader's own -->
+
     cd C:/src/cash
     cd /c/src/cash
     cd 'C:\src\cash'
@@ -30,10 +32,14 @@ Go up one directory, or two:
 
 Go home, or to a directory in it:
 
+<!-- parse only: names directories of the reader's own -->
+
     cd
     cd ~/Documents
 
 Switch between two directories:
+
+<!-- parse only: names directories of the reader's own -->
 
     cd C:/src/cash
     cd C:/work/notes
@@ -42,9 +48,13 @@ Switch between two directories:
 
 A directory with spaces in its name needs quotes:
 
+<!-- parse only: names a directory a machine may not have -->
+
     cd "C:/Program Files/Git"
 
 A network share:
+
+<!-- parse only: names a share -->
 
     cd //fileserver/projects
 
@@ -57,6 +67,8 @@ Work in a directory without leaving this one:
     (cd tools && make)
 
 See where a junction really leads:
+
+<!-- parse only: cash prints C:/Users where Git Bash prints /c/Users, as cash spells paths -->
 
     cd -P "C:/Documents and Settings"
     pwd               # C:/Users

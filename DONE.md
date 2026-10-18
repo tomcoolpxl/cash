@@ -2251,3 +2251,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `--help` (GNU's `or:` lines too), not the generic `NAME [ARGS]` a bundled tool
   reports. `help -m NAME` is the whole page, a draft ending with its `--help`; topics
   are shown whole. The tests that read options or later sections read `help -m`.
+- **`man`, step 5: every example is a test** (2026-10-18): each block of code under a
+  page's Examples heading runs under cash in a copy of shared files
+  (`crates/cash/tests/man-examples/fixture`, a CRLF file among them), and its output,
+  status and the files it changed or removed are checked against what Git Bash 5.3 with
+  GNU sed gave, frozen beside them as the corpus's oracle output is
+  (`CASH_MAN_EXAMPLES_FREEZE=1`). A block that names a share or the reader's own
+  directories follows `<!-- parse only: why -->`, which is not drawn, and is parsed
+  with `cash -n`; the examples of cash's own commands run with status 0. Pages written
+  in full are checked: cd's three runnable examples and sed's thirteen give what Git
+  Bash gave, `sed -i`'s files and `config.ini.bak` included, and man's four run.

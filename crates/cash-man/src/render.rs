@@ -490,7 +490,9 @@ fn blocks(body: &str) -> Vec<Block> {
                 .map(str::to_owned)
                 .collect();
             blocks.push(Block::Code(code));
-        } else if trimmed.is_empty() {
+        } else if trimmed.is_empty() || trimmed.starts_with("<!--") {
+            // A blank line ends a block; so does a comment, a mark for the examples' test
+            // that is not drawn.
             blocks.extend(open.take());
         } else if line.starts_with("    ") && !continues {
             blocks.extend(open.take());

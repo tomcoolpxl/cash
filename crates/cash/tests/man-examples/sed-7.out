@@ -1,0 +1,9 @@
+apple
+banana
+cherry
+key=value
+other=1
+def f():
+    return 1
+print(f())
+--- status 0

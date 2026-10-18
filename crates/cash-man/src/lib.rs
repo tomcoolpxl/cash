@@ -8,6 +8,7 @@
 //! `research/man-browser-design.md`.
 
 pub mod browser;
+pub mod examples;
 pub mod page;
 pub mod render;
 pub mod search;

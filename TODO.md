@@ -36,7 +36,7 @@ The phases before, released as 1.22.0 to 1.27.0, are in DONE.md.
    2. rendering: done (2026-10-18, DONE.md);
    3. `help` on the new pages: done (2026-10-18, DONE.md);
    4. the browser: done (2026-10-18, DONE.md), with `help`'s short view;
-   5. the examples' test;
+   5. the examples' test: done (2026-10-18, DONE.md);
    6. the first batch of about 20 pages at full depth, and drafts for the rest; then a
       release;
    7. the next batches, about 20 pages each, each released when done.
