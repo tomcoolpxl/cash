@@ -1,0 +1,2 @@
+declare -x GREETING="hello"
+--- status 0

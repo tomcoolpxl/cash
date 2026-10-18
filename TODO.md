@@ -37,8 +37,8 @@ The phases before, released as 1.22.0 to 1.27.0, are in DONE.md.
    3. `help` on the new pages: done (2026-10-18, DONE.md);
    4. the browser: done (2026-10-18, DONE.md), with `help`'s short view;
    5. the examples' test: done (2026-10-18, DONE.md);
-   6. the first batch of about 20 pages at full depth, and drafts for the rest; then a
-      release;
+   6. the first batch of about 20 pages at full depth, and drafts for the rest: done
+      (2026-10-18, DONE.md); then a release;
    7. the next batches, about 20 pages each, each released when done.
 2. **Document the two spellings a directory takes in `PATH`** (the user, 2026-10-18,
    after the side effects were weighed): no code. Spelling a `C:/` entry `/c/` as
@@ -91,6 +91,27 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **An alias is not text: a quote it leaves open does not go on into the line**
+  (2026-10-18, found writing alias's man page): with `alias q="echo it's"`, Bash reads
+  `q quoted'` as `echo it's quoted'` and prints `its quoted`; cash stops with
+  "unexpected EOF while looking for matching `''". Bash substitutes an alias's text and
+  reads on; cash's parser takes it as words of its own. Rare in practice (an alias
+  that opens a quote); the fix is in the tokenizer's alias expansion. Medium.
+
+- **Two variables whose names differ in case reach a program at random** (2026-10-18,
+  found writing export's man page): reading ignores case only when no name is spelled
+  exactly (`$Path` reads `PATH`), but an assignment is exact, so `export Path=/x`
+  makes a second variable beside `PATH`. The shell goes on looking commands up in
+  `PATH`; a program gets both, and Rust's `Command` keeps one of two names that
+  differ only in case, the one added last, in hash-map order:
+  `export FOO=upper Foo=mixed; printenv FOO` gave `mixed` three times in five. The
+  vars and paths topics said `$Foo` and `$FOO` cannot be two variables; they now say
+  what happens. Fixes, to pick: an assignment lands on a variable already spelled
+  otherwise (no `$x` and `$X` as two, against Bash), or only the well-known Windows
+  names (`PATH`, `TEMP`, ...) fold on assignment, or the boundary picks one name
+  deterministically and warns. Danger of leaving: a script that writes `Path` gets a
+  different PATH in programs than in the shell. Small to medium.
+
 - **`cp` keeps the source's modification time without `-p`** (2026-10-18, found
   writing cp's man page): `touch -d 2020-01-02 old; cp old new` gives `new` the time of
   2020, as Windows' `CopyFileExW` (under `std::fs::copy`, under `uu_cp`) copies it;
@@ -108,7 +129,10 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   'nosuch': No such file or directory`; `cat nosuch` says `cat: nosuch: The system
   cannot find the file specified.` (GNU: `No such file or directory`); `mkdir docs`
   over a directory says `mkdir: docs: File exists` (GNU: `cannot create directory
-  'docs': File exists`); `ln nosuch z` says `failed to create hard link 'z' =>
+  'docs': File exists`), `mkdir nosuch/x` ends `The system cannot find the path
+  specified.` (GNU: `No such file or directory`), and `mkdir -p afile` over a file
+  ends `Cannot create a file when that file already exists.` (GNU: `File exists`);
+  `ln nosuch z` says `failed to create hard link 'z' =>
   'nosuch'` (GNU: `failed to access 'nosuch'`). The statuses agree, but for `mv -i`
   answered no (or not at all): GNU leaves the file and exits 0, `uu_mv` exits 1. They
   come from

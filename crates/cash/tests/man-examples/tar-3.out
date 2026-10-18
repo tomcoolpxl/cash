@@ -1,0 +1,20 @@
+notes.txt
+pairs.txt
+--- status 0
+--- file flat/notes.txt
+the cat sat on the cat mat
+no pets here
+a cat and a cat and a cat
+--- file flat/pairs.txt
+hello world
+foo bar
+single
+--- file site.tar.gz (binary)
+--- file site/notes.txt
+the cat sat on the cat mat
+no pets here
+a cat and a cat and a cat
+--- file site/pairs.txt
+hello world
+foo bar
+single

@@ -3,12 +3,14 @@ title: Variables cash reads and sets
 summary: The `CASH_*` variables, the Bash variables cash sets, and how Windows' variables are seen.
 see: export paths crlf keys config
 ---
-## Names ignore case
+## Names, and case
 
-Windows variable names ignore case, and so do cash's: `$Path`, `$path` and `$PATH`
-are one variable, and an exact match wins over a near one. The usual names (`PATH`,
-`HOME`, `TEMP`, `USERNAME`, `SYSTEMROOT`, `APPDATA`, ...) are upper-cased as cash starts.
-The cost: `$Foo` and `$FOO` cannot be two variables.
+Windows variable names ignore case. cash reads them so when no variable is spelled
+exactly: `$Path` and `$path` read `PATH`. The usual names (`PATH`, `HOME`, `TEMP`,
+`USERNAME`, `SYSTEMROOT`, `APPDATA`, ...) are upper-cased as cash starts. An
+assignment is exact, as in Bash: `Path=x` makes a second variable and leaves `PATH`
+as it was, so spell the names as they are, `PATH=...`; a program given two names
+that differ only in case gets one of them.
 
 ## cash's own
 

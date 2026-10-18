@@ -1,0 +1,11 @@
+notes.txt
+--- status 0
+--- file restore/site/notes.txt
+the cat sat on the cat mat
+no pets here
+a cat and a cat and a cat
+--- file site.tar.gz (binary)
+--- file site/notes.txt
+the cat sat on the cat mat
+no pets here
+a cat and a cat and a cat

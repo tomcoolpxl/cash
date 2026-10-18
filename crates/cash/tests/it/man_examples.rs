@@ -138,6 +138,13 @@ fn record(command: &mut Command, fixture: &Path) -> String {
     let after = files_below(scratch.path());
     for (name, bytes) in &after {
         if before.iter().all(|(was, old)| was != name || old != bytes) {
+            // An archive or other binary file is named, not shown: it holds the times
+            // of the fixture's files, new on every run. What is in it, the example
+            // shows (`tar -tf`).
+            if bytes.contains(&0) {
+                let _ = writeln!(out, "--- file {name} (binary)");
+                continue;
+            }
             let text = String::from_utf8_lossy(bytes).replace('\r', "\\r");
             let _ = write!(out, "--- file {name}\n{text}");
             if !text.ends_with('\n') {
