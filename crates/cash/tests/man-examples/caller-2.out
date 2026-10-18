@@ -1,0 +1,12 @@
+5 inner trace.sh
+6 outer trace.sh
+7 main trace.sh
+--- status 0
+--- file trace.sh
+trace() {
+  local n=0
+  while caller $n; do n=$((n + 1)); done
+}
+inner() { trace; }
+outer() { inner; }
+outer

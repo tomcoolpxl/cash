@@ -2392,3 +2392,15 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   page's last example linked to a target that was not there, which only a shell with
   the symlink privilege can do, so it passed here and failed on CI; it points a link
   at another directory, and is only parsed.
+- **The manual's fifth twenty pages written in full** (2026-10-19, batch 5): true,
+  false, `:`, hash, unalias, builtin, times, ulimit, caller, id (with groups), whoami,
+  hostname, nproc, yes, base64, sha256sum (with md5sum, sha1sum, sha224sum, sha384sum,
+  sha512sum and b2sum, one page now), rev, fold and join; `.` joined `source`'s page.
+  Every option was run in cash and in Git Bash, and every example runs against Git
+  Bash, its output frozen. `id` and `groups` did not do what their options said: `-G`
+  and `groups` printed the account itself, not its groups; `-r`, `-z` and a USER were
+  refused; `id -un` said `PC\user` where `whoami` says `user`. They list the groups the
+  shell's token works with (Administrators only elevated), or another account's local
+  groups, each id its SID's last part, and take GNU's options. A script being run was
+  missing from `FUNCNAME`, `BASH_SOURCE` and `BASH_LINENO`, and `caller` named its
+  frame `source`; it is `main`, from line 0, as in Bash.

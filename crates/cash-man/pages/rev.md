@@ -3,18 +3,40 @@ name: rev
 summary: Reverse the characters of each line.
 kind: Text and file tools
 see: tac crlf
-draft: yes
 ---
+
+## Syntax
+
+    rev [OPTION] [FILE]...
+
+    rev FILE                each line of FILE, back to front
+    rev | sort | rev        sort lines by their ends
 
 ## Examples
 
-    echo hello | rev                       # olleh
-    rev names.txt | sort | rev             # sort by the ends of the lines
+A line back to front:
+
+    echo hello | rev
+
+The last field, however many there are:
+
+    echo 'C:/Users/me/report.txt' | rev | cut -d/ -f1 | rev
+
+Sorted by their ends, so by extension:
+
+    printf 'report.pdf\nnotes.txt\nphoto.jpg\ndata.txt\n' | rev | sort | rev
 
 ## How it works
 
-`rev` reverses the characters of each line: util-linux's, with `-0` for NUL-separated
-lines. Invalid UTF-8 is kept byte by byte.
+`rev` writes each line of its files, or standard input, with its characters in reverse
+order: characters, not bytes, so `é` stays whole. Invalid UTF-8 is kept byte by byte.
+`-0` reads lines that end with a NUL.
+
+## Options
+
+    -0, --zero    Lines end with a NUL, not a newline.
+
+Exit status: 0, or 1 for a file that cannot be read.
 
 ## Different in cash
 

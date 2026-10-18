@@ -1,0 +1,6 @@
+2 outer calls.sh
+--- status 0
+--- file calls.sh
+where() { caller 0; }
+outer() { where; }
+outer

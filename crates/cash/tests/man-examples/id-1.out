@@ -1,0 +1,3 @@
+id -un is whoami
+id -u is a number
+--- status 0

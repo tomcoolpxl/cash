@@ -1,8 +1,9 @@
 ---
-name: source
+names: source .
 summary: Run a file's commands in the current shell.
+summary .: Run a file's commands in the current shell (the same as `source`).
 kind: Bash builtins
-see: . config
+see: return config
 ---
 
 ## Syntax

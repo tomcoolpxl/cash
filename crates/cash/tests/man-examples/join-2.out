@@ -1,0 +1,13 @@
+1 Ann 31
+2 Bob NA
+3 Cy 27
+4 50
+--- status 0
+--- file ages.txt
+1 31
+3 27
+4 50
+--- file names.txt
+1 Ann
+2 Bob
+3 Cy
