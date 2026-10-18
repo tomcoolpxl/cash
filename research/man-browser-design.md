@@ -93,8 +93,9 @@ marked to be parsed only.
   recognisable as you scroll: the section's heading stays on the pane's top line.
 - **Bottom line**: the keys that matter now, and where you are (`line 3 of 120`, or the
   search's `3 / 12`).
-- **Narrow terminals** (under ~80 columns): the page fills the screen; Tab shows the
-  list in its place, Enter opens a page and goes back to it.
+- **Narrow terminals** (under 100 columns, where two panes would leave the page under
+  ~65): the page fills the screen; Tab shows the list in its place, Enter opens a page
+  and goes back to it.
 
 ### Keys
 
@@ -208,7 +209,8 @@ first (section 6).
   sed, cp, mv, rm, cat, ...), each batch with its examples' tests and fixes for the
   bugs they find, and released when done.
 - The section's heading stays on the top line while the page scrolls.
-- Under about 80 columns one pane fills the screen, Tab switching to the list.
+- Under 100 columns one pane fills the screen, Tab switching to the list (first set at
+  80; at 80 the page pane had 45 columns beside the list).
 - The list starts with "Getting started" and cash's topics, a rule, then every
   command A to Z, as the user asked from the start.
 

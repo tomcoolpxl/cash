@@ -13,8 +13,9 @@ use crate::Manual;
 use crate::page::Subject;
 use crate::render::{self, Drawn, Line, SectionStart, Style};
 
-/// Below this many columns, one pane at a time.
-pub const NARROW: usize = 80;
+/// Below this many columns, one pane at a time: two would leave the page fewer than
+/// about 65 columns, beside a list some 30 wide.
+pub const NARROW: usize = 100;
 
 /// A key the browser acts on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -492,18 +493,39 @@ impl<'m> Browser<'m> {
         if self.filter.trim().is_empty() {
             self.shown = (0..self.entries.len()).collect();
         } else {
+            // The name typed whole first, then the names that match, best first, then
+            // the entries only a summary matches: `sed` is the command before the topic
+            // whose summary mentions it.
             self.fuzzy.set(&self.filter);
-            let candidates: Vec<String> = self
+            let typed = self.filter.trim();
+            let exact = self
                 .entries
                 .iter()
-                .map(|entry| format!("{} {}", entry.name, entry.summary.replace('`', "")))
-                .collect();
-            self.shown = self
+                .position(|entry| entry.name.eq_ignore_ascii_case(typed));
+            let by_name: Vec<usize> = self
                 .fuzzy
-                .rank(candidates.iter().map(String::as_str))
+                .rank(self.entries.iter().map(|entry| entry.name.as_str()))
                 .into_iter()
                 .map(|found| found.index)
                 .collect();
+            let summaries: Vec<String> = self
+                .entries
+                .iter()
+                .map(|entry| entry.summary.replace('`', ""))
+                .collect();
+            let by_summary: Vec<usize> = self
+                .fuzzy
+                .rank(summaries.iter().map(String::as_str))
+                .into_iter()
+                .map(|found| found.index)
+                .collect();
+            let mut shown: Vec<usize> = exact.into_iter().collect();
+            for index in by_name.into_iter().chain(by_summary) {
+                if !shown.contains(&index) {
+                    shown.push(index);
+                }
+            }
+            self.shown = shown;
         }
         self.selected = 0;
         self.list_scroll = 0;
@@ -820,17 +842,8 @@ impl<'m> Browser<'m> {
         if self.keys_shown {
             return "Keys".to_owned();
         }
-        let summary = self
-            .entries
-            .iter()
-            .find(|entry| entry.page == open.page && entry.name == open.name)
-            .map_or("", |entry| entry.summary.as_str())
-            .replace('`', "");
-        let mut title = if summary.is_empty() {
-            open.name.clone()
-        } else {
-            format!("{} \u{2014} {summary}", open.name)
-        };
+        // The name, not the summary: the page's first line says that.
+        let mut title = open.name.clone();
         if let Some(section) = current_section(&open.drawn.sections, open.scroll)
             && section.line < open.scroll
         {
@@ -950,8 +963,8 @@ impl<'m> Browser<'m> {
             return pad(&format!("{prompt}{}\u{2588}", find.word), width);
         }
         let keys = match self.focus {
-            Focus::List => " type to filter  Enter open  Tab page  Ctrl-F every page  Esc quit",
-            Focus::Page => " / find  n N  Enter see also  [ ] sections  Tab list  ? keys  Esc quit",
+            Focus::List => " type to filter  Enter open  Tab page  ? keys  Esc quit",
+            Focus::Page => " / find  Enter see also  Tab list  ? keys  Esc quit",
         };
         let place = match (&self.find, &self.open, self.focus) {
             (Some(find), _, _) if !find.matches.is_empty() => {
@@ -1129,7 +1142,7 @@ mod tests {
                 Page::parse(
                     "getting-started",
                     Subject::Topic,
-                    "---\ntitle: Getting started\nsummary: Where to begin.\n---\nRead cd's page.\n",
+                    "---\ntitle: Getting started\nsummary: Where to begin, as pwd shows.\n---\nRead cd's page.\n",
                 ),
                 Page::parse(
                     "paths",
@@ -1153,16 +1166,13 @@ mod tests {
         let mut browser = Browser::new(&manual, None, false, |_| None);
         let frame = plain(&browser.frame(100, 12));
         assert!(frame[0].starts_with("┌ Topics & commands"), "{frame:#?}");
-        assert!(
-            frame[0].contains("Getting started \u{2014} Where to begin."),
-            "{frame:#?}"
-        );
+        assert!(frame[0].contains("┐┌ Getting started ─"), "{frame:#?}");
         assert!(frame[1].contains("▸ Getting started"), "{frame:#?}");
         assert!(frame[2].contains("  Paths"), "{frame:#?}");
         assert!(frame[3].contains("─────"), "{frame:#?}");
         assert!(frame[4].contains("  cd"), "{frame:#?}");
         assert!(
-            frame[1].contains("Getting started \u{2014} Where to begin."),
+            frame[1].contains("Getting started \u{2014} Where to begin, as pwd shows."),
             "{frame:#?}"
         );
         assert!(frame.iter().all(|line| line.width() <= 100), "{frame:#?}");
@@ -1179,11 +1189,14 @@ mod tests {
         }
         let frame = plain(&browser.frame(100, 10));
         assert!(frame[0].starts_with("┌ Filter: pwd"), "{frame:#?}");
+        // The command named first; the topic whose summary mentions it after.
+        assert!(frame[1].contains("pwd"), "{frame:#?}");
+        assert!(frame[2].contains("Getting started"), "{frame:#?}");
         assert!(frame[1].contains("pwd"), "{frame:#?}");
         browser.key(Key::Enter);
         let frame = plain(&browser.frame(100, 10));
         assert!(
-            frame[0].contains("pwd \u{2014} Print the directory."),
+            frame[1].contains("pwd \u{2014} Print the directory."),
             "{frame:#?}"
         );
         // Esc clears the filter first, and then quits.
@@ -1265,9 +1278,9 @@ mod tests {
         );
         browser.key(Key::Down);
         browser.key(Key::Enter);
-        assert!(plain(&browser.frame(100, 12))[0].contains("Paths \u{2014} C:/ and /c/."));
+        assert!(plain(&browser.frame(100, 12))[1].contains("Paths \u{2014} C:/ and /c/."));
         browser.key(Key::Backspace);
-        assert!(plain(&browser.frame(100, 12))[0].contains("cd \u{2014} Change the directory."));
+        assert!(plain(&browser.frame(100, 12))[1].contains("cd \u{2014} Change the directory."));
         browser.key(Key::Forward);
         assert!(plain(&browser.frame(100, 12))[0].contains("Paths"));
     }
@@ -1306,7 +1319,11 @@ mod tests {
             ))
         });
         let frame = plain(&browser.frame(60, 20));
-        assert!(frame[0].contains("egrep \u{2014} grep -E."), "{frame:#?}");
+        assert!(frame[0].contains(" egrep"), "{frame:#?}");
+        assert!(
+            frame[1].contains("grep, egrep \u{2014} Match lines."),
+            "{frame:#?}"
+        );
         let text = frame.join("\n");
         assert!(text.contains("USAGE AND OPTIONS"), "{text}");
         assert!(text.contains("Usage: grep [OPTION]... PATTERN"), "{text}");

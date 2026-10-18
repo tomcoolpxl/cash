@@ -947,6 +947,43 @@ fn conpty_alt_e_picks_a_directory_and_cd_runs() {
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
 
+/// `man` opens its browser on the alternate screen: Getting started first, the list
+/// narrowed by typing, a page opened with Enter, and `q` back to the prompt as it was.
+#[test]
+fn conpty_man_opens_a_page_from_the_list_and_q_leaves_it() {
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+    session.send("man\r").unwrap();
+    // 80 columns: one pane, the page first.
+    session
+        .expect("READING THIS MANUAL", Duration::from_secs(10))
+        .expect("the browser opened on Getting started");
+    // Tab to the list, narrow it to sed, Enter: sed's page.
+    session.send("\t").unwrap();
+    session
+        .expect("Topics & commands", Duration::from_secs(10))
+        .expect("the list in the page's place");
+    session.send("sed").unwrap();
+    session
+        .expect("Filter: sed", Duration::from_secs(10))
+        .expect("the list narrowed");
+    session.send("\r").unwrap();
+    session
+        .expect("Edit text line by line", Duration::from_secs(10))
+        .expect("sed's page opened");
+    session.send("q").unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    session.send("echo back_from_man\r").unwrap();
+    session
+        .expect("back_from_man", Duration::from_secs(10))
+        .expect("the prompt took commands again");
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}
+
 /// After another command, croot lists files too, inserts a pick without running the
 /// line, and stays open for the next until Esc (D73).
 #[test]

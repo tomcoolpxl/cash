@@ -2241,7 +2241,7 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   See-also pages on the left, Backspace and Alt-Left/Right go back and forward, `1` to
   `8` and `[` `]` jump between sections, `?` shows the keys, Esc leaves a search and
   then the browser. The section the top line is in stays on the pane's top border.
-  Under 80 columns one pane fills the screen. A draft ends with the command's own
+  Under 100 columns one pane fills the screen. A draft ends with the command's own
   `--help`. Not on a terminal, `man` prints the page as text; `man -k WORD` lists the
   names and summaries that hold WORD. A line of code wider than a narrow pane goes on
   below, never cut. `man` has its own page, written in full.

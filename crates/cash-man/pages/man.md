@@ -36,7 +36,7 @@ Keep a page, or search it with the tools you know:
 
 `man` opens a full-screen browser: cash's topics and every command on the left, the
 page on the right. Typing narrows the list, Enter opens a page, Tab moves between the
-two panes. In a terminal under 80 columns one pane fills the screen, and Tab switches.
+two panes. In a terminal under 100 columns one pane fills the screen, and Tab switches.
 
 Every command's page has the same sections in the same order: Syntax, Examples, How
 it works, Options, Advanced, Different in cash, See also. The section the top line of
