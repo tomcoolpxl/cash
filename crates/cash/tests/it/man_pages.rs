@@ -38,14 +38,22 @@ fn man_prints_a_page_as_text_when_its_output_is_not_a_terminal() {
             .starts_with("Getting started")
     );
 
-    // A draft ends with the command's own --help.
-    let out = run("man csplit");
-    assert!(
-        out.stdout.contains("\nUSAGE AND OPTIONS\n"),
-        "{}",
-        out.stdout
-    );
-    assert!(out.stdout.contains("--suffix-format"), "{}", out.stdout);
+    // A draft ends with the command's own --help: any of uutils' tools not written in
+    // full yet, so the check stays as pages are written.
+    let manual = cash_man::manual();
+    if let Some(page) = manual
+        .pages
+        .iter()
+        .find(|page| page.draft && page.kind == "Bundled coreutils, from uutils")
+    {
+        let out = run(&format!("man {}", page.names[0]));
+        assert!(
+            out.stdout.contains("\nUSAGE AND OPTIONS\n"),
+            "{}",
+            out.stdout
+        );
+        assert!(out.stdout.contains("--help"), "{}", out.stdout);
+    }
 }
 
 #[test]

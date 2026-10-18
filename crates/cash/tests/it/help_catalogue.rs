@@ -110,13 +110,21 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
         text.contains("\nSEE ALSO\n") && text.contains("crlf"),
         "{text}"
     );
-    // A draft ends with the builtin's own `--help`.
-    let draft = run("help -m csplit");
-    assert!(
-        draft.stdout.contains("\nUSAGE AND OPTIONS\n"),
-        "{}",
-        draft.stdout
-    );
+    // A draft ends with the builtin's own `--help`: any of uutils' tools not written in
+    // full yet, so the check stays as pages are written.
+    let manual = cash_man::manual();
+    if let Some(page) = manual
+        .pages
+        .iter()
+        .find(|page| page.draft && page.kind == "Bundled coreutils, from uutils")
+    {
+        let draft = run(&format!("help -m {}", page.names[0]));
+        assert!(
+            draft.stdout.contains("\nUSAGE AND OPTIONS\n"),
+            "{}",
+            draft.stdout
+        );
+    }
     // Help speaks to the user: no spec decision numbers, rows or section signs
     // (the user, 2026-10-05).
     for developer_note in [
