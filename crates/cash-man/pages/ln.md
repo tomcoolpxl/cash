@@ -35,10 +35,13 @@ Links in a directory, each named as its target:
     ln notes.txt pairs.txt shortcuts/
     ls shortcuts
 
-Replace a link that is there:
+Point a link at another directory, replacing it:
 
-    ln -s real link2
-    ln -sfn real link2 && ls link2
+<!-- parse only: Git Bash copies a directory for ln -s without the privilege -->
+
+    mkdir -p v1 v2 && touch v2/new
+    ln -s v1 current
+    ln -sfn v2 current && ls current
 
 ## How it works
 
