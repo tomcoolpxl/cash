@@ -32,7 +32,7 @@ fn tar_matches_gnu_tar_1_35() {
 fn tar_is_a_builtin_with_a_page() {
     let out = run("type tar");
     assert!(out.stdout.contains("shell builtin"), "{}", out.stdout);
-    let page = run("help tar");
+    let page = run("help -m tar");
     assert_eq!(page.code, 0, "{}", page.stderr);
     assert!(page.stdout.contains("GNU tar 1.35"), "{}", page.stdout);
 }

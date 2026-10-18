@@ -57,7 +57,7 @@ fn the_three_names_are_builtins_with_one_page() {
             "{name}: {}",
             out.stdout
         );
-        let page = run(&format!("help {name}"));
+        let page = run(&format!("help -m {name}"));
         assert_eq!(page.code, 0, "{}", page.stderr);
         assert!(
             page.stdout.contains("miniz_oxide"),

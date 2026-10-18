@@ -109,7 +109,9 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   cannot find the file specified.` (GNU: `No such file or directory`); `mkdir docs`
   over a directory says `mkdir: docs: File exists` (GNU: `cannot create directory
   'docs': File exists`); `ln nosuch z` says `failed to create hard link 'z' =>
-  'nosuch'` (GNU: `failed to access 'nosuch'`). The statuses agree. They come from
+  'nosuch'` (GNU: `failed to access 'nosuch'`). The statuses agree, but for `mv -i`
+  answered no (or not at all): GNU leaves the file and exits 0, `uu_mv` exits 1. They
+  come from
   `uu_cp`, `uu_cat`, `uu_mkdir` and `uu_ln` as crates; the fix is cash's own copy of
   each (as `rm` and `sort` are) or a wrapper that puts uucore's Windows errors in
   POSIX's words. Medium.

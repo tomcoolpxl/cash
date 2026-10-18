@@ -244,7 +244,7 @@ fn pbcopy_and_pbpaste_round_trip_through_the_clipboard() {
         out.stderr
     );
 
-    let page = run("help pbpaste");
+    let page = run("help -m pbpaste");
     assert_eq!(page.code, 0, "{}", page.stderr);
     assert!(page.stdout.contains("CRLF"), "{}", page.stdout);
 

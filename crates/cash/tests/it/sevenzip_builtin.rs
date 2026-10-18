@@ -130,7 +130,7 @@ fn seven_za_is_the_same_command_under_its_own_name() {
         "{}",
         out.stdout
     );
-    let page = run("help 7z");
+    let page = run("help -m 7z");
     assert!(page.stdout.contains("7-Zip 26.03"), "{}", page.stdout);
 }
 

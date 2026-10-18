@@ -67,7 +67,7 @@ fn the_three_are_builtins_with_pages() {
             "{name}: {}",
             out.stdout
         );
-        let page = run(&format!("help {name}"));
+        let page = run(&format!("help -m {name}"));
         assert_eq!(page.code, 0, "{}", page.stderr);
         assert!(page.stdout.contains(word), "{name}: {}", page.stdout);
     }
