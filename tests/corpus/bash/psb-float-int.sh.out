@@ -1,0 +1,28 @@
+[1]                    float=no int=yes
+[-2]                   float=no int=yes
+[+3]                   float=no int=yes
+[1.5]                  float=yes int=no
+[-0.25]                float=yes int=no
+[.5]                   float=yes int=no
+[5.]                   float=yes int=no
+[1.2.3]                float=no int=no
+[1e3]                  float=no int=no
+[1.5e3]                float=yes int=no
+[0x1A]                 float=no int=yes
+[0X1a]                 float=no int=yes
+[017]                  float=no int=yes
+[08]                   float=no int=no
+[abc]                  float=no int=no
+[]                     float=no int=no
+[ 3]                   float=no int=yes
+[3 ]                   float=no int=no
+[9223372036854775807]  float=no int=yes
+[9223372036854775808]  float=no int=no
+['A]                   float=no int=yes
+["B]                   float=no int=yes
+26 15 65 0
+1.00 0.2 1000.000000
+1
+status 1
+0
+status 1

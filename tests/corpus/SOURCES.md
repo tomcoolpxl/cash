@@ -7,6 +7,11 @@ What each source allows, and the notices its terms ask to be kept with the copie
 | Cases | Source | Terms |
 | --- | --- | --- |
 | `bash/pbb-*` | [pure-bash-bible](https://github.com/dylanaraps/pure-bash-bible), Dylan Araps | MIT, below |
+| `bash/psb-*` | [pure-sh-bible](https://github.com/dylanaraps/pure-sh-bible), Dylan Araps | MIT, the same notice as pure-bash-bible's |
+| `bash/json-sh.sh` and `fixtures/JSON.sh` | [JSON.sh](https://github.com/dominictarr/JSON.sh), Dominic Tarr, unchanged | MIT or Apache License 2.0, at the user's choice; taken under MIT: Copyright (c) 2011 Dominic Tarr, under the MIT notice below |
+| `bash/spark.sh` and `fixtures/spark` | [spark](https://github.com/holman/spark), Zach Holman, unchanged | MIT: Copyright (c) Zach Holman, https://zachholman.com, under the MIT notice below |
+| `bash/getoptions.sh` and `fixtures/getoptions_*.sh` | [getoptions](https://github.com/ko1nksm/getoptions)' `lib/`, unchanged, and its `examples/basic.sh` definition | CC0 1.0, as each file's header says: no conditions |
+| `bash/semver-tool.sh` and `fixtures/semver` | [semver-tool](https://github.com/fsaintjacques/semver-tool) 3.4.0's `src/semver`, unchanged | Apache License 2.0, as the script's SPDX line says; the text is in [`licenses/`](../../licenses/) (`*-Apache-2.0.txt`) |
 | `awk/*` citing `onetrueawk` | [The One True Awk](https://github.com/onetrueawk/awk)'s `testdir`, the test programs of *The AWK Programming Language* | Lucent's permission notice, below |
 | `sed/pement-*`, `awk/pement-*` | Eric Pement's one-liners, [sed](https://www.pement.org/sed/sed1line.txt) and [awk](https://www.pement.org/awk/awk1line.txt) | No licence stated; one-liners, cited by URL |
 | `sed/*` citing `gnu.org` | The [GNU sed manual](https://www.gnu.org/software/sed/manual/)'s examples | GNU Free Documentation License 1.3 or later |
@@ -17,6 +22,9 @@ What each source allows, and the notices its terms ask to be kept with the copie
 New cases come from sources whose terms allow copying, and the table says which.
 
 ## pure-bash-bible
+
+The notice JSON.sh and spark are under is the same, with their own copyright lines in the
+table.
 
 The MIT License (MIT)
 

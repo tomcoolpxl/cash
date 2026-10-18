@@ -46,7 +46,10 @@ Released as 1.25.0. Then, for 1.26.0:
    yet in the corpus, with `tests/corpus/SOURCES.md` for every source's terms. Done
    (DONE.md): quoted alias names, aliases in aliases and after a blank, a subshell's own
    traps, and `trap -p`'s listing. The `$OSTYPE` case is a known difference (spec §4
-   row 25). Left open from it:
+   row 25). The second round: 10 pure-sh-bible cases (MIT), all as Bash has them, and
+   semver-tool 3.4.0 (Apache-2.0) run whole, which found `.` taking `--help` and `--`
+   after the script as its own (done, DONE.md). The third: JSON.sh (MIT), spark (MIT)
+   and getoptions (CC0) run whole, all three as Bash has them. Left open from them:
 
    - **An alias whose value holds an operator runs it as words**: `alias multi='echo
      m1; echo m2'`, then `multi`, prints `m1 ; echo m2`; Bash runs both commands.

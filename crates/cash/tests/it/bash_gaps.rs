@@ -143,6 +143,28 @@ fn source_and_dot_follow_bash_53_path_lookup() {
 }
 
 #[test]
+fn source_takes_options_only_before_the_script() {
+    // As Bash 5.3: what follows the script's path is the script's, `--help` and `--`
+    // included; a missing path is said, and the usage names `.` itself.
+    let root = source_fixture("options");
+    std::fs::write(root.join("args.sh"), "echo \"args: $*\"\n").unwrap();
+    let (code, stdout) = output_in(
+        root.path(),
+        ". ./args.sh --help -x; . ./args.sh -- a; source ./args.sh -p q; . -p . args.sh one; \
+         . 2>/dev/null; echo \"st $?\"; . 2>&1 | grep -c ': filename argument required$'; \
+         . 2>&1 | grep -x '.: usage: . \\[-p path\\] filename \\[arguments\\]'; \
+         . --help | sed -n 3p",
+    );
+    assert_eq!(code, 0);
+    assert_eq!(
+        stdout,
+        "args: --help -x\nargs: -- a\nargs: -p q\nargs: one\nst 2\n1\n\
+         .: usage: . [-p path] filename [arguments]\n\
+         Usage: . [OPTIONS] <SCRIPT_PATH [ARGUMENTS]>..."
+    );
+}
+
+#[test]
 fn source_argument_mutations_follow_bash_scope_rules() {
     let root = source_fixture("args");
     std::fs::write(

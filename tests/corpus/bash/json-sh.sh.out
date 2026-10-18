@@ -1,0 +1,72 @@
+["a"]	1
+["b",0]	true
+["b",1]	false
+["b",2]	null
+["b"]	[true,false,null]
+["c","d"]	"x\"y"
+["c","e"]	-1.5e3
+["c"]	{"d":"x\"y","e":-1.5e3}
+["f"]	""
+["g"]	[]
+["h"]	{}
+[]	{"a":1,"b":[true,false,null],"c":{"d":"x\"y","e":-1.5e3},"f":"","g":[],"h":{}}
+-- leaf only
+["a"]	1
+["b",0]	true
+["b",1]	false
+["b",2]	null
+["c","d"]	"x\"y"
+["c","e"]	-1.5e3
+["f"]	""
+-- prune
+["a"]	1
+["b",0]	true
+["b",1]	false
+["b",2]	null
+["b"]	[true,false,null]
+["c","d"]	"x\"y"
+["c","e"]	-1.5e3
+["c"]	{"d":"x\"y","e":-1.5e3}
+["g"]	[]
+["h"]	{}
+[]	{"a":1,"b":[true,false,null],"c":{"d":"x\"y","e":-1.5e3},"f":"","g":[],"h":{}}
+-- brief
+["a"]	1
+["b",0]	true
+["b",1]	false
+["b",2]	null
+["c","d"]	"x\"y"
+["c","e"]	-1.5e3
+-- no head
+["a"]	1
+["b",0]	true
+["b",1]	false
+["b",2]	null
+["b"]	[true,false,null]
+["c","d"]	"x\"y"
+["c","e"]	-1.5e3
+["c"]	{"d":"x\"y","e":-1.5e3}
+["f"]	""
+["g"]	[]
+["h"]	{}
+-- solidus
+["url"]	"http://x/y"
+-- layout
+[0,"id"]	1
+[0,"tags",0]	"a"
+[0,"tags",1]	"b"
+[1,"id"]	2
+[]	"é and \\ and \t"
+[]	0
+-- errors
+[0]	1
+[1]	2
+status 1
+1
+status 1
+status 1
+[0]	1
+[]	[1]
+status 1
+ERROR: Unknown option.
+

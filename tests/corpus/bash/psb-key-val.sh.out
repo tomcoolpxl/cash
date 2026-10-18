@@ -1,0 +1,12 @@
+name: cash
+empty: 
+url: http://x/?a=1&b=2
+  spaced :  value  
+novalue: 
+[name]=[cash]
+[empty]=[]
+[url]=[http://x/?a=1&b=2]
+[  spaced ]=[ value  ]
+[novalue]=[]
+[last]=[no newline]
+cash|http://x/?a=1&b=2|no newline

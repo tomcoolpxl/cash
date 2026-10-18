@@ -1,0 +1,10 @@
+a sub_string1 b: contains 1
+sub_string2 first: contains 2
+  starts with 2
+last sub_string1: contains 1
+  ends with 1
+plain: neither
+a*b: has a literal star
+axb: matched an unquoted $star
+[x]: has brackets
+x: matched an unquoted $star

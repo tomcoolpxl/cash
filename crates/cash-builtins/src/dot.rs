@@ -11,12 +11,15 @@ pub(crate) struct DotCommand {
     #[arg(short = 'p', value_name = "PATH")]
     search_path: Option<String>,
 
-    /// Path to the script to evaluate.
-    script_path: String,
-
-    /// Any arguments to be passed as positional parameters to the script.
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-    script_args: Vec<String>,
+    /// Path to the script to evaluate, then the arguments it gets as positional
+    /// parameters. Options come before the path only: what follows it is the script's,
+    /// `--help` and `--` included, as in Bash.
+    #[arg(
+        required = true,
+        trailing_var_arg = true,
+        value_name = "SCRIPT_PATH [ARGUMENTS]"
+    )]
+    operands: Vec<String>,
 }
 
 impl builtins::Command for DotCommand {
@@ -26,21 +29,20 @@ impl builtins::Command for DotCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        let script_path = resolve_source_path(
-            context.shell,
-            &self.script_path,
-            self.search_path.as_deref(),
-        )
-        .ok_or_else(|| {
+        let Some((script, script_args)) = self.operands.split_first() else {
+            return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
+        };
+        let script_path = resolve_source_path(context.shell, script, self.search_path.as_deref())
+            .ok_or_else(|| {
             cash_core::Error::from(cash_core::ErrorKind::FailedSourcingFile(
-                PathBuf::from(&self.script_path),
+                PathBuf::from(script),
                 std::io::Error::from(std::io::ErrorKind::NotFound),
             ))
         })?;
 
         context
             .shell
-            .source_script(&script_path, self.script_args.iter(), &context.params)
+            .source_script(&script_path, script_args.iter(), &context.params)
             .await
     }
 }

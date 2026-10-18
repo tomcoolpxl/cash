@@ -81,7 +81,13 @@ where
     I: IntoIterator,
     I::Item: Into<std::ffi::OsString> + Clone,
 {
+    let args: Vec<std::ffi::OsString> = args.into_iter().map(Into::into).collect();
     let mut command = clap_command::<C>();
+    // clap names the command after the file name in its first word, which `.` has none
+    // of: its usage said `cash-builtins`.
+    if let Some(name) = args.first() {
+        command.set_bin_name(name.to_string_lossy());
+    }
     let mut matches = command.try_get_matches_from_mut(args)?;
     C::from_arg_matches_mut(&mut matches).map_err(|error| error.format(&mut command))
 }
@@ -714,8 +720,13 @@ fn report_parse_error(
         (ErrorKind::InvalidValue, Some(argument)) if no_value => {
             let _ = writeln!(stderr, "{name}: {argument}: option requires an argument");
         }
-        // A missing operand is the usage line alone, as `getopts` says it.
-        (ErrorKind::MissingRequiredArgument | ErrorKind::TooFewValues, _) => {}
+        // A missing operand is the usage line alone, as `getopts` says it; `.` and
+        // `source` say what is missing first, as Bash does.
+        (ErrorKind::MissingRequiredArgument | ErrorKind::TooFewValues, _) => {
+            if matches!(name, "." | "source") {
+                let _ = writeln!(stderr, "{name}: filename argument required");
+            }
+        }
         _ => {
             let rendered = error.render().to_string();
             let first = rendered.lines().next().unwrap_or_default();

@@ -1,0 +1,54 @@
+[1.2.3]                  valid
+[v1.2.3]                 valid
+[V1.2.3]                 valid
+[1.2.3-alpha.1+build.5]  valid
+[1.0.0+20130313144700]   valid
+[1.2.3-x-y-z.---]        valid
+[01.2.3]                 invalid
+[1.2]                    invalid
+[1.2.3.4]                invalid
+[1.2.3-0123]             invalid
+[1.2.3-alpha..1]         invalid
+[1.2.3+]                 invalid
+[]                       invalid
+[a.b.c]                  invalid
+major=1
+minor=2
+patch=3
+prerel=rc.1
+prerelease=rc.1
+build=b.5
+release=1.2.3
+2.0.0
+1.3.0
+1.2.4
+1.2.3
+1.2.3-1
+1.2.3-rc10
+1.2.3-rc1
+1.2.3-rc1
+1.2.3-alpha
+1.2.3-rc.1+b.7
+1.0.0-alpha vs 1.0.0-alpha.1: -1 1
+1.0.0-alpha.1 vs 1.0.0-alpha.beta: -1 1
+1.0.0-alpha.beta vs 1.0.0-beta: -1 1
+1.0.0-beta vs 1.0.0-beta.2: -1 1
+1.0.0-beta.2 vs 1.0.0-beta.11: -1 1
+1.0.0-beta.11 vs 1.0.0-rc.1: -1 1
+1.0.0-rc.1 vs 1.0.0: -1 1
+0
+-1
+1.2.3 -> 2.0.0: [major]
+1.2.3 -> 1.3.0: [minor]
+1.2.3 -> 1.2.4: [patch]
+1.2.3-a -> 1.2.3-b: [prerelease]
+1.2.3+a -> 1.2.3+b: [build]
+1.2.3 -> 1.2.3: []
+semver: 3.4.0
+bad version: 1
+bad part: 1
+Unknown command: 
+no command: 1
+Usage:
+  semver bump major <version>
+  semver bump minor <version>

@@ -1,0 +1,6 @@
+trap -- '' SIGINT
+tmpfile is there
+body
+second
+removed
+clean_up ran, status was 1

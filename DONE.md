@@ -2059,3 +2059,21 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
     `trap -- '' INT`, in the order of a hash map, and `'echo it's'`. It lists as Bash
     does now: EXIT, the signals by number as `SIGINT`, then DEBUG, ERR and RETURN, each
     command single-quoted so that the line sets the trap again.
+- **The corpus's second round** (2026-10-18): 10 pure-sh-bible cases (MIT; POSIX
+  trims, splits on `IFS` with `set -f`, `key=val` files, read loops that keep a last
+  line with no newline, dirname and basename by expansion, `eval` names, numbers
+  checked by `printf %d` and `%f`), all as Git Bash 5.3 has them, and semver-tool 3.4.0
+  (Apache-2.0) run whole from a fixture, its regexes, `BASH_REMATCH`, eval'd arrays and
+  `set -euo pipefail`. It found:
+  - **`.` took options after the script as its own**: `. ./script --help` printed `.`'s
+    help and `. ./script -- a` dropped the `--`, where Bash passes both to the script;
+    a missing path printed the usage line alone, without Bash's `filename argument
+    required`; and `. --help` said `Usage: cash-builtins`, as clap names a command after
+    the file name in its first word, which `.` has none of. Options count before the
+    path only now, and every builtin's usage names it as it was called.
+- **The corpus's third round** (2026-10-18): three more real scripts run whole from
+  fixtures, all three as Git Bash 5.3 has them: JSON.sh (MIT; `sh`, `egrep -o` tokens
+  through a `read` loop, every option and its errors), spark (MIT; `${@//,/ }`, `<<` in
+  `(( ))`, arrays of multibyte ticks) and getoptions (CC0; an option parser generated
+  as shell text and `eval`'d, compared to the byte with the generated code, sixteen
+  command lines through it, abbreviations, and help from a quoted heredoc).

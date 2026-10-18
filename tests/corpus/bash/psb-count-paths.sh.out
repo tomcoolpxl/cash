@@ -1,0 +1,21 @@
+5
+2
+2
+0
+[/home/black/Pictures/Wallpapers/1.jpg]  dirname=/home/black/Pictures/Wallpapers basename=1.jpg
+[/home/black/Pictures/Wallpapers/]       dirname=/home/black/Pictures basename=Wallpapers
+[/]                                      dirname=/ basename=/
+[//]                                     dirname=/ basename=/
+[a]                                      dirname=. basename=a
+[a/]                                     dirname=. basename=a
+[/a]                                     dirname=/ basename=a
+[/a/b//]                                 dirname=/a basename=b
+[]                                       dirname=. basename=/
+[.]                                      dirname=. basename=.
+[..]                                     dirname=. basename=..
+[./x]                                    dirname=. basename=x
+[../y/]                                  dirname=.. basename=y
+1
+Downloads
+a.tar
+/

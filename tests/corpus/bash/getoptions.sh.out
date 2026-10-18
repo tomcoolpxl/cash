@@ -1,0 +1,228 @@
+a= b= f= w= v=0 p= n= o= | []
+  status 0
+a=1 b=1 f= w= v=0 p= n= o= | [x] [y]
+  status 0
+a=1 b=1 f=1 w= v=3 p= n= o= | []
+  status 0
+a= b= f= w= v=0 p= n= o= | []
+  status 0
+a= b= f= w= v=0 p=bar n=42 o=default | []
+  status 0
+a= b= f= w= v=0 p= n=7 o=given | [-a] [two words]
+  status 0
+Does not match the pattern (foo | bar): --param
+  status 1
+Validation error (number:1): -n
+  status 1
+Unrecognized option: -x
+  status 1
+Does not allow an argument: --flag
+  status 1
+Requires an argument: -p
+  status 1
+a= b= f= w= v=1 p=foo n= o= | []
+  status 0
+Ambiguous option: --ver (could be --verbose, --version)
+  status 1
+a= b= f= w= v=0 p= n= o= | [a] [b]
+  status 0
+Usage: basic [options...] [arguments...]
+
+getoptions basic example
+
+Options:
+  -a                          message a
+  -b                          message b
+  -f, +f, --{no-}flag         expands to --flag and --no-flag
+          --with{out}-flag    expands to ---with-flag and --without-flag
+  -v,     --verbose           e.g. -vvv is verbose level 3
+  -p,     --param PARAM       accepts --param value / --param=value
+  -n,     --number NUMBER     accepts only a number value
+  -o,     --option[=OPTION]   accepts -ovalue / --option=value
+  -h,     --help              
+          --version           
+  status 0
+0.1
+  status 0
+-- the generated parser
+FLAG_A=''
+FLAG_B=''
+FLAG_F=''
+FLAG_W=''
+VERBOSE='0'
+PARAM=''
+NUMBER=''
+OPTION=''
+REST=''
+parse() {
+	OPTIND=$(($#+1))
+	while OPTARG= && [ "${REST}" != x ] && [ $# -gt 0 ]; do
+		set -- "${1%%\=*}" "${1#*\=}" "$@"
+		while [ ${#1} -gt 2 ]; do
+			case $1 in (*[!a-zA-Z0-9_-]*) break; esac
+			case '--flag' in
+				"$1") OPTARG=; break ;;
+				$1*) OPTARG="$OPTARG --flag"
+			esac
+			case '--no-flag' in
+				"$1") OPTARG=; break ;;
+				$1*) OPTARG="$OPTARG --no-flag"
+			esac
+			case '--with{out}-flag' in
+				"$1") OPTARG=; break ;;
+				$1*) OPTARG="$OPTARG --with{out}-flag"
+			esac
+			case '--verbose' in
+				"$1") OPTARG=; break ;;
+				$1*) OPTARG="$OPTARG --verbose"
+			esac
+			case '--param' in
+				"$1") OPTARG=; break ;;
+				$1*) OPTARG="$OPTARG --param"
+			esac
+			case '--number' in
+				"$1") OPTARG=; break ;;
+				$1*) OPTARG="$OPTARG --number"
+			esac
+			case '--option' in
+				"$1") OPTARG=; break ;;
+				$1*) OPTARG="$OPTARG --option"
+			esac
+			case '--help' in
+				"$1") OPTARG=; break ;;
+				$1*) OPTARG="$OPTARG --help"
+			esac
+			case '--version' in
+				"$1") OPTARG=; break ;;
+				$1*) OPTARG="$OPTARG --version"
+			esac
+			break
+		done
+		case ${OPTARG# } in
+			*\ *)
+				eval "set -- $OPTARG $1 $OPTARG"
+				OPTIND=$((($#+1)/2)) OPTARG=$1; shift
+				while [ $# -gt "$OPTIND" ]; do OPTARG="$OPTARG, $1"; shift; done
+				set "Ambiguous option: $1 (could be $OPTARG)" ambiguous "$@"
+				echo "$1" >&2
+				exit 1 ;;
+			?*)
+				[ "$2" = "$3" ] || OPTARG="$OPTARG=$2"
+				shift 3; eval 'set -- "${OPTARG# }"' ${1+'"$@"'}; OPTARG= ;;
+			*) shift 2
+		esac
+		case $1 in
+			--?*=*) OPTARG=$1; shift
+				eval 'set -- "${OPTARG%%\=*}" "${OPTARG#*\=}"' ${1+'"$@"'}
+				;;
+			--no-*|--without-*) unset OPTARG ;;
+			-[pno]?*) OPTARG=$1; shift
+				eval 'set -- "${OPTARG%"${OPTARG#??}"}" "${OPTARG#??}"' ${1+'"$@"'}
+				;;
+			-[abfvh]?*) OPTARG=$1; shift
+				eval 'set -- "${OPTARG%"${OPTARG#??}"}" -"${OPTARG#??}"' ${1+'"$@"'}
+				case $2 in --*) set -- "$1" unknown "$2" && REST=x; esac;OPTARG= ;;
+			+[f]?*) OPTARG=$1; shift
+				eval 'set -- "${OPTARG%"${OPTARG#??}"}" +"${OPTARG#??}"' ${1+'"$@"'}
+				unset OPTARG ;;
+			+*) unset OPTARG ;;
+		esac
+		case $1 in
+			'-a')
+				[ "${OPTARG:-}" ] && OPTARG=${OPTARG#*\=} && set "noarg" "$1" && break
+				eval '[ ${OPTARG+x} ] &&:' && OPTARG='1' || OPTARG=''
+				FLAG_A="$OPTARG"
+				;;
+			'-b')
+				[ "${OPTARG:-}" ] && OPTARG=${OPTARG#*\=} && set "noarg" "$1" && break
+				eval '[ ${OPTARG+x} ] &&:' && OPTARG='1' || OPTARG=''
+				FLAG_B="$OPTARG"
+				;;
+			'-f'|'+f'|'--flag'|'--no-flag')
+				[ "${OPTARG:-}" ] && OPTARG=${OPTARG#*\=} && set "noarg" "$1" && break
+				eval '[ ${OPTARG+x} ] &&:' && OPTARG='1' || OPTARG=''
+				FLAG_F="$OPTARG"
+				;;
+			'--with-flag'|'--without-flag')
+				[ "${OPTARG:-}" ] && OPTARG=${OPTARG#*\=} && set "noarg" "$1" && break
+				eval '[ ${OPTARG+x} ] &&:' && OPTARG='1' || OPTARG=''
+				FLAG_W="$OPTARG"
+				;;
+			'-v'|'--verbose')
+				[ "${OPTARG:-}" ] && OPTARG=${OPTARG#*\=} && set "noarg" "$1" && break
+				eval '[ ${OPTARG+x} ] &&:' && OPTARG=1 || OPTARG=-1
+				VERBOSE="$((${VERBOSE:-0}+$OPTARG))"
+				;;
+			'-p'|'--param')
+				[ $# -le 1 ] && set "required" "$1" && break
+				OPTARG=$2
+				case $OPTARG in foo | bar) ;;
+					*) set "pattern:foo | bar" "$1"; break
+				esac
+				PARAM="$OPTARG"
+				shift ;;
+			'-n'|'--number')
+				[ $# -le 1 ] && set "required" "$1" && break
+				OPTARG=$2
+				number || { set -- number:$? "$1" number; break; }
+				NUMBER="$OPTARG"
+				shift ;;
+			'-o'|'--option')
+				set -- "$1" "$@"
+				[ ${OPTARG+x} ] && {
+					case $1 in --no-*|--without-*) set "noarg" "${1%%\=*}"; break; esac
+					[ "${OPTARG:-}" ] && { shift; OPTARG=$2; } || OPTARG='default'
+				} || OPTARG=''
+				OPTION="$OPTARG"
+				shift ;;
+			'-h'|'--help')
+				usage
+				exit 0 ;;
+			'--version')
+				echo "${VERSION}"
+				exit 0 ;;
+			--)
+				shift
+				while [ $# -gt 0 ]; do
+					REST="${REST} \"\${$(($OPTIND-$#))}\""
+					shift
+				done
+				break ;;
+			[-+]?*) set "unknown" "$1"; break ;;
+			*)
+				REST="${REST} \"\${$(($OPTIND-$#))}\""
+		esac
+		shift
+	done
+	[ $# -eq 0 ] && { OPTIND=1; unset OPTARG; return 0; }
+	case $1 in
+		unknown) set "Unrecognized option: $2" "$@" ;;
+		noarg) set "Does not allow an argument: $2" "$@" ;;
+		required) set "Requires an argument: $2" "$@" ;;
+		pattern:*) set "Does not match the pattern (${1#*:}): $2" "$@" ;;
+		notcmd) set "Not a command: $2" "$@" ;;
+		*) set "Validation error ($1): $2" "$@"
+	esac
+	echo "$1" >&2
+	exit 1
+}
+usage() {
+cat<<'GETOPTIONSHERE'
+Usage: basic [options...] [arguments...]
+
+getoptions basic example
+
+Options:
+  -a                          message a
+  -b                          message b
+  -f, +f, --{no-}flag         expands to --flag and --no-flag
+          --with{out}-flag    expands to ---with-flag and --without-flag
+  -v,     --verbose           e.g. -vvv is verbose level 3
+  -p,     --param PARAM       accepts --param value / --param=value
+  -n,     --number NUMBER     accepts only a number value
+  -o,     --option[=OPTION]   accepts -ovalue / --option=value
+  -h,     --help              
+          --version           
+GETOPTIONSHERE
+}
+# Do not execute
