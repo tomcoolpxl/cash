@@ -39,13 +39,13 @@ fn man_prints_a_page_as_text_when_its_output_is_not_a_terminal() {
     );
 
     // A draft ends with the command's own --help.
-    let out = run("man grep");
+    let out = run("man sort");
     assert!(
         out.stdout.contains("\nUSAGE AND OPTIONS\n"),
         "{}",
         out.stdout
     );
-    assert!(out.stdout.contains("--include"), "{}", out.stdout);
+    assert!(out.stdout.contains("--numeric-sort"), "{}", out.stdout);
 }
 
 #[test]

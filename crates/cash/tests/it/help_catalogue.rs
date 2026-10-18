@@ -80,10 +80,10 @@ fn help_is_the_syntax_and_the_examples_and_points_to_man() {
         text.contains("The whole page: man sed, or help -m sed."),
         "{text}"
     );
-    let draft = run("help grep");
+    let draft = run("help sort");
     assert!(draft.stdout.contains("\nSYNTAX\n"), "{}", draft.stdout);
     assert!(
-        draft.stdout.contains("grep [OPTION]... PATTERNS [FILE]..."),
+        draft.stdout.contains("sort [OPTION]... [FILE]..."),
         "{}",
         draft.stdout
     );
@@ -111,7 +111,7 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
         "{text}"
     );
     // A draft ends with the builtin's own `--help`.
-    let draft = run("help -m grep");
+    let draft = run("help -m sort");
     assert!(
         draft.stdout.contains("\nUSAGE AND OPTIONS\n"),
         "{}",
