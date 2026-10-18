@@ -365,3 +365,25 @@ fn install_creates_directories_and_copies_files() {
     );
     assert_eq!(out.stdout, "sample content");
 }
+
+#[test]
+fn install_backs_up_keeps_times_and_takes_makefiles_options() {
+    // `-c`, `-p`, `-b`, `-S`, `--backup`, `-T`, `-o` and `-g` were refused, so a Makefile's
+    // `install -c -o root -m 755 prog DIR` failed; and the copy kept the source's time.
+    let out = cash(
+        "d=$(mktemp -d); cd \"$d\" || exit; printf 'v1\\n' > s; \
+         install -c s d; install -S .bak s d; install -b s d; \
+         install --backup=numbered s d; install --backup=numbered s d; ls d*; \
+         mkdir dir; install -T s dir 2>/dev/null || echo 'T refused'; \
+         touch -d 2001-01-01 s; install s now; install -p s kept; \
+         ls -l --time-style=+%Y now kept | rev | cut -d' ' -f1-2 | rev | sed 's/^20[2-9][0-9]/NOW/'; \
+         install -o root -g wheel s owned 2>/dev/null && cat owned; \
+         install --backup=bogus s d 2>/dev/null; echo \"bogus $?\"; cd /; rm -rf \"$d\"",
+    );
+    assert_eq!(
+        out.stdout,
+        "d\nd.bak\nd.~1~\nd.~2~\nd~\nT refused\n2001 kept\nNOW now\nv1\nbogus 1",
+        "{}",
+        out.stderr
+    );
+}
