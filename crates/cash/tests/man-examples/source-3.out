@@ -1,0 +1,4 @@
+args: one two
+--- status 0
+--- file args.sh
+echo "args: $*"

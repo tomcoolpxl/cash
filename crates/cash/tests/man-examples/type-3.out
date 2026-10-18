@@ -1,0 +1,6 @@
+greet is a function
+greet () 
+{ 
+    echo hi
+}
+--- status 0

@@ -1,0 +1,16 @@
+2c2
+< two
+---
+> 2
+3a4
+> four
+--- status 1
+--- file new.txt
+one
+2
+three
+four
+--- file old.txt
+one
+two
+three

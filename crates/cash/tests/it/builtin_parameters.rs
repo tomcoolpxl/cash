@@ -660,6 +660,25 @@ fn chmod_modify_readonly_attribute() {
     assert_eq!(out_w.stdout, "W");
 }
 
+/// `-c` says only what changed, and `--reference` takes another file's read-only state;
+/// both were refused as modes, `invalid mode: '-c'`.
+#[test]
+fn chmod_changes_and_reference() {
+    let sb = Sandbox::new("chmod-c-reference");
+    std::fs::write(sb.root.join("a"), "a").unwrap();
+    std::fs::write(sb.root.join("b"), "b").unwrap();
+    let out = sb.run(
+        "chmod -c 444 a; chmod -c 444 a; chmod a-w b; chmod u+w a; \
+         chmod --reference=b a; [ -w a ] && echo W || echo RO; chmod u+w a b",
+    );
+    assert_eq!(
+        out.stdout.replace("\r\n", "\n"),
+        "mode of 'a' changed from writable to read-only\nRO",
+        "{}",
+        out.stderr
+    );
+}
+
 #[test]
 fn chmod_execute_warning_and_silence_flag() {
     let sb = Sandbox::new("chmod-warn");

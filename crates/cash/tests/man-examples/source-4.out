@@ -1,0 +1,7 @@
+before
+status 3
+--- status 0
+--- file early.sh
+echo before
+return 3
+echo never

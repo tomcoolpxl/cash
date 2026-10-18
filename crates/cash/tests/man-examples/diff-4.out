@@ -1,0 +1,9 @@
+Files a/f and b/f differ
+Only in a: only
+--- status 1
+--- file a/f
+x
+--- file a/only
+z
+--- file b/f
+y

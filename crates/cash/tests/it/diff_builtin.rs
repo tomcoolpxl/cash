@@ -160,9 +160,9 @@ fn help_diff_is_a_page_with_windows_notes_and_its_own_options() {
         text.contains("\nSEE ALSO\n") && text.contains("crlf"),
         "{text}"
     );
-    // The options are diff's own `--help`, not a copy.
-    assert!(text.contains("\nUSAGE AND OPTIONS\n"), "{text}");
-    assert!(text.contains("--report-identical-files"), "{text}");
+    // A page written in full has its own options, and no `--help` after them.
+    assert!(text.contains("\nOPTIONS\n"), "{text}");
+    assert!(!text.contains("\nUSAGE AND OPTIONS\n"), "{text}");
     // Help speaks to the user: no spec decision numbers, rows or research files
     // (the user, 2026-10-05).
     for developer_note in ["D76", "D48", "(row", "§", "spec.md", "ROADMAP", "research/"] {
@@ -177,7 +177,11 @@ fn help_diff_is_a_page_with_windows_notes_and_its_own_options() {
         "{}",
         cmp.stdout
     );
-    assert!(cmp.stdout.contains("--ignore-initial"), "{}", cmp.stdout);
+    assert!(
+        cmp.stdout.contains("-l (every differing byte"),
+        "{}",
+        cmp.stdout
+    );
 }
 
 /// Doctor counts both among the commands cash answers for itself, and no longer asks

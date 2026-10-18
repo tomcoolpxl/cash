@@ -46,6 +46,14 @@ pub(crate) struct ChmodCommand {
     #[arg(short = 'R', long = "recursive")]
     recursive: bool,
 
+    /// Like -v, but say only what changed.
+    #[arg(short = 'c', long = "changes")]
+    changes: bool,
+
+    /// Use RFILE's mode, as far as Windows keeps it, instead of a MODE.
+    #[arg(long = "reference", value_name = "RFILE")]
+    reference: Option<String>,
+
     /// The mode, then the files: `chmod +x script.sh`.
     #[arg(allow_hyphen_values = true)]
     args: Vec<String>,
@@ -66,6 +74,28 @@ impl builtins::Command for ChmodCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // `--reference=RFILE` takes RFILE's read-only state, and every argument is a file.
+        if let Some(reference) = &self.reference {
+            let path = context.shell.absolute_path(Path::new(reference));
+            let metadata = match path.metadata() {
+                Ok(metadata) => metadata,
+                Err(error) => {
+                    writeln!(
+                        context.stderr(),
+                        "{}: failed to get attributes of '{reference}': {}",
+                        context.command_name,
+                        cash_core::error::os_error_text(&error)
+                    )?;
+                    return Ok(ExecutionResult::general_error());
+                }
+            };
+            let request = Request {
+                writable: Some(!metadata.permissions().readonly()),
+                unsupported: Vec::new(),
+            };
+            return self.change_all(&context, &self.args, &request);
+        }
+
         let Some((mode, files)) = self.args.split_first() else {
             writeln!(
                 context.stderr(),
@@ -108,6 +138,18 @@ impl builtins::Command for ChmodCommand {
             )?;
         }
 
+        self.change_all(&context, files, &request)
+    }
+}
+
+impl ChmodCommand {
+    /// Changes each of `files` as `request` asks, walking directories under `-R`.
+    fn change_all<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        files: &[String],
+        request: &Request,
+    ) -> Result<ExecutionResult, cash_core::Error> {
         let mut failed = false;
         for file in files {
             let path = context.shell.absolute_path(Path::new(file));
@@ -157,7 +199,7 @@ impl builtins::Command for ChmodCommand {
                 if entry.kind == Kind::Link && entry.depth > 0 {
                     continue;
                 }
-                failed |= !self.change(&context, &entry, &request)?;
+                failed |= !self.change(context, &entry, request)?;
             }
         }
 
@@ -166,9 +208,7 @@ impl builtins::Command for ChmodCommand {
         }
         Ok(ExecutionResult::success())
     }
-}
 
-impl ChmodCommand {
     /// Changes one entry of the walk, saying what went wrong as GNU's chmod does, naming
     /// the operand as it was written and what is under it from there; whether it changed.
     fn change<SE: cash_core::ShellExtensions>(
@@ -177,6 +217,7 @@ impl ChmodCommand {
         entry: &crate::walk::Entry,
         request: &Request,
     ) -> Result<bool, cash_core::Error> {
+        let before = describe(&entry.path);
         if let Err(e) = apply(&entry.path, request) {
             if !self.silent {
                 let what = if e.kind() == std::io::ErrorKind::NotFound {
@@ -194,12 +235,19 @@ impl ChmodCommand {
             }
             return Ok(false);
         }
-        if self.verbose {
+        // `-v` says what each file is now, `-c` only what changed, as GNU's do.
+        let after = describe(&entry.path);
+        if after != before && (self.verbose || self.changes) {
             writeln!(
                 context.stdout(),
-                "mode of '{}' retained as {}",
-                entry.shown,
-                describe(&entry.path)
+                "mode of '{}' changed from {before} to {after}",
+                entry.shown
+            )?;
+        } else if self.verbose {
+            writeln!(
+                context.stdout(),
+                "mode of '{}' retained as {after}",
+                entry.shown
             )?;
         }
         Ok(true)

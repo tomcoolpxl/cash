@@ -1,0 +1,5 @@
+ran
+--- status 0
+--- file run.sh
+#!/bin/sh
+echo ran

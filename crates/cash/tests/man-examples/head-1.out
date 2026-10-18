@@ -1,0 +1,11 @@
+line 1: ok
+line 2: ok
+line 3: ok
+line 4: ok
+line 5: error retrying
+line 6: ok
+line 7: ERROR disk full
+line 8: ok
+line 9: ok
+line 10: error retrying
+--- status 0

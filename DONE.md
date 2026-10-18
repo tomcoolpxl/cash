@@ -2358,3 +2358,9 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   tokens wait behind the body, has its text tokenized alone as before. Chained aliases,
   keywords, `case`, here-documents, functions and the end of the input were each
   checked against Git Bash.
+- **The manual's second twenty pages written in full** (2026-10-18, man step 7, batch 2):
+  head, tail, sort, uniq, wc, cut, tr, xargs, touch, ln, chmod, diff (and cmp), date,
+  kill, jobs (and fg, bg), history, type, source, set and env. Every option the pages
+  list was run in cash and in Git Bash, and every example runs against Git Bash, its
+  output frozen. Two options did not work and now do: `chmod -c`, which says only what
+  changed, and `chmod --reference=FILE`, both refused as modes.

@@ -1,0 +1,5 @@
+hello, world
+--- status 0
+--- file lib.sh
+GREETING=hello
+greet() { echo "$GREETING, $1"; }
