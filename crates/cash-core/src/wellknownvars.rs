@@ -633,14 +633,14 @@ fn get_funcname_value(shell: &dyn ShellState) -> variables::ShellValue {
             .iter()
             .filter_map(|frame| match &frame.frame_type {
                 crate::callstack::FrameType::Function(func) => Some(func.function_name.as_str()),
-                crate::callstack::FrameType::Script(script) => {
-                    // Only include sourced scripts, not run scripts
+                // A sourced file is `source`, and the script being run `main`, as in Bash.
+                crate::callstack::FrameType::Script(script) => Some(
                     if matches!(script.call_type, crate::callstack::ScriptCallType::Source) {
-                        Some("source")
+                        "source"
                     } else {
-                        None
-                    }
-                }
+                        "main"
+                    },
+                ),
                 crate::callstack::FrameType::TrapHandler(_)
                 | crate::callstack::FrameType::Eval
                 | crate::callstack::FrameType::CommandString
@@ -675,7 +675,13 @@ fn get_bash_lineno_value(shell: &dyn ShellState) -> variables::ShellValue {
                                 .to_string(),
                         )
                     } else {
-                        None
+                        // The script being run, FUNCNAME's `main`, was called from line 0.
+                        matches!(
+                            &frame.frame_type,
+                            crate::callstack::FrameType::Script(script)
+                                if matches!(script.call_type, crate::callstack::ScriptCallType::Run)
+                        )
+                        .then(|| "0".to_owned())
                     }
                 }
                 crate::callstack::FrameType::TrapHandler(_)
@@ -705,13 +711,9 @@ fn get_bash_source_value(shell: &dyn ShellState) -> variables::ShellValue {
                 crate::callstack::FrameType::Function(func) => {
                     Some(func.function.source().source.clone())
                 }
+                // A sourced file and the script being run, as FUNCNAME's `source` and `main`.
                 crate::callstack::FrameType::Script(script) => {
-                    // Only include sourced scripts (matching the "source" in FUNCNAME)
-                    if matches!(script.call_type, crate::callstack::ScriptCallType::Source) {
-                        Some(script.source_info.source.clone())
-                    } else {
-                        None
-                    }
+                    Some(script.source_info.source.clone())
                 }
                 crate::callstack::FrameType::TrapHandler(_) | crate::callstack::FrameType::Eval => {
                     None

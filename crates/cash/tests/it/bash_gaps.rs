@@ -2502,3 +2502,19 @@ x";
         )
     );
 }
+
+#[test]
+fn a_script_run_is_main_in_funcname_caller_and_bash_source() {
+    // FUNCNAME left the script out, and caller named its frame `source`, as a sourced
+    // file is named; Bash names it `main`, from line 0.
+    let root = Scratch::new("funcname-main");
+    std::fs::write(
+        root.path().join("main.sh"),
+        "f() { echo \"${FUNCNAME[*]} ${BASH_SOURCE[*]} ${BASH_LINENO[*]}\"; caller 0; }\nf\n",
+    )
+    .unwrap();
+    assert_eq!(
+        output_in(root.path(), "bash main.sh"),
+        (0, "f main main.sh main.sh 2 0\n2 main main.sh".into())
+    );
+}

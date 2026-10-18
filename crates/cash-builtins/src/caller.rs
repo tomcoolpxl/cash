@@ -41,7 +41,14 @@ impl builtins::Command for CallerCommand {
         if self.expr.is_some() {
             let function_name = match &calling_frame.frame_type {
                 callstack::FrameType::Function(func_call) => func_call.name(),
-                callstack::FrameType::Script(..) => "source".into(),
+                // A sourced file is `source`, the script being run `main`, as FUNCNAME has them.
+                callstack::FrameType::Script(script) => {
+                    if matches!(script.call_type, callstack::ScriptCallType::Source) {
+                        "source".into()
+                    } else {
+                        "main".into()
+                    }
+                }
                 _ => "".into(),
             };
 
