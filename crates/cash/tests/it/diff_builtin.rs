@@ -150,7 +150,7 @@ fn exit_status_and_bytes_in_a_script() {
 /// opens the same page.
 #[test]
 fn help_diff_is_a_page_with_windows_notes_and_its_own_options() {
-    let out = run("help diff");
+    let out = run("help -m diff");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
     assert!(text.starts_with("diff \u{2014} "), "{text}");
@@ -168,7 +168,7 @@ fn help_diff_is_a_page_with_windows_notes_and_its_own_options() {
     for developer_note in ["D76", "D48", "(row", "§", "spec.md", "ROADMAP", "research/"] {
         assert!(!text.contains(developer_note), "{developer_note} in {text}");
     }
-    let cmp = run("help cmp");
+    let cmp = run("help -m cmp");
     assert_eq!(cmp.code, 0, "{}", cmp.stderr);
     // cmp's own summary, though the page is diff's.
     assert!(

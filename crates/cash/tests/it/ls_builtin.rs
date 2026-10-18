@@ -964,7 +964,7 @@ fn ls_l_shows_and_walks_what_a_link_names() {
 /// clap's page of the few options clap knew.
 #[test]
 fn help_ls_gives_ls_help_options() {
-    let out = cash("help ls | grep -c -- '--time-style=STYLE\\|-L, --dereference'");
+    let out = cash("help -m ls | grep -c -- '--time-style=STYLE\\|-L, --dereference'");
     assert_eq!(out.stdout, "2", "{}", out.stderr);
 }
 

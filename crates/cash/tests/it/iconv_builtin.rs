@@ -177,7 +177,7 @@ fn help_and_version_are_the_builtins_own() {
         String::from_utf8_lossy(&out.stdout).trim_end(),
         "iconv (cash): glibc 2.44's options, on the Windows code pages"
     );
-    let out = cash_in(s.path(), "iconv --help; help iconv", b"");
+    let out = cash_in(s.path(), "iconv --help; help -m iconv", b"");
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains("--from-code=NAME"), "{text}");
     assert!(text.contains("Windows' own code pages"), "{text}");

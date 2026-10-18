@@ -66,7 +66,7 @@ fn xxd_version_names_what_it_follows() {
 
 #[test]
 fn xxd_help_is_a_page_without_developer_notes() {
-    let out = run("help xxd");
+    let out = run("help -m xxd");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
     assert!(text.starts_with("xxd \u{2014} "), "{text}");

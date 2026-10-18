@@ -121,7 +121,7 @@ fn egrep_and_fgrep_are_grep_with_a_syntax_preset() {
 fn color_auto_colours_only_a_terminal_and_help_speaks_to_the_user() {
     let out = run("echo foo | grep --color=auto foo | od -An -c");
     assert_eq!(od_words(&out.stdout), ["f", "o", "o", "\\n"]);
-    let out = run("help grep");
+    let out = run("help -m grep");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
     assert!(text.starts_with("grep \u{2014} "), "{text}");

@@ -226,7 +226,7 @@ impl HelpCommand {
         if self.short_usage {
             return short_usage(name, registration);
         }
-        builtin_page(name, registration, style)
+        builtin_page(name, registration, style, self.man_page_style)
     }
 
     fn topic_text(&self, topic: &Page, style: Style) -> String {
@@ -380,30 +380,30 @@ fn hiding_note(name: &str, program: &std::path::Path) -> String {
     )
 }
 
-/// `help NAME`: the builtin's page, as the manual draws it, with what only `help`
-/// knows: that the name hides a Windows program, or that it is disabled. A draft page
-/// ends with the builtin's own `--help`, before its See also; a builtin with no page
-/// has only that.
+/// `help NAME`: the builtin's page in short, as the manual draws it, with what only
+/// `help` knows: that the name hides a Windows program, or that it is disabled. The
+/// short form is the syntax (the builtin's usage line when its page has none) and the
+/// examples, and where the whole page is; `whole` (`help -m`) is all of it, a draft
+/// ending with the builtin's own `--help` before its See also.
 fn builtin_page<SE: cash_core::ShellExtensions>(
     name: &str,
     registration: &builtins::Registration<SE>,
     style: Style,
+    whole: bool,
 ) -> Result<String, cash_core::Error> {
     let manual = cash_man::manual();
     let page = manual.page(name);
     let drawn = page.map(|page| cash_man::render::draw(page, manual, style.width));
+    let mut out = page_head(name, registration, page, style)?;
+    if !whole {
+        out.push_str(&short_form(name, registration, drawn.as_ref(), style)?);
+        return Ok(out);
+    }
     let lines = drawn
         .as_ref()
         .map_or(&[][..], |drawn| drawn.lines.as_slice());
-    let text = |lines: &[cash_man::render::Line]| -> String {
-        let mut text = String::new();
-        for line in lines {
-            text.push_str(line.ansi(style.colour).trim_end());
-            text.push('\n');
-        }
-        text
-    };
-    // The top: the name and summary, up to the first blank line.
+    // The page's own top, the name and summary up to the first blank line, is left
+    // out: the head says it for the name asked for.
     let top = lines
         .iter()
         .position(|line| line.spans.is_empty())
@@ -417,9 +417,39 @@ fn builtin_page<SE: cash_core::ShellExtensions>(
                 .find(|section| section.title == "SEE ALSO")
         })
         .map_or(lines.len(), |section| section.line.saturating_sub(1));
+    out.push_str(&lines_text(
+        lines.get(top..see_also).unwrap_or_default(),
+        style,
+    ));
+    if page.is_none_or(|page| page.draft) {
+        let options = builtins::ContentOptions {
+            colorized: style.colour,
+        };
+        let own = (registration.content_func)(name, builtins::ContentType::DetailedHelp, &options)?;
+        if !own.trim().is_empty() {
+            out.push('\n');
+            out.push_str(&render::heading("Usage and options", style));
+            out.push_str(&render::indented(&own, render::INDENT));
+        }
+    }
+    out.push_str(&lines_text(
+        lines.get(see_also..).unwrap_or_default(),
+        style,
+    ));
+    Ok(out)
+}
 
-    // The name asked for and its own summary, in place of the page's top, which names
-    // all it covers: `help cmp` starts with cmp.
+/// The head of `help NAME`: the name asked for and its own summary, in place of the
+/// page's top, which names all it covers (`help cmp` starts with cmp); its kind, the
+/// other names of its page, and the notes on a hidden Windows program or `enable -n`.
+fn page_head<SE: cash_core::ShellExtensions>(
+    name: &str,
+    registration: &builtins::Registration<SE>,
+    page: Option<&Page>,
+    style: Style,
+) -> Result<String, cash_core::Error> {
+    let paragraph =
+        |text: &str| render::wrap(&render::inline(text, style.colour), style.width, "", 0);
     let mut out = render::wrap(
         &format!(
             "{} \u{2014} {}",
@@ -432,59 +462,136 @@ fn builtin_page<SE: cash_core::ShellExtensions>(
     );
     if let Some(page) = page {
         let _ = writeln!(out, "({})", page.kind);
-        let others: Vec<&str> = page
+        let others: Vec<String> = page
             .names
             .iter()
-            .map(String::as_str)
             .filter(|covered| *covered != name)
+            .map(|other| format!("`{other}`"))
             .collect();
         if !others.is_empty() {
-            let list = others.iter().map(|other| format!("`{other}`")).join(", ");
-            out.push_str(&render::wrap(
-                &render::inline(&format!("The same page covers {list}."), style.colour),
-                style.width,
-                "",
-                0,
-            ));
+            out.push_str(&paragraph(&format!(
+                "The same page covers {}.",
+                others.join(", ")
+            )));
         }
     }
     if let Some(program) = hidden_windows_program(name) {
         out.push('\n');
-        out.push_str(&render::wrap(
-            &render::inline(&hiding_note(name, &program), style.colour),
-            style.width,
-            "",
-            0,
-        ));
+        out.push_str(&paragraph(&hiding_note(name, &program)));
     }
     if registration.disabled {
         out.push('\n');
-        out.push_str(&render::wrap(
-            &render::inline(
-                "It is disabled (`enable -n`): the name runs a command found on `PATH` \
-                 instead, until `enable` turns it back on.",
-                style.colour,
-            ),
-            style.width,
-            "",
-            0,
+        out.push_str(&paragraph(
+            "It is disabled (`enable -n`): the name runs a command found on `PATH` \
+             instead, until `enable` turns it back on.",
         ));
     }
-    out.push_str(&text(lines.get(top..see_also).unwrap_or_default()));
-
-    if page.is_none_or(|page| page.draft) {
-        let options = builtins::ContentOptions {
-            colorized: style.colour,
-        };
-        let own = (registration.content_func)(name, builtins::ContentType::DetailedHelp, &options)?;
-        if !own.trim().is_empty() {
-            out.push('\n');
-            out.push_str(&render::heading("Usage and options", style));
-            out.push_str(&render::indented(&own, render::INDENT));
-        }
-    }
-    out.push_str(&text(lines.get(see_also..).unwrap_or_default()));
     Ok(out)
+}
+
+/// The short form of a page: its syntax, or the builtin's usage line when it has none,
+/// its examples, and where the whole page is.
+fn short_form<SE: cash_core::ShellExtensions>(
+    name: &str,
+    registration: &builtins::Registration<SE>,
+    drawn: Option<&cash_man::render::Drawn>,
+    style: Style,
+) -> Result<String, cash_core::Error> {
+    let section = |title: &str| -> Option<&[cash_man::render::Line]> {
+        let drawn = drawn?;
+        let at = drawn
+            .sections
+            .iter()
+            .position(|section| section.title == title)?;
+        let start = drawn.sections.get(at)?.line;
+        let end = drawn
+            .sections
+            .get(at + 1)
+            .map_or(drawn.lines.len(), |next| next.line);
+        let mut part = drawn.lines.get(start..end)?;
+        while let [rest @ .., last] = part
+            && last.spans.is_empty()
+        {
+            part = rest;
+        }
+        Some(part)
+    };
+    let mut out = String::from("\n");
+    if let Some(syntax) = section("SYNTAX") {
+        out.push_str(&lines_text(syntax, style));
+    } else {
+        out.push_str(&render::heading("Syntax", style));
+        out.push_str(&render::indented(
+            &usage_lines(name, registration)?,
+            render::INDENT + 4,
+        ));
+    }
+    if let Some(examples) = section("EXAMPLES") {
+        out.push('\n');
+        out.push_str(&lines_text(examples, style));
+    }
+    out.push('\n');
+    out.push_str(&render::wrap(
+        &render::inline(
+            &format!("The whole page: `man {name}`, or `help -m {name}`."),
+            style.colour,
+        ),
+        style.width,
+        "",
+        0,
+    ));
+    Ok(out)
+}
+
+/// The builtin's usage lines, from its own `--help`: `Usage: grep [OPTION]... PATTERNS
+/// [FILE]...` and GNU's `or:` lines after it; failing those, its short usage.
+fn usage_lines<SE: cash_core::ShellExtensions>(
+    name: &str,
+    registration: &builtins::Registration<SE>,
+) -> Result<String, cash_core::Error> {
+    let help = (registration.content_func)(
+        name,
+        builtins::ContentType::DetailedHelp,
+        &builtins::ContentOptions::default(),
+    )?;
+    let mut lines = help.lines().map(str::trim);
+    let mut usage: Vec<String> = Vec::new();
+    if let Some(first) = lines.by_ref().find_map(|line| line.strip_prefix("Usage")) {
+        // `Usage: cat [OPTION]...`, or `Usage` with the line on the next (`ping`).
+        let first = first.trim_start_matches(':').trim();
+        let first = if first.is_empty() {
+            lines
+                .by_ref()
+                .find(|line| !line.is_empty())
+                .unwrap_or_default()
+        } else {
+            first
+        };
+        usage.push(first.to_owned());
+        usage.extend(
+            lines
+                .map_while(|line| line.strip_prefix("or:"))
+                .map(|line| line.trim().to_owned()),
+        );
+    }
+    if usage.iter().all(|line| line.is_empty()) {
+        let short = short_usage(name, registration)?;
+        return Ok(short
+            .strip_prefix(&format!("{name}: "))
+            .unwrap_or(&short)
+            .to_owned());
+    }
+    Ok(usage.join("\n") + "\n")
+}
+
+/// Drawn lines as text, a line each, coloured as `style` says.
+fn lines_text(lines: &[cash_man::render::Line], style: Style) -> String {
+    let mut text = String::new();
+    for line in lines {
+        text.push_str(line.ansi(style.colour).trim_end());
+        text.push('\n');
+    }
+    text
 }
 
 /// A page whole, as the manual draws it: a topic's.

@@ -616,7 +616,7 @@ fn help_pages_cover_free_nice_and_renice() {
         ("nice", "six priority classes"),
         ("renice", "six priority classes"),
     ] {
-        let out = output_of(cash_command().args(["-c", &format!("help {name}")]));
+        let out = output_of(cash_command().args(["-c", &format!("help -m {name}")]));
         assert_eq!(out.code, 0, "{}", out.stderr);
         assert!(out.stdout.contains(needle), "help {name}:\n{}", out.stdout);
     }

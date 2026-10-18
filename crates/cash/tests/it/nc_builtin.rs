@@ -498,7 +498,7 @@ fn help_cites_nothing_internal() {
         out.stderr.lines().next(),
         Some("nc: option requires an argument -- 'V'")
     );
-    let out = cash("help nc");
+    let out = cash("help -m nc");
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("DIFFERENT IN CASH"), "{}", out.stdout);
 }

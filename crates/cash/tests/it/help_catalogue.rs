@@ -63,9 +63,40 @@ fn help_marks_a_builtin_that_hides_a_windows_program() {
     );
 }
 
+/// `help NAME` is the short form: the syntax and the examples, and where the whole
+/// page is; a draft without a syntax shows the builtin's usage line.
+#[test]
+fn help_is_the_syntax_and_the_examples_and_points_to_man() {
+    let out = run("help sed");
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let text = &out.stdout;
+    assert!(text.starts_with("sed \u{2014} "), "{text}");
+    assert!(
+        text.contains("\nSYNTAX\n") && text.contains("\nEXAMPLES\n"),
+        "{text}"
+    );
+    assert!(!text.contains("\nOPTIONS\n"), "{text}");
+    assert!(
+        text.contains("The whole page: man sed, or help -m sed."),
+        "{text}"
+    );
+    let draft = run("help grep");
+    assert!(draft.stdout.contains("\nSYNTAX\n"), "{}", draft.stdout);
+    assert!(
+        draft.stdout.contains("grep [OPTION]... PATTERNS [FILE]..."),
+        "{}",
+        draft.stdout
+    );
+    assert!(
+        !draft.stdout.contains("\nUSAGE AND OPTIONS\n"),
+        "{}",
+        draft.stdout
+    );
+}
+
 #[test]
 fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
-    let out = run("help sed");
+    let out = run("help -m sed");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let text = &out.stdout;
     assert!(text.starts_with("sed \u{2014} "), "{text}");
@@ -80,7 +111,7 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
         "{text}"
     );
     // A draft ends with the builtin's own `--help`.
-    let draft = run("help grep");
+    let draft = run("help -m grep");
     assert!(
         draft.stdout.contains("\nUSAGE AND OPTIONS\n"),
         "{}",

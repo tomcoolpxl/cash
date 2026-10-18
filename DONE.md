@@ -2245,3 +2245,9 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `--help`. Not on a terminal, `man` prints the page as text; `man -k WORD` lists the
   names and summaries that hold WORD. A line of code wider than a narrow pane goes on
   below, never cut. `man` has its own page, written in full.
+- **`help NAME` is the short form of a page** (2026-10-18, the design's step 4): the
+  name and its summary, the syntax and the examples, and `The whole page: man NAME, or
+  help -m NAME`. A draft with no syntax shows the `Usage:` lines of the builtin's own
+  `--help` (GNU's `or:` lines too), not the generic `NAME [ARGS]` a bundled tool
+  reports. `help -m NAME` is the whole page, a draft ending with its `--help`; topics
+  are shown whole. The tests that read options or later sections read `help -m`.

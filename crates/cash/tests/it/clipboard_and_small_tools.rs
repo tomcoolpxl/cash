@@ -42,7 +42,7 @@ fn uuidgen_names_itself_and_prints_util_linux_s_help() {
     );
     assert!(out.stdout.contains(" -V, --version       display version"));
 
-    let page = run("help uuidgen");
+    let page = run("help -m uuidgen");
     assert_eq!(page.code, 0, "{}", page.stderr);
     assert!(page.stdout.contains("--sha1"), "{}", page.stdout);
 }
@@ -114,7 +114,7 @@ fn xdg_open_takes_one_target_and_exits_as_the_real_one_does() {
     let out = run_in(dir, "command -v xdg-open; type -t xdg-open");
     assert_eq!(out.stdout, "xdg-open\nbuiltin");
 
-    let page = run("help xdg-open");
+    let page = run("help -m xdg-open");
     assert_eq!(page.code, 0, "{}", page.stderr);
     assert!(
         page.stdout.contains("it is start under the name"),
