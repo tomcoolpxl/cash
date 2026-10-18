@@ -401,77 +401,100 @@ impl Execute for ast::Program {
         shell: &mut Shell<impl extensions::ShellExtensions>,
         params: &ExecutionParameters,
     ) -> Result<ExecutionResult, error::Error> {
-        let mut result = ExecutionResult::success();
+        execute_program(self, shell, params, None)
+            .await
+            .map(|(result, _)| result)
+    }
+}
 
-        // Whether another program is running this one, which then has the last word on an
-        // interrupt.
-        let part_of_another = params.within_program;
-        let mut params = params.clone();
-        params.within_program = true;
-        let params = &params;
+/// Runs `program`'s commands in turn. With `parsed_as`, the parser options the program was
+/// parsed with, it stops before the next command once a command leaves them otherwise (an
+/// alias defined, extglob turned), and says which command that is: Bash reads a command
+/// after the one before it ran, so the rest is to be parsed again
+/// (`Shell::run_text`).
+pub(crate) async fn execute_program(
+    program: &ast::Program,
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    parsed_as: Option<&cash_parser::ParserOptions>,
+) -> Result<(ExecutionResult, Option<usize>), error::Error> {
+    let mut result = ExecutionResult::success();
 
-        // A Ctrl-C that arrived when the prompt's last command line had nothing left to
-        // interrupt is not for the next one.
-        if !part_of_another && shell.options().interactive {
-            let _ = cash_win32::console::take_interrupt();
+    // Whether another program is running this one, which then has the last word on an
+    // interrupt.
+    let part_of_another = params.within_program;
+    let mut params = params.clone();
+    params.within_program = true;
+    let params = &params;
+
+    // A Ctrl-C that arrived when the prompt's last command line had nothing left to
+    // interrupt is not for the next one.
+    if !part_of_another && shell.options().interactive {
+        let _ = cash_win32::console::take_interrupt();
+    }
+
+    for (index, command) in program.complete_commands.iter().enumerate() {
+        // A script tells of the jobs a signal ended before its next line, as Bash's
+        // reader does, with that line's number.
+        if shell.jobs_mut().has_signal_notices() {
+            shell.set_current_cmd(command);
+            shell.report_signalled_jobs(params);
         }
 
-        for command in &self.complete_commands {
-            // A script tells of the jobs a signal ended before its next line, as Bash's
-            // reader does, with that line's number.
-            if shell.jobs_mut().has_signal_notices() {
-                shell.set_current_cmd(command);
-                shell.report_signalled_jobs(params);
-            }
+        // Execute the command and handle any errors without immediately propagating them.
+        // This allows interactive shells to continue executing subsequent commands even after
+        // errors.
+        match command.execute(shell, params).await {
+            Ok(exec_result) => result = exec_result,
+            Err(err) => {
+                // cash: an interrupt (Ctrl-C while `read` waits for the keyboard) ends
+                // everything that is running, as SIGINT reaches every process of a
+                // Unix shell's foreground job: the sourced file, the `eval`, the
+                // command substitution and whatever runs them. Each passes it on, and
+                // the outermost program ends there: a script or a `-c` string ends the
+                // shell with status 130, and at the prompt the line is abandoned.
+                let interrupted = err.is_silent_interrupt();
+                if interrupted && part_of_another {
+                    return Err(err);
+                }
 
-            // Execute the command and handle any errors without immediately propagating them.
-            // This allows interactive shells to continue executing subsequent commands even after
-            // errors.
-            match command.execute(shell, params).await {
-                Ok(exec_result) => result = exec_result,
-                Err(err) => {
-                    // cash: an interrupt (Ctrl-C while `read` waits for the keyboard) ends
-                    // everything that is running, as SIGINT reaches every process of a
-                    // Unix shell's foreground job: the sourced file, the `eval`, the
-                    // command substitution and whatever runs them. Each passes it on, and
-                    // the outermost program ends there: a script or a `-c` string ends the
-                    // shell with status 130, and at the prompt the line is abandoned.
-                    let interrupted = err.is_silent_interrupt();
-                    if interrupted && part_of_another {
-                        return Err(err);
-                    }
-
-                    // Display the error and convert to an execution result.
-                    if !interrupted {
-                        let _ = shell.display_error(&mut params.stderr(shell), &err);
-                    }
-                    let discards_line = err.discards_line();
-                    result = err.into_result(shell);
-                    // An error that abandons its line abandons the rest of a `-c` string,
-                    // which Bash runs as one unit; a script goes on at its next line. An
-                    // interrupt leaves nothing of the program to go on with.
-                    let in_command_string = shell
-                        .call_stack()
-                        .current_frame()
-                        .is_some_and(|frame| frame.frame_type.is_command_string());
-                    if interrupted || (discards_line && in_command_string) {
-                        shell.set_last_exit_status(result.exit_code.into());
-                        break;
-                    }
+                // Display the error and convert to an execution result.
+                if !interrupted {
+                    let _ = shell.display_error(&mut params.stderr(shell), &err);
+                }
+                let discards_line = err.discards_line();
+                result = err.into_result(shell);
+                // An error that abandons its line abandons the rest of a `-c` string,
+                // which Bash runs as one unit; a script goes on at its next line. An
+                // interrupt leaves nothing of the program to go on with.
+                let in_command_string = shell
+                    .call_stack()
+                    .current_frame()
+                    .is_some_and(|frame| frame.frame_type.is_command_string());
+                if interrupted || (discards_line && in_command_string) {
+                    shell.set_last_exit_status(result.exit_code.into());
+                    break;
                 }
             }
-
-            // Update status
-            shell.set_last_exit_status(result.exit_code.into());
-
-            // Check if we should stop executing subsequent commands
-            if !result.is_normal_flow() {
-                break;
-            }
         }
 
-        Ok(result)
+        // Update status
+        shell.set_last_exit_status(result.exit_code.into());
+
+        // Check if we should stop executing subsequent commands
+        if !result.is_normal_flow() {
+            break;
+        }
+
+        if let Some(parsed_as) = parsed_as
+            && index + 1 < program.complete_commands.len()
+            && shell.parser_options() != *parsed_as
+        {
+            return Ok((result, Some(index + 1)));
+        }
     }
+
+    Ok((result, None))
 }
 
 #[async_trait::async_trait]
@@ -773,6 +796,12 @@ impl Execute for ast::Pipeline {
                 next_control_flow: crate::ExecutionControlFlow::ExitShell,
                 exit_code: ExecutionExitCode::from(u8::try_from(128 + signal).unwrap_or(u8::MAX)),
             });
+        }
+        // A pipeline's stages are copies of the shell, which keep their own lines; the
+        // shell's is the pipeline's while they run, the line an error in a stage names, as
+        // in Bash. It was the line of the command before.
+        if self.seq.len() > 1 {
+            shell.set_current_cmd(self);
         }
         // A busy job, below normal priority, takes turns of a millisecond, so a lock it
         // holds is not out of the foreground's reach for every other job's time slice.

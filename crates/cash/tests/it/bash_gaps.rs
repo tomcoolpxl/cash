@@ -663,6 +663,26 @@ fn globignore_and_a_last_globstar_match_as_in_bash() {
 }
 
 #[test]
+fn line_numbers_stay_right_across_a_pipeline_and_a_second_parse() {
+    // As Bash 5.3: an error in a pipeline's stage names the pipeline's line, where it
+    // named the line of the command before; and a text parsed again from a command on,
+    // after `shopt -s extglob` changed how it parses, keeps its lines.
+    let (code, stdout, stderr) = output_with_stderr(
+        "echo one\nno_such_b | cat\nshopt -s extglob\necho \"line $LINENO\"\nf() {\n  echo \"f $LINENO\"\n}\nf\nno_such_c | cat",
+    );
+    assert_eq!(code, 0);
+    assert_eq!(stdout, "one\nline 4\nf 6");
+    assert!(
+        stderr.contains("line 2: no_such_b: command not found"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("line 9: no_such_c: command not found"),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn globignore_turns_dotglob_on_and_its_unset_turns_it_off() {
     // As Bash 5.3: patterns in GLOBIGNORE turn dotglob on, an empty one leaves it, and
     // unsetting it turns dotglob off.

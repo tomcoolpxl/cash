@@ -339,10 +339,11 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     }
 
     /// Runs `text` as Bash runs a script, a sourced file, a `-c` string or `eval`'s:
-    /// whole when `whole`, its parse, succeeded, which is the common case; when it did
-    /// not, a complete command at a time, as Bash reads it, so the commands before the
-    /// error run and a payload after an `exit` is never read (EXE-07). A command a line
-    /// before it changed, as `shopt -s extglob` does, parses as that command left it.
+    /// as parsed when `whole`, its parse, succeeded, which is the common case
+    /// ([`Self::run_parsed_text`]); when it did not, a complete command at a time, as Bash
+    /// reads it, so the commands before the error run and a payload after an `exit` is
+    /// never read (EXE-07). A command a line before it changed, as `shopt -s extglob`
+    /// does, parses as that command left it.
     ///
     /// The syntax error is reported where it is reached, as [`Self::report_syntax_error`]
     /// reports it with `fatal`.
@@ -355,11 +356,13 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         params: &ExecutionParameters,
         fatal: bool,
     ) -> Result<ExecutionResult, error::Error> {
-        if let Ok(program) = whole {
-            return self
-                .run_parsed_result(Ok(program), source_info, params)
-                .await;
-        }
+        let lines_run = match self
+            .run_parsed_text(text, whole, source_info, params)
+            .await?
+        {
+            Ok(result) => return Ok(result),
+            Err(lines_run) => lines_run,
+        };
 
         // A last line ends as the others do, as Bash ends a `-c` or `eval` string: `echo (`
         // is wrong at its newline, not at the end of the text.
@@ -375,9 +378,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         let mut result = ExecutionResult::success();
         let mut pending: Vec<u8> = Vec::new();
         // The lines before `pending`, which its own line numbers do not count.
-        let mut lines_before = 0;
+        let mut lines_before = lines_run;
         let mut pending_lines = 0;
-        let mut lines = text.split_inclusive(|&byte| byte == b'\n').peekable();
+        let mut lines = text
+            .split_inclusive(|&byte| byte == b'\n')
+            .skip(lines_run)
+            .peekable();
         while let Some(line) = lines.next() {
             pending.extend_from_slice(line);
             pending_lines += 1;
@@ -576,6 +582,77 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         message
     }
 
+    /// Runs `text` from `whole`, its parse, a command at a time: when a command leaves the
+    /// rest to be parsed otherwise (an alias defined, extglob turned), the rest is parsed
+    /// again from the line the next command starts on, as Bash reads a command after the
+    /// one before it ran. `Err` with the lines of `text` run when the rest does not parse,
+    /// for [`Self::run_text`] to read it a command at a time from there.
+    async fn run_parsed_text(
+        &mut self,
+        text: &[u8],
+        whole: Result<cash_parser::ast::Program, cash_parser::ParseError>,
+        source_info: &crate::SourceInfo,
+        params: &ExecutionParameters,
+    ) -> Result<Result<ExecutionResult, usize>, error::Error> {
+        use cash_parser::ast::SourceLocation as _;
+
+        // The lines of `text` before the part `parsed` is a parse of.
+        let mut lines_run = 0;
+        let mut parsed = whole;
+        while let Ok(program) = parsed {
+            let parsed_as = self.parser_options();
+            self.call_stack.increment_current_line_offset(lines_run);
+            let ran = self
+                .run_program_watching(&program, params, &parsed_as)
+                .await;
+            self.call_stack.decrement_current_line_offset(lines_run);
+            let (result, next) = ran?;
+            let Some(next) = next else {
+                return Ok(Ok(result));
+            };
+            let Some(line) = program
+                .complete_commands
+                .get(next)
+                .and_then(|command| command.location())
+                .map(|span| span.start.line)
+            else {
+                // No line to start from: the rest runs as it was parsed.
+                let rest = cash_parser::ast::Program {
+                    complete_commands: program.complete_commands[next..].to_vec(),
+                };
+                self.call_stack.increment_current_line_offset(lines_run);
+                let ran = self.run_parsed_result(Ok(rest), source_info, params).await;
+                self.call_stack.decrement_current_line_offset(lines_run);
+                return ran.map(Ok);
+            };
+            lines_run += line - 1;
+            parsed = self.parse(after_lines(text, lines_run));
+        }
+        Ok(Err(lines_run))
+    }
+
+    /// Runs `program`, parsed with `parsed_as`, as [`Self::run_parsed_result`] runs a
+    /// program, stopping before the command that a command before it left to be parsed
+    /// otherwise, which it names (`interp::execute_program`).
+    async fn run_program_watching(
+        &mut self,
+        program: &cash_parser::ast::Program,
+        params: &ExecutionParameters,
+        parsed_as: &cash_parser::ParserOptions,
+    ) -> Result<(ExecutionResult, Option<usize>), error::Error> {
+        match crate::interp::execute_program(program, self, params, Some(parsed_as)).await {
+            Ok(ran) => Ok(ran),
+            // An interrupt a program passes on is for the program that runs it to act on.
+            Err(err) if err.is_silent_interrupt() => Err(err),
+            Err(err) => {
+                let _ = self.display_error(&mut params.stderr(self), &err);
+                let result = err.into_result(self);
+                self.set_last_exit_status(result.exit_code.into());
+                Ok((result, None))
+            }
+        }
+    }
+
     pub(crate) async fn run_parsed_result(
         &mut self,
         parse_result: Result<cash_parser::ast::Program, cash_parser::ParseError>,
@@ -692,6 +769,16 @@ const fn first_line(origin: TextOrigin) -> usize {
         TextOrigin::Whole => 1,
         TextOrigin::Eval { line } => line,
     }
+}
+
+/// `text` after its first `lines` lines.
+fn after_lines(text: &[u8], lines: usize) -> &[u8] {
+    let start: usize = text
+        .split_inclusive(|&byte| byte == b'\n')
+        .take(lines)
+        .map(<[u8]>::len)
+        .sum();
+    text.get(start..).unwrap_or_default()
 }
 
 /// The lines in `text`, a last one without a newline included.
