@@ -381,8 +381,7 @@ fn install_backs_up_keeps_times_and_takes_makefiles_options() {
          install --backup=bogus s d 2>/dev/null; echo \"bogus $?\"; cd /; rm -rf \"$d\"",
     );
     assert_eq!(
-        out.stdout,
-        "d\nd.bak\nd.~1~\nd.~2~\nd~\nT refused\n2001 kept\nNOW now\nv1\nbogus 1",
+        out.stdout, "d\nd.bak\nd.~1~\nd.~2~\nd~\nT refused\n2001 kept\nNOW now\nv1\nbogus 1",
         "{}",
         out.stderr
     );
