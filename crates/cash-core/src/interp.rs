@@ -135,6 +135,14 @@ impl ExecutionParameters {
         self.asynchronous
     }
 
+    /// Runs the thread that takes it below normal priority while the guard lives, when
+    /// this is a part of a command started with `&` run on a thread of its own: a busy
+    /// job then leaves the foreground, and the prompt, a processor the moment they wake.
+    pub(crate) fn lower_if_asynchronous(&self) -> Option<cash_win32::priority::ThreadLowered> {
+        self.asynchronous
+            .then(cash_win32::priority::lower_this_thread)
+    }
+
     /// What tells a command run under these parameters that it is to stop
     /// (`commands::StopToken`).
     pub fn stop_token(&self) -> commands::StopToken {
@@ -610,10 +618,13 @@ where
     // The job runs on a thread of its own, as a pipeline stage does. As a task on the
     // runtime's workers, a job that never waits (a loop of builtins) held its worker for
     // good, and as many such jobs as cores left a foreground `$(…)` waiting for ever
-    // (`REVIEW_REPORT.md` EXE-03).
+    // (`REVIEW_REPORT.md` EXE-03). Below normal priority, a busy job leaves the
+    // foreground a processor the moment it wakes, where Windows Server's long time
+    // slices had it wait behind every job (`priority::lower_this_thread`).
     let job_cancel = std::sync::Arc::clone(&cancel);
     let mut join_handle = tokio::task::spawn_blocking(move || {
         let _guard = slot_guard;
+        let _lowered = cash_win32::priority::lower_this_thread();
         let outcome = run(cloned_shell, cloned_params);
         // A job `kill` ended ends with 128 plus the signal, as Bash's killed subshell
         // does, whatever its last command ended with: the program it was waiting for,
@@ -745,6 +756,11 @@ impl Execute for ast::Pipeline {
                 next_control_flow: crate::ExecutionControlFlow::ExitShell,
                 exit_code: ExecutionExitCode::from(u8::try_from(128 + signal).unwrap_or(u8::MAX)),
             });
+        }
+        // A busy job, below normal priority, takes turns of a millisecond, so a lock it
+        // holds is not out of the foreground's reach for every other job's time slice.
+        if params.asynchronous {
+            cash_win32::priority::share_the_processor();
         }
 
         let mut params = params.clone();
@@ -1216,6 +1232,7 @@ async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
             let mut shell = *target;
             let join_handle = tokio::task::spawn_blocking(move || {
                 let _guard = slot_guard;
+                let _lowered = params.lower_if_asynchronous();
                 let rt = tokio::runtime::Handle::current();
                 let outcome = rt.block_on(compound.execute(&mut shell, &params));
                 commands::stage_result(&shell, &params, outcome)
@@ -3141,6 +3158,7 @@ fn spawn_substitution(
         .name("cash-procsub".into())
         .stack_size(crate::SHELL_THREAD_STACK_SIZE)
         .spawn(move || {
+            let _lowered = params.lower_if_asynchronous();
             let _ = crate::runtime::block_on_this_thread(handle.as_ref(), || {
                 subshell_cmd.list.execute(&mut subshell, &params)
             });

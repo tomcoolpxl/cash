@@ -17,7 +17,7 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use crate::common::{cash_command, output_of, run, run_in};
+use crate::common::{CASH, cash_command, isolate, output_of, run, run_in};
 
 /// Runs each script and checks its standard output and status.
 fn check(cases: &[(&str, &str)]) {
@@ -68,6 +68,48 @@ fn busy_background_jobs_leave_the_foreground_free() {
            for j in $(seq 1 40); do kill %$j; done; wait; echo done"#,
         "fg hi\ndone",
     )]);
+}
+
+#[test]
+fn busy_background_jobs_leave_the_foreground_a_lone_processor() {
+    // On one processor, 40 busy jobs at the foreground's priority held it 11 to 19 s,
+    // each time it woke waiting a turn behind all of them, and CI's four processors with
+    // Windows Server's longer time slices timed out at 15 s. A job's threads run below
+    // normal priority now, in turns of a millisecond: it takes 0.2 s.
+    let dir = tempfile::tempdir().expect("temporary folder");
+    let script = dir.path().join("busy.sh");
+    std::fs::write(
+        &script,
+        "for i in $(seq 1 40); do { while :; do :; done; } & done\n\
+         echo \"fg $(echo hi)\"\n\
+         for j in $(seq 1 40); do kill %$j; done; wait; echo done\n",
+    )
+    .expect("script");
+    let mut command = std::process::Command::new("cmd");
+    isolate(&mut command)
+        .args([
+            "/d",
+            "/c",
+            "start",
+            "",
+            "/b",
+            "/wait",
+            "/affinity",
+            "1",
+            CASH,
+        ])
+        .arg("--no-config")
+        .arg(&script);
+    let started = std::time::Instant::now();
+    let out = output_of(&mut command);
+    let took = started.elapsed();
+    assert_eq!(
+        (out.stdout.as_str(), out.code),
+        ("fg hi\ndone", 0),
+        "{}",
+        out.stderr
+    );
+    assert!(took < std::time::Duration::from_secs(8), "took {took:?}");
 }
 
 #[test]

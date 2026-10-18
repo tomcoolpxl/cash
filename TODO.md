@@ -25,27 +25,22 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the current phase, 2026-10-17)
+## Picked by the user (the current phase, 2026-10-18)
 
-The user's picks after 1.23.0 (decisions.md, "The phase after 1.23.0"), the first two
-added after the benchmark at 1.23.0 found `ls -la` 20% slower, in this
-order. The phases before, released as 1.22.0 and 1.23.0, are in DONE.md.
+The user's picks after 1.24.0 (decisions.md, "The phase after 1.24.0" and "The phase
+after 1.25.0"), in this order. The phases before, released as 1.22.0 to 1.24.0, are in
+DONE.md.
 
-1. **`ls -la` 12% slower for keeping the access time**: done (2026-10-18, DONE.md).
-2. **`ls -l`'s file facts from the folder listing**: done (2026-10-18, DONE.md).
-3. **A TERM trap never runs on cash's own `kill -TERM`**: settled as a limitation, not
-   fixed (the user, 2026-10-18; decisions.md, DONE.md).
-4. **An archiver killed at once hung past 15 s in CI**: settled, load on CI's runners
-   (2026-10-18, DONE.md).
-5. **The completion menu scans PATH on each keystroke**: done (2026-10-18, DONE.md).
-6. **`which <builtin>` walks all of PATH**: done (2026-10-18, DONE.md).
-7. **Each `.ps1` run scans PATH for pwsh**: done (2026-10-18, DONE.md).
-8. **`HISTCONTROL=erasedups` scans the whole history**: done (2026-10-18, DONE.md).
+1. **Command completion offered DLLs**: done (2026-10-18, DONE.md).
+2. **Busy background jobs starved the foreground**: done (2026-10-18, DONE.md). Picked
+   for the phase after 1.25.0 and taken into 1.25.0, as 1.24.0's release gate timed out
+   on it four times.
 
-All eight are done or settled; the phase ends with release 1.24.0.
+Released as 1.25.0. Then, for 1.26.0:
 
-After 1.24.0 the user picked the DLLs completion offered as commands: done (2026-10-18,
-DONE.md).
+3. **Grow the differential corpus** (`tests/corpus`, ROADMAP.md section 6): new
+   real-world scripts run under cash and under Git Bash 5.3 with GNU sed and gawk; each
+   mismatch fixed with a focused regression, or classified in its file's `# tags:` line.
 
 ## Left over from finished phases
 

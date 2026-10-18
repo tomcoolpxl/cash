@@ -2019,3 +2019,18 @@ the terminal it was typed in. Each item as TODO.md had it, then what was done.
   DLL (`IMAGE_FILE_DLL`), from one read of the file's first 512 bytes, where the header
   lies in practice, instead of two: no slower. An `MZ` too short for the header still
   counts, as before.
+- **Busy background jobs starved the foreground** (found 2026-10-18 in runs 39077538398
+  and 39079333899, 1.24.0's release gate; the user's pick): with the test that starts
+  40 busy loops running alone, CI still timed it out at 15 s on all four tries. Its own
+  jobs were the load: 40 threads of cash at the foreground's priority, which on one
+  processor here held the script 11 to 19 s (3.2 to 4.1 s on four, 1.4 to 3.4 s on
+  sixteen), and Windows Server's longer time slices made it longer still. A job's
+  threads (its own, its pipeline stages', its process substitutions') now run below
+  normal priority, so the foreground takes a processor the moment it wakes; lowered
+  alone, a job that held a lock the foreground wanted (the first write to standard
+  output, made once) still kept it 0.6 to 1.3 s, waiting its turn behind 39 busy
+  siblings' time slices, so a job's thread hands the processor on after a millisecond
+  between its pipelines. The script takes 0.2 s on one processor, 0.12 s on four; a
+  background loop alone is as fast as before (+1.2%, within the noise). The new test
+  runs it on one processor (`start /affinity 1`): 12 to 14 s before, past its 8 s
+  bound.

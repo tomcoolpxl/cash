@@ -14,10 +14,10 @@ use std::io;
 use std::os::windows::io::AsRawHandle as _;
 
 use windows_sys::Win32::System::Threading::{
-    ABOVE_NORMAL_PRIORITY_CLASS, BELOW_NORMAL_PRIORITY_CLASS, GetCurrentProcess, GetPriorityClass,
-    HIGH_PRIORITY_CLASS, IDLE_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS,
-    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_INFORMATION, REALTIME_PRIORITY_CLASS,
-    SetPriorityClass,
+    ABOVE_NORMAL_PRIORITY_CLASS, BELOW_NORMAL_PRIORITY_CLASS, GetCurrentProcess, GetCurrentThread,
+    GetPriorityClass, GetThreadPriority, HIGH_PRIORITY_CLASS, IDLE_PRIORITY_CLASS,
+    NORMAL_PRIORITY_CLASS, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_INFORMATION,
+    REALTIME_PRIORITY_CLASS, SetPriorityClass, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
 };
 
 use crate::handle::open_process;
@@ -236,6 +236,101 @@ pub fn hold(class: PriorityClass) -> io::Result<Held> {
     })
 }
 
+/// What `GetThreadPriority` answers when it fails (`MAXLONG`).
+const THREAD_PRIORITY_ERROR_RETURN: i32 = i32::MAX;
+
+/// The thread that took it, run below normal priority for a while: dropping it, on that
+/// thread, puts the thread's previous priority back.
+#[must_use = "the thread's priority is put back when this is dropped"]
+pub struct ThreadLowered {
+    previous: Option<i32>,
+    /// The priority is the taking thread's, so the guard stays on it.
+    _on_this_thread: std::marker::PhantomData<*const ()>,
+}
+
+impl Drop for ThreadLowered {
+    fn drop(&mut self) {
+        if let Some(previous) = self.previous {
+            // SAFETY: a pseudo-handle for this thread, which needs no closing.
+            let me = unsafe { GetCurrentThread() };
+            // SAFETY: as above; a priority this thread had.
+            let _ = unsafe { SetThreadPriority(me, previous) };
+        }
+    }
+}
+
+/// Runs this thread one step below normal priority until the returned guard is dropped.
+///
+/// For the threads of a background job: as threads of the shell's own process they
+/// would share the processors with the foreground turn by turn, and Windows Server's
+/// long time slices leave a foreground that wakes waiting behind every busy job. One
+/// step below, the foreground takes a processor the moment it wakes, and the jobs have
+/// every processor nothing else wants. A thread already below normal is left as it is,
+/// and so is one whose priority cannot be read or set.
+pub fn lower_this_thread() -> ThreadLowered {
+    // SAFETY: a pseudo-handle for this thread, which needs no closing.
+    let me = unsafe { GetCurrentThread() };
+    // SAFETY: as above.
+    let previous = unsafe { GetThreadPriority(me) };
+    let lowered = previous != THREAD_PRIORITY_ERROR_RETURN
+        && previous > THREAD_PRIORITY_BELOW_NORMAL
+        // SAFETY: as above.
+        && unsafe { SetThreadPriority(me, THREAD_PRIORITY_BELOW_NORMAL) } != 0;
+    ThreadLowered {
+        previous: lowered.then_some(previous),
+        _on_this_thread: std::marker::PhantomData,
+    }
+}
+
+/// How long a thread runs before [`share_the_processor`] hands its processor on.
+const TURN: std::time::Duration = std::time::Duration::from_millis(1);
+
+/// How many calls of [`share_the_processor`] pass between looks at the clock: a loop of
+/// builtins calls it every microsecond or two.
+const CALLS_BETWEEN_LOOKS: u32 = 8;
+
+/// Hands this thread's processor to another thread ready to run, once this one has run
+/// for a millisecond since it last did: for a lowered thread that may never wait.
+///
+/// A lowered thread that holds a lock the foreground wants (the allocator's, the
+/// standard output's, made once) runs again only in its turn among the busy threads of
+/// its priority, each turn a whole time slice, 30 to 190 ms; forty busy jobs held the
+/// foreground's first `echo` for over a second on one processor. A turn of a millisecond
+/// bounds that, at a cost of a system call per millisecond.
+pub fn share_the_processor() {
+    thread_local! {
+        static CALLS_AND_TURN: std::cell::Cell<(u32, Option<std::time::Instant>)> =
+            const { std::cell::Cell::new((0, None)) };
+    }
+    CALLS_AND_TURN.with(|state| {
+        let (calls, began) = state.get();
+        if calls < CALLS_BETWEEN_LOOKS {
+            state.set((calls + 1, began));
+            return;
+        }
+        let now = std::time::Instant::now();
+        let began = match began {
+            Some(at) if now.duration_since(at) < TURN => at,
+            Some(_) => {
+                std::thread::yield_now();
+                std::time::Instant::now()
+            }
+            None => now,
+        };
+        state.set((0, Some(began)));
+    });
+}
+
+/// This thread's priority, as `SetThreadPriority` takes it: 0 is normal, -1 below.
+#[must_use]
+pub fn this_threads_priority() -> Option<i32> {
+    // SAFETY: a pseudo-handle for this thread, which needs no closing.
+    let me = unsafe { GetCurrentThread() };
+    // SAFETY: as above.
+    let priority = unsafe { GetThreadPriority(me) };
+    (priority != THREAD_PRIORITY_ERROR_RETURN).then_some(priority)
+}
+
 #[cfg(test)]
 #[allow(
     clippy::expect_used,
@@ -318,6 +413,23 @@ mod tests {
             assert_eq!(of_process(std::process::id()).unwrap(), other);
         }
         assert_eq!(current().unwrap(), before);
+    }
+
+    #[test]
+    fn lowering_a_thread_lasts_as_long_as_the_guard() {
+        std::thread::spawn(|| {
+            assert_eq!(this_threads_priority(), Some(0));
+            {
+                let _lowered = lower_this_thread();
+                assert_eq!(this_threads_priority(), Some(-1));
+                // Lowered again, it stays where it is, and the outer guard restores.
+                drop(lower_this_thread());
+                assert_eq!(this_threads_priority(), Some(-1));
+            }
+            assert_eq!(this_threads_priority(), Some(0));
+        })
+        .join()
+        .unwrap();
     }
 
     #[test]

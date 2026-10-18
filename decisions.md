@@ -426,6 +426,12 @@ the shell on threads of their own. A job that runs no program gets a number no W
 can be (4n + 1 from 100001), which `$!`, `kill`, `wait` and `jobs -p` take. At most 256
 run at once, Git Bash's `ulimit -u` (`CASH_MAX_SUBSHELLS`). Turned down: tasks on the
 runtime's workers, where a job that never waits holds a worker for good.
+Added (2026-10-18, the user's pick after 1.24.0): a job's threads run below normal
+priority, in turns of a millisecond between pipelines. At the foreground's priority,
+forty busy jobs held it 11 to 19 s on one processor and past 15 s on CI's Windows
+Server, where Linux hands a waking shell the processor at once. The programs a job
+starts keep their priority. Turned down: lowering alone, where a job holding a lock the
+foreground wanted kept it a second behind the other jobs' time slices.
 
 ### D71 — A writer whose reader went away ends as SIGPIPE ends it, if it is cash's
 
@@ -812,6 +818,12 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   Turned down: leaving the 7% of the per-file facts; reverting the access time unseen.
 - **The phase after 1.24.0** (the user, 2026-10-18): the DLLs completion offered as
   commands. The user published 1.24.0 to Scoop.
+- **The phase after 1.25.0** (the user, 2026-10-18): the busy background jobs that
+  starved the foreground, and growing the differential corpus; the first was taken into
+  1.25.0 when 1.24.0's release gate timed out on it. 1.25.0 is tagged and taken to
+  Scoop once CI is green, as 1.24.0 was. Turned down for now: taking lzma-rust2 in for
+  7z's and xz's speed and a prompt stop, zstd's real levels, the winget submission, and
+  the four leftovers.
 
 ## 8. Archives and compression
 

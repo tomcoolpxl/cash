@@ -1352,6 +1352,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
     ) -> ExecutionSpawnResult {
         let last_arg = Self::take_last_arg(&args);
         let join_handle = tokio::task::spawn_blocking(move || {
+            let _lowered = params.lower_if_asynchronous();
             let stage_params = params.clone();
             let cmd_context = ExecutionContext {
                 shell: &mut shell,
@@ -1475,6 +1476,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
 
         let join_handle = tokio::task::spawn_blocking(move || {
             let _guard = slot_guard;
+            let _lowered = params.lower_if_asynchronous();
             let rt = tokio::runtime::Handle::current();
             let stage_params = params.clone();
 
