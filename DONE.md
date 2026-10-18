@@ -1349,6 +1349,23 @@ each item's entry is under "Found along the way, done" below.
    traps, `trap -p`'s listing, `.` taking the script's options, its usage's name,
    `GLOBIGNORE`, and a last `**`. Three were left for the next phase.
 
+## The phase after 1.26.0: reading a command at a time
+
+The user's picks after 1.26.0 (decisions.md), released as 1.27.0; each item's entry is
+under "Found along the way, done" below.
+
+1. **Two small fixes**: `GLOBIGNORE` in `shopt dotglob`, and the clipboard tests that
+   put back only text.
+2. **extglob on from the start**: off now, `[[`'s patterns extended either way.
+3. **Aliases with operators**: expanded on the tokens before parsing; a script read a
+   command at a time, and the rest parsed whole again once a command leaves the
+   options as they were.
+4. **More corpus rounds**: one, mo, ansi, nvm and the alias case.
+
+Also in 1.27.0: "directory", never "folder", everywhere (the user); a `case` of many
+options matched without a regular expression per pattern, which held the release when
+the ansi case timed out under load; `croot`'s top line keeping its mode in sight.
+
 ## Found along the way, done
 
 - **cash's `printf` writes a line's end in a write of its own** (found on 2026-10-09
@@ -2178,3 +2195,11 @@ each item's entry is under "Found along the way, done" below.
 - **`croot`'s top line kept its place whole and cut what it shows** (2026-10-18, CI's
   longer temporary path cut `[directories]`): a deep directory now gives up its start,
   an ellipsis in front, and the picker's mode, flags and search state stay in sight.
+- **`man`, step 1: the pages' model** (2026-10-18; the design's section 7): the crate
+  `cash-man` reads a page's front matter (`name:`/`names:`, `summary:`, `kind:`,
+  `see:`, `draft:`, a topic's `title:`) and its `##` sections, and checks the shape:
+  a command's page has Syntax, Examples, How it works, Options, Advanced and Different
+  in cash only, each once, in that order; no section is empty; no line of code is wider
+  than 80 columns, as code is drawn as written. The pages are embedded deflated at
+  build time. The first two are cd and sed, from the complete samples, with upper-case
+  placeholders; the width check found four lines of them too wide.

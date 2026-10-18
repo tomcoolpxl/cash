@@ -27,21 +27,48 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ## Picked by the user (the current phase, 2026-10-18)
 
-The user's picks after 1.26.0 (decisions.md, "The phase after 1.26.0"), in this order;
-items 2 and 3, both changes to how a script is read, go together, as Bash expands an
-alias as it reads each command. The phases before, released as 1.22.0 to 1.26.0, are in
-DONE.md.
+The user's picks after 1.27.0 (decisions.md, "The phase after 1.27.0"), in this order.
+The phases before, released as 1.22.0 to 1.27.0, are in DONE.md.
 
-1. **Two small fixes**: done (2026-10-18, DONE.md).
-2. **extglob is on from the start**: done (2026-10-18, DONE.md).
-3. **An alias whose value holds an operator runs it as words**: done (2026-10-18,
-   DONE.md).
-4. **More corpus rounds**: permissively licensed real scripts and cases of cash's own
-   with the Bash manual as their spec, as in the last phase (`tests/corpus/SOURCES.md`).
-   The first round (2026-10-18): the alias case, and mo, ansi and nvm run from
-   fixtures, nvm's 5,642 lines one `{ }` command. All as Bash has them but nvm's
-   `nvm_strip_path`, which met D3's `C:/` spelling of `$PWD` in a colon-separated list:
-   noted under "Found along the way".
+1. **`man`, cash's own manual** (the user, 2026-10-18): `research/man-browser-design.md`,
+   in the steps of its section 7, each ending in a commit:
+   1. the pages' model, in the crate `cash-man`: done (2026-10-18, DONE.md);
+   2. rendering;
+   3. `help` on the new pages;
+   4. the browser;
+   5. the examples' test;
+   6. the first batch of about 20 pages at full depth, and drafts for the rest; then a
+      release;
+   7. the next batches, about 20 pages each, each released when done.
+2. **Document the two spellings a directory takes in `PATH`** (the user, 2026-10-18,
+   after the side effects were weighed): no code. Spelling a `C:/` entry `/c/` as
+   `PATH` is assigned was turned down, since `case ":$PATH:" in *":$HOME/bin:"*`, the
+   idiom that adds a directory once, would then never find what it added. `$HOME` and
+   `$PWD` are `C:/…` (D3) and inherited entries `/c/…` (D5): in spec §4 and
+   `help differences`, with what a script that splits `PATH` on `:` should do. The
+   finding:
+   **A `C:/` directory put into `PATH` breaks a colon-separated split** (2026-10-18, found
+   by the corpus's nvm case): `PATH="$PWD/bin:$PATH"` works for running programs, as
+   cash's own search knows a drive, but the value keeps `C:/…` (D3's spelling of `$PWD`),
+   so a script that splits `PATH` on `:` (`IFS=: read -ra`, `${PATH%%:*}`, awk with
+   `RS=:` as nvm's `nvm_strip_path` does) gets `C` as an entry. D5 has scripts see `PATH`
+   as `/c/…`, colon-separated, which a `C:/` entry assigned by a script breaks. In Git
+   Bash `$PWD` is `/c/…`, so the list stays whole.
+3. **zstd's real levels**: before the switch, its side effects are looked at: the size
+   of `cash.exe` (a release stops past 2 MiB more), the port's unsafe translated code,
+   and the memory of levels 19 to 22.
+   **zstd compresses at ruzstd's fast level only** (parked by the user, 2026-10-17;
+   phase 28, 2026-10-07): every level
+   `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
+   `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
+   real; until then the page says so.
+4. **The winget submission** (**yours** at the time): the manifests are validated
+   (ROADMAP.md section 18); the submission is a pull request to `microsoft/winget-pkgs`,
+   public, which goes out only with the user's yes then. Its side effects first: each
+   release then needs a winget pull request of its own, and a winget install meets the
+   first-start offer that changes the user's `PATH` and default Terminal profile.
+5. **More corpus rounds**: permissively licensed real scripts and cases of cash's own
+   on the Bash manual (`tests/corpus/SOURCES.md`).
 
 ## Left over from finished phases
 
@@ -94,16 +121,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   `cd -@` says "not yet implemented" with status 99, where Git Bash refuses `-@` as an
   invalid option with its usage line and status 2. Small each.
 
-- **A `C:/` directory put into `PATH` breaks a colon-separated split** (2026-10-18, found
-  by the corpus's nvm case): `PATH="$PWD/bin:$PATH"` works for running programs, as
-  cash's own search knows a drive, but the value keeps `C:/…` (D3's spelling of `$PWD`),
-  so a script that splits `PATH` on `:` (`IFS=: read -ra`, `${PATH%%:*}`, awk with
-  `RS=:` as nvm's `nvm_strip_path` does) gets `C` as an entry. D5 has scripts see `PATH`
-  as `/c/…`, colon-separated, which a `C:/` entry assigned by a script breaks. In Git
-  Bash `$PWD` is `/c/…`, so the list stays whole. A fix would spell a `C:/` entry `/c/`
-  as `PATH` is assigned, as D5 spells the inherited value. Medium; decision needed on
-  whether other colon lists (`CDPATH`, `MANPATH`) follow.
-
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against
@@ -134,12 +151,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   waits out every block in flight. Writing the block in pieces and asking
   `shutdown_flag` between them would end it within a piece; that means taking
   lzma-rust2 (20.5k lines) in as cash's own, as crossterm was (`[patch.crates-io]`).
-
-- **zstd compresses at ruzstd's fast level only** (parked by the user, 2026-10-17;
-  phase 28, 2026-10-07): every level
-  `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
-  `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
-  real; until then the page says so.
 
 ---
 

@@ -835,6 +835,14 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   dotglob`, with the clipboard test that puts back only text, and more corpus rounds.
   1.26.0 is tagged and taken to Scoop once CI is green. Still turned down for now:
   lzma-rust2, zstd's levels, the winget submission, the four leftovers.
+- **The phase after 1.27.0** (the user, 2026-10-18): `man` first, the design's steps
+  to the first batch of pages and a release; then `PATH`'s two spellings documented, not
+  changed (rewriting a `C:/` entry as `/c/` would have the add-once idiom
+  `case ":$PATH:" in *":$HOME/bin:"*` never find what it added); zstd's real levels and
+  the winget submission, each after its side effects are weighed, winget going out only
+  with the user's yes; more corpus rounds. Every example in a page runs as a test
+  against Git Bash or the real tool. 1.27.0 is tagged and taken to Scoop once CI is
+  green.
 
 ## 8. Archives and compression
 
