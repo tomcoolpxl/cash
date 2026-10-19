@@ -1,0 +1,84 @@
+["name"]	"cash"
+["version",0]	1
+["version",1]	34
+["version",2]	0
+["version"]	[1,34,0]
+["ok"]	true
+["tags","shell"]	"bash"
+["tags","os"]	"windows"
+["tags"]	{"shell":"bash","os":"windows"}
+["empty"]	[]
+["none"]	{}
+["nested","a","b"]	null
+["nested","a"]	{"b":null}
+["nested"]	{"a":{"b":null}}
+["text"]	"line\nbreak \"quoted\" a\/b"
+["num"]	-12.5e3
+[]	{"name":"cash","version":[1,34,0],"ok":true,"tags":{"shell":"bash","os":"windows"},"empty":[],"none":{},"nested":{"a":{"b":null}},"text":"line\nbreak \"quoted\" a\/b","num":-12.5e3}
+status: 0
+["name"]	"cash"
+["version",0]	1
+["version",1]	34
+["version",2]	0
+["ok"]	true
+["tags","shell"]	"bash"
+["tags","os"]	"windows"
+["nested","a","b"]	null
+["text"]	"line\nbreak \"quoted\" a\/b"
+["num"]	-12.5e3
+["name"]	"cash"
+["version",0]	1
+["version",1]	34
+["version",2]	0
+["ok"]	true
+["tags","shell"]	"bash"
+["tags","os"]	"windows"
+["nested","a","b"]	null
+["text"]	"line\nbreak \"quoted\" a\/b"
+["num"]	-12.5e3
+["name"]	"cash"
+["version",0]	1
+["version",1]	34
+["version",2]	0
+["version"]	[1,34,0]
+["ok"]	true
+["tags","shell"]	"bash"
+["tags","os"]	"windows"
+["tags"]	{"shell":"bash","os":"windows"}
+["empty"]	[]
+["none"]	{}
+["nested","a","b"]	null
+["nested","a"]	{"b":null}
+["nested"]	{"a":{"b":null}}
+["text"]	"line\nbreak \"quoted\" a\/b"
+["num"]	-12.5e3
+[]	{"name":"cash","version":[1,34,0],"ok":true,"tags":{"shell":"bash","os":"windows"},"empty":[],"none":{},"nested":{"a":{"b":null}},"text":"line\nbreak \"quoted\" a\/b","num":-12.5e3}
+["name"]	"cash"
+["version",0]	1
+["version",1]	34
+["version",2]	0
+["ok"]	true
+["tags","shell"]	"bash"
+["tags","os"]	"windows"
+["nested","a","b"]	null
+["text"]	"line\nbreak \"quoted\" a\/b"
+["num"]	-12.5e3
+["name"]	"cash"
+["version",0]	1
+["version",1]	34
+["version",2]	0
+["ok"]	true
+["tags","shell"]	"bash"
+["tags","os"]	"windows"
+["nested","a","b"]	null
+["text"]	"line\nbreak \"quoted\" a/b"
+["num"]	-12.5e3
+[0]	1
+[1]	2
+status: 1
+status: 1
+status: 1
+[0]	"x"
+[1,"y",0]	true
+[1,"y",1]	false
+status: 0

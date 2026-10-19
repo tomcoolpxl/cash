@@ -2570,3 +2570,18 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   ASCII classes, a lone `[` a character. A bracket the regular expression reads as no
   shell does (`[\d]`, its digits; `[a&&b]`, an intersection) is still left to it. A
   test compares the two on 52 brackets and 72 texts.
+- **A corpus round: JSON.sh, argbash, asdf and bash-oo-framework** (2026-10-20, the phase
+  after 1.34.0, item 3, the user's pick of the sources): argbash, asdf and
+  bash-oo-framework, unchanged, and JSON.sh run as a program beside the case that sources it.
+  bash-oo-framework found four bugs. `compgen -A function WORD` gave every function, not
+  those that start with the word, so the framework made methods of all its own helpers,
+  which then called themselves to the limit of 500. A function's name could not end in
+  `=` (`boolean.=() {`); now only a word that starts an assignment is refused, and after
+  `function` any word is a name, as in Bash. An alias after `}`, `fi`, `done` or `esac`
+  was not expanded, where Bash expands it: the framework's `try { ...; } catch { ...; }`
+  closes a subshell with its `catch`. And `exit` ran the ERR trap, as `return` no longer
+  did: the framework's handler threw an exception for its `exit 1`. asdf climbs from
+  `$PWD` with `dirname` until it reaches `/`, which `C:/...` never does; its case puts the
+  files it looks for at the top, and the differences page names it. The corpus test
+  copied every fixture for every case, two thirds of its time; it copies the ones a case
+  names, 30 s against 93.

@@ -1,0 +1,19 @@
+== string
+([0]="123" [1]="99")
+99 Mark
+My 123 Joe is 99 Mark
+status: 0
+== human
+Mark just ate corn, which is the same as corn
+MARK JUST ATE BLUEBERRIES, WHICH IS THE SAME AS BLUEBERRIES
+I'm a human called Mark, 180 cm tall.
+Number is: 150!
+status: 0
+== exitcode
+status: 1
+== try and catch
+in try
+caught, status 
+nothing fails
+after both
+status: 0

@@ -30,10 +30,13 @@ for working through it. What is done, phases and findings, is in DONE.md.
 The user's picks after 1.34.0 (decisions.md, "The phase after 1.34.0"), in this order,
 each described under "Found along the way" until it is done:
 
-1. `--inherit-fd FD` does nothing;
-2. a `case` of more than 64 patterns with brackets or extended globs;
+1. `--inherit-fd FD` does nothing: done (DONE.md);
+2. a `case` of more than 64 patterns with brackets or extended globs: done (DONE.md);
 3. another corpus round: JSON.sh, argbash, asdf's core and bash-oo-framework, the
-   downloads approved in the same pick.
+   downloads approved in the same pick: done 2026-10-20 (DONE.md).
+
+1.34.0 was tagged and not published (its cash.exe went over the size budget); 1.34.1
+carried it, with the fix, to Scoop (2026-10-19).
 
 ## The phase before (2026-10-19, done)
 

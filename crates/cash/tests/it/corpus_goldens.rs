@@ -200,9 +200,10 @@ fn check_case(name: &str, case: &Path, fixtures: &Path) -> Option<String> {
     let expected_status = read(&case.with_file_name(format!("{file}.status")));
     let expected_status = expected_status.trim();
 
+    let script = read(case);
     let scratch = Scratch::new("corpus");
-    copy_fixtures(fixtures, scratch.path());
-    let (stdout, status) = run_case(&read(case), scratch.path());
+    copy_named_fixtures(fixtures, scratch.path(), &script);
+    let (stdout, status) = run_case(&script, scratch.path());
     (stdout != expected || status != expected_status).then(|| {
         format!(
             "{name}: status {status} (oracle {expected_status})\n--- cash\n{stdout}--- oracle\n{expected}"
@@ -218,6 +219,30 @@ fn read(path: &Path) -> String {
 
 /// The fixtures every case runs beside, as `run.ps1` copies them: directories too, for a
 /// program of many files (bats-core, rbenv, git-flow).
+/// The fixtures `script` names, copied into `to`. Each case copied all of them, 389 files
+/// for each of 318 cases: two thirds of the test's time, 93 s against 30 s (2026-10-20).
+/// A case that uses one names it; `run.ps1` copies them all, so a case that needs one it
+/// does not name differs here and is seen.
+fn copy_named_fixtures(from: &Path, to: &Path, script: &str) {
+    for entry in std::fs::read_dir(from)
+        .expect("read the fixtures")
+        .flatten()
+    {
+        let name = entry.file_name();
+        if !script.contains(name.to_string_lossy().as_ref()) {
+            continue;
+        }
+        let path = entry.path();
+        let target = to.join(&name);
+        if path.is_dir() {
+            std::fs::create_dir_all(&target).expect("make a fixture directory");
+            copy_fixtures(&path, &target);
+        } else if path.is_file() {
+            std::fs::copy(&path, &target).expect("copy a fixture");
+        }
+    }
+}
+
 fn copy_fixtures(from: &Path, to: &Path) {
     for entry in std::fs::read_dir(from)
         .expect("read the fixtures")

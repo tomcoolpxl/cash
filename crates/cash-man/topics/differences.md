@@ -18,7 +18,8 @@ and in the fewest places it can.
   split on `:` cuts in two (`help paths`). The same colon ends a `sed` address
   delimited by `:` that holds `$PWD`, and a loop that climbs the tree with
   `dir=${dir%/*}` until `dir` is empty never ends, as `C:` has no `/` left to cut:
-  test for `*/*` instead.
+  test for `*/*` instead. Nor does one that climbs with `dirname` until it reaches
+  `/`, as asdf 0.15 does: `dirname C:` is `C:`, in Git Bash too.
 - Globbing and `find -name` ignore case, as the file system does; `shopt -u nocaseglob`
   turns that off.
 - Reading a variable from Windows, or one cash sets as it starts, ignores case when no
