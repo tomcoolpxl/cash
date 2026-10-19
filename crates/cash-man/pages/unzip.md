@@ -3,17 +3,33 @@ names: unzip zipinfo
 summary: List, test or extract a zip archive, with Info-ZIP's options.
 summary zipinfo: List a zip archive in detail, as `ls -l` does: `unzip -Z`.
 kind: Text and file tools
-see: zip tar
-draft: yes
+see: zip 7z tar
 ---
+
+## Syntax
+
+    unzip [OPTION]... ARCHIVE [MEMBER]... [-x MEMBER...] [-d DIRECTORY]
+    zipinfo [OPTION]... ARCHIVE [MEMBER]...
+
+    unzip site.zip               everything, into this directory
+    unzip site.zip -d out        into out
+    unzip -l site.zip            what is in it
+    unzip -o site.zip 'css/*'    some members, replacing without asking
+    unzip -p site.zip a.txt      a member to standard output
+    zipinfo -l site.zip          modes, sizes, methods
 
 ## Examples
 
-    unzip release.zip -d /tmp/release
-    unzip -l release.zip            # what is in it
-    unzip -o site.zip 'site/css/*'  # some members, replacing without asking
-    unzip -p data.zip report.csv | head
-    zipinfo -l release.zip          # modes, sizes, methods
+An archive listed, tested, and extracted elsewhere:
+
+<!-- parse only: Git Bash has no zip to make the archive with -->
+
+    zip -rq site.zip site
+    unzip -l site.zip
+    unzip -tq site.zip
+    unzip -q site.zip -d out
+    unzip -p site.zip site/a.txt
+    zipinfo -1 site.zip
 
 ## How it works
 
@@ -24,16 +40,51 @@ another; names after the archive choose members, `-x` names leave some out. `-l`
 `-1` (names only) to `-v` (every field of every record).
 
 The options, messages, listings and exit statuses are Info-ZIP UnZip 6.00's and ZipInfo
-3.00's. That takes in `-o`, `-n`, `-f`, `-u`, `-j`, `-C`, `-L`, `-W`, `-q`, `-qq`, `-c`,
-`-D`, `-P`, `-T`, the overwrite question, `UNZIP` and `ZIPINFO`, and zipinfo's `-s`, `-m`,
-`-l`, `-h`, `-t`, `-T` and `-z`. A wildcard in the archive's name (`unzip '*.zip'`) names
-every archive it matches, with UnZip's tally after them.
+3.00's. A wildcard in the archive's name (`unzip '*.zip'`) names every archive it
+matches, with UnZip's tally after them.
 
 It is all in Rust, in cash: stored, deflated, Deflate64, bzip2, LZMA, xz, zstd and PPMd
 members, PKZIP 1's shrunk, reduced and imploded ones, Zip64 archives, split archives
 (read from all their parts), and both the traditional encryption and WinZip's AES are
 read; what Windows' Explorer, `tar.exe`, 7-Zip, WinZip and Info-ZIP's zip write, cash
 reads. Info-ZIP's own unzip reads fewer of these.
+
+## Options
+
+unzip:
+
+    -d DIRECTORY    Extract into DIRECTORY.
+    -x MEMBER...    Leave these members out.
+    -l              List the members.
+    -v              List them in detail.
+    -t              Test every member's data.
+    -p              Members to standard output, nothing else.
+    -c              Members to standard output, with their names.
+    -z              The archive's comment.
+    -o              Replace files without asking.
+    -n              Never replace a file.
+    -f              Freshen: only files that are there, if older.
+    -u              Update: files that are older or not there.
+    -j              Every member into one directory, no paths.
+    -C              Match names case aside.
+    -L              Names in lower case.
+    -P PASSWORD     The password of an encrypted archive.
+    -q, -qq         Quiet, quieter.
+    -Z              List as zipinfo does.
+
+zipinfo:
+
+    -1              Names only.
+    -s              Short, as ls -l does: the default.
+    -m              Medium: with the compression ratio.
+    -l              Long: with the compressed size.
+    -v              Every field of every record.
+    -h, -t          The header line, the totals line.
+    -T              Times as sortable numbers.
+    -z              The comment.
+
+Exit status: Info-ZIP UnZip's: 0; 1 for a warning; 9 when the archive is not there; 11
+when no member matches; others for errors.
 
 ## Different in cash
 

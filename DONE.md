@@ -2422,3 +2422,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   not have, so a Makefile's `install -c -o root -m 755 prog DIR` failed: it takes `-c`,
   `-p`, `-b`, `--backup`, `-S`, `-T`, and `-o`/`-g` said once, as chown says it; and the
   copy gets the time it is made, as GNU gives it, unless `-p`.
+- **The manual's eighth twenty pages written in full** (2026-10-19, batch 8): 7z, bzip2,
+  xz, zstd, zip, unzip (with zipinfo), rar (with unrar), chown, shred, sync, tsort, pr,
+  ptx, arch, hostid, logname, users, who, pinky and logger. Every option was run in
+  cash, and in Git Bash where it has the tool; the examples of tools it lacks (7z, rar,
+  zip, zstd) are only parsed. Three tools did not do what their options said and now
+  do: `sync` and `sync FILE` failed with status 5 unelevated, as uutils flushed every
+  volume, and `-d` did nothing; cash's own `sync` flushes the file, and the drives
+  Windows lets it. `pr -2` put its second column at 40 where GNU puts it at 36, `-s`
+  padded, `-o` came before every column, and `pr -m -t` printed a row of padding to the
+  page's end; its columns are GNU's bytes now. `who`, `pinky` and `users` read
+  `quser.exe`'s text: in TODO.md, with GNU's options they lack.

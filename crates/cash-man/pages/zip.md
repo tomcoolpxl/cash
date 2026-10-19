@@ -2,17 +2,30 @@
 name: zip
 summary: Pack files into a zip archive, or update or delete its members, with Info-ZIP's options.
 kind: Text and file tools
-see: unzip tar gzip
-draft: yes
+see: unzip 7z tar gzip
 ---
+
+## Syntax
+
+    zip [OPTION]... ARCHIVE [FILE]...
+
+    zip -r site.zip site/            a directory, whole
+    zip -u site.zip site/index.html  only what is new or changed
+    zip -d site.zip 'site/tmp/*'     members out
+    zip -9 -x '*.log' logs.zip logs/*    smallest, some left out
+    zip -r - src > src.zip           to standard output
 
 ## Examples
 
-    zip -r site.zip site/            # a directory, whole
-    zip -u site.zip site/index.html  # only if changed
-    zip -d site.zip 'site/tmp/*'     # members out
-    zip -rq - src | ssh host 'cat > src.zip'
-    zip -9 -x '*.log' logs.zip logs/*
+A directory archived, listed, and a member taken out:
+
+<!-- parse only: Git Bash has no zip to compare with -->
+
+    mkdir -p site; printf 'a\n' > site/a.txt; printf 'b\n' > site/b.log
+    zip -rq site.zip site
+    unzip -l site.zip
+    zip -d site.zip 'site/*.log'
+    zip -rq -e secret.zip private/
 
 ## How it works
 
@@ -23,16 +36,48 @@ archive hold exactly the files named. `.zip` is added to an archive's name that 
 suffix. `-` as the archive writes it to standard output; `-` as a file reads standard
 input.
 
-The options, messages and exit statuses are Info-ZIP zip 3.0's. That takes in `-0` to
-`-9`, `-j`, `-D`, `-X`, `-y`, `-m`, `-q`, `-v`, `-x` and `-i` patterns, `-@`, `-t` and
-`-tt` dates, `-n` suffixes, `-Z store|deflate|bzip2`, `-P` and `-e`, `-z` and `-c`
-comments, `-l` and `-ll` line ends, `-o`, `-T`, `-sf`, `-MM` and `--out`. `-s SIZE` writes
-a split archive (`NAME.z01`, `NAME.z02`, … `NAME.zip`), `-s 0 SPLIT.zip --out ONE.zip`
+The options, messages and exit statuses are Info-ZIP zip 3.0's. `-s SIZE` writes a
+split archive (`NAME.z01`, `NAME.z02`, ... `NAME.zip`), `-s 0 SPLIT.zip --out ONE.zip`
 makes one archive of it again, and `-F` or `-FF` with `--out` salvages a damaged one.
 Stored archives without extra fields (`-0 -X`) are zip's byte for byte, split ones too.
 
 It is all in Rust, in cash. What cash writes, Windows' Explorer, `tar.exe`, 7-Zip and
 Info-ZIP's unzip read, with Unix modes and times.
+
+## Options
+
+    -r                  Directories, whole.
+    -u                  Add what is new or changed.
+    -f                  Replace what changed; add nothing.
+    -d                  Delete the members named.
+    -FS                 The archive holds exactly the files named.
+    -m                  Move: remove the files once archived.
+    -0 ... -9           Store, to smallest: 6 without.
+    -Z METHOD           store, deflate or bzip2.
+    -j                  Names without their directories.
+    -D                  No entries for directories.
+    -x PATTERN...       Leave these out.
+    -i PATTERN...       Only these.
+    -@                  Read the names from standard input.
+    -n SUFFIXES         Store these without compressing: .zip:.png
+    -e                  Encrypt, the password asked for.
+    -P PASSWORD         Encrypt with PASSWORD.
+    -z                  An archive comment, from standard input.
+    -c                  A comment for each member.
+    -l, -ll             LF to CRLF, CRLF to LF, in text.
+    -X                  No Unix ids or times in extra fields.
+    -y                  Store a link as a link.
+    -t DATE, -tt DATE   Only files changed on or after, before, DATE.
+    -o                  The archive's time the newest member's.
+    -T                  Test the archive once written.
+    -s SIZE             Split into parts of SIZE: 100m.
+    -sf                 List the files that would go in.
+    --out FILE          Write the result to FILE.
+    -F, -FF             Salvage a damaged archive, with --out.
+    -q                  Quiet.
+    -v                  Say more.
+
+Exit status: 0; 12 when there was nothing to do; Info-ZIP's other codes for errors.
 
 ## Different in cash
 

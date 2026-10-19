@@ -96,6 +96,14 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **`who`, `pinky` and `users` read `quser.exe`'s text** (2026-10-19, found writing
+  their man pages): its dates follow the machine's locale (`15/10/2026 13:58`, where
+  GNU's who writes `2026-10-15 13:58`), its columns differ by language, and Windows
+  Home has no `quser.exe`, so there they name this session's account alone. Windows'
+  session API (`WTSEnumerateSessionsW`, `WTSQuerySessionInformationW`) gives the
+  sessions, users, stations and logon times directly, and with it GNU's options cash
+  lacks: `who -b` (boot time), `-a`, `-u`, `-T`; `pinky -l`, `-s`, `-f`, `-w`. Medium.
+
 - **`split --filter` is refused** (2026-10-19, found checking split's options for its
   man page): uutils' `split` answers `--filter is currently not supported in this
   platform` on Windows, where GNU's pipes each piece into the command, `$FILE` naming

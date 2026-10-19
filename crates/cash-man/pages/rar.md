@@ -4,10 +4,29 @@ summary: Add to, list, test, extract or change a RAR archive, with rar's command
 summary unrar: List, test or extract a RAR archive, with unrar's commands and switches.
 kind: Text and file tools
 see: 7z zip tar
-draft: yes
 ---
 
+## Syntax
+
+    rar COMMAND [SWITCH]... ARCHIVE [NAME]... [DIRECTORY/]
+    unrar COMMAND [SWITCH]... ARCHIVE [NAME]... [DIRECTORY/]
+
+    rar a ARCHIVE NAMES    add files and directories
+    rar u ARCHIVE NAMES    add what is new or newer
+    rar l ARCHIVE          list it
+    rar t ARCHIVE          test it
+    rar x ARCHIVE DIR/     extract it, with its directories, into DIR
+    rar e ARCHIVE          extract it, every file into one directory
+    rar p ARCHIVE NAME     print a file
+    rar d ARCHIVE NAMES    delete files from it
+    unrar x ARCHIVE        extract, with unrar's commands alone
+
 ## Examples
+
+Listing, extracting, adding, and the rest:
+
+<!-- parse only: Git Bash has no rar to compare with -->
+
 
     rar l archive.rar
     rar x archive.rar out/          # with its directories, into out
@@ -101,6 +120,39 @@ recovery records and `.rev` volumes, and encrypted data and headers; damaged hea
 read as far as they go. It writes RAR 5: a stored archive (`-m0`) is WinRAR's byte for
 byte, volumes too; a compressed one holds the same files, packed by other code. An
 update copies the files already archived as they are, not packed again, as WinRAR does.
+
+## Options
+
+Commands: `a` add, `u` update, `f` freshen, `m` and `mf` move, `d` delete, `l`, `lt`,
+`lb`, `v` list, `t` test, `x` and `e` extract, `p` print, `c` and `cw` comments, `rn`
+rename, `k` lock, `rr` recovery record, `r` repair, `rc` rebuild volumes, `ch` change,
+`i` find a string. The switches most used:
+
+    -r             Every directory below, for a wildcard.
+    -x NAME        Leave NAME out.
+    -n NAME        Only NAME.
+    -m0 ... -m5    Store, to smallest: 3 without.
+    -s             A solid archive.
+    -p[PASSWORD]   Encrypt the data; asked for when left out.
+    -hp[PASSWORD]  Encrypt the names too.
+    -v SIZE        Volumes of SIZE: -v100m.
+    -rr[N%]        A recovery record of N%.
+    -htb           BLAKE2 checksums, not CRC32.
+    -k             Lock the archive.
+    -t             Test what was written.
+    -df            Delete what was added.
+    -ep, -ep1      Names without their paths, without the base.
+    -ad            Each archive's files in a directory named after it.
+    -o+, -o-       Replace files, keep them, without asking.
+    -y             Yes to every question.
+    -ol            Store links as links.
+    -idq, -inul    Fewer messages, none.
+    -cfg-          Read no default switches.
+    --             Stop reading switches.
+
+Exit status: WinRAR's: 0; 1 for a warning; 2 for a fatal error; 3 for a CRC error;
+5 when a file cannot be written; 6 when one cannot be opened; 7 for a bad command line;
+10 when no file matched; 11 for a wrong password.
 
 ## Different in cash
 
