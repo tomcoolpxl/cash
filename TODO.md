@@ -46,7 +46,7 @@ DONE.md); then the man batches straight on (step 7), before items 2 to 5.
       (2026-10-18, DONE.md); then a release;
    7. the next batches, about 20 pages each: done (2026-10-19, batches 2 to 10,
       DONE.md); every page is written in full, none is a draft. Released as 1.29.0
-      (to batch 4) and 1.30.0 (to batch 7); batches 8 to 10 go in the next release.
+      (to batch 4), 1.30.0 (to batch 7) and 1.31.0 (batches 8 to 10).
 2. **Document the two spellings a directory takes in `PATH`**: done (2026-10-19,
    DONE.md): `help paths`, `help differences` and spec §4 row 2.
 3. **zstd's real levels**: before the switch, its side effects are looked at: the size
@@ -66,7 +66,9 @@ DONE.md); then the man batches straight on (step 7), before items 2 to 5.
    release then needs a winget pull request of its own, and a winget install meets the
    first-start offer that changes the user's `PATH` and default Terminal profile.
 5. **More corpus rounds**: permissively licensed real scripts and cases of cash's own
-   on the Bash manual (`tests/corpus/SOURCES.md`).
+   on the Bash manual (`tests/corpus/SOURCES.md`). A round done (2026-10-19, DONE.md):
+   wait-for-it, shUnit2, shFlags, bashmarks and git-extras, four fixes. A next round
+   needs the user's yes for its downloads.
 
 ## Left over from finished phases
 

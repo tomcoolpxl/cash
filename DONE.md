@@ -2455,3 +2455,16 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   adds it in the Unix spelling. Spelling assigned entries `/c/` was turned down, as
   `case ":$PATH:" in *":$HOME/bin:"*`, the idiom that adds a directory once, would
   then never find what it added. In `help paths`, `help differences` and spec §4 row 2.
+- **A corpus round: five real scripts** (2026-10-19, TODO's item 5, the user's pick of
+  the sources): wait-for-it, shUnit2, shFlags, bashmarks and two git-extras commands,
+  unchanged, with their terms in `tests/corpus/SOURCES.md`. Four fixes came of it.
+  `exec mktemp` ran Git's GNU mktemp, whose `/tmp` name cash's tools cannot open: a
+  bundled tool's name after `exec` is cash's tool. With a here-document pending on the
+  line, the words inside a `${...}` or `$(...)` were held for after its body:
+  `cat <<EOF >"${f}"` read `${}`. `/bin/rm` and `/usr/bin/env` were not found: such a
+  path runs cash's command when no file is there (the user's pick, D7). Every variable
+  was read in another case, so shflags' `FLAGS_HELP` read its `FLAGS_help`: only a
+  variable from Windows or cash's own start is now (the user's pick, D31). A case may
+  give itself more time with a `# timeout: N` line. git-summary's author column is
+  matched without its padding: util-linux `column` pads a cell holding a tab as if the
+  tab were its escape.
