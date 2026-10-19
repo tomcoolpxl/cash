@@ -426,11 +426,7 @@ fn check_platform(findings: &mut Vec<Finding>) {
 
 /// Every name cash answers for itself, without building a shell.
 pub(crate) fn builtin_names() -> std::collections::HashSet<String> {
-    let mut names: std::collections::HashSet<String> = cash_builtins::default_builtins::<
-        cash_core::extensions::DefaultShellExtensions,
-    >(cash_builtins::BuiltinSet::BashMode)
-    .into_keys()
-    .collect();
+    let mut names = cash_shell::entry::default_builtin_names(cash_builtins::BuiltinSet::BashMode);
 
     // The bundled utilities (D48) register as builtins too, but only once their registry
     // is installed. Installing is idempotent, so doing it here makes the diagnostic

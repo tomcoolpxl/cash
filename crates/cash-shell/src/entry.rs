@@ -20,8 +20,17 @@ use std::io::IsTerminal;
 static TRACE_EVENT_CONFIG: LazyLock<Arc<tokio::sync::Mutex<Option<events::TraceEventConfig>>>> =
     LazyLock::new(|| Arc::new(tokio::sync::Mutex::new(None)));
 
-type BrushShellExtensions = cash_core::extensions::ShellExtensionsImpl<error_formatter::Formatter>;
+pub(crate) type BrushShellExtensions =
+    cash_core::extensions::ShellExtensionsImpl<error_formatter::Formatter>;
 type BrushShell = cash_core::Shell<BrushShellExtensions>;
+
+/// The names of the builtins a shell of `set` has, made for the shell's own extensions:
+/// made for any other, every builtin is compiled again, megabytes of `cash.exe`.
+pub fn default_builtin_names(set: cash_builtins::BuiltinSet) -> std::collections::HashSet<String> {
+    cash_builtins::default_builtins::<BrushShellExtensions>(set)
+        .into_keys()
+        .collect()
+}
 
 // WARN: this implementation shadows `clap::Parser::parse_from` one so it must be defined
 // after the `use clap::Parser`

@@ -44,15 +44,12 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
 ///
 /// Asked by `env` and `timeout` of the command they run. Making the builtins takes a
 /// while on a debug build, and every cash makes them as its shell starts, so their names
-/// are kept from then; a process that has made none makes them once.
+/// are kept from then; a process that has made none makes them once. `SE` is to be the
+/// shell's own: each other one compiles every builtin again, megabytes of `cash.exe`.
 #[must_use]
-pub fn is_default_builtin(name: &str, set: BuiltinSet) -> bool {
+pub fn is_default_builtin<SE: cash_core::ShellExtensions>(name: &str, set: BuiltinSet) -> bool {
     names_of(set)
-        .get_or_init(|| {
-            make_default_builtins::<cash_core::extensions::DefaultShellExtensions>(set)
-                .into_keys()
-                .collect()
-        })
+        .get_or_init(|| make_default_builtins::<SE>(set).into_keys().collect())
         .contains(name)
 }
 
@@ -614,11 +611,19 @@ mod tests {
     #[test]
     fn a_builtin_is_known_by_its_name() {
         for set in [BuiltinSet::BashMode, BuiltinSet::ShMode] {
-            assert!(is_default_builtin("cd", set));
-            assert!(is_default_builtin("time", set));
-            assert!(!is_default_builtin("whoami.exe", set));
+            assert!(is_default_builtin::<
+                cash_core::extensions::DefaultShellExtensions,
+            >("cd", set));
+            assert!(is_default_builtin::<
+                cash_core::extensions::DefaultShellExtensions,
+            >("time", set));
+            assert!(!is_default_builtin::<
+                cash_core::extensions::DefaultShellExtensions,
+            >("whoami.exe", set));
             let made = default_builtins::<cash_core::extensions::DefaultShellExtensions>(set);
-            assert!(made.keys().all(|name| is_default_builtin(name, set)));
+            assert!(made.keys().all(|name| is_default_builtin::<
+                cash_core::extensions::DefaultShellExtensions,
+            >(name, set)));
         }
     }
 

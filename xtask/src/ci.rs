@@ -98,6 +98,10 @@ fn steps(lane: Lane, verbose: bool) -> Vec<Step<'static>> {
             Box::new(move || check::run(&CheckCommand::ProcessState, verbose)),
         ),
         (
+            "One shell extensions check",
+            Box::new(move || check::run(&CheckCommand::OneExtensions, verbose)),
+        ),
+        (
             "Lint check",
             Box::new(move || check::run(&CheckCommand::Lint(LintArgs::default()), verbose)),
         ),

@@ -29,6 +29,9 @@ pub enum CheckCommand {
     /// Check that the shell's crates take the working directory and environment from the
     /// shell, not from the process.
     ProcessState,
+    /// Check that no crate but `cash-core` names `DefaultShellExtensions` outside its tests,
+    /// which compiles every builtin again for it.
+    OneExtensions,
 }
 
 /// Options for the build check.
@@ -62,6 +65,7 @@ pub fn run(cmd: &CheckCommand, verbose: bool) -> Result<()> {
         CheckCommand::Lint(args) => check_lint(&sh, args, verbose),
         CheckCommand::UnusedDeps => check_unused_deps(&sh, verbose),
         CheckCommand::ProcessState => check_process_state(verbose),
+        CheckCommand::OneExtensions => check_one_extensions(verbose),
         CheckCommand::Build(args) => check_build(&sh, args, verbose),
     }
 }
@@ -289,6 +293,82 @@ fn takes_process_state(line: &str) -> bool {
     })
 }
 
+/// The shell's crates generic over the shell's extensions are compiled once for each type
+/// they are used with, in each crate that uses it. The shell has its own (`cash-shell`'s
+/// `BrushShellExtensions`); a call with `DefaultShellExtensions` outside a test compiled
+/// every builtin again: 1.34.0's `cash.exe` was 4.7 MB larger for `env`'s question, and
+/// `cash doctor`'s list of names cost as much again.
+const ONE_EXTENSIONS_NAME: &str = "DefaultShellExtensions";
+
+/// Fails on a crate but `cash-core`, which defines it, that names
+/// [`ONE_EXTENSIONS_NAME`] in code that is not a test: before its file's
+/// `#[cfg(test)]`, or out of `tests` and `benches`.
+fn check_one_extensions(verbose: bool) -> Result<()> {
+    let root = crate::common::find_workspace_root()?;
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(root.join("crates")).context("reading crates")? {
+        let crate_dir = entry?.path();
+        if crate_dir
+            .file_name()
+            .is_some_and(|name| name == "cash-core")
+        {
+            continue;
+        }
+        let src = crate_dir.join("src");
+        if src.is_dir() {
+            collect_rust_files(&src, &mut files)?;
+        }
+    }
+    files.sort();
+
+    let mut found = Vec::new();
+    for file in &files {
+        let text =
+            std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+        for (index, line) in text.lines().enumerate() {
+            let code = line.trim_start();
+            if code.starts_with("#[cfg(test)]") {
+                break;
+            }
+            if !code.starts_with("//") && names_other_extensions(code) {
+                let shown = file.strip_prefix(&root).unwrap_or(file);
+                found.push(format!("{}:{}: {}", shown.display(), index + 1, code));
+            }
+        }
+    }
+
+    if verbose {
+        eprintln!("Checked {} files for {ONE_EXTENSIONS_NAME}.", files.len());
+    }
+    if found.is_empty() {
+        eprintln!("One shell extensions check passed.");
+        return Ok(());
+    }
+    for line in &found {
+        eprintln!("{line}");
+    }
+    anyhow::bail!(
+        "{} line(s) name {ONE_EXTENSIONS_NAME} outside cash-core and the tests, which compiles \
+         every builtin again for it; use the shell's own extensions, as \
+         `cash_shell::entry::default_builtin_names` does.",
+        found.len()
+    )
+}
+
+/// Whether `code` names [`ONE_EXTENSIONS_NAME`] other than as the default of a type
+/// parameter (`SE: ShellExtensions = DefaultShellExtensions`), which compiles nothing
+/// until code leaves the parameter out, and that code names the type.
+fn names_other_extensions(code: &str) -> bool {
+    code.match_indices(ONE_EXTENSIONS_NAME).any(|(at, _)| {
+        let before = code
+            .get(..at)
+            .unwrap_or_default()
+            .trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == ':')
+            .trim_end();
+        !(before.ends_with('=') && before.contains("ShellExtensions"))
+    })
+}
+
 /// Every `.rs` file under `dir`.
 fn collect_rust_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) -> Result<()> {
     for entry in std::fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
@@ -300,4 +380,24 @@ fn collect_rust_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The two calls that compiled the builtins again are caught; a default is not.
+    #[test]
+    fn a_call_with_the_default_extensions_is_caught() {
+        assert!(names_other_extensions(
+            "|| cash_builtins::default_builtins::<cash_core::extensions::DefaultShellExtensions>("
+        ));
+        assert!(names_other_extensions(
+            "cash_core::extensions::DefaultShellExtensions,"
+        ));
+        assert!(!names_other_extensions(
+            "pub type ShellRef<SE: cash_core::ShellExtensions = cash_core::extensions::DefaultShellExtensions> ="
+        ));
+        assert!(!names_other_extensions("let x = 1;"));
+    }
 }
