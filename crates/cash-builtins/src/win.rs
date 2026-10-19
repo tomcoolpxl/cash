@@ -103,7 +103,7 @@ impl builtins::Command for WinPathCommand {
     }
 }
 
-/// Open a file or URL with its default handler — the Windows `xdg-open`.
+/// Open a file or URL with its default handler: the Windows `xdg-open`.
 #[derive(Parser)]
 pub(crate) struct StartCommand {
     /// The file, directory or URL to open.

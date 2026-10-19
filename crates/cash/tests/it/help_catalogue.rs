@@ -142,6 +142,15 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
     assert!(!text.contains('\x1b'), "{text}");
 }
 
+/// No builtin's `--help` has an em dash: output uses a plain hyphen (the user,
+/// 2026-10-18). `start`'s had one, from its doc comment.
+#[test]
+fn no_builtins_help_has_an_em_dash() {
+    let out =
+        run("for c in $(compgen -b); do $c --help 2>&1 </dev/null | grep -q '—' && echo $c; done");
+    assert_eq!(out.stdout, "", "{}", out.stderr);
+}
+
 /// The F1 screen's text is beside the topics but not one of them: `help topics` does not
 /// list it, and it speaks to the user as the rest of help does, with no decision
 /// numbers or file names of the project's own.
