@@ -645,8 +645,13 @@ impl Spec {
                 }
                 CompleteAction::Function => {
                     // Functions are stored unordered; bash enumerates them sorted by name.
+                    // Those that start with the word, as for every other action: every
+                    // function was given, so bash-oo-framework's `compgen -A function
+                    // "array."` made methods of all its helpers.
                     for (name, _) in shell.funcs().iter().sorted_by_key(|v| v.0) {
-                        candidates.push(name.to_owned());
+                        if name.starts_with(token) {
+                            candidates.push(name.to_owned());
+                        }
                     }
                 }
                 CompleteAction::Group => {

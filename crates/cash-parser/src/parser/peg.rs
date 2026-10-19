@@ -497,13 +497,13 @@ peg::parser! {
         // (bash rejects e.g. `for (){ :; }`). With the 'function' keyword, reserved words are
         // allowed as function names (bash accepts e.g. `function for { :; }`).
         rule function_definition() -> ast::FunctionDefinition =
-            specific_word("function") fname:fname() body:function_parens_and_body() {
+            specific_word("function") fname:any_fname() body:function_parens_and_body() {
                 ast::FunctionDefinition { fname, body }
             } /
             fname:non_reserved_fname() body:function_parens_and_body() {
                 ast::FunctionDefinition { fname, body }
             } /
-            specific_word("function") fname:fname() linebreak() body:function_body() {
+            specific_word("function") fname:any_fname() linebreak() body:function_body() {
                 ast::FunctionDefinition { fname, body }
             } /
             expected!("function definition")
@@ -516,10 +516,13 @@ peg::parser! {
             c:compound_command() r:redirect_list()? { ast::FunctionBody(c, r) }
 
         rule fname() -> ast::Word =
-            // Special-case: don't allow it to end with an equals sign, to avoid the challenge of
-            // misinterpreting certain declaration assignments as function definitions.
-            // TODO(parser): Find a way to make this still work without requiring this targeted exception.
-            w:[Token::Word(word, l) if !word.ends_with('=')] { ast::Word::with_location(word, l) }
+            // Not the start of an assignment, `x=` of `x=()`, as in Bash; a word that only
+            // ends in `=` is a name (bash-oo-framework's `boolean.=() {`).
+            w:[Token::Word(word, l) if !is_assignment_start(word)] { ast::Word::with_location(word, l) }
+
+        // After `function`, whatever word follows is the name, as Bash has it: `function h=`.
+        rule any_fname() -> ast::Word =
+            w:[Token::Word(word, l)] { ast::Word::with_location(word, l) }
 
         rule non_reserved_fname() -> ast::Word =
             !reserved_word() w:fname() { w }
@@ -843,6 +846,14 @@ fn add_pipe_extension_redirection(c: &mut ast::Command) {
 #[inline]
 fn locations_are_contiguous(loc_left: &crate::SourceSpan, loc_right: &crate::SourceSpan) -> bool {
     loc_left.end.index == loc_right.start.index
+}
+
+/// Whether `word` starts an assignment, `name=`, `name+=` or `a[1]=`, which Bash never
+/// takes for a function's name.
+fn is_assignment_start(word: &str) -> bool {
+    word.strip_suffix('=')
+        .map(|name| name.strip_suffix('+').unwrap_or(name))
+        .is_some_and(is_io_variable_name)
 }
 
 /// Whether `name`, from `{name}>file`, is what Bash allocates a descriptor into: a

@@ -1526,6 +1526,17 @@ fn compgen_wordlist_filtering() {
 }
 
 #[test]
+fn compgen_a_function_gives_the_functions_that_start_with_the_word() {
+    // Every function was given, whatever the word: bash-oo-framework asks for its type's
+    // methods with `compgen -A function "array."`, and made methods of all its helpers.
+    let out = cash(
+        r#"f.x() { :; }; f.y() { :; }; fax() { :; }; g() { :; }
+           compgen -A function f.; echo "none: $(compgen -A function nothing; echo $?)""#,
+    );
+    assert_eq!(out.stdout, "f.x\nf.y\nnone: 1");
+}
+
+#[test]
 fn compgen_a_service_gives_the_network_services_as_git_bash_does() {
     // Windows' own `drivers\etc\services`, a name once for each of its lines, as Git Bash
     // 5.3 gives `ssh`, `ssdp` (tcp) and `ssdp` (udp).

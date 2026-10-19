@@ -896,7 +896,8 @@ impl Execute for ast::Pipeline {
         // We reuse `suppress_errexit` here because bash suppresses the ERR trap in
         // exactly the same contexts it suppresses errexit (conditionals, `!`-prefixed
         // pipelines, etc.).
-        // A `return` leaves before Bash reaches its ERR check, so it never fires ERR.
+        // A `return` or an `exit` leaves before Bash reaches its ERR check, so neither fires
+        // ERR: `exit 1` ran bash-oo-framework's ERR handler, which threw an exception.
         if !result.is_success()
             && !params.suppress_errexit
             && !self.bang
@@ -905,6 +906,7 @@ impl Execute for ast::Pipeline {
             && !matches!(
                 result.next_control_flow,
                 crate::ExecutionControlFlow::ReturnFromFunctionOrScript
+                    | crate::ExecutionControlFlow::ExitShell
             )
         {
             if shell.traps().handles(crate::traps::TrapSignal::Err) {

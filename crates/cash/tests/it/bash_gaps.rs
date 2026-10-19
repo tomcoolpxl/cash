@@ -2587,3 +2587,36 @@ fn declare_f_with_extdebug_gives_the_line_and_file() {
         (0, "f 1 defs.sh\ng 3 defs.sh\nf".into())
     );
 }
+
+#[test]
+fn a_function_name_may_end_in_an_equals_sign() {
+    // bash-oo-framework defines `boolean.=() {`: a word that ends in `=` is a name unless
+    // it starts an assignment, `x=` of `x=()`; after `function` any word is.
+    let (status, out) = output(
+        "boolean.=() { echo eq; }; boolean.=; function h=() { echo h; }; type -t h=; \
+         x=(); echo \"x: ${#x[@]}\"",
+    );
+    assert_eq!((status, out.as_str()), (0, "eq\nfunction\nx: 0"));
+}
+
+#[test]
+fn an_alias_after_a_closing_word_is_expanded() {
+    // Bash looks for an alias after `}`, `fi`, `done` and `esac`: bash-oo-framework's
+    // `try { ...; } catch { ...; }`, whose `catch` closes the subshell `try` opened.
+    let (status, out) = output(
+        "shopt -s expand_aliases; alias try='( '; alias catch=') || '\n\
+         try { echo body; false; } catch { echo caught; }\n\
+         try { echo fine; } catch { echo not; }",
+    );
+    assert_eq!((status, out.as_str()), (0, "body\ncaught\nfine"));
+}
+
+#[test]
+fn exit_does_not_run_the_err_trap() {
+    // `exit` leaves before Bash checks for ERR, as `return` does: bash-oo-framework's
+    // ERR handler threw an exception for its `exit 1`, in a function too with errtrace.
+    let (status, out) = output(
+        "trap 'echo ERR $?' ERR; (exit 4); f() { exit 3; }; set -E; (f); echo \"status $?\"; exit 2",
+    );
+    assert_eq!((status, out.as_str()), (2, "ERR 4\nERR 3\nstatus 3"));
+}

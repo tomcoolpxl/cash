@@ -362,6 +362,9 @@ fn read_word(word: &str, reading: &mut Reading) {
     match word {
         // A command follows these.
         "if" | "then" | "else" | "elif" | "do" | "while" | "until" | "!" | "{" | "time" => {}
+        // And Bash looks for an alias after these too (`reserved_word_acceptable`), where
+        // only one could stand: bash-oo-framework's `try { ...; } catch { ...; }`.
+        "}" | "fi" | "done" => {}
         "case" => {
             reading.case_depth += 1;
             reading.after_case = true;
@@ -382,8 +385,9 @@ fn read_word(word: &str, reading: &mut Reading) {
     }
 }
 
+/// `esac`, after which Bash looks for an alias, as after `fi` and `done`.
 const fn close_case(reading: &mut Reading) {
     reading.case_depth = reading.case_depth.saturating_sub(1);
     reading.expect_pattern = false;
-    reading.command_position = false;
+    reading.command_position = true;
 }
