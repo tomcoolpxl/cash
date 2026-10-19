@@ -3,15 +3,24 @@ name: xdg-open
 summary: Open a file, directory or URL with its default program (`start`, under the name scripts try first).
 kind: Windows commands
 see: start
-draft: yes
 ---
+
+## Syntax
+
+    xdg-open TARGET
+
+    xdg-open report.pdf    a file in its program
+    xdg-open .             this directory in Explorer
+    xdg-open https://...   a page in the browser
 
 ## Examples
 
+A file and a page, and how cross-platform scripts look for it:
+
+<!-- parse only: opens windows on the reader's desktop -->
+
     xdg-open report.pdf
-    xdg-open .  # this directory in Explorer
     xdg-open https://github.com/tomcoolpxl/cash
-    # how scripts probe
     if command -v xdg-open >/dev/null; then xdg-open "$url"; fi
 
 ## How it works
@@ -29,6 +38,15 @@ draft: yes
 - 2: the file does not exist.
 - 4: Windows could not open it: no program is registered for it, or that program
   refused.
+
+## Options
+
+    --help       The usage.
+    --manual     The manual, as xdg-open's.
+    --version    The version.
+
+Exit status: 0 when the program was started; 1 for a mistake on the command line; 2
+when the file does not exist; 4 when Windows could not open it.
 
 ## Different in cash
 

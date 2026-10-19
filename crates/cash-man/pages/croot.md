@@ -3,8 +3,24 @@ name: croot
 summary: Pick a file or directory in a tree, and print it (Alt-E opens it on the command line).
 kind: cash's shell commands
 see: cd cdh prevd z keys
-draft: yes
 ---
+
+## Syntax
+
+    croot [-d | -f] [DIR]
+
+    croot           pick a directory below this one, and print it
+    croot -f ~/src  a file or a directory, below ~/src
+    Alt-E           the picker below the command line
+
+## Examples
+
+A directory picked into a variable, then a file:
+
+<!-- parse only: opens a picker on the reader's screen -->
+
+    dir=$(croot) && cd "$dir"
+    code "$(croot -f ~/src)"
 
 ## How it works
 
@@ -64,3 +80,11 @@ your home directory, and as `C:/…` otherwise; it is quoted only when it needs 
 showing directories only (`-d`, the default) or files and directories too (`-f`). It prints
 what you pick on standard output, so `cd "$(croot)"` and `vim "$(croot -f)"` work. It
 exits 1 when closed without a pick.
+## Options
+
+    -d    Directories only: the default.
+    -f    Files and directories.
+    DIR   Start there: the current directory without.
+
+Exit status: 0 when something was picked; 1 when the picker closed without a pick.
+

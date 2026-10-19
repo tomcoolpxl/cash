@@ -3,17 +3,35 @@ name: pstree
 summary: Show processes as a tree of parents and children.
 kind: Processes and network
 see: ps top kill
-draft: yes
 ---
+
+## Syntax
+
+    pstree [-p] [PID]
+
+    pstree         every process, as a forest of trees
+    pstree -p $$   this shell and what it started, with ids
 
 ## Examples
 
-    pstree -p $$          # this shell and what it started
+This shell's tree, with the ids:
+
+<!-- parse only: Git Bash has no pstree to compare with -->
+
+    pstree -p $$
+    pstree | head -20
 
 ## How it works
 
 `pstree` draws Windows processes as a tree of parents and children, from every root or
 from one pid. `-p` adds each process's id.
+
+## Options
+
+    -p     Each process's id after its name.
+    PID    Start at this process, not at every root.
+
+Exit status: 0, or 1 for a PID that is not running.
 
 ## Different in cash
 

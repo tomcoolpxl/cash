@@ -3,15 +3,31 @@ name: abbr
 summary: Manage fish-style abbreviations, expanded as you type.
 kind: cash's shell commands
 see: alias keys config
-draft: yes
 ---
+
+## Syntax
+
+    abbr [-a] [--position command|anywhere] NAME EXPANSION...
+    abbr -e NAME...
+    abbr [-s] | -l
+    abbr -q NAME...
+    abbr -r OLD NEW
+
+    abbr -a gco git checkout    gco becomes git checkout as you type
+    abbr                        every abbreviation, as abbr -a lines
+    abbr -e gco                 remove one, from the file too
 
 ## Examples
 
+Added, listed by name and in full, asked about, renamed and removed:
+
     abbr -a gco git checkout
     abbr -a --position anywhere -- -h --help
-    abbr                     # list them, as lines that define them again
-    abbr -e gco              # remove one, from the file too
+    abbr -l
+    abbr
+    abbr -q gco && echo "gco is an abbreviation"
+    abbr -r gco gch
+    abbr -e gch
 
 ## How it works
 
@@ -40,3 +56,15 @@ not read the file, since nothing expands there.
 `abbr` is cash's own; Bash does not have it. Guard it, or put it in `~/.cashrc`:
 `command -v abbr >/dev/null && abbr -a gco git checkout`. Or define it once at the
 prompt and let the file keep it.
+## Options
+
+    -a, --add                  Add NAME, expanding to EXPANSION.
+    --position WHERE           command (the default) or anywhere.
+    -e, --erase                Remove each NAME.
+    -s, --show                 Every one, as abbr -a lines: the default.
+    -l, --list                 The names alone.
+    -q, --query                Whether each NAME is an abbreviation.
+    -r, --rename               Rename OLD to NEW.
+
+Exit status: 0; 1 when `-q` finds a NAME that is not one, or `-e` a NAME to remove.
+

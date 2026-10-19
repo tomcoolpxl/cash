@@ -3,8 +3,27 @@ name: sudo
 summary: Run a command elevated, or as another user, in this terminal.
 kind: Windows commands
 see: su sudoedit elevate elevation id
-draft: yes
 ---
+
+## Syntax
+
+    sudo [-E] [-n] [-u USER] [-i | -s] [NAME=value]... [COMMAND [ARG]...]
+
+    sudo COMMAND        COMMAND elevated, in this terminal
+    sudo -u alice CMD   as alice, after her password
+    sudo -i             an elevated login shell
+    sudo -l             who you are, and how sudo elevates here
+
+## Examples
+
+Commands elevated, with their output here and a file written as an administrator:
+
+<!-- parse only: asks UAC on the reader's machine -->
+
+    sudo winget upgrade --all
+    hosts=C:/Windows/System32/drivers/etc/hosts
+    echo '127.0.0.1 dev.local' | sudo tee -a "$hosts"
+    sudo -l
 
 ## How it works
 
@@ -39,6 +58,19 @@ cash chooses what runs, as the shell would: `sudo ls` is cash's `ls` in an eleva
 `sudo bash` is cash (Windows' `sudo.exe` found WSL's `bash.exe`), and a script or a batch
 file runs through cash. A function is not run, as a Unix `sudo` runs none. In a shell
 that is already elevated, the command simply runs here.
+
+## Options
+
+    -i, --login             A login shell, or COMMAND run by one.
+    -s, --shell             A shell here, or COMMAND run by one.
+    -u, --user USER         As USER, not elevated, after USER's password.
+    -E, --preserve-env      The exported variables go with the command.
+    -n, --non-interactive   Fail at once when approval would be asked for.
+    -e, --edit FILE...      Edit files, as sudoedit does.
+    -l, --list              Who you are, and how sudo elevates here.
+    -v, -k, -K              Kept for scripts: there is no credentials cache.
+
+Exit status: the command's; 1 when UAC's prompt was declined or `-n` would have asked.
 
 ## Different in cash
 

@@ -3,15 +3,26 @@ name: su
 summary: Start a shell or run a command as another user, or elevated.
 kind: Windows commands
 see: sudo elevation id
-draft: yes
 ---
+
+## Syntax
+
+    su [-|-l] [-m] [-s SHELL] [-c COMMAND] [USER [ARG]...]
+
+    su                 an elevated cash
+    su -               an elevated login shell, in your home directory
+    su -c COMMAND      a command, elevated
+    su alice           a cash as alice, after her password
 
 ## Examples
 
-    su        # an elevated cash
-    su -      # an elevated login shell, in your home directory
+An elevated shell, a command elevated, and a shell as another account:
+
+<!-- parse only: asks UAC or a password on the reader's machine -->
+
+    su
     su -c 'net stop spooler'
-    su alice  # a cash as alice
+    su alice
 
 ## How it works
 
@@ -26,6 +37,16 @@ elevated; `su USER` gives that account, at its usual level, after its password.
 - `-m`, `-p`, `--preserve-environment`: the shell's exported variables go with it, as
   `sudo -E` passes them.
 - Words after USER are the shell's arguments.
+
+## Options
+
+    -, -l, --login                  A login shell, in the home directory.
+    -c, --command COMMAND           Run COMMAND instead of a shell.
+    -s, --shell SHELL               Run SHELL instead of cash.
+    -m, -p, --preserve-environment  The exported variables go with it.
+
+Exit status: the shell's or COMMAND's; 1 when UAC's prompt or the password was
+declined.
 
 ## Different in cash
 

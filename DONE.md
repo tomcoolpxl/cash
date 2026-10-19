@@ -2440,3 +2440,11 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   processes or history, and those Git Bash cannot run (flock on a descriptor), are only
   parsed. Nothing needed a fix: the differences found are Windows' (ping's `-n` is
   Linux's, cash's flock locks a descriptor) or edges left alone.
+- **The manual's last pages written in full** (2026-10-19, batch 10): abbr, bc,
+  cashctl (with cashinfo), coolfetch, croot, detach, elevate, pbcopy (with pbpaste),
+  prevd (with nextd and cdh), pstree, start, su, sudo, sudoedit, where, winpath,
+  xdg-open and z. No page is a draft now. The options were run in cash, with APPDATA
+  and LOCALAPPDATA a scratch directory, so `abbr` and `z` touched nothing of the
+  user's; the commands that open windows, ask UAC or use the clipboard were asked for
+  their help only, and their examples are only parsed. `start --help` had an em dash;
+  a test now keeps every builtin's `--help` without one.

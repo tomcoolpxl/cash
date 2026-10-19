@@ -44,7 +44,9 @@ DONE.md); then the man batches straight on (step 7), before items 2 to 5.
    5. the examples' test: done (2026-10-18, DONE.md);
    6. the first batch of about 20 pages at full depth, and drafts for the rest: done
       (2026-10-18, DONE.md); then a release;
-   7. the next batches, about 20 pages each, each released when done.
+   7. the next batches, about 20 pages each: done (2026-10-19, batches 2 to 10,
+      DONE.md); every page is written in full, none is a draft. Released as 1.29.0
+      (to batch 4) and 1.30.0 (to batch 7); batches 8 to 10 go in the next release.
 2. **Document the two spellings a directory takes in `PATH`** (the user, 2026-10-18,
    after the side effects were weighed): no code. Spelling a `C:/` entry `/c/` as
    `PATH` is assigned was turned down, since `case ":$PATH:" in *":$HOME/bin:"*`, the

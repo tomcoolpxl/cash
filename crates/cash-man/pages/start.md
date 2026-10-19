@@ -3,12 +3,23 @@ name: start
 summary: Open a file, directory or URL with its default program.
 kind: Windows commands
 see: detach elevate
-draft: yes
 ---
+
+## Syntax
+
+    start TARGET
+
+    start .                 this directory in Explorer
+    start report.pdf        a file in its program
+    start https://...       a page in the browser
 
 ## Examples
 
-    start .                    # this directory in Explorer
+A directory, a file and a page, each in its program:
+
+<!-- parse only: opens windows on the reader's desktop -->
+
+    start .
     start "$(winpath -w ~/Downloads)"
     start https://github.com/tomcoolpxl/cash
 
@@ -18,6 +29,12 @@ draft: yes
 double-clicking it in Explorer would: `start report.pdf`, `start .`, `start
 https://example.com`. It is the Windows `xdg-open` or `open`. It does not wait for the
 program.
+
+## Options
+
+None: the one argument is the target.
+
+Exit status: 0 when the program was started; 1 when Windows could not open TARGET.
 
 ## Different in cash
 

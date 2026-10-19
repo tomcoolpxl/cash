@@ -5,13 +5,27 @@ summary nextd: Go forward through the directory history.
 summary cdh: Choose a recent directory to go to.
 kind: cash's shell commands
 see: cd pushd dirs z keys
-draft: yes
 ---
+
+## Syntax
+
+    prevd [-l] [N]
+    nextd [-l] [N]
+    cdh [DIRECTORY]
+
+    prevd       back to the directory before
+    nextd       forward again
+    prevd -l    the directories recorded
+    cdh         a numbered list of recent directories, to pick from
 
 ## Examples
 
-    cd ~/src/app; cd /c/tools; prevd     # back in ~/src/app
-    cdh                                  # pick from a numbered list
+Back and forward through the directories visited:
+
+    mkdir -p one two
+    cd one; cd ../two
+    prevd; basename "$PWD"
+    nextd; basename "$PWD"
 
 ## How it works
 
@@ -30,3 +44,11 @@ On an empty line, `Alt-Left` is `prevd` and `Alt-Right` is `nextd`, and the prom
 redraws in the new directory. With text on the line they move a word, as usual. Windows
 Terminal keeps Alt-arrows for split panes, so they reach cash in a tab that is not
 split.
+## Options
+
+    N     How many directories back or forward: 1 without.
+    -l    List the record, as prevd and nextd move through it.
+    DIRECTORY    For cdh: go there, as cd does.
+
+Exit status: 0, or 1 when there is no directory that far back or forward.
+

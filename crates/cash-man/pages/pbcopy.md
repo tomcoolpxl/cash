@@ -4,14 +4,25 @@ summary: Copy standard input to the clipboard, as text.
 summary pbpaste: Write the clipboard's text to standard output.
 kind: Terminal and clipboard
 see: start crlf
-draft: yes
 ---
+
+## Syntax
+
+    pbcopy [-pboard NAME]
+    pbpaste [-pboard NAME] [-Prefer TYPE]
+
+    COMMAND | pbcopy    COMMAND's output on the clipboard
+    pbpaste             the clipboard's text, printed
+    pbpaste > FILE      into a file
 
 ## Examples
 
-    pbpaste | sort -u | pbcopy      # the clipboard's lines, sorted
+The clipboard's lines sorted, a commit's id copied, and the clipboard kept in a file:
+
+<!-- parse only: changes the reader's clipboard -->
+
+    pbpaste | sort -u | pbcopy
     git rev-parse HEAD | pbcopy
-    cat ~/.ssh/id_ed25519.pub | pbcopy
     pbpaste > notes.txt
 
 ## How it works
@@ -20,6 +31,14 @@ draft: yes
 writes the clipboard's text to standard output, and nothing when the clipboard holds no
 text (an image, files, or nothing at all). They are macOS's names, so a script written
 there runs; Windows has no command of its own for either.
+
+## Options
+
+    -pboard NAME     general, ruler, find or font: all the clipboard.
+    -Prefer TYPE     pbpaste: txt, rtf or ps; only text is there.
+    -h, --help       The usage.
+
+Exit status: 0; 1 when the clipboard is in use by another program.
 
 ## Different in cash
 

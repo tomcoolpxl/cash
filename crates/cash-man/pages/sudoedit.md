@@ -3,10 +3,20 @@ name: sudoedit
 summary: Edit files you may not write: your editor on copies, written back elevated.
 kind: Windows commands
 see: sudo elevation
-draft: yes
 ---
 
+## Syntax
+
+    sudoedit [-n] [-u USER] FILE...
+
+    sudoedit FILE              FILE in your editor, written back elevated
+    EDITOR='code --wait' sudoedit FILE    in VS Code, waited for
+
 ## Examples
+
+The hosts file, and a service's configuration in another editor:
+
+<!-- parse only: asks UAC on the reader's machine -->
 
     sudoedit C:/Windows/System32/drivers/etc/hosts
     EDITOR='code --wait' sudoedit C:/ProgramData/ssh/sshd_config
@@ -26,3 +36,11 @@ draft: yes
   be asked for, as for `sudo`.
 
 An editor that returns at once (`code`) must be told to wait: `EDITOR='code --wait'`.
+## Options
+
+    -u, --user USER         Write the files as USER.
+    -n, --non-interactive   Fail at once when approval would be asked for.
+
+Exit status: 0; 1 when the editor failed, a file could not be written back, or UAC's
+prompt was declined.
+

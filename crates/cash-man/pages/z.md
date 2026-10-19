@@ -3,15 +3,27 @@ name: z
 summary: Jump to a directory you often go to, from a word of its path.
 kind: cash's shell commands
 see: cd prevd croot keys vars
-draft: yes
 ---
+
+## Syntax
+
+    z [-l | -i] [WORD]...
+
+    z cash       the directory you go to most whose last part holds cash
+    z src api    src somewhere in the path, api in the last part
+    z -l         the recorded directories, with their scores
+    z -i doc     pick from those that match doc
 
 ## Examples
 
-    z cash     # the directory whose last part holds "cash" you go to most
-    z src api  # "src", then "api" in the last part
-    z -l       # every recorded directory, with its score
-    z -i doc   # pick from the directories matching "doc"
+Jumps, a list, and a pick:
+
+<!-- parse only: reads the reader's own record of directories -->
+
+    z cash
+    z src api
+    z -l
+    z -i doc
 
 ## How it works
 
@@ -41,6 +53,13 @@ visit, so a drive unplugged for a while keeps its directories. `z` says when not
 matches, and exits 1.
 
 In `Alt-E`'s picker, `Alt-H` lists the same directories, best first (see `help croot`).
+
+## Options
+
+    -l, --list           The matches with their scores, best first.
+    -i, --interactive    Pick one of the matches from a list.
+
+Exit status: 0, or 1 when nothing matches.
 
 ## Different in cash
 

@@ -3,10 +3,20 @@ name: detach
 summary: Start a command that outlives the shell.
 kind: Windows commands
 see: disown nohup start job-control
-draft: yes
 ---
 
+## Syntax
+
+    detach COMMAND [ARG]...
+
+    detach code .       an editor that stays open when cash exits
+    detach cash -c 'CMD > log 2>&1'    with its output kept
+
 ## Examples
+
+An editor, and a server whose output goes to a file:
+
+<!-- parse only: starts programs on the reader's machine -->
 
     detach code .
     detach cash -c './server.exe --port 8080 > server.log 2>&1'
@@ -15,6 +25,12 @@ draft: yes
 
 `detach COMMAND` starts a command that outlives the shell: outside cash's job object,
 with no console, and not waited for. It prints the new process's id and returns.
+
+## Options
+
+None: the first argument is the command.
+
+Exit status: 0 when the command started; 127 when it is not found.
 
 ## Different in cash
 
