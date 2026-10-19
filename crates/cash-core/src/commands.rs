@@ -745,6 +745,26 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         return Ok((command, Extras::default()));
     }
 
+    // A bundled tool's name is cash's tool, as it is when typed as a command (D48): `exec
+    // mktemp` searched PATH and ran Git's GNU `mktemp`, whose `/tmp` name cash's other
+    // tools cannot open (shunit2). The bundled tools are the builtins run as a process of
+    // their own (`spawn_func`); `enable -n` gives the name back to PATH.
+    if !candidate.is_file()
+        && !command_name.contains(['/', '\\'])
+        && context
+            .shell
+            .builtins()
+            .get(command_name)
+            .is_some_and(|b| b.spawn_func.is_some() && !b.disabled)
+        && let Ok(own) = std::env::current_exe()
+    {
+        // process state: the shell's spawn layer, which sets the directory and environment.
+        let mut c = std::process::Command::new(&own);
+        c.args(["--invoke-bundled", command_name]);
+        push_native_args(&mut c, &own, args);
+        return Ok((c, Extras::default()));
+    }
+
     if !candidate.is_file() {
         // A bare name, as `exec grep` passes: `Command::new` searches PATH for it, so
         // search the shell's PATH too, to know which encoding its arguments need.

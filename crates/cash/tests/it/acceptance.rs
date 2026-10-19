@@ -1004,6 +1004,19 @@ fn timeout_and_env_run_a_script() {
     );
 }
 
+#[test]
+fn exec_of_a_bundled_tool_runs_cashs_own() {
+    // `exec mktemp` searched PATH and ran Git's GNU mktemp, whose `/tmp` name cash's
+    // other tools cannot open: shunit2 makes its temp directory so.
+    let out = cash(
+        "(exec mktemp --version) | head -1; \
+         d=$(exec mktemp -d) && [ -d \"$d\" ] && rmdir \"$d\" && echo made",
+    );
+    let (version, made) = out.stdout.split_once('\n').unwrap_or_default();
+    assert!(version.contains("uutils"), "{}", out.stdout);
+    assert_eq!(made, "made", "{}", out.stderr);
+}
+
 // ---------------------------------------------------------------------------
 // D17 — process substitution.
 // ---------------------------------------------------------------------------
