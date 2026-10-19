@@ -3,19 +3,33 @@ name: flock
 summary: Run a command, or hold a descriptor, under a lock on a file, so scripts take turns.
 kind: Processes and network
 see: exec mktemp
-draft: yes
 ---
+
+## Syntax
+
+    flock [OPTION]... FILE COMMAND [ARG]...
+    flock [OPTION]... FILE -c STRING
+    flock [OPTION]... DESCRIPTOR
+
+    flock build.lock make         one make at a time
+    flock -n q.lock ./drain.sh    fail at once if another holds it
+    flock 9                       lock what descriptor 9 has open
 
 ## Examples
 
-    flock /tmp/build.lock make            # one build at a time
-    flock -n -E 75 queue.lock ./drain.sh  # 75 if another drain is running
-    # wait up to 10 s for a shared lock
-    flock -w 10 -s state.db cat state.db
-    (
-      flock -n 9 || exit 1                # the lock lives on descriptor 9
-      echo "$$" > pid
-    ) 9> run.lock                         # and is released here
+A command under a lock, and a string run through the shell:
+
+    flock build.lock echo "building"
+    flock build.lock -c 'echo "one at a time"'
+
+A lock held on a descriptor for part of a script:
+
+<!-- parse only: Git Bash's flock cannot lock a descriptor -->
+
+    exec 9> run.lock
+    flock -n 9 && echo "got the lock"
+    flock -u 9 && echo "let it go"
+    exec 9>&-
 
 ## How it works
 
@@ -26,6 +40,21 @@ shell. `flock N` locks the shell's descriptor `N` for as long as it stays open, 
 default, is exclusive), `-n` to fail at once rather than wait, `-w SECS` to wait that
 long, `-E CODE` for the status when the lock is not got (1 by default), and `--verbose`.
 The command's own status is returned otherwise.
+
+## Options
+
+    -x, --exclusive        An exclusive lock: the default.
+    -s, --shared           A shared lock.
+    -n, --nonblock         Fail at once rather than wait.
+    -w, --timeout=SECS     Wait at most SECS.
+    -E, --conflict-exit-code=N    The status without the lock: 1.
+    -u, --unlock           Release a descriptor's lock.
+    -c, --command=STRING   Run STRING through the shell.
+    -o, --close            Accepted; see below.
+    -F, --no-fork          Accepted; there is no fork.
+    --verbose              Say how long it took.
+
+Exit status: the command's; with `-n` or `-w`, 1 (or `-E`'s) when the lock was not got.
 
 ## Different in cash
 

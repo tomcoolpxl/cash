@@ -1,0 +1,3 @@
+complete -W 'start stop status' svc
+svc completes as a file again
+--- status 0

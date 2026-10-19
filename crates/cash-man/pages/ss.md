@@ -3,15 +3,26 @@ name: ss
 summary: Show sockets, as iproute2's `ss` does.
 kind: Processes and network
 see: fuser ping
-draft: yes
 ---
+
+## Syntax
+
+    ss [OPTION]... [FILTER]
+
+    ss -tulpn             what is listening, TCP and UDP, with the process
+    ss -tn state established    the open TCP connections
+    ss -s                 counts of each kind
 
 ## Examples
 
+What listens, a connection to a port, and the counts:
+
+<!-- parse only: lists the reader's own sockets -->
+
     ss -tulpn
     ss -tn state established '( dport = :443 )'
-    ss -tnr dst 192.168.1.0/24
-    sudo ss -tni dport = :443
+    ss -ltn | grep -q ':5432 ' && echo "postgres is listening"
+    ss -s
 
 ## How it works
 
@@ -19,6 +30,25 @@ draft: yes
 listening, `ss -ltn | grep -q ':5432 '` in a script. State filters and the
 `sport`/`dport`/`src`/`dst`/`dev` expressions are supported, and options are spelled and
 combined as in iproute2 7.2 (`--num` for `--numeric`, `-A 'all,!udp'`).
+
+## Options
+
+    -t, -u         TCP, UDP.
+    -l             Listening sockets only.
+    -a             Listening and the rest.
+    -n             Numbers, not service names.
+    -p             The process of each.
+    -4, -6         IPv4 or IPv6 only.
+    -s             Counts of each kind.
+    -r             Host names for addresses.
+    -i             Each connection's statistics.
+    -K             Close the connections matched; elevated.
+    -B             Sockets bound but not connected.
+    -A QUERY       The socket tables by name: all, tcp, udp, ...
+    state STATE    Only sockets in STATE: established, listening, ...
+    EXPRESSION     sport, dport, src, dst, dev, with and, or, not.
+
+Exit status: 0, or 1 for an option or a filter it does not take.
 
 ## Different in cash
 

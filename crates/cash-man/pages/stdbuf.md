@@ -3,14 +3,27 @@ name: stdbuf
 summary: Run a command with changed buffering; on Windows, as it is.
 kind: Coreutils written for Windows
 see: grep nice nohup
-draft: yes
 ---
+
+## Syntax
+
+    stdbuf OPTION... COMMAND [ARG]...
+
+    stdbuf -oL COMMAND    its output a line at a time
+    stdbuf -o0 COMMAND    its output unbuffered
 
 ## Examples
 
-    # grep writes each matching line at once
+A builtin's lines through a pipe as they come:
+
+    printf 'a\nb\n' | stdbuf -oL grep b
+    stdbuf -o0 echo "unbuffered"
+
+Each match as it is found, in a long pipeline:
+
+<!-- parse only: names files of the reader's own -->
+
     stdbuf -oL grep pattern big.log | head -1
-    stdbuf -oL find . -name '*.log' | tee found  # each name as it is found
     stdbuf -o0 tail -f app.log | sed 's/^/> /'
 
 ## How it works
@@ -36,3 +49,12 @@ it as is`. `stdbuf` then exits with the program's status.
 
 The options and messages are coreutils': a bad mode or a missing command is status 125,
 a command that cannot be found 127.
+## Options
+
+    -i, --input=MODE     Standard input: 0, L or a size.
+    -o, --output=MODE    Standard output: 0 none, L lines, or a size.
+    -e, --error=MODE     Standard error: the same.
+
+Exit status: the command's; 125 for a bad mode or no command; 127 when the command is
+not found.
+

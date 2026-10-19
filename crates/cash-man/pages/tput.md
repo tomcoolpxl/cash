@@ -3,23 +3,35 @@ name: tput
 summary: Write a terminal capability as the VT sequence xterm-256color uses.
 kind: Terminal and clipboard
 see: clear keys
-draft: yes
 ---
+
+## Syntax
+
+    tput CAPABILITY [PARAMETER]...
+    tput -S
+
+    tput bold         bold from here on
+    tput setaf 1      red text
+    tput sgr0         back to plain text
+    tput cup 5 10     the cursor to row 5, column 10
+    tput cols         the window's width
 
 ## Examples
 
-    # colours and attributes for a script
+The sequences a script writes for bold, a colour and plain text again:
+
+    tput bold | od -An -c
+    tput setaf 1 | od -An -c
+    tput sgr0 | od -An -c
+
+Bold in a message:
+
+<!-- parse only: draws on the reader's terminal -->
+
     bold=$(tput bold); normal=$(tput sgr0)
     echo "${bold}warning${normal}"
-    tput setaf 1; echo red; tput op  # a colour, then the default colours
-    cols=$(tput cols)                # the window's width
-    # the cursor to the top left, clear the line
     tput cup 0 0; tput el
-    tput -S <<EOF                    # several at once
-    clear
-    setaf 4
-    bold
-    EOF
+    cols=$(tput cols)
 
 ## How it works
 
@@ -32,6 +44,16 @@ capability are its parameters; what follows the numbers is the next capability, 
 `tput cup 5 10 bold` writes both. `-S` reads one capability with its parameters per line
 from standard input, `-x` keeps the scrollback when clearing, and `clear`, `init`,
 `reset` and `longname` work as commands.
+
+## Options
+
+    -S            Capabilities from standard input, one a line.
+    -T TYPE       The terminal type: xterm-, vt- or ms-terminal-like.
+    -x            With clear: keep the scrollback.
+    clear, init, reset, longname    Commands, as ncurses' tput has them.
+
+Exit status: 0; 1 for a capability the terminal lacks; 3 for a terminal type it does
+not know; 4 for a capability name it does not know.
 
 ## Different in cash
 

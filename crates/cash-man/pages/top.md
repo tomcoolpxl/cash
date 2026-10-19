@@ -3,8 +3,25 @@ name: top
 summary: Show the processes using the machine, updated live.
 kind: Processes and network
 see: ps pstree kill uptime
-draft: yes
 ---
+
+## Syntax
+
+    top [OPTION]...
+
+    top              live, full screen, until q
+    top -b -n 1      once, as text, for a pipe or a log
+    top -o mem       sorted by memory
+
+## Examples
+
+Live, once to a file, and the five that use most memory:
+
+<!-- parse only: lists the reader's own processes -->
+
+    top
+    top -b -n 1 > snapshot.txt
+    top -b -n 1 -o mem | head -12
 
 ## How it works
 
@@ -21,6 +38,16 @@ memory meters and a load average: Windows has no `top`, and procps was never por
 - `d`: change the interval. `k`: send a signal, by `kill`'s rules.
 - `t`, `m`: meters, text or nothing for CPU and memory. `z`: colour on or off.
 - `q`: quit, and the screen is put back.
+
+## Options
+
+    -b             Plain text, not a live screen.
+    -n COUNT       Stop after COUNT updates.
+    -d SECONDS     Update every SECONDS: 3 without.
+    -o FIELD       Sort by FIELD: cpu (the default), mem, time, pid.
+    -u USER        Only USER's processes.
+
+Exit status: 0.
 
 ## Different in cash
 

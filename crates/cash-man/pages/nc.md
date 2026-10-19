@@ -3,17 +3,29 @@ name: nc
 summary: Connect to, listen on or scan TCP and UDP ports, as OpenBSD's netcat does.
 kind: Processes and network
 see: ss ping
-draft: yes
 ---
+
+## Syntax
+
+    nc [OPTION]... HOST PORT
+    nc -l [OPTION]... PORT
+
+    nc -z HOST PORT      whether a port answers
+    nc HOST PORT         a connection: standard input to it, it to output
+    nc -l 9000           listen for one connection
+    nc -u HOST PORT      UDP
 
 ## Examples
 
-    nc -zv github.com 443
+Wait for a service, check a port, send a request, and pass a file across:
+
+<!-- parse only: connects to hosts and ports of the reader's own -->
+
     until nc -z localhost 5432; do sleep 1; done
+    nc -zv github.com 443
     printf 'GET / HTTP/1.0\r\n\r\n' | nc -q 1 example.org 80
-    nc -l 9000 > received.txt        # in one shell
-    nc -N localhost 9000 < file.txt  # in another
-    echo -n status | nc -u -q 0 192.168.1.10 514
+    nc -l 9000 > received.txt
+    nc -N localhost 9000 < file.txt
 
 ## How it works
 
@@ -26,6 +38,26 @@ timeout, `-N` to close the sending side when standard input ends, `-q SECONDS` t
 that long after it ends, `-p`/`-s` for the local port and address, `-4`/`-6`, `-n`, `-C`,
 `-i`, `-r`, `-W`, `-d`, `-t`. A port may be a number, a service name (`http`) or a range
 (`8000-8010`). Exit status is 0 when a connection was made, 1 otherwise.
+
+## Options
+
+    -l           Listen for a connection.
+    -k           With -l, one connection after another.
+    -z           Connect and report; send nothing.
+    -u           UDP, not TCP.
+    -v           Say what happens.
+    -w SECONDS   Give up on connecting, or on silence, after SECONDS.
+    -N           Close the sending side when standard input ends.
+    -q SECONDS   Quit SECONDS after standard input ends.
+    -p PORT      The local port.
+    -s ADDRESS   The local address.
+    -4, -6       IPv4 or IPv6 only.
+    -n           No name lookups.
+    -C           Send CRLF for each line end.
+    -i SECONDS   Wait between lines sent.
+    -r           Ports in a range in random order.
+
+Exit status: 0 when a connection was made; 1 otherwise.
 
 ## Different in cash
 

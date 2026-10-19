@@ -2433,3 +2433,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   padded, `-o` came before every column, and `pr -m -t` printed a row of padding to the
   page's end; its columns are GNU's bytes now. `who`, `pinky` and `users` read
   `quser.exe`'s text: in TODO.md, with GNU's options they lack.
+- **The manual's ninth twenty pages written in full** (2026-10-19, batch 9): bind,
+  compgen, complete, compopt, fc, suspend, logout, getopt, dircolors, locale, getconf,
+  stty, tput, stdbuf, flock, fuser (with lsof), nc, ping, ss and top. Every option was
+  run in cash and in Git Bash; the examples that act on the reader's console, network,
+  processes or history, and those Git Bash cannot run (flock on a descriptor), are only
+  parsed. Nothing needed a fix: the differences found are Windows' (ping's `-n` is
+  Linux's, cash's flock locks a descriptor) or edges left alone.
