@@ -100,4 +100,5 @@ it added, as `$HOME` is `C:/...`.
 - Globbing ignores case, as the file system does: `*.sh` matches `Setup.SH`.
   `shopt -u nocaseglob` makes it case-sensitive.
 - `ln -s` makes a real symbolic link when Windows allows it (Developer Mode or an
-  elevated shell), a junction for a directory otherwise, and fails for a file.
+  elevated shell), a junction for a directory otherwise, and for a file a copy, with a
+  warning, as Git Bash's `ln` copies it.

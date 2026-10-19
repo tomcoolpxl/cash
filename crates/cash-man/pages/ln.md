@@ -80,4 +80,7 @@ Exit status: 0 when every link was made; 1 otherwise.
 - A symbolic link needs Developer Mode or an elevated shell on Windows. Without, `ln
   -s` to a directory makes a junction, which needs neither, names its target by its
   full path, and is otherwise the same to cash and to Windows programs; to a file it
-  fails, `Operation not permitted`, saying how to get the privilege.
+  copies the file, as Git Bash's `ln` does, and says so on standard error. A copy does
+  not follow later changes to its target, and `[ -L ]` says it is no link. A link to
+  nothing that is there fails, `Operation not permitted`, saying how to get the
+  privilege.

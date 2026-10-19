@@ -13,7 +13,7 @@ use uucore::error::{UError, UIoError, UResult};
 use crate::messages::translate;
 use uucore::fs::replace_link;
 use uucore::fs::{make_path_relative_to, paths_refer_to_same_file};
-use uucore::{format_usage, prompt_yes, show_error};
+use uucore::{format_usage, prompt_yes, show_error, show_warning};
 
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -464,13 +464,30 @@ pub fn link(src: &Path, dst: &Path, settings: &Settings) -> LnResult<()> {
     // Link first, matching GNU. Replacing uses a temp name + `renameat`, so
     // `dst` is never briefly free for another user to claim.
     let link_target = hard_link_src.as_deref().unwrap_or(&source);
+    let mut copied = false;
     let raw = if overwrite_on_conflict {
-        replace_link(link_target, dst, settings.symbolic)
+        replace_link(link_target, dst, settings.symbolic).or_else(|error| {
+            // cash (D27): a copy in place of the file link Windows refused, as below.
+            let target = self::link_target(&source, dst);
+            if settings.symbolic && privilege_refused(&error) && target.is_file() {
+                copy_in_place_of(&target, dst)?;
+                copied = true;
+                Ok(())
+            } else {
+                Err(error)
+            }
+        })
     } else if settings.symbolic {
-        symlink(&source, dst)
+        symlink(&source, dst).map(|made| copied = matches!(made, Made::Copy))
     } else {
         fs::hard_link(link_target, dst)
     };
+    if copied {
+        show_warning!(
+            "{}",
+            translate!("ln-warning-copied", "source" => source.quote(), "dest" => dst.quote())
+        );
+    }
 
     let res = raw.map_err(|e| {
         if settings.symbolic {
@@ -533,25 +550,65 @@ pub fn link(src: &Path, dst: &Path, settings: &Settings) -> LnResult<()> {
 /// elevated shell.
 const ERROR_PRIVILEGE_NOT_HELD: i32 = 1314;
 
-pub fn symlink<P1: AsRef<Path>, P2: AsRef<Path>>(src: P1, dst: P2) -> io::Result<()> {
+/// What [`symlink`] made of a symbolic link asked for.
+pub enum Made {
+    /// The link, or a junction for a directory.
+    Link,
+    /// A copy of the file, as Windows refused the link: Git Bash's `ln` copies then too.
+    Copy,
+}
+
+/// The target of a link at `dst` to `src` as the link sees it, a relative one from the
+/// link's directory.
+fn link_target(src: &Path, dst: &Path) -> PathBuf {
+    dst.parent()
+        .map_or_else(|| src.to_path_buf(), |dir| dir.join(src))
+}
+
+/// Whether `error` is Windows refusing a symbolic link for want of the privilege.
+fn privilege_refused(error: &io::Error) -> bool {
+    error.raw_os_error() == Some(ERROR_PRIVILEGE_NOT_HELD)
+}
+
+pub fn symlink<P1: AsRef<Path>, P2: AsRef<Path>>(src: P1, dst: P2) -> io::Result<Made> {
     use std::os::windows::fs::{symlink_dir, symlink_file};
     let (src, dst) = (src.as_ref(), dst.as_ref());
-    // cash: the target as the link sees it, a relative one from the link's directory;
-    // uutils asked whether `src` was a directory from the working directory.
-    let target = dst
-        .parent()
-        .map_or_else(|| src.to_path_buf(), |dir| dir.join(src));
+    // cash: uutils asked whether `src` was a directory from the working directory.
+    let target = link_target(src, dst);
     if !target.is_dir() {
-        return symlink_file(src, dst);
+        // cash (D27): without the privilege, a file is copied, with a warning, as Git
+        // Bash's `ln` copies it: bats links each test file and failed. A link to nothing
+        // is still the error that names Developer Mode.
+        return match symlink_file(src, dst) {
+            Err(error) if privilege_refused(&error) && target.is_file() => {
+                fs::copy(&target, dst)?;
+                Ok(Made::Copy)
+            }
+            made => made.map(|()| Made::Link),
+        };
     }
     match symlink_dir(src, dst) {
         // cash (D27): without the privilege, a directory gets a junction, which needs
         // none and names its target by its full path.
-        Err(error) if error.raw_os_error() == Some(ERROR_PRIVILEGE_NOT_HELD) => {
+        Err(error) if privilege_refused(&error) => {
             cash_win32::junction::point(dst, &std::path::absolute(&target)?)
         }
         made => made,
     }
+    .map(|()| Made::Link)
+}
+
+/// Puts a copy of the file `target` at `dst` in place of what is there, through a name
+/// beside it, so `dst` is never missing: `ln -sf` where Windows refused the link.
+fn copy_in_place_of(target: &Path, dst: &Path) -> io::Result<()> {
+    let mut name = std::ffi::OsString::from(".");
+    name.push(dst.file_name().unwrap_or_default());
+    name.push(".ln-copy");
+    let temporary = dst.with_file_name(name);
+    fs::copy(target, &temporary)?;
+    fs::rename(&temporary, dst).inspect_err(|_| {
+        let _ = fs::remove_file(&temporary);
+    })
 }
 
 /// What an error making a link says: for a symbolic link to a file that Windows refused

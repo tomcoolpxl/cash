@@ -32,7 +32,7 @@ the user's answers, with their dates. A new decision goes here, under its topic.
 | D24 | `~/.bashrc` is read, then `~/.cashrc` | Startup files, help and messages |
 | D25 | Scoop shims are run, not resolved through | Running programs and the environment |
 | D26 | Descriptors above 2 work where cash holds both ends | Processes, jobs and signals |
-| D27 | `ln -s`: a symlink, a junction for directories, else an error | Paths, files and text |
+| D27 | `ln -s`: a symlink, a junction for directories, a copy for files | Paths, files and text |
 | D28 | Reserved names stay devices | Paths, files and text |
 | D29 | Paths of any length | Paths, files and text |
 | D31 | Variable names are case-insensitive; POSIX names upper-cased | Running programs and the environment |
@@ -197,11 +197,12 @@ starts with `#!`. `chmod +x` changes nothing and returns 0, so `chmod +x x.sh &&
 works. Turned down: ACLs alone, which call every profile file executable; the extension
 alone, which invents a permission model.
 
-### D27 — `ln -s`: a symlink, a junction for directories, else an error
+### D27 — `ln -s`: a symlink, a junction for directories, a copy for files
 
 With privilege (admin or Developer Mode) a real symlink; without, a junction for a directory
-and an error naming Developer Mode for a file. Turned down: hard links for files, which are
-not symlinks and give scripts wrong answers.
+and for a file a copy with a warning naming Developer Mode, as Git Bash's `ln` copies (the
+user, 2026-10-19: bats links each test file); a link to nothing is the error. Turned down:
+hard links for files, which are not symlinks and give scripts wrong answers; a silent copy.
 
 ### D28 — Reserved names stay devices
 

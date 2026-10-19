@@ -38,3 +38,4 @@ ln-failed-to-create-symbolic-link = failed to create symbolic link {$dest}
 ln-failed-to-create-hard-link-dir = {$source}: hard link not allowed for directory
 ln-backup = backup: {$backup}
 ln-error-symlink-privilege = Windows makes a symbolic link to a file only in Developer Mode or an elevated shell
+ln-warning-copied = Windows makes a symbolic link to a file only in Developer Mode or an elevated shell: copied {$source} to {$dest}
