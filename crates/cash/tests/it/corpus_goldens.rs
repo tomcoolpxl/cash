@@ -62,6 +62,12 @@ const NOT_RUN: &[(&str, &str)] = &[
 /// ([`timeout_of`]).
 const TIMEOUT: Duration = Duration::from_secs(10);
 
+/// How many times a case's own time cash gets here. The test runs a debug build, about
+/// five times slower than a release on getoptions' case, eight cases at once, and CI's
+/// machines are slower again: getoptions ended its output in time and its status after
+/// 10 s. No golden expects a timeout, so here the limit only stops a hang.
+const DEBUG_SLOWER: u32 = 3;
+
 /// How long the case `script` may take: its header's `# timeout: N` seconds, as in
 /// `run.ps1`, or [`TIMEOUT`].
 fn timeout_of(script: &str) -> Duration {
@@ -217,10 +223,10 @@ fn copy_fixtures(from: &Path, to: &Path) {
 }
 
 /// Runs `script` as `run.ps1` runs it under cash: `-c`, `LC_ALL=C`, standard input a
-/// pipe already closed, killed after its [`timeout_of`]. Its standard output with CRLF as
-/// LF, and its status.
+/// pipe already closed, killed after its [`timeout_of`] times [`DEBUG_SLOWER`]. Its
+/// standard output with CRLF as LF, and its status.
 fn run_case(script: &str, dir: &Path) -> (String, String) {
-    let timeout = timeout_of(script);
+    let timeout = timeout_of(script) * DEBUG_SLOWER;
     let mut child = cash_command()
         .args(["--noprofile", "--norc", "-c", script])
         .current_dir(dir)
