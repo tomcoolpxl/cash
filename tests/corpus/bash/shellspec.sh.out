@@ -1,0 +1,17 @@
+1 4
+1..4
+ok 1 - arithmetic adds
+not ok 2 - arithmetic fails on purpose # FAILED
+# (in specfile spec/example_spec.sh, line 8)
+# When call echo actual
+# The output should eq expected
+# 
+#   expected: "expected"
+#        got: "actual"
+# 
+ok 3 - functions greets
+ok 4 - functions skips # SKIP not today
+status: 101
+1..1
+ok 1 - functions greets
+focused: 0

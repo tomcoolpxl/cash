@@ -1,7 +1,7 @@
 # source: https://github.com/TypedDevs/bashunit/tree/0.52.0 (the runner `bashunit` and its `src` as the fixture directory `bashunit`, unchanged)
 # desc: a real test framework of many sourced files, under set -euo pipefail: test functions found by name, set_up before each, assertions passing and one failing with its message, the summary and its status, a filter, simple output; the times each test took are left out
 # timeout: 60
-export BASHUNIT_NO_NETWORK=true NO_COLOR=1
+export BASHUNIT_NO_NETWORK=true NO_COLOR=1; unset GITHUB_ACTIONS
 printf '%s\n' \
   'function set_up() { greeting=hello; }' \
   'function test_addition() { assert_equals 4 "$((2 + 2))"; }' \

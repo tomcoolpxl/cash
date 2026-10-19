@@ -152,11 +152,12 @@ filter = 'binary(it) and test(=fuser_lsof::fuser_marks_an_executable_and_a_loade
 slow-timeout = { period = "30s", terminate-after = 3 }
 
 # Every `tests/corpus` case, eight at a time (WORKERS in corpus_goldens.rs), so it takes
-# eight slots and three periods of its own.
+# eight slots and four periods of its own: 87 to 90 s on a debug build once shellspec,
+# bashunit and git-subrepo joined (2026-10-19).
 [[profile.default.overrides]]
 filter = 'binary(it) and test(=corpus_goldens::every_corpus_case_gives_the_oracles_output)'
 threads-required = 8
-slow-timeout = { period = "30s", terminate-after = 3 }
+slow-timeout = { period = "30s", terminate-after = 4 }
 
 # Makes about forty git repositories (15 s idle) and runs 115 prompt cases in them, eight
 # at a time (25 s idle; tests/git-prompt-differential.sh).

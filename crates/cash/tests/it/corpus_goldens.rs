@@ -116,6 +116,12 @@ fn every_corpus_case_gives_the_oracles_output() {
             cases.push((name, case, why));
         }
     }
+    // The longest first, by the time their headers allow: a real program's case takes
+    // many times a snippet's, and one started last kept the test running on one worker
+    // after the others had finished (shellspec's 18 s, 2026-10-19).
+    cases.sort_by_cached_key(|(_, case, _)| {
+        std::cmp::Reverse(std::fs::read_to_string(case).map_or(TIMEOUT, |s| timeout_of(&s)))
+    });
 
     let next = std::sync::atomic::AtomicUsize::new(0);
     let fixtures = corpus.join("fixtures");
