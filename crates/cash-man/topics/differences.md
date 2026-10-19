@@ -14,7 +14,8 @@ and in the fewest places it can.
 
 - `pwd` prints `C:/src`, not `/c/src`: printed paths become arguments to Windows
   programs. `$PATH` alone reads `/c/...`, because its entries are separated
-  by colons.
+  by colons; an entry a script adds from `$PWD` or `$HOME` keeps `C:/`, which a
+  split on `:` cuts in two (`help paths`).
 - Globbing and `find -name` ignore case, as the file system does; `shopt -u nocaseglob`
   turns that off.
 - Reading a variable ignores case when no name is spelled exactly: `$Path` reads

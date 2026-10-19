@@ -2448,3 +2448,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   user's; the commands that open windows, ask UAC or use the clipboard were asked for
   their help only, and their examples are only parsed. `start --help` had an em dash;
   a test now keeps every builtin's `--help` without one.
+- **The two spellings a directory takes in `PATH`, documented** (2026-10-19, TODO's
+  item 2, the user's pick): an entry keeps the spelling it was given, so
+  `PATH="$PWD/bin:$PATH"` holds `C:/...`, which a script that splits `PATH` on `:`
+  cuts in two (nvm's `nvm_strip_path` did); `PATH="$(winpath -u "$PWD")/bin:$PATH"`
+  adds it in the Unix spelling. Spelling assigned entries `/c/` was turned down, as
+  `case ":$PATH:" in *":$HOME/bin:"*`, the idiom that adds a directory once, would
+  then never find what it added. In `help paths`, `help differences` and spec §4 row 2.

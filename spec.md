@@ -106,7 +106,7 @@ someone who expected bash, so additions need to earn their place.
 | # | Divergence | Why | Ref |
 |---|---|---|---|
 | 1 | `pwd` prints `C:/src`, not `/c/src` | Rendered paths become native exe arguments | D3 |
-| 2 | `$PATH` renders Unix-style while other paths render Windows-style | Colon separation is incompatible with `C:` | D5 |
+| 2 | `$PATH` renders Unix-style while other paths render Windows-style; an entry a script adds keeps its spelling, so `PATH="$PWD/bin:$PATH"` holds `C:/...`, which a split on `:` cuts in two (`winpath -u` gives the Unix spelling) | Colon separation is incompatible with `C:`; spelling assigned entries `/c/` would break `case ":$PATH:" in *":$HOME/bin:"*`, the idiom that adds a directory once | D5 |
 | 3 | Globbing and `find -name` are case-insensitive by default | Case-sensitive matching can only produce false negatives on a case-insensitive volume | D16 |
 | 4 | `\r\n` terminates a line in `$(...)`, `read`, `mapfile`, here-docs | Python/.NET/cmd emit CRLF and cannot be fixed at source | D20 |
 | 5 | Redirections above fd 2 error for native exes | Windows exes have no POSIX fd ABI | D26 |

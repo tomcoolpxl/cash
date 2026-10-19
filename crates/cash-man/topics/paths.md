@@ -74,6 +74,18 @@ translated: `GOPATH` or `PYTHONPATH` pass through as you wrote them. `$Path` is
 `$PATH`, as in Windows, and `Path=x` sets it; an all-lower-case `path` is a script's
 own variable, as in Bash.
 
+An entry keeps the spelling it was given. The ones inherited from Windows read `/c/...`,
+but `PATH="$PWD/bin:$PATH"` puts `C:/src/bin` in, since `$PWD` is `C:/...`. Programs are
+still found there, as cash knows a drive in an entry; but a script that splits `PATH`
+on `:` (`IFS=: read -ra`, `${PATH%%:*}`, awk with `RS=:`) gets `C` as an entry of its
+own. Such a script adds a directory in the Unix spelling:
+
+    PATH="$(winpath -u "$PWD")/bin:$PATH"
+
+Spelling every `C:/` entry `/c/` when `PATH` is assigned was turned down: the idiom that
+adds a directory once, `case ":$PATH:" in *":$HOME/bin:"*)`, would then never find what
+it added, as `$HOME` is `C:/...`.
+
 ## Long paths, globbing, links
 
 - Paths of any length work in cash's own file operations, whatever the long-path

@@ -47,20 +47,8 @@ DONE.md); then the man batches straight on (step 7), before items 2 to 5.
    7. the next batches, about 20 pages each: done (2026-10-19, batches 2 to 10,
       DONE.md); every page is written in full, none is a draft. Released as 1.29.0
       (to batch 4) and 1.30.0 (to batch 7); batches 8 to 10 go in the next release.
-2. **Document the two spellings a directory takes in `PATH`** (the user, 2026-10-18,
-   after the side effects were weighed): no code. Spelling a `C:/` entry `/c/` as
-   `PATH` is assigned was turned down, since `case ":$PATH:" in *":$HOME/bin:"*`, the
-   idiom that adds a directory once, would then never find what it added. `$HOME` and
-   `$PWD` are `C:/…` (D3) and inherited entries `/c/…` (D5): in spec §4 and
-   `help differences`, with what a script that splits `PATH` on `:` should do. The
-   finding:
-   **A `C:/` directory put into `PATH` breaks a colon-separated split** (2026-10-18, found
-   by the corpus's nvm case): `PATH="$PWD/bin:$PATH"` works for running programs, as
-   cash's own search knows a drive, but the value keeps `C:/…` (D3's spelling of `$PWD`),
-   so a script that splits `PATH` on `:` (`IFS=: read -ra`, `${PATH%%:*}`, awk with
-   `RS=:` as nvm's `nvm_strip_path` does) gets `C` as an entry. D5 has scripts see `PATH`
-   as `/c/…`, colon-separated, which a `C:/` entry assigned by a script breaks. In Git
-   Bash `$PWD` is `/c/…`, so the list stays whole.
+2. **Document the two spellings a directory takes in `PATH`**: done (2026-10-19,
+   DONE.md): `help paths`, `help differences` and spec §4 row 2.
 3. **zstd's real levels**: before the switch, its side effects are looked at: the size
    of `cash.exe` (a release stops past 2 MiB more), the port's unsafe translated code,
    and the memory of levels 19 to 22.
@@ -68,7 +56,10 @@ DONE.md); then the man batches straight on (step 7), before items 2 to 5.
    phase 28, 2026-10-07): every level
    `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
    `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
-   real; until then the page says so.
+   real; until then the page says so. Looked at again 2026-10-19: `libzstd-rs-sys` is
+   still a pre-release (`v0.0.1-prerelease.2`), its encoder the raw c2rust translation
+   (Trifecta Tech seeks funding for that cleanup, "Milestone 4: Encoder
+   implementation"), with no safe Rust API; parked until it has one.
 4. **The winget submission** (**yours** at the time): the manifests are validated
    (ROADMAP.md section 18); the submission is a pull request to `microsoft/winget-pkgs`,
    public, which goes out only with the user's yes then. Its side effects first: each
