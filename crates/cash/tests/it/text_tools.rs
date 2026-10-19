@@ -124,3 +124,22 @@ fn sed_reads_utf8_when_no_locale_is_set() {
     ]));
     assert_eq!(out.stdout, "cafE\nb\n3", "{}", out.stderr);
 }
+
+#[test]
+fn pr_lays_columns_out_as_gnu_pr_does() {
+    // The second of two columns began at column 40, where GNU's begins at 36: a tab
+    // followed the padding. `-s` padded where POSIX leaves the columns as they are, and
+    // the `-o` margin came before every column.
+    let out = run(
+        "seq 30 | pr -t -2 | head -2; seq 30 | pr -t -3 -w 30 | head -1; \
+         printf 'the cat sat\non the mat\n' | pr -t -s, -2; \
+         printf 'a\nb\n' | pr -t -o 2 -2",
+    );
+    // GNU pr's own bytes, from Git Bash.
+    assert_eq!(
+        out.stdout,
+        "1\t\t\t\t    16\n2\t\t\t\t    17\n1\t  11\t    21\nthe cat sat,on the mat\n  a\t\t\t\t      b",
+        "{}",
+        out.stderr
+    );
+}

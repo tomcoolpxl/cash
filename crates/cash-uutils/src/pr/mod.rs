@@ -39,7 +39,10 @@ const TRAILER_LINES_PER_PAGE: usize = 5;
 const FILE_STDIN: &str = "-";
 const DEFAULT_COLUMN_WIDTH: usize = 72;
 const DEFAULT_COLUMN_WIDTH_WITH_S_OPTION: usize = 512;
-const DEFAULT_COLUMN_SEPARATOR: &char = &TAB;
+// cash: GNU's columns are apart by a space, padding and all written as tabs where they
+// can be; with `-J` by a tab. A tab after the padding moved the second of two columns to
+// column 40, where GNU's is at 36.
+const DEFAULT_COLUMN_SEPARATOR: &char = &' ';
 const FF: u8 = 0x0C_u8;
 const NL: u8 = b'\n';
 const MAX_INT_VALUE: usize = i32::MAX as usize;
@@ -90,6 +93,10 @@ struct OutputOptions {
     form_feed_used: bool,
     join_lines: bool,
     col_sep_for_printing: String,
+    /// cash: whether the columns are apart by white space, no separator having been
+    /// given: then the padding and the separating space are written as GNU writes them,
+    /// tabs to each tab stop the gap reaches and spaces after.
+    pad_with_white_space: bool,
     line_width: Option<usize>,
     expand_tabs: Option<ExpandTabsOptions>,
 }
@@ -903,11 +910,21 @@ fn build_options(
 
     let across_mode = matches.get_flag(options::ACROSS);
 
-    let column_separator = match matches.get_one::<String>(options::COLUMN_STRING_SEPARATOR) {
+    let given_separator = match matches.get_one::<String>(options::COLUMN_STRING_SEPARATOR) {
         Some(x) => Some(x),
         None => matches.get_one::<String>(options::COLUMN_CHAR_SEPARATOR),
-    }
-    .map_or_else(|| DEFAULT_COLUMN_SEPARATOR.to_string(), ToString::to_string);
+    };
+    // cash: with `-J` the columns are apart by a tab, as GNU has them.
+    let column_separator = given_separator.map_or_else(
+        || {
+            if matches.get_flag(options::JOIN_LINES) {
+                TAB.to_string()
+            } else {
+                DEFAULT_COLUMN_SEPARATOR.to_string()
+            }
+        },
+        ToString::to_string,
+    );
 
     let default_column_width = if matches.contains_id(options::COLUMN_WIDTH)
         && matches.contains_id(options::COLUMN_CHAR_SEPARATOR)
@@ -1018,16 +1035,27 @@ fn build_options(
     let col_sep_for_printing = column_mode_options.as_ref().map_or_else(
         || {
             merge_files_print
-                .map(|_k| DEFAULT_COLUMN_SEPARATOR.to_string())
+                .map(|_k| {
+                    given_separator
+                        .map_or_else(|| DEFAULT_COLUMN_SEPARATOR.to_string(), ToString::to_string)
+                })
                 .unwrap_or_default()
         },
         |i| i.column_separator.clone(),
     );
+    let pad_with_white_space = given_separator.is_none() && !join_lines;
 
     let columns_to_print =
         merge_files_print.unwrap_or_else(|| column_mode_options.as_ref().map_or(1, |i| i.columns));
 
-    let line_width = if join_lines {
+    // cash: POSIX's `-s` turns the columns' truncation and padding off, unless `-w`
+    // gives a width; `-S` does not.
+    let separated_only = matches
+        .get_one::<String>(options::COLUMN_CHAR_SEPARATOR)
+        .is_some()
+        && !matches.contains_id(options::COLUMN_WIDTH);
+
+    let line_width = if join_lines || (separated_only && columns_to_print > 1) {
         None
     } else if columns_to_print > 1 {
         Some(
@@ -1057,6 +1085,7 @@ fn build_options(
         form_feed_used,
         join_lines,
         col_sep_for_printing,
+        pad_with_white_space,
         line_width,
         expand_tabs,
     })
@@ -1531,7 +1560,12 @@ fn write_columns(
         } else {
             row.iter().take_while(|cell| cell.is_some()).count()
         };
+        // cash: the row is laid out as one line, the `-o` margin once before it (it was
+        // written before every column), each column starting where GNU starts it.
         let mut cells_written = 0;
+        let mut text = String::new();
+        let mut position = options.offset_spaces;
+        let mut column_start = position;
         for (i, cell) in row.iter().enumerate() {
             let line_to_print = match cell {
                 None if options.merge_files_print.is_some() => &blank_line,
@@ -1542,12 +1576,32 @@ fn write_columns(
                 Some(file_line) => file_line,
             };
 
-            write_offset_spaces(writer, options.offset_spaces)?;
-            writer.write_all(
-                get_line_for_printing(options, line_to_print, columns, i, line_width, indexes)
-                    .as_bytes(),
-            )?;
+            let cell_text = get_line_for_printing(options, line_to_print, columns, i, line_width);
+            position += cell_text.chars().count();
+            text.push_str(&cell_text);
+            if i + 1 != indexes && !options.join_lines {
+                let separator = options.col_sep_for_printing.chars().count();
+                if let Some(width) = line_width {
+                    let goal = column_start + width.saturating_sub(columns - 1) / columns;
+                    if options.pad_with_white_space {
+                        push_white_space(&mut text, position, goal + 1);
+                        position = goal + 1;
+                    } else {
+                        push_white_space_as_spaces(&mut text, position, goal);
+                        text.push_str(&options.col_sep_for_printing);
+                        position = goal + separator;
+                    }
+                } else {
+                    text.push_str(&options.col_sep_for_printing);
+                    position += separator;
+                }
+                column_start = position;
+            }
             cells_written += 1;
+        }
+        if cells_written > 0 {
+            write_offset_spaces(writer, options.offset_spaces)?;
+            writer.write_all(text.as_bytes())?;
         }
         // The last row of a partly filled page has content in its leading
         // columns and nothing in the rest, so it still needs to be terminated.
@@ -1564,46 +1618,48 @@ fn write_columns(
     Ok(())
 }
 
+/// A cell's text, its number and its line, cut to the column's width when there is one;
+/// the padding and the separator after it are the row's to write.
 fn get_line_for_printing(
     options: &OutputOptions,
     file_line: &FileLine,
     columns: usize,
     index: usize,
     line_width: Option<usize>,
-    indexes: usize,
 ) -> String {
-    let blank_line = String::new();
     let formatted_line_number = get_formatted_line_number(options, file_line.line_number, index);
 
     // TODO: support non-UTF-8 bytes (currently replaced with U+FFFD)
     let content = String::from_utf8_lossy(&file_line.line_content);
-    let mut complete_line = format!("{formatted_line_number}{content}");
+    let complete_line = format!("{formatted_line_number}{content}");
 
-    let tab_count = complete_line.chars().filter(|i| i == &TAB).count();
+    match line_width {
+        Some(width) => {
+            let min_width = width.saturating_sub(columns - 1) / columns;
+            complete_line.chars().take(min_width).collect()
+        }
+        None => complete_line,
+    }
+}
 
-    let display_length = complete_line.len() + (tab_count * 7);
+/// White space from column `from` to column `to`, as GNU's pr writes it: a tab for
+/// each tab stop (every 8) the gap reaches, unless it is a single space, then spaces.
+fn push_white_space(text: &mut String, from: usize, to: usize) {
+    let mut at = from;
+    while to.saturating_sub(at) > 1 {
+        let stop = at + 8 - at % 8;
+        if stop > to {
+            break;
+        }
+        text.push(TAB);
+        at = stop;
+    }
+    push_white_space_as_spaces(text, at, to);
+}
 
-    let sep = if (index + 1) != indexes && !options.join_lines {
-        &options.col_sep_for_printing
-    } else {
-        &blank_line
-    };
-
-    format!(
-        "{}{sep}",
-        line_width
-            .map(|i| {
-                let min_width = i.saturating_sub(columns - 1) / columns;
-                if display_length < min_width {
-                    for _i in 0..(min_width - display_length) {
-                        complete_line.push(' ');
-                    }
-                }
-
-                complete_line.chars().take(min_width).collect()
-            })
-            .unwrap_or(complete_line),
-    )
+/// Spaces from column `from` to column `to`.
+fn push_white_space_as_spaces(text: &mut String, from: usize, to: usize) {
+    text.extend(std::iter::repeat_n(' ', to.saturating_sub(from)));
 }
 
 fn get_formatted_line_number(opts: &OutputOptions, line_number: usize, index: usize) -> String {
