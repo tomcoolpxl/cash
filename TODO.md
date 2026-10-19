@@ -122,10 +122,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   cash (`cash -c FILTER`, the piece on its standard input). Medium; the rest of split
   works.
 
-- **`set -o history` in a script keeps no history** (2026-10-18, found writing
-  history's man page): Bash keeps the script's commands once it is on, and `history`
-  lists them; cash's `history` exits 1 with nothing. Small; rare in scripts.
-
 - **A `case` of more than 64 patterns with brackets or extended globs** compiles each
   pattern again on every pass: compiled patterns are kept in an LRU of 64, which a
   cycle through more misses every time. Patterns of characters, `?` and `*` match
@@ -143,11 +139,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   (`tests/shell-bench/results/<date>-<os>/`, hyperfine's JSON and the machine: CPU,
   OS, shell versions), and `table.py` reading every results directory into one table. Not
   too complex: bash and hyperfine on both systems, Python only for the table. Small.
-
-- **ROADMAP.md section 6 says cash's sed lacks `\b` and labels ended by a space**
-  (2026-10-18, found checking the man page samples): both work now, as in GNU sed
-  (`s/\bcat\b/dog/g`, `:a ;s/a/x/;ta`), and the corpus has three known differences, not
-  four. The section's status paragraph is out of date. Small.
 
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,

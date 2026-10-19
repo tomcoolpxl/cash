@@ -2475,3 +2475,17 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   invalid option with the usage line and status 2, as in Git Bash. `cd -P -e` said "not
   yet implemented" too: cash resolves the real name before it enters the directory, so
   `-e` changes nothing and is taken.
+- **`set -o history` in a script** (2026-10-19, the phase after 1.32.0, item 2): Bash
+  keeps what a script reads once history is on, a command's lines as one entry, and
+  `history` lists them; cash kept none. Such a script is now read a command at a time,
+  and each command kept before it runs, joined as `cmdhist` joins lines (a space after
+  `then`, `do`, `{` or `|`, `; ` otherwise, a newline in a quote or a here-document);
+  sourced text, `eval`'s and a `-c` string are not, as in Bash. `HISTFILE` gets its
+  default only in an interactive shell, as in Bash, so a script's history reaches no
+  file unless it names one. Comment lines right after `set -o history` are not kept: the
+  whole-file reader resumes at the next command, and resuming earlier could read a
+  here-document's body again.
+- **ROADMAP.md section 6 brought up to date** (2026-10-19, the phase after 1.32.0, item
+  3): its status paragraph counted 209 cases and four differences, two of them GNU sed's
+  `\b` and space-ended labels, which work now. It gives the 305 cases, the real scripts
+  among them, the golden test, and the six cases that differ, each with its reason.

@@ -166,15 +166,25 @@ awk target POSIX, so each mismatch is classified as a Cash bug, a GNU/gawk-only 
 a Windows divergence. The first run (209 cases) found 19 mismatches, among them an awk
 compiler panic on `for` loops with an empty clause.
 
-**Status:** 205 of 209 cases match. Each fix has a focused regression; besides those named in
-the commit history, the corpus exposed `(( count[$word]++ ))` storing every word under key
-`0` (associative subscripts were evaluated as arithmetic), `for x in; do` iterating over
-`$@`, and `sed`'s `l` ignoring `-l`. The four remaining cases are classified in their files'
-`# tags:` lines:
+**Status:** 305 cases (129 sed, 72 awk, 104 bash), the bash ones including real scripts
+run unchanged: JSON.sh, spark, getoptions, mo, ansi, nvm.sh's helpers, semver-tool,
+wait-for-it, shUnit2, shFlags, bashmarks and two git-extras commands
+([`tests/corpus/SOURCES.md`](tests/corpus/SOURCES.md)). `run.ps1 -Freeze` writes Git Bash's
+output beside each case, and the `it` test `corpus_goldens` checks cash against it on every
+CI run. Each fix has a focused regression; besides those named in the commit history, the
+corpus exposed `(( count[$word]++ ))` storing every word under key `0` (associative
+subscripts were evaluated as arithmetic), `for x in; do` iterating over `$@`, and `sed`'s
+`l` ignoring `-l`. Every case matches but six, each classified in its file's `# tags:` line
+and listed in that test:
 
-- deliberate divergences: arithmetic never runs `$(...)` from a variable's value (spec §4,
-  row 27), and `s/.$//` does not see a hidden CR (D49);
-- GNU-only sed extensions: `\b` word boundaries, a label ended by a space.
+- deliberate divergences: `$PWD` is `C:/...` (D3), whose colon splits nvm's
+  colon-separated list; `$OSTYPE` is `windows` (spec §4 row 25); arithmetic never runs
+  `$(...)` from a variable's value (spec §4 row 27); `s/.$//` does not see a hidden CR
+  (D49);
+- two cases call `gawk` by name, and run only where it is installed.
+
+GNU sed's extensions the corpus uses (`\b`, labels ended by a space or `;`, `0~5`
+addresses, `\|` in a BRE) work in cash's sed.
 
 The last gap closed was pure-bash-bible's `reverse_array`, which reads `BASH_ARGV` under
 `extdebug`. cash built `BASH_ARGV` from its call stack; Bash keeps a stack of its own. A
