@@ -238,7 +238,7 @@ pub fn maybe_dispatch() -> Option<i32> {
     }
 
     #[cfg(feature = "bundled-coreutils")]
-    let argv = relaying_msys_command(cash_for_shell_names(argv));
+    let argv = relaying_msys_command(cash_for_scripts(cash_for_shell_names(argv)));
 
     // A tool that runs a command hands it its standard output, which would keep the
     // relay's pipe open after the tool is done.
@@ -324,6 +324,51 @@ fn cash_for_shell_names(argv: Vec<OsString>) -> Vec<OsString> {
     if let Some(slot) = args.get_mut(operand.index) {
         exe.as_os_str().clone_into(slot);
     }
+    args
+}
+
+/// `argv` for a bundled `env` or `timeout` whose command is not a Windows program but a
+/// script: a `#!` script, a batch file or a PowerShell script.
+///
+/// The tools start their command with `CreateProcess`, which starts programs only, so
+/// `timeout 10 ./test.sh` and `env X=1 ./run.sh` failed with `%1 is not a valid Win32
+/// application`, status 126, where `nohup`, `xargs` and `find -exec` ran the script.
+/// cash is handed the command instead, and runs it as the shell would run it, by its
+/// `#!` line or its kind: `cash -c 'exec "$0" "$@"' SCRIPT ARGS...`.
+#[cfg(feature = "bundled-coreutils")]
+fn cash_for_scripts(argv: Vec<OsString>) -> Vec<OsString> {
+    let Some(operand) = cash_coreutils_builtins::command_operand(&argv) else {
+        return argv;
+    };
+    let Some(program) = operand.args.get(operand.index) else {
+        return argv;
+    };
+    let mut cwd = std::env::current_dir().unwrap_or_default();
+    if let Some(dir) = &operand.chdir {
+        cwd = cwd.join(dir);
+    }
+    let path: Vec<PathBuf> = operand
+        .path
+        .clone()
+        .or_else(|| std::env::var_os("PATH"))
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default();
+    let pathext = cash_win32::resolve::process_pathext();
+    let dispatch = cash_win32::resolve::resolve(&program.to_string_lossy(), &path, &pathext, &cwd);
+    let (Some(dispatch), Some(exe)) = (dispatch, self_exe()) else {
+        return argv;
+    };
+    if matches!(dispatch, cash_win32::resolve::Dispatch::Native(_)) {
+        return argv;
+    }
+    let mut args = operand.args;
+    let tail = args.split_off(operand.index);
+    args.extend([
+        exe.as_os_str().to_owned(),
+        OsString::from("-c"),
+        OsString::from(r#"exec "$0" "$@""#),
+    ]);
+    args.extend(tail);
     args
 }
 

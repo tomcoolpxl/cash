@@ -975,6 +975,35 @@ fn timeout_works_without_an_external_one() {
     );
 }
 
+#[test]
+fn timeout_and_env_run_a_script() {
+    // They start their command with CreateProcess, which starts programs only: a `#!`
+    // script or a batch file failed with `%1 is not a valid Win32 application`, 126.
+    let scratch = Scratch::new("timeout-script");
+    std::fs::write(
+        scratch.path().join("s.sh"),
+        "#!/usr/bin/env bash\necho \"ran with $*\"\n",
+    )
+    .unwrap();
+    std::fs::write(scratch.path().join("b.cmd"), "@echo batch %1\r\n").unwrap();
+    std::fs::write(
+        scratch.path().join("slow.sh"),
+        "#!/usr/bin/env bash\nsleep 5\necho late\n",
+    )
+    .unwrap();
+    let out = output_of(cash_command().current_dir(scratch.path()).args([
+        "-c",
+        "timeout 5 ./s.sh a b; env X=1 ./s.sh c; timeout 5 ./b.cmd z; \
+         timeout 1 ./slow.sh; echo \"slow $?\"",
+    ]));
+    // cmd's echo ends its line with CRLF.
+    assert_eq!(
+        out.stdout, "ran with a b\nran with c\nbatch z\r\nslow 124",
+        "{}",
+        out.stderr
+    );
+}
+
 // ---------------------------------------------------------------------------
 // D17 — process substitution.
 // ---------------------------------------------------------------------------
