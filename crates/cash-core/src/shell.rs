@@ -356,6 +356,9 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
             wellknownvars::init_well_known_vars(&mut shell)?;
         }
 
+        // What a read finds in another case (D31), before any variable of the caller's.
+        shell.env.mark_started();
+
         // Set any provided variables.
         for (var_name, var_value) in options.vars {
             shell.env.set_global(var_name, var_value)?;

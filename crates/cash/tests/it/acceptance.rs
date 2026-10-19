@@ -322,6 +322,18 @@ fn an_exact_match_still_wins() {
     );
 }
 
+#[test]
+fn a_scripts_own_variable_is_not_read_in_another_case() {
+    // Only a variable from Windows or from cash's own start is: shflags keeps a flag's
+    // value in `FLAGS_help` and its help in `FLAGS_HELP`, and `${FLAGS_HELP:-}` read the
+    // flag's `0` for the help.
+    assert_eq!(
+        cash(r#"FLAGS_help=0; export Mine=1; printf '[%s][%s][%s]' "${FLAGS_HELP-}" "$MINE" "${seconds+set}""#)
+            .stdout,
+        "[][][set]"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // §9.1 — the parser fix.
 // ---------------------------------------------------------------------------

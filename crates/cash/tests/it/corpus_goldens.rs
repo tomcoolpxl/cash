@@ -58,8 +58,22 @@ const NOT_RUN: &[(&str, &str)] = &[
     ),
 ];
 
-/// How long one case may take, as `run.ps1` allows.
+/// How long one case may take, as `run.ps1` allows, unless its header says otherwise
+/// ([`timeout_of`]).
 const TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long the case `script` may take: its header's `# timeout: N` seconds, as in
+/// `run.ps1`, or [`TIMEOUT`].
+fn timeout_of(script: &str) -> Duration {
+    script
+        .lines()
+        .take_while(|line| line.starts_with('#'))
+        .find_map(|line| {
+            let rest = line.trim_start_matches('#').trim_start();
+            rest.strip_prefix("timeout:")?.trim().parse().ok()
+        })
+        .map_or(TIMEOUT, Duration::from_secs)
+}
 
 /// How many cases run at once. The test takes as many of nextest's slots
 /// (`.config/nextest.toml`).
@@ -203,9 +217,10 @@ fn copy_fixtures(from: &Path, to: &Path) {
 }
 
 /// Runs `script` as `run.ps1` runs it under cash: `-c`, `LC_ALL=C`, standard input a
-/// pipe already closed, killed after [`TIMEOUT`]. Its standard output with CRLF as LF,
-/// and its status.
+/// pipe already closed, killed after its [`timeout_of`]. Its standard output with CRLF as
+/// LF, and its status.
 fn run_case(script: &str, dir: &Path) -> (String, String) {
+    let timeout = timeout_of(script);
     let mut child = cash_command()
         .args(["--noprofile", "--norc", "-c", script])
         .current_dir(dir)
@@ -228,7 +243,7 @@ fn run_case(script: &str, dir: &Path) -> (String, String) {
     let status = loop {
         match child.try_wait().expect("wait for cash") {
             Some(status) => break status.code().map_or_else(|| "-1".into(), |c| c.to_string()),
-            None if started.elapsed() > TIMEOUT => {
+            None if started.elapsed() > timeout => {
                 let _ = child.kill();
                 let _ = child.wait();
                 break "timeout".into();

@@ -11,6 +11,9 @@
   pwsh tests/corpus/run.ps1 -CheckArgPassing   # also runs oracle bash on the file itself, to prove script passing is lossless
   pwsh tests/corpus/run.ps1 -Freeze            # also writes the oracle's stdout and status beside each case
                                                # (case.sh.out, case.sh.status), which the `it` test corpus_goldens checks cash against
+
+  A case's header may hold a `# timeout: N` line, N seconds for it instead of -TimeoutSec,
+  for a real script that starts many processes, which MSYS starts slowly.
 #>
 param(
     [string]$Cash = (Join-Path $PSScriptRoot '../../target/debug/cash.exe'),
@@ -34,14 +37,15 @@ $cases = foreach ($group in 'sed', 'awk', 'bash') {
         $rel = "$group/$($_.Name)"
         if ($rel -notlike $Filter -and $_.BaseName -notlike $Filter) { return }
         $text = [IO.File]::ReadAllText($_.FullName) -replace "`r`n", "`n"
-        $meta = @{ source = ''; desc = ''; tags = '' }
+        $meta = @{ source = ''; desc = ''; tags = ''; timeout = '' }
         foreach ($l in $text -split "`n") {
             if ($l -notmatch '^#') { break }
-            if ($l -match '^#\s*(source|desc|tags):\s*(.*)$') { $meta[$Matches[1]] = $Matches[2].Trim() }
+            if ($l -match '^#\s*(source|desc|tags|timeout):\s*(.*)$') { $meta[$Matches[1]] = $Matches[2].Trim() }
         }
         [pscustomobject]@{
             name = $rel; group = $group; file = $_.FullName; script = $text
             source = $meta.source; desc = $meta.desc; tags = $meta.tags
+            timeout = if ($meta.timeout) { [int]$meta.timeout } else { $TimeoutSec }
         }
     }
 }
@@ -100,19 +104,19 @@ $results = $cases | ForEach-Object -ThrottleLimit $Throttle -Parallel {
         New-Item -ItemType Directory -Force $cwd | Out-Null
         if (Test-Path $using:fixtures) { Copy-Item (Join-Path $using:fixtures '*') $cwd -Recurse }
         $viaEnv = if ($k -eq 'bash') { $c.script } else { $null }
-        $res[$k] = & $run $shells[$k] @('--noprofile', '--norc', '-c', $c.script) $cwd $using:TimeoutSec $viaEnv
+        $res[$k] = & $run $shells[$k] @('--noprofile', '--norc', '-c', $c.script) $cwd $c.timeout $viaEnv
     }
     $argCheck = $null
     if ($using:CheckArgPassing) {
         $cwd = Join-Path $using:workRoot "$safe/bashfile"
         New-Item -ItemType Directory -Force $cwd | Out-Null
         if (Test-Path $using:fixtures) { Copy-Item (Join-Path $using:fixtures '*') $cwd -Recurse }
-        $f = & $run $using:Bash @('--noprofile', '--norc', ($c.file -replace '\\', '/')) $cwd $using:TimeoutSec $null
+        $f = & $run $using:Bash @('--noprofile', '--norc', ($c.file -replace '\\', '/')) $cwd $c.timeout $null
         $argCheck = ($f.stdout -ceq $res.bash.stdout) -and ("$($f.status)" -eq "$($res.bash.status)")
         $cwd = Join-Path $using:workRoot "$safe/cashfile"
         New-Item -ItemType Directory -Force $cwd | Out-Null
         if (Test-Path $using:fixtures) { Copy-Item (Join-Path $using:fixtures '*') $cwd -Recurse }
-        $g = & $run $using:Cash @('--noprofile', '--norc', $c.file) $cwd $using:TimeoutSec $null
+        $g = & $run $using:Cash @('--noprofile', '--norc', $c.file) $cwd $c.timeout $null
         $argCheck = $argCheck -and ($g.stdout -ceq $res.cash.stdout) -and ("$($g.status)" -eq "$($res.cash.status)")
     }
     $outMatch = $res.bash.stdout -ceq $res.cash.stdout

@@ -115,6 +115,9 @@ pub struct ShellEnvironment {
     /// The variables inherited from Windows, by their folded spelling: an assignment to
     /// `Path` lands on `PATH` ([`ShellEnvironment::mark_inherited`]).
     inherited: HashMap<String, String>,
+    /// The folded names a read finds in another case (D31): the variables inherited from
+    /// Windows and those cash set as it started ([`ShellEnvironment::mark_started`]).
+    foldable: std::collections::HashSet<String>,
 }
 
 impl Default for ShellEnvironment {
@@ -131,6 +134,7 @@ impl ShellEnvironment {
             export_variables_on_modification: false,
             entry_count: 0,
             inherited: HashMap::new(),
+            foldable: std::collections::HashSet::new(),
         }
     }
 
@@ -143,8 +147,24 @@ impl ShellEnvironment {
     /// own `path` or `temp`, all in lower case, stays its own, as in Bash: folding those
     /// would have `for path in "$@"` break the script's command lookup.
     pub fn mark_inherited(&mut self, name: &str) {
-        self.inherited
-            .insert(cash_win32::fold::name_key(name), name.to_owned());
+        let key = cash_win32::fold::name_key(name);
+        self.foldable.insert(key.clone());
+        self.inherited.insert(key, name.to_owned());
+    }
+
+    /// Records the variables set now, as the shell starts, as those a read of a name not
+    /// set finds in another case (D31): an unset `$seconds` reads `SECONDS`.
+    ///
+    /// A variable a script sets later is found by its exact name only, as in Bash:
+    /// shflags keeps a flag's value in `FLAGS_help` and its help in `FLAGS_HELP`, and an
+    /// unset `${FLAGS_HELP:-}` read the flag's `0` for the help.
+    pub fn mark_started(&mut self) {
+        let names: Vec<String> = self
+            .scopes
+            .iter()
+            .flat_map(|(_, map)| map.iter().map(|(name, _)| cash_win32::fold::name_key(name)))
+            .collect();
+        self.foldable.extend(names);
     }
 
     /// Whether `name` is spelled as a variable inherited from Windows is.
@@ -322,9 +342,14 @@ impl ShellEnvironment {
         //
         // Deliberately a fallback rather than the primary lookup: an exact match always
         // wins, so a script that defines its own `$x` and `$X` keeps bash semantics. Only
-        // a name that resolves to nothing at all gets the second chance. Its folded
-        // spelling is made once for all the scopes.
+        // a name that resolves to nothing at all gets the second chance, and only for a
+        // variable from Windows or cash's own start (`mark_started`): a script's own
+        // `FLAGS_help` is not its `FLAGS_HELP`. Its folded spelling is made once for all
+        // the scopes.
         let key = cash_win32::fold::name_key(name.as_ref());
+        if !self.foldable.contains(&key) {
+            return None;
+        }
         for (scope_type, map) in self.scopes.iter().rev() {
             if let Some(var) = map.get_by_folded_name(&key) {
                 return Some((*scope_type, var));

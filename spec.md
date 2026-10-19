@@ -110,7 +110,7 @@ someone who expected bash, so additions need to earn their place.
 | 3 | Globbing and `find -name` are case-insensitive by default | Case-sensitive matching can only produce false negatives on a case-insensitive volume | D16 |
 | 4 | `\r\n` terminates a line in `$(...)`, `read`, `mapfile`, here-docs | Python/.NET/cmd emit CRLF and cannot be fixed at source | D20 |
 | 5 | Redirections above fd 2 error for native exes | Windows exes have no POSIX fd ABI | D26 |
-| 6 | Environment lookup is case-insensitive | Windows supplies `Path`, not `PATH` | D31 |
+| 6 | Environment lookup is case-insensitive for variables from Windows and those cash sets as it starts | Windows supplies `Path`, not `PATH` | D31 |
 | 7 | `test -x` requires ACL **and** extension/shebang | Default ACLs make every file execute-granted | D23 |
 | 8 | `chmod -x` warns and does nothing | Revoking execute needs Deny ACEs | D34 |
 | 9 | `kill -STOP` suspends threads, not a real `SIGSTOP` | Windows has no `SIGSTOP` for arbitrary exes | D19 |

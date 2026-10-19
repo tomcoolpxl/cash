@@ -1,0 +1,13 @@
+Hello, cash!
+Hello, bash!
+Hello, bash!
+verbose: ratio 0.25, rest: one two
+bad count: 2
+USAGE: NAME [flags] args
+flags:
+  -n,--name:  name to greet (default: 'world')
+  -v,--[no]verbose:  say more (default: false)
+  -c,--count:  how many times (default: 1)
+  -r,--ratio:  a ratio (default: 0.5)
+  -h,--help:  show this help (default: false)
+help: 1

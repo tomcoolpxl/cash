@@ -11,7 +11,9 @@ exactly: `$Path` and `$path` read `PATH`. The usual names (`PATH`, `HOME`, `TEMP
 inherited from Windows is the same one in any spelling with a capital in it:
 `Path=x` and `export Temp=x` set `PATH` and `TEMP`. A name all in lower case is a
 script's own, as in Bash, so `for path in "$@"` and `local temp` leave `PATH` and
-`TEMP` alone. Your own variables keep their case: `$Foo` and `$FOO` are two.
+`TEMP` alone. Your own variables keep their case: `$Foo` and `$FOO` are two, and with
+only `FLAGS_help` set, `$FLAGS_HELP` is empty, as in Bash. Only a variable from Windows,
+or one cash sets as it starts (`$seconds` reads `SECONDS`), is read in another case.
 
 ## cash's own
 

@@ -289,10 +289,13 @@ through shims, which ties cash to Scoop.
 
 ### D31 — Variable names are case-insensitive; POSIX names upper-cased
 
-Windows supplies `Path`, `Temp` and `UserProfile`, so lookup ignores case for every
-variable (an exact match wins), and `PATH`, `HOME`, `TMPDIR` and `USER` are upper-cased on
-import; an unset `$seconds` reads `SECONDS`. Turned down: Bash's case-sensitive lookup,
-where `$PATH` is empty; limiting the fallback to exported names.
+Windows supplies `Path`, `Temp` and `UserProfile`, so lookup ignores case for a variable
+inherited from Windows or set by cash as it starts (an exact match wins), and `PATH`,
+`HOME`, `TMPDIR` and `USER` are upper-cased on import; an unset `$seconds` reads
+`SECONDS`. A script's own variables are found by their exact name, as in Bash: shflags
+keeps `FLAGS_help` and `FLAGS_HELP` apart (the user, 2026-10-19). Turned down: Bash's
+case-sensitive lookup, where `$PATH` is empty; folding every variable; limiting the
+fallback to exported names.
 
 ### D32 — `.bat` and `.cmd` arguments are escaped for cmd
 
