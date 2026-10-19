@@ -2585,3 +2585,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   files it looks for at the top, and the differences page names it. The corpus test
   copied every fixture for every case, two thirds of its time; it copies the ones a case
   names, 30 s against 93.
+- **A corpus round: git-prompt.sh, bash3boilerplate and sharness** (2026-10-20, the phase
+  after 1.35.0, the user's pick of the sources): Git 2.56.0's `__git_ps1` through 19
+  states of a repository, bash3boilerplate 2.8.0's option parsing, logging and helpers,
+  and sharness 1.2.1's test runs, unchanged. bash3boilerplate found two bugs and one
+  more beside them. `declare -a "arg_i[@]"='(...)'` failed on the subscript `@`: with
+  `-a` or `-A`, a list given to `name[...]` is the whole array's, the subscript ignored,
+  as in Bash. A file sourced by the script had only itself in `BASH_SOURCE`, where Bash
+  gives `(file script)`. And the script's `EXIT` trap ran after the script was gone, so
+  it saw no `$@` and no `BASH_SOURCE`; it runs inside the script now. getopts' message for
+  a missing argument differs in its wording only, and the case leaves it out.

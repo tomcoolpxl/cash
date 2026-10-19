@@ -1,0 +1,63 @@
+ok 1 - true passes
+ok 2 - a file is written in the trash
+not ok 3 - a known breakage # TODO known breakage
+ok 4 - a breakage fixed # TODO known breakage vanished
+not ok 5 - a failure
+#	echo to-the-log; false
+ok 6 # skip skipped for its prerequisite (missing MISSING)
+ok 7 - run with its prerequisite
+ok 8 - test_cmp
+ok 9 - test_must_fail
+# 1 known breakage(s) vanished; please update test(s)
+# still have 1 known breakage(s)
+# failed 1 among remaining 7 test(s)
+1..9
+status: 1
+trash directory.t0001-basic
+expecting success: true
+ok 1 - true passes
+
+expecting success: echo hello >out && test "$(cat out)" = hello
+ok 2 - a file is written in the trash
+
+checking known breakage: false
+not ok 3 - a known breakage # TODO known breakage
+
+checking known breakage: true
+ok 4 - a breakage fixed # TODO known breakage vanished
+
+expecting success: echo to-the-log; false
+to-the-log
+not ok 5 - a failure
+#	echo to-the-log; false
+
+skipping test: skipped for its prerequisite true
+ok 6 # skip skipped for its prerequisite (missing MISSING)
+
+expecting success: true
+ok 7 - run with its prerequisite
+
+expecting success: echo a >expect && echo a >actual && test_cmp expect actual
+ok 8 - test_cmp
+
+expecting success: test_must_fail false
+ok 9 - test_must_fail
+
+# 1 known breakage(s) vanished; please update test(s)
+# still have 1 known breakage(s)
+# failed 1 among remaining 7 test(s)
+1..9
+verbose: 1
+ok 1 - true passes
+ok 2 - a file is written in the trash
+not ok 3 - a known breakage # TODO known breakage
+ok 4 - a breakage fixed # TODO known breakage vanished
+not ok 5 - a failure
+#	echo to-the-log; false
+immediate: 1
+ok 1 - one
+ok 2 - two
+# passed all 2 test(s)
+1..2
+status: 0
+trash left: 2

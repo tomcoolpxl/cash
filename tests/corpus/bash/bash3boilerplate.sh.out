@@ -1,0 +1,155 @@
+
+ Option -f (--file) requires an argument
+
+  -f --file  [arg] Filename to process. Required.
+  -t --temp  [arg] Location of tempfile. Default="/tmp/bar"
+  -v               Enable verbose mode, print script as it is executed
+  -d --debug       Enables debug mode
+  -h --help        This page
+  -n --no-color    Disable color output
+  -1 --one         Do just one thing
+  -i --input [arg] File to process. Can be repeated.
+  -x               Specify a flag. Can be repeated.
+
+ This is Bash3 Boilerplate's help text. Feel free to add any description of your
+ program or elaborate more on command-line arguments. This section is not
+ parsed and will be added as-is to the help.
+
+status: 1
+[     info] __i_am_main_script: 1
+[     info] arg_f: in.txt
+[     info] arg_d: 0
+[     info] arg_v: 0
+[     info] arg_h: 0
+[     info] arg_i: 0
+[     info] arg_x: 0
+[     info] multiple lines example - line #1
+[     info] multiple lines example - line #2
+[     info] imagine logging the output of 'ls -al /path/'
+[     info] Normal operational messages - may be harvested for reporting, measuring throughput, etc. - no action required.
+[   notice] Events that are unusual but not error conditions - might be summarized in an email to developers or admins to spot potential problems - no immediate action required.
+[  warning] Warning messages, not an error, but indication that an error will occur if action is not taken, e.g. file system 85% full - each item must be resolved within a given time.
+[    error] Non-urgent failures, these should be relayed to developers or admins; each item must be resolved within a given time.
+[ critical] Should be corrected immediately, but indicates failure in a primary system, an example is a loss of a backup ISP connection.
+[    alert] Should be corrected immediately, therefore notify staff who can fix the problem. An example would be the loss of a primary ISP connection.
+[emergency] A "panic" condition usually affecting multiple apps/servers/sites. At this level it would usually notify all tech staff on call.
+[     info] Cleaning up. Done
+status: 1
+[     info] __i_am_main_script: 1
+[     info] arg_f: in.txt
+[     info] arg_d: 0
+[     info] arg_v: 0
+[     info] arg_h: 0
+[     info] arg_i:
+[     info]  - a
+[     info]  - b
+[     info] arg_x: 3
+[     info] multiple lines example - line #1
+[     info] multiple lines example - line #2
+[     info] imagine logging the output of 'ls -al /path/'
+[     info] Normal operational messages - may be harvested for reporting, measuring throughput, etc. - no action required.
+[   notice] Events that are unusual but not error conditions - might be summarized in an email to developers or admins to spot potential problems - no immediate action required.
+[  warning] Warning messages, not an error, but indication that an error will occur if action is not taken, e.g. file system 85% full - each item must be resolved within a given time.
+[    error] Non-urgent failures, these should be relayed to developers or admins; each item must be resolved within a given time.
+[ critical] Should be corrected immediately, but indicates failure in a primary system, an example is a loss of a backup ISP connection.
+[    alert] Should be corrected immediately, therefore notify staff who can fix the problem. An example would be the loss of a primary ISP connection.
+[emergency] A "panic" condition usually affecting multiple apps/servers/sites. At this level it would usually notify all tech staff on call.
+[     info] Cleaning up. Done
+status: 1
+
+ Option -f (--file) requires an argument
+
+  -f --file  [arg] Filename to process. Required.
+  -t --temp  [arg] Location of tempfile. Default="/tmp/bar"
+  -v               Enable verbose mode, print script as it is executed
+  -d --debug       Enables debug mode
+  -h --help        This page
+  -n --no-color    Disable color output
+  -1 --one         Do just one thing
+  -i --input [arg] File to process. Can be repeated.
+  -x               Specify a flag. Can be repeated.
+
+ This is Bash3 Boilerplate's help text. Feel free to add any description of your
+ program or elaborate more on command-line arguments. This section is not
+ parsed and will be added as-is to the help.
+
+status: 1
+[    error] Non-urgent failures, these should be relayed to developers or admins; each item must be resolved within a given time.
+[ critical] Should be corrected immediately, but indicates failure in a primary system, an example is a loss of a backup ISP connection.
+[    alert] Should be corrected immediately, therefore notify staff who can fix the problem. An example would be the loss of a primary ISP connection.
+[emergency] A "panic" condition usually affecting multiple apps/servers/sites. At this level it would usually notify all tech staff on call.
+status: 1
+status: 1
+[     info] __i_am_main_script: 1
+[     info] arg_f: in.txt
+[     info] arg_d: 0
+[     info] arg_v: 0
+[     info] arg_h: 0
+[     info] arg_i: 0
+[     info] arg_x: 0
+[     info] multiple lines example - line #1
+[     info] multiple lines example - line #2
+[     info] imagine logging the output of 'ls -al /path/'
+[     info] Normal operational messages - may be harvested for reporting, measuring throughput, etc. - no action required.
+[   notice] Events that are unusual but not error conditions - might be summarized in an email to developers or admins to spot potential problems - no immediate action required.
+[  warning] Warning messages, not an error, but indication that an error will occur if action is not taken, e.g. file system 85% full - each item must be resolved within a given time.
+[    error] Non-urgent failures, these should be relayed to developers or admins; each item must be resolved within a given time.
+[ critical] Should be corrected immediately, but indicates failure in a primary system, an example is a loss of a backup ISP connection.
+[    alert] Should be corrected immediately, therefore notify staff who can fix the problem. An example would be the loss of a primary ISP connection.
+[emergency] A "panic" condition usually affecting multiple apps/servers/sites. At this level it would usually notify all tech staff on call.
+[     info] Cleaning up. Done
+status: 1
+== parse_url
+proto: https://
+user: johndoe
+pass: abc123
+host: example.com
+port: 8443
+path: a/b.html
+
+ Use second argument to return just 1 variable.
+ parse_url() demo: 
+
+   proto: ftp://
+   user:  
+   pass:  
+   host:  example.org
+   port:  
+   path:  pub
+
+
+ Use second argument to return just 1 variable.
+ parse_url() demo: 
+
+   proto: http://
+   user:  
+   pass:  
+   host:  example.com
+   port:  8080
+   path:  index.html
+
+== ini_val
+host: 10.0.0.1
+
+[connection]
+;[host] Host name or IP address
+host=127.0.0.1
+host = 10.0.0.1
+port = 5432
+
+[software]
+version=1.35
+name = cash
+
+[default]
+orphan=nowhere
+cash
+== templater
+kept = ${MISSING}
+ERROR: Unable to replace the above template vars
+status: 1
+kept = ${MISSING}
+status: 0
+name = kevin
+port = 8080
+kept = ${MISSING}

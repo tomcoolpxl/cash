@@ -888,6 +888,10 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   corpus round, of JSON.sh, argbash, asdf's core and bash-oo-framework, downloaded with
   the user's OK in the same pick. Left out: `sudo -E` through a handle, 7z at 7-Zip's
   speed (parked).
+- **The phase after 1.35.0** (the user, 2026-10-20): another corpus round, of
+  git-prompt.sh (Git's `__git_ps1`), bash3boilerplate and sharness, downloaded with the
+  user's OK in the same pick. Left out: bash-preexec, `sudo -E` through a handle, and
+  lzma-rust2 taken in for 7z's speed and xz's Ctrl-C.
 
 ## 8. Archives and compression
 

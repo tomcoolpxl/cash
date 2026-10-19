@@ -25,7 +25,14 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the current phase, 2026-10-19)
+## Picked by the user (the current phase, 2026-10-20)
+
+The user's picks after 1.35.0 (decisions.md, "The phase after 1.35.0"):
+
+1. another corpus round: git-prompt.sh, bash3boilerplate and sharness, the downloads
+   approved in the same pick: done 2026-10-20 (DONE.md).
+
+## The phase before (2026-10-20, done)
 
 The user's picks after 1.34.0 (decisions.md, "The phase after 1.34.0"), in this order,
 each described under "Found along the way" until it is done:
@@ -129,6 +136,11 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **An `EXIT` trap run by `exit` inside a function** (2026-10-20, found in the corpus
+  round after 1.35.0): Bash runs the trap where `exit` was called, so `FUNCNAME` there is
+  `f main`; cash runs it once the function has returned, and `FUNCNAME` is empty. The
+  script's positional parameters and `BASH_SOURCE` are right since. Small; seen by no
+  script so far.
 - **Two oracle tests lost their directory part way, once** (2026-10-19, a full `it`
   run): `column_cases.sh` and `bzip2_cases.sh`, running at the same moment, found the
   directory `mktemp -d` had made for them gone ("Not a directory" for each program they
