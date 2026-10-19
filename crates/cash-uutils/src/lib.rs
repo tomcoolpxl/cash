@@ -2,8 +2,8 @@
 // for their copyright and licence, see the LICENSE file beside this crate's manifest.
 
 //! `cat`, `cp`, `head`, `ln`, `mkdir`, `mv`, `paste`, `pr`, `ptx`, `rm`, `rmdir`, `shred`,
-//! `shuf`, `sort`, `tac`, `tail`, `tee` and `uniq`, taken from uutils coreutils 0.12.0 and
-//! made cash's own: what changed on the way in is in this crate's `README.md`. cash runs
+//! `shuf`, `sort`, `split`, `tac`, `tail`, `tee` and `uniq`, taken from uutils coreutils 0.12.0
+//! and made cash's own: what changed on the way in is in this crate's `README.md`. cash runs
 //! each through its `uumain`, as it runs the uutils tools it bundles unchanged.
 
 // The workspace lints apply here as everywhere, rustc's warnings and the unsafe ones
@@ -60,6 +60,7 @@ pub mod rmdir;
 pub mod shred;
 pub mod shuf;
 pub mod sort;
+pub mod split;
 pub mod tac;
 pub mod tail;
 pub mod tee;

@@ -146,3 +146,18 @@ fn pr_lays_columns_out_as_gnu_pr_does() {
         out.stderr
     );
 }
+
+#[test]
+fn split_filter_pipes_each_piece_into_a_command() {
+    // uutils refused `--filter` on Windows. Each piece goes into cash, with `$FILE` the
+    // name the piece would have had.
+    let out = run("d=$(mktemp -d) && cd \"$d\" && seq 10 > in.txt && \
+         split -l 4 --filter='echo \"$FILE: $(wc -l)\"' in.txt && \
+         split -l 5 --filter='cat > $FILE.copy' in.txt p && cat p*.copy | wc -l && ls; \
+         cd / && rm -rf \"$d\"");
+    assert_eq!(
+        out.stdout, "xaa: 4\nxab: 4\nxac: 2\n10\nin.txt\npaa.copy\npab.copy",
+        "{}",
+        out.stderr
+    );
+}

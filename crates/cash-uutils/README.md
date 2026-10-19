@@ -1,13 +1,14 @@
 # cash-uutils
 
 `cat`, `cp`, `head`, `ln`, `mkdir`, `mv`, `paste`, `pr`, `ptx`, `rm`, `rmdir`, `shred`,
-`shuf`, `sort`, `tac`, `tail`, `tee` and `uniq` for cash: taken from
+`shuf`, `sort`, `split`, `tac`, `tail`, `tee` and `uniq` for cash: taken from
 [uutils coreutils](https://github.com/uutils/coreutils) 0.12.0 (`uu_cat`, `uu_cp`,
 `uu_head`, `uu_ln`, `uu_mkdir`, `uu_mv`, `uu_paste`, `uu_pr`, `uu_ptx`, `uu_rm`,
-`uu_rmdir`, `uu_shred`, `uu_shuf`, `uu_sort`, `uu_tac`, `uu_tail`, `uu_tee`,
-`uu_uniq`), © the uutils developers, under the MIT License (`LICENSE`), and made cash's
-own: `rm`, `sort`, `tee`, `uniq` and `shuf` on 2026-10-10, `head` and `tail` on
-2026-10-17, the other eleven on 2026-10-18 to say their errors in GNU's words. Until
+`uu_rmdir`, `uu_shred`, `uu_shuf`, `uu_sort`, `uu_split`, `uu_tac`, `uu_tail`,
+`uu_tee`, `uu_uniq`), © the uutils developers, under the MIT License (`LICENSE`), and
+made cash's own: `rm`, `sort`, `tee`, `uniq` and `shuf` on 2026-10-10, `head` and `tail`
+on 2026-10-17, eleven more on 2026-10-18 to say their errors in GNU's words, and
+`split` on 2026-10-19 for `--filter` on Windows. Until
 then the first five were carried in `vendor/uutils` as patched copies, and the rest
 were used from crates.io as published, as the other uutils tools cash bundles still
 are.
@@ -49,6 +50,11 @@ as it registers the uutils tools it uses unchanged.
   is ineffective, as GNU tail does (uutils took any input for one), and `--pid` holds
   the process through `cash_win32::process::Held`. `tail` no longer ends itself with 13
   on a broken pipe: cash's relay of a bundled tool's output ends it with 141.
+- **`split --filter` on Windows** (2026-10-19): uutils refused it there, as its Unix
+  writer set `FILE` for the whole process before starting the shell. Each piece is now
+  piped into cash itself, this process's own exe, with `--norc --noprofile -c COMMAND`,
+  `FILE` set for that child alone and `CASH_ARGV0` telling a linked `split.exe` it was
+  started as the shell, as for awk's `system()`. Its Unix and WASI writers are gone.
 - **`rm`'s trailing separators**: `d/../////` is trimmed to `d/../` with either
   separator; uutils looked for `\` alone on Windows.
 - **`rm` removes the directory it runs in** (2026-10-17): the bundled `rm` runs in the

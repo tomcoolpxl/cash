@@ -65,6 +65,8 @@ use cash_uutils::shred as uu_shred;
 use cash_uutils::shuf as uu_shuf;
 #[cfg(feature = "coreutils.sort")]
 use cash_uutils::sort as uu_sort;
+#[cfg(feature = "coreutils.split")]
+use cash_uutils::split as uu_split;
 #[cfg(feature = "coreutils.tac")]
 use cash_uutils::tac as uu_tac;
 #[cfg(feature = "coreutils.tail")]

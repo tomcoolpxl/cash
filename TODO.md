@@ -106,14 +106,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
-- **`split --filter` is refused** (2026-10-19, found checking split's options for its
-  man page): uutils' `split` answers `--filter is currently not supported in this
-  platform` on Windows, where GNU's pipes each piece into the command, `$FILE` naming
-  it (`split -l 1000 --filter='gzip > $FILE.gz' big.log`). It would mean taking
-  uutils' split in as cash's own (`crates/cash-uutils`), and running the filter with
-  cash (`cash -c FILTER`, the piece on its standard input). Medium; the rest of split
-  works.
-
 - **A `case` of more than 64 patterns with brackets or extended globs** compiles each
   pattern again on every pass: compiled patterns are kept in an LRU of 64, which a
   cycle through more misses every time. Patterns of characters, `?` and `*` match

@@ -2508,3 +2508,9 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   with the account's full name, profile directory, `.project` and `.plan`. `users` names an
   account once for each session, as GNU does. A FILE of login records is refused. All
   three keep GNU's layouts, times as `2026-10-19 08:12`.
+- **`split --filter`** (2026-10-19, the phase after 1.32.0, item 6): uutils' split refused
+  it on Windows. split is now cash's own (`crates/cash-uutils`, from `uu_split` 0.12.0),
+  and each piece is piped into cash with `$FILE` the name it would have had, as GNU
+  split runs `$SHELL`: `split -l 1000 --filter='gzip > $FILE.gz' big.log`. A failing
+  filter is reported at each piece with status 1, where GNU stops at the first with its
+  status; that edge was left.
