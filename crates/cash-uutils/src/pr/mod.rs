@@ -1560,6 +1560,16 @@ fn write_columns(
         } else {
             row.iter().take_while(|cell| cell.is_some()).count()
         };
+        // cash: a merged row with nothing from any file is past the end of them all: with
+        // `-t` the output ends there, as GNU's does; else the page goes on in empty
+        // lines. Both printed a row of padding, to the page's end.
+        if merge && row.iter().all(Option::is_none) {
+            if !options.display_header_and_trailer {
+                break;
+            }
+            writer.write_all(line_separator)?;
+            continue;
+        }
         // cash: the row is laid out as one line, the `-o` margin once before it (it was
         // written before every column), each column starting where GNU starts it.
         let mut cells_written = 0;

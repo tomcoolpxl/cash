@@ -133,12 +133,15 @@ fn pr_lays_columns_out_as_gnu_pr_does() {
     let out = run(
         "seq 30 | pr -t -2 | head -2; seq 30 | pr -t -3 -w 30 | head -1; \
          printf 'the cat sat\non the mat\n' | pr -t -s, -2; \
-         printf 'a\nb\n' | pr -t -o 2 -2",
+         printf 'a\nb\n' | pr -t -o 2 -2; \
+         pr -m -t <(printf 'one\n') <(printf 'uno\ndos\n') | tr '\\t' T",
     );
-    // GNU pr's own bytes, from Git Bash.
+    // GNU pr's own bytes, from Git Bash; `-m -t` ends with the longest file, where a row
+    // of padding was printed for each line to the page's end.
     assert_eq!(
         out.stdout,
-        "1\t\t\t\t    16\n2\t\t\t\t    17\n1\t  11\t    21\nthe cat sat,on the mat\n  a\t\t\t\t      b",
+        "1\t\t\t\t    16\n2\t\t\t\t    17\n1\t  11\t    21\nthe cat sat,on the mat\n  a\t\t\t\t      b\n\
+         oneTTTT    uno\nTTTT    dos",
         "{}",
         out.stderr
     );
