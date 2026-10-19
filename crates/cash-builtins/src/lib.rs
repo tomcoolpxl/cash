@@ -295,7 +295,7 @@ mod lookup;
 mod unimp;
 
 pub use builder::ShellBuilderExt;
-pub use factory::{BuiltinSet, default_builtins};
+pub use factory::{BuiltinSet, default_builtins, is_default_builtin};
 pub use which::is_bash_builtin;
 
 /// Writes an alias definition in the reusable form printed by `alias` and `command -v`.

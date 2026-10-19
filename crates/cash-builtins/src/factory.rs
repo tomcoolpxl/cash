@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
@@ -15,13 +16,48 @@ pub enum BuiltinSet {
     BashMode,
 }
 
+/// The names of the builtins of each set, from the first time this process made them.
+static NAMES: [OnceLock<HashSet<String>>; 2] = [OnceLock::new(), OnceLock::new()];
+
+/// Where the names of `set`'s builtins are kept.
+const fn names_of(set: BuiltinSet) -> &'static OnceLock<HashSet<String>> {
+    match set {
+        BuiltinSet::ShMode => &NAMES[0],
+        BuiltinSet::BashMode => &NAMES[1],
+    }
+}
+
 /// Returns the default set of built-in commands.
 ///
 /// # Arguments
 ///
 /// * `set` - The set of built-ins to return.
-#[expect(clippy::too_many_lines)]
 pub fn default_builtins<SE: cash_core::ShellExtensions>(
+    set: BuiltinSet,
+) -> HashMap<String, builtins::Registration<SE>> {
+    let builtins = make_default_builtins(set);
+    names_of(set).get_or_init(|| builtins.keys().cloned().collect());
+    builtins
+}
+
+/// Whether `name` is one of the builtins of `set`.
+///
+/// Asked by `env` and `timeout` of the command they run. Making the builtins takes a
+/// while on a debug build, and every cash makes them as its shell starts, so their names
+/// are kept from then; a process that has made none makes them once.
+#[must_use]
+pub fn is_default_builtin(name: &str, set: BuiltinSet) -> bool {
+    names_of(set)
+        .get_or_init(|| {
+            make_default_builtins::<cash_core::extensions::DefaultShellExtensions>(set)
+                .into_keys()
+                .collect()
+        })
+        .contains(name)
+}
+
+#[expect(clippy::too_many_lines)]
+fn make_default_builtins<SE: cash_core::ShellExtensions>(
     set: BuiltinSet,
 ) -> HashMap<String, builtins::Registration<SE>> {
     let mut m = HashMap::<String, builtins::Registration<SE>>::new();
@@ -572,6 +608,19 @@ const STARTS_COMMANDS: &[&str] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The names kept are the builtins' own, whether `default_builtins` made them first or
+    /// the question did.
+    #[test]
+    fn a_builtin_is_known_by_its_name() {
+        for set in [BuiltinSet::BashMode, BuiltinSet::ShMode] {
+            assert!(is_default_builtin("cd", set));
+            assert!(is_default_builtin("time", set));
+            assert!(!is_default_builtin("whoami.exe", set));
+            let made = default_builtins::<cash_core::extensions::DefaultShellExtensions>(set);
+            assert!(made.keys().all(|name| is_default_builtin(name, set)));
+        }
+    }
 
     /// The builtins whose output is written as it comes, not gathered into larger writes
     /// (`cash_core::output`): each runs until it is stopped, or draws a screen and waits

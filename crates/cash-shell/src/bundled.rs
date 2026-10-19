@@ -348,11 +348,8 @@ fn cash_for_builtins(argv: Vec<OsString>) -> Vec<OsString> {
         return argv;
     }
     let bundled = registry().is_some_and(|tools| tools.contains_key(&name));
-    let builtin = bundled
-        || cash_builtins::default_builtins::<cash_core::extensions::DefaultShellExtensions>(
-            cash_builtins::BuiltinSet::BashMode,
-        )
-        .contains_key(&name);
+    let builtin =
+        bundled || cash_builtins::is_default_builtin(&name, cash_builtins::BuiltinSet::BashMode);
     let (true, Some(exe)) = (builtin, self_exe()) else {
         return argv;
     };
