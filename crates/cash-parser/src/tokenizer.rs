@@ -266,6 +266,9 @@ struct CrossTokenParseState {
     /// Whether the words since a `[[` have not yet reached its `]]`: there an extglob
     /// pattern is read whether extglob is on or not, as in Bash.
     in_double_brackets: bool,
+    /// How many `${...}` expansions are being read, inside one another: their words are
+    /// not held for after a here-document's body, even one begun inside them.
+    braced_expansions: u32,
 }
 
 /// Options controlling how the tokenizer operates.
@@ -626,6 +629,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                 queued_tokens: vec![],
                 arithmetic_expansion: false,
                 in_double_brackets: false,
+                braced_expansions: 0,
             },
             pending: vec![],
             blank_end: false,
@@ -767,6 +771,48 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
     ///   `[`).
     /// * `initial_nesting` - The initial nesting count (e.g., 2 for `$((`, 1 for `$[`).
     fn consume_nested_construct(
+        &mut self,
+        state: &mut TokenParseState,
+        terminating_char: char,
+        nesting_open: &str,
+        nesting_count: u32,
+    ) -> Result<(), TokenizerError> {
+        // A here-document inside is the construct's own, its body read at the first
+        // newline inside, as Bash reads the construct as a program of its own: with one
+        // pending on the line, `cat <<A; echo "$(cat <<B ...)"` ran out of input.
+        let outer = self.set_aside_here_documents();
+        let result = self.consume_nested_text(state, terminating_char, nesting_open, nesting_count);
+        self.take_back_here_documents(outer);
+        result
+    }
+
+    /// Puts aside the here-documents pending on the line, for a construct inside it whose
+    /// words are its own (`$(...)`, `${...}`): with one pending, each word inside was held
+    /// for after its body.
+    fn set_aside_here_documents(&mut self) -> (HereState, Vec<HereTag>) {
+        (
+            std::mem::take(&mut self.cross_state.here_state),
+            std::mem::take(&mut self.cross_state.current_here_tags),
+        )
+    }
+
+    /// Takes back what [`Self::set_aside_here_documents`] put aside. A here-document the
+    /// construct left open (`$(cat <<EOF)`, its body on the lines after) waits after those,
+    /// for the end of the line, which inside a `${...}` has not come yet.
+    fn take_back_here_documents(&mut self, (state, mut tags): (HereState, Vec<HereTag>)) {
+        let inner = std::mem::take(&mut self.cross_state.current_here_tags);
+        self.cross_state.here_state = if inner.is_empty() || self.cross_state.braced_expansions > 0
+        {
+            state
+        } else {
+            HereState::NextLineIsHereDoc
+        };
+        tags.extend(inner);
+        self.cross_state.current_here_tags = tags;
+    }
+
+    /// The loop of [`Self::consume_nested_construct`].
+    fn consume_nested_text(
         &mut self,
         state: &mut TokenParseState,
         terminating_char: char,
@@ -1205,6 +1251,12 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                             let mut pending_here_doc_tokens = vec![];
                             let mut drain_here_doc_tokens = false;
 
+                            // The words inside are the expansion's, not the line's: with a
+                            // here-document pending on the line, `cat <<EOF >"${f}"` lost
+                            // `f` and read `${}`.
+                            let outer = self.set_aside_here_documents();
+                            self.cross_state.braced_expansions += 1;
+
                             loop {
                                 let cur_token = if drain_here_doc_tokens
                                     && !pending_here_doc_tokens.is_empty()
@@ -1267,6 +1319,9 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                                     _ => (),
                                 }
                             }
+
+                            self.cross_state.braced_expansions -= 1;
+                            self.take_back_here_documents(outer);
                         }
                         _ => {
                             // This is either a different character, or else the end of the string.

@@ -2518,3 +2518,14 @@ fn a_script_run_is_main_in_funcname_caller_and_bash_source() {
         (0, "f main main.sh main.sh 2 0\n2 main main.sh".into())
     );
 }
+
+#[test]
+fn a_braced_expansion_or_substitution_on_a_here_document_line_keeps_its_words() {
+    // With a here-document pending on the line, each word inside a `${...}` or `$(...)`
+    // was held for after its body: `cat <<EOF >"${f}"` read `${}` (shunit2), and a
+    // here-document inside `$(...)` ran out of input.
+    let script = "f=/dev/stdout x=X\ncat <<EOF >\"${f}\"\na ${x}\nEOF\n\
+        cat <<EOF; echo \"$(cat <<IN\nb\nIN\n)\"\nc\nEOF\n\
+        echo \"${y:-$(cat <<EOF)}\"\nd\nEOF\n";
+    assert_eq!(output(script), (0, "a X\nc\nb\nd".into()));
+}
