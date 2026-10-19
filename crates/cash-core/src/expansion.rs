@@ -1758,6 +1758,24 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                         cash_parser::word::ParameterTestType::Unset,
                         ParameterState::DefinedEmptyString,
                     ) => Ok(self.expand_parameter_word(alternative_value).await?),
+                    // `"${a[@]+word}"` and `"${@+word}"` give no word when the array or
+                    // the positional parameters are empty, as `"${a[@]}"` gives none:
+                    // bats' `BATS_TEST_TAGS=("${tags[@]+${tags[@]}}")` held one empty tag,
+                    // and printed `# tags:` under every failing test.
+                    _ if matches!(
+                        parameter,
+                        cash_parser::word::Parameter::NamedWithAllIndices {
+                            concatenate: false,
+                            ..
+                        } | cash_parser::word::Parameter::Special(
+                            cash_parser::word::SpecialParameter::AllPositionalParameters {
+                                concatenate: false
+                            }
+                        )
+                    ) =>
+                    {
+                        Ok(expanded_parameter)
+                    }
                     _ => Ok(Expansion::from(String::new())),
                 }
             }

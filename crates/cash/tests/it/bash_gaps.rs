@@ -2544,3 +2544,15 @@ fn a_trap_running_is_running_in_its_command_substitutions() {
         (0, "debug ran 3 times\nparent\nchild")
     );
 }
+
+#[test]
+fn an_empty_arrays_alternative_in_quotes_is_no_word() {
+    // `"${a[@]+word}"` gives no word when the array is empty, as `"${a[@]}"` gives none:
+    // bats' `BATS_TEST_TAGS=("${tags[@]+${tags[@]}}")` held one empty tag.
+    let (status, out) = output(
+        "unset t; a=(\"${t[@]+${t[@]}}\"); b=(\"${t[@]:+y}\"); set --; c=(\"${@+$@}\"); \
+         d=(\"${t[@]-}\"); e=(\"${t[*]+z}\"); u=(x y); f=(\"${u[@]+${u[@]}}\"); \
+         echo ${#a[@]} ${#b[@]} ${#c[@]} ${#d[@]} ${#e[@]} ${#f[@]}",
+    );
+    assert_eq!((status, out.as_str()), (0, "0 0 0 1 1 2"));
+}
