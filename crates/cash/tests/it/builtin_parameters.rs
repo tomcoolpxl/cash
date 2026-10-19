@@ -774,6 +774,29 @@ fn declare_integer_attribute() {
 }
 
 #[test]
+fn a_quoted_parenthesised_value_for_an_array_is_its_elements() {
+    // Bash takes `declare -a a="(...)"` as the array of the words inside, expanded as in
+    // `a=(...)`; cash made the whole text one element, and bash-tpl's `.INCLUDE FILE`
+    // looked for `(FILE)`.
+    let out = cash(
+        r#"args='x "y z"'; declare -a a="($args)"; declare -p a
+        b=(1); declare b='(p [5]=q)'; declare -p b
+        f() { local -a l="( )"; declare -p l; }; f
+        declare -A h='([k]=v)'; declare -p h
+        declare d="(1 2)"; declare -p d
+        declare -a e="(x"; declare -p e"#,
+    );
+    assert_eq!(
+        out.stdout,
+        "declare -a a=([0]=\"x\" [1]=\"y z\")\ndeclare -a b=([0]=\"p\" [5]=\"q\")\n\
+         declare -a l=()\ndeclare -A h=([k]=\"v\" )\ndeclare -- d=\"(1 2)\"\n\
+         declare -a e=([0]=\"(x\")",
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn readonly_prevents_mutation() {
     let out = cash(
         r#"

@@ -175,6 +175,8 @@ impl builtins::Command for DeclareCommand {
                     let subscript = self
                         .resolve_word_subscript(&mut context, declaration)
                         .await?;
+                    let compound = self.compound_from_value(&mut context, declaration).await?;
+                    let declaration = compound.as_ref().unwrap_or(declaration);
                     if !self.process_declaration(&mut context, declaration, verb, subscript)? {
                         result = ExecutionResult::general_error();
                     }
@@ -377,6 +379,87 @@ impl DeclareCommand {
         } else {
             context.shell.env_mut().get_mut_using_policy(name, lookup)
         }
+    }
+
+    /// The array assignment Bash makes of a value that begins with `(` and ends with `)`,
+    /// given to an array (`-a`, `-A`, or one already), as an ordinary value would be
+    /// elsewhere: `declare -a args="($list)"` is the array of `$list`'s words, each
+    /// expanded as in `args=(...)`. bash-tpl reads its `.INCLUDE` arguments so, and
+    /// cash made the whole text one element.
+    async fn compound_from_value(
+        &self,
+        context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+        declaration: &cash_core::CommandArg,
+    ) -> Result<Option<cash_core::CommandArg>, cash_core::Error> {
+        let (name, value, append) = match declaration {
+            cash_core::CommandArg::Assignment(ast::Assignment {
+                name: ast::AssignmentName::VariableName(name),
+                value: ast::AssignmentValue::Scalar(value),
+                append,
+                ..
+            }) => (name.clone(), value.value.clone(), *append),
+            cash_core::CommandArg::String(s) => match Self::string_assignment(s) {
+                Some((name, None, append, value)) => (name, value, append),
+                _ => return Ok(None),
+            },
+            cash_core::CommandArg::Assignment(_) => return Ok(None),
+        };
+        if !(value.len() >= 2 && value.starts_with('(') && value.ends_with(')')) {
+            return Ok(None);
+        }
+        let array = self.make_indexed_array.to_bool() == Some(true)
+            || self.make_associative_array.to_bool() == Some(true)
+            || context
+                .shell
+                .env()
+                .get(name.as_str())
+                .is_some_and(|(_, var)| {
+                    matches!(
+                        var.value(),
+                        ShellValue::IndexedArray(_)
+                            | ShellValue::AssociativeArray(_)
+                            | ShellValue::Unset(
+                                ShellValueUnsetType::IndexedArray
+                                    | ShellValueUnsetType::AssociativeArray
+                            )
+                    )
+                });
+        if !array {
+            return Ok(None);
+        }
+        let options = context.shell.parser_options();
+        let Some(elements) = cash_parser::word::parse_compound_assignment_value(&value, &options)
+        else {
+            return Ok(None);
+        };
+        let mut expanded = Vec::new();
+        for (key, word) in elements {
+            if let Some(key) = key {
+                let key = context
+                    .shell
+                    .basic_expand_string(&context.params, &key.value)
+                    .await?;
+                let word = context
+                    .shell
+                    .basic_expand_string(&context.params, &word.value)
+                    .await?;
+                expanded.push((Some(ast::Word::new(&key)), ast::Word::new(&word)));
+            } else {
+                for field in context
+                    .shell
+                    .full_expand_and_split_string(&context.params, &word.value)
+                    .await?
+                {
+                    expanded.push((None, ast::Word::new(&field)));
+                }
+            }
+        }
+        Ok(Some(cash_core::CommandArg::Assignment(ast::Assignment {
+            name: ast::AssignmentName::VariableName(name),
+            value: ast::AssignmentValue::Array(expanded),
+            append,
+            loc: cash_parser::SourceSpan::default(),
+        })))
     }
 
     /// The subscript of an assignment that reached `declare` as an ordinary word
