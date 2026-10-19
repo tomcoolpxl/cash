@@ -697,35 +697,24 @@ fn get_bash_lineno_value(shell: &dyn ShellState) -> variables::ShellValue {
 }
 
 fn get_bash_source_value(shell: &dyn ShellState) -> variables::ShellValue {
-    let stack = shell.call_stack();
-
-    if stack.iter_function_calls().next().is_none() {
-        let top_frame = stack.iter_script_calls().next();
-        top_frame
-            .map_or_else(Vec::new, |frame| vec![frame.source_info.source.clone()])
-            .into()
-    } else {
-        // When in a function, include both functions and sourced scripts in the stack
-        // This mirrors the FUNCNAME array structure
-        stack
-            .iter()
-            .filter_map(|frame| match &frame.frame_type {
-                crate::callstack::FrameType::Function(func) => {
-                    Some(func.function.source().source.clone())
-                }
-                // A sourced file and the script being run, as FUNCNAME's `source` and `main`.
-                crate::callstack::FrameType::Script(script) => {
-                    Some(script.source_info.source.clone())
-                }
-                crate::callstack::FrameType::TrapHandler(_) | crate::callstack::FrameType::Eval => {
-                    None
-                }
-                crate::callstack::FrameType::CommandString
-                | crate::callstack::FrameType::InteractiveSession => None,
-            })
-            .collect::<Vec<_>>()
-            .into()
-    }
+    // Functions and sourced scripts, as the FUNCNAME array has them, outside a function
+    // too: a file sourced by the script sees `(file script)`, which bash3boilerplate
+    // reads as `${BASH_SOURCE[1]}`; cash gave the file alone.
+    shell
+        .call_stack()
+        .iter()
+        .filter_map(|frame| match &frame.frame_type {
+            crate::callstack::FrameType::Function(func) => {
+                Some(func.function.source().source.clone())
+            }
+            // A sourced file and the script being run, as FUNCNAME's `source` and `main`.
+            crate::callstack::FrameType::Script(script) => Some(script.source_info.source.clone()),
+            crate::callstack::FrameType::TrapHandler(_) | crate::callstack::FrameType::Eval => None,
+            crate::callstack::FrameType::CommandString
+            | crate::callstack::FrameType::InteractiveSession => None,
+        })
+        .collect::<Vec<_>>()
+        .into()
 }
 
 /// The entries of Bash's `BASH_ARGV` stack, newest first (`CallStack::bash_args`).

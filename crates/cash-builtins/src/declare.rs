@@ -172,10 +172,15 @@ impl builtins::Command for DeclareCommand {
                         result = ExecutionResult::general_error();
                     }
                 } else {
-                    let subscript = self
-                        .resolve_word_subscript(&mut context, declaration)
-                        .await?;
+                    // A list is the whole array's: its subscript, `@` as often as not, is
+                    // not evaluated.
                     let compound = self.compound_from_value(&mut context, declaration).await?;
+                    let subscript = if compound.is_some() {
+                        None
+                    } else {
+                        self.resolve_word_subscript(&mut context, declaration)
+                            .await?
+                    };
                     let declaration = compound.as_ref().unwrap_or(declaration);
                     if !self.process_declaration(&mut context, declaration, verb, subscript)? {
                         result = ExecutionResult::general_error();
@@ -427,24 +432,39 @@ impl DeclareCommand {
         context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
         declaration: &cash_core::CommandArg,
     ) -> Result<Option<cash_core::CommandArg>, cash_core::Error> {
-        let (name, value, append) = match declaration {
+        let (name, value, append, subscripted) = match declaration {
             cash_core::CommandArg::Assignment(ast::Assignment {
                 name: ast::AssignmentName::VariableName(name),
                 value: ast::AssignmentValue::Scalar(value),
                 append,
                 ..
-            }) => (name.clone(), value.value.clone(), *append),
+            }) => (name.clone(), value.value.clone(), *append, false),
+            cash_core::CommandArg::Assignment(ast::Assignment {
+                name: ast::AssignmentName::ArrayElementName(name, _),
+                value: ast::AssignmentValue::Scalar(value),
+                append,
+                ..
+            }) => (name.clone(), value.value.clone(), *append, true),
             cash_core::CommandArg::String(s) => match Self::string_assignment(s) {
-                Some((name, None, append, value)) => (name, value, append),
-                _ => return Ok(None),
+                Some((name, subscript, append, value)) => {
+                    (name, value, append, subscript.is_some())
+                }
+                None => return Ok(None),
             },
             cash_core::CommandArg::Assignment(_) => return Ok(None),
         };
         if !(value.len() >= 2 && value.starts_with('(') && value.ends_with(')')) {
             return Ok(None);
         }
-        let array = self.make_indexed_array.to_bool() == Some(true)
-            || self.make_associative_array.to_bool() == Some(true)
+        let explicit = self.make_indexed_array.to_bool() == Some(true)
+            || self.make_associative_array.to_bool() == Some(true);
+        // With `-a` or `-A`, a list given to `name[...]` is the whole array's, the
+        // subscript ignored, as Bash has it: bash3boilerplate appends to its arrays with
+        // `declare -a "arg_i[@]"='("${!name}" "$value")'`. Without, it is the element's text.
+        if subscripted && !explicit {
+            return Ok(None);
+        }
+        let array = explicit
             || context
                 .shell
                 .env()

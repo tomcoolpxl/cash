@@ -224,6 +224,13 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             self.take_status_before_return();
         }
 
+        // The script's `EXIT` trap runs while it is still the script, as in Bash: its
+        // positional parameters, `BASH_SOURCE` and `$0`. Run after the frame was gone, the
+        // trap saw no `$@`. Its own result is ignored, as before.
+        if matches!(call_type, callstack::ScriptCallType::Run) && result.is_ok() {
+            let _ = self.on_exit().await;
+        }
+
         let exited_frame = self.call_stack.pop();
 
         // Jobs that finished while the file was sourced are reported now that it is done
@@ -332,9 +339,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             )
             .await?;
 
-        // Give the shell a chance to run on-exit tasks, but ignore the result.
-        let _ = self.on_exit().await;
-
+        // The on-exit tasks, the `EXIT` trap, ran inside the script's frame.
         Ok(result)
     }
 

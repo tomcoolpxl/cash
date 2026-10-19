@@ -2620,3 +2620,47 @@ fn exit_does_not_run_the_err_trap() {
     );
     assert_eq!((status, out.as_str()), (2, "ERR 4\nERR 3\nstatus 3"));
 }
+
+#[test]
+fn declare_a_with_a_subscript_takes_a_list_for_the_whole_array() {
+    // With `-a` or `-A`, a list given to `name[...]` is the whole array's, the subscript
+    // ignored, `@` too: bash3boilerplate appends with `declare -a "arg_i[@]"='("${!v}" "$x")'`.
+    // Without them, it is the element's text.
+    let (status, out) = output(
+        r#"a=(p q); v="a[@]"; declare -a "a[@]"='("${!v}" "z")'; declare -p a
+           declare -a "b[0]"="(x y)"; declare -A "m[k]"="([a]=1)"; declare -p b m
+           f() { local -a "c[*]"="(u v)"; declare -p c; }; f
+           d=(1); declare "d[0]"="(x y)"; declare -p d"#,
+    );
+    assert_eq!(
+        (status, out.as_str()),
+        (
+            0,
+            "declare -a a=([0]=\"p\" [1]=\"q\" [2]=\"z\")\ndeclare -a b=([0]=\"x\" [1]=\"y\")\n\
+             declare -A m=([a]=\"1\" )\ndeclare -a c=([0]=\"u\" [1]=\"v\")\ndeclare -a d=([0]=\"(x y)\")"
+        )
+    );
+}
+
+#[test]
+fn bash_source_holds_the_sourcing_files_outside_a_function_and_in_the_exit_trap() {
+    // A file sourced by the script sees `(file script)` in BASH_SOURCE, which
+    // bash3boilerplate reads as `${BASH_SOURCE[1]}`; cash gave the file alone. And the
+    // script's EXIT trap runs while it is still the script, with its `$@`.
+    let root = Scratch::new("bash-source-chain");
+    std::fs::write(root.join("lib.sh"), "echo \"lib: ${BASH_SOURCE[*]}\"\n").unwrap();
+    std::fs::write(
+        root.join("main.sh"),
+        "trap 'echo \"trap: [$*] [${BASH_SOURCE[*]}]\"' EXIT\nsource ./lib.sh\nset -- changed one\n",
+    )
+    .unwrap();
+    let out = cash_command()
+        .current_dir(root.path())
+        .args(["--noprofile", "--norc", "main.sh", "x"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n"),
+        "lib: ./lib.sh main.sh\ntrap: [changed one] [main.sh]\n"
+    );
+}
