@@ -105,7 +105,8 @@ list, kept short.
 ### D7 — No modes: compatibility behaviours are always on
 
 Each compatibility behaviour is a superset no Windows script can trip on, so all are on:
-`/dev` names, CRLF script source, the BOM stripped (D41), `/usr/bin/env`, Unix path
+`/dev` names, CRLF script source, the BOM stripped (D41), `/usr/bin/env` and the other
+`/bin` and `/usr/bin` paths of the commands cash carries, Unix path
 spellings. `sh`, `bash` and `cash` are cash, ahead of `PATH`; started as `sh` it runs in
 POSIX mode with nothing switched off. `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and
 `/dev/fd/N` share the shell's descriptor, never reopen a file. Turned down: a `--posix`

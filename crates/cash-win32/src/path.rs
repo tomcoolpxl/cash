@@ -190,6 +190,29 @@ pub fn virtual_tool(spelled: &str) -> Option<String> {
     (!name.is_empty() && !name.contains('/')).then(|| name.to_owned())
 }
 
+/// The command a Unix system tool's path names, `rm` for `/bin/rm` or `/usr/bin/rm`, when
+/// no file answers to it there, with or without an extension of `extensions` (`PATHEXT`).
+///
+/// A script written for Unix runs the system's own tools so, and Windows has no such
+/// directory: bashmarks deletes a bookmark with `/bin/mv` and `/bin/rm`. A file that is
+/// there is run.
+pub fn system_tool(spelled: &str, extensions: &[String]) -> Option<String> {
+    let name = spelled
+        .strip_prefix("/usr/bin/")
+        .or_else(|| spelled.strip_prefix("/bin/"))?;
+    if name.is_empty() || name.contains(['/', '\\']) {
+        return None;
+    }
+    let file = accept_path(spelled);
+    let there = file.exists()
+        || extensions.iter().any(|extension| {
+            let mut with = file.clone().into_os_string();
+            with.push(extension);
+            Path::new(&with).exists()
+        });
+    (!there).then(|| name.to_owned())
+}
+
 /// `cash -c '"$0" "$@"' TOOL`, to which the caller adds the arguments.
 ///
 /// A process that runs the command `tool` names as cash would if it were typed, for a

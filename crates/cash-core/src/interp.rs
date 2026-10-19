@@ -3134,8 +3134,8 @@ fn takes_substitution_pipes(
     let Some(CommandArg::String(name)) = name else {
         return false;
     };
-    // A path to a bundled tool names the builtin, and never a function (ROADMAP item 12).
-    let (name, functions) = match cash_win32::path::virtual_tool(name) {
+    // A path to a cash command names the builtin, and never a function (ROADMAP item 12).
+    let (name, functions) = match crate::pathsearch::tool_named_by_path(shell, name) {
         Some(tool) => (Cow::Owned(tool), false),
         None => (Cow::Borrowed(name.as_str()), true),
     };

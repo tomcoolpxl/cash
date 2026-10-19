@@ -328,7 +328,8 @@ fn cash_for_shell_names(argv: Vec<OsString>) -> Vec<OsString> {
 }
 
 /// `argv` for a bundled `env` or `timeout` whose command is not a Windows program but a
-/// script: a `#!` script, a batch file or a PowerShell script.
+/// script: a `#!` script, a batch file or a PowerShell script; or a Unix system tool's
+/// path, `/bin/rm`, which is no file.
 ///
 /// The tools start their command with `CreateProcess`, which starts programs only, so
 /// `timeout 10 ./test.sh` and `env X=1 ./run.sh` failed with `%1 is not a valid Win32
@@ -354,12 +355,16 @@ fn cash_for_scripts(argv: Vec<OsString>) -> Vec<OsString> {
         .map(|value| std::env::split_paths(&value).collect())
         .unwrap_or_default();
     let pathext = cash_win32::resolve::process_pathext();
-    let dispatch = cash_win32::resolve::resolve(&program.to_string_lossy(), &path, &pathext, &cwd);
-    let (Some(dispatch), Some(exe)) = (dispatch, self_exe()) else {
+    let program = program.to_string_lossy();
+    let Some(exe) = self_exe() else {
         return argv;
     };
-    if matches!(dispatch, cash_win32::resolve::Dispatch::Native(_)) {
-        return argv;
+    match cash_win32::resolve::resolve(&program, &path, &pathext, &cwd) {
+        Some(cash_win32::resolve::Dispatch::Native(_)) => return argv,
+        Some(_) => {}
+        // `/bin/rm`, no file but a command cash runs as the shell would.
+        None if cash_win32::path::system_tool(&program, &pathext).is_some() => {}
+        None => return argv,
     }
     let mut args = operand.args;
     let tail = args.split_off(operand.index);

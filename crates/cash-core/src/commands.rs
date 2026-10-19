@@ -735,34 +735,38 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         _ => candidate,
     };
 
-    // A virtual path from `which` (`C:/…/cash.exe/ls`) run as a process — `exec
-    // "$(which ls)"` — re-enters cash to run the command it names (ROADMAP item 12).
-    if !candidate.is_file()
-        && let Some(tool) = cash_win32::path::virtual_tool(command_name)
-    {
-        let mut command = cash_win32::path::reentry_command(&tool);
-        command.args(args);
-        return Ok((command, Extras::default()));
-    }
-
-    // A bundled tool's name is cash's tool, as it is when typed as a command (D48): `exec
-    // mktemp` searched PATH and ran Git's GNU `mktemp`, whose `/tmp` name cash's other
-    // tools cannot open (shunit2). The bundled tools are the builtins run as a process of
-    // their own (`spawn_func`); `enable -n` gives the name back to PATH.
-    if !candidate.is_file()
-        && !command_name.contains(['/', '\\'])
-        && context
-            .shell
-            .builtins()
-            .get(command_name)
-            .is_some_and(|b| b.spawn_func.is_some() && !b.disabled)
-        && let Ok(own) = std::env::current_exe()
-    {
-        // process state: the shell's spawn layer, which sets the directory and environment.
-        let mut c = std::process::Command::new(&own);
-        c.args(["--invoke-bundled", command_name]);
-        push_native_args(&mut c, &own, args);
-        return Ok((c, Extras::default()));
+    // A path that names a cash command, `which`'s (`C:/…/cash.exe/ls`, ROADMAP item 12) or
+    // a Unix system tool's (`/bin/rm`), runs that command, as when typed. So does a bundled
+    // tool's name (D48): `exec mktemp` searched PATH and ran Git's GNU `mktemp`, whose
+    // `/tmp` name cash's other tools cannot open (shunit2). The bundled tools are the
+    // builtins run as a process of their own (`spawn_func`), started here at once; another
+    // command named by a path re-enters cash. `enable -n` gives a name back to PATH.
+    if !candidate.is_file() {
+        let by_path = command_name.contains(['/', '\\']);
+        let tool = if by_path {
+            crate::pathsearch::tool_named_by_path(context.shell, command_name)
+        } else {
+            Some(command_name.to_owned())
+        };
+        if let Some(tool) = tool {
+            let bundled = context
+                .shell
+                .builtins()
+                .get(&tool)
+                .is_some_and(|b| b.spawn_func.is_some() && !b.disabled);
+            if bundled && let Ok(own) = std::env::current_exe() {
+                // process state: the shell's spawn layer sets the directory and environment.
+                let mut c = std::process::Command::new(&own);
+                c.args(["--invoke-bundled", tool.as_str()]);
+                push_native_args(&mut c, &own, args);
+                return Ok((c, Extras::default()));
+            }
+            if by_path {
+                let mut command = cash_win32::path::reentry_command(&tool);
+                command.args(args);
+                return Ok((command, Extras::default()));
+            }
+        }
     }
 
     if !candidate.is_file() {
@@ -1210,20 +1214,21 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         self.shell.sync_program_location_cache();
 
         // cash (ROADMAP item 12): `which ls` prints `C:/…/cash.exe/ls` for a command cash
-        // carries, so that `"$(which ls)" -la` can be run. That path is no file; it names
-        // the builtin, which runs as if typed by name — but never a function, as a path
-        // never names one.
-        if let Some(tool) = cash_win32::path::virtual_tool(&self.command_name)
-            && self
-                .shell
-                .builtins()
-                .get(&tool)
-                .is_some_and(|r| !r.disabled)
+        // carries, so that `"$(which ls)" -la` can be run, and a script runs `/bin/rm`.
+        // Such a path is no file; it names the command, which runs as if typed by name —
+        // but never a function, as a path never names one.
+        if sys::fs::contains_path_separator(&self.command_name)
+            && let Some(tool) = pathsearch::tool_named_by_path(&*self.shell, &self.command_name)
         {
             if let Some(first) = self.args.first_mut() {
                 *first = CommandArg::String(tool.clone());
             }
-            self.command_name = tool;
+            // `/bin/sh` is cash by the path's name, its `$0`.
+            if pathsearch::runs_cash_itself(&tool) && self.argv0.is_none() {
+                self.argv0 = Some(std::mem::replace(&mut self.command_name, tool));
+            } else {
+                self.command_name = tool;
+            }
             self.use_functions = false;
         }
 

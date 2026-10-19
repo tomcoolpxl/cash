@@ -36,6 +36,12 @@ write to (`>&3`) and read from (`<&3`), `cat </dev/tcp/host/port` reads one, and
 fails is reported in Bash's two lines, `connect: Connection refused` and the
 redirection's own; as an argument to a program the name is a file that does not exist.
 
+A command run by a Unix system path, `/bin/rm` or `/usr/bin/printf`, is cash's own
+command of that name when no such file is there, as a script written for Unix expects:
+`/bin/mv a b`, `/usr/bin/env python3`, `[ -x /bin/rm ]`, and the same after `exec`,
+`xargs`, `timeout` and `env`. `/bin/sh` and `/bin/bash` are cash. A name cash has no
+command for is not found.
+
 ## Backslashes
 
 Backslash is Bash's escape character, so an unquoted `cd C:\Users\me` reaches `cd` as

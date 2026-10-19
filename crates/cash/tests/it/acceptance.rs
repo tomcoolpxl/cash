@@ -1017,6 +1017,28 @@ fn exec_of_a_bundled_tool_runs_cashs_own() {
     assert_eq!(made, "made", "{}", out.stderr);
 }
 
+#[test]
+fn a_unix_system_tools_path_runs_cashs_command() {
+    // `/bin/rm` and `/usr/bin/env` name the system's own tools to a script written for
+    // Unix, and Windows has no such directory: bashmarks deletes a bookmark with `/bin/mv`
+    // and `/bin/rm`. They run cash's command, never a function; `/bin/sh` is cash, in
+    // POSIX mode, with the path as its `$0`.
+    let scratch = Scratch::new("unix-tool-paths");
+    let out = output_of(cash_command().current_dir(scratch.path()).args([
+        "-c",
+        "touch a; /bin/mv a b; /bin/ls; rm() { echo function; }; /bin/rm b; unset -f rm; \
+         /bin/ls | wc -l; [ -x /bin/rm ] && echo x; /usr/bin/env echo env; \
+         (exec /bin/echo exec); timeout 5 /bin/echo timeout; \
+         /bin/sh -c 'echo $0; shopt -qo posix && echo posix'; \
+         /usr/bin/nosuchtool 2>/dev/null; echo $?",
+    ]));
+    assert_eq!(
+        out.stdout, "b\n0\nx\nenv\nexec\ntimeout\n/bin/sh\nposix\n127",
+        "{}",
+        out.stderr
+    );
+}
+
 // ---------------------------------------------------------------------------
 // D17 — process substitution.
 // ---------------------------------------------------------------------------

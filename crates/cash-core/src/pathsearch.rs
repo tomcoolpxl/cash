@@ -177,6 +177,22 @@ pub(crate) fn runs_cash_itself(name: &str) -> bool {
     cash_as_shell(Path::new(name)).is_some()
 }
 
+/// The command a path that is no file names, which runs as if typed by name but never as
+/// a function: a path `which` printed for a command cash carries (`C:/…/cash.exe/ls`,
+/// ROADMAP item 12), or a Unix system tool's (`/bin/rm`, `/usr/bin/env`) for which cash
+/// has the command. `/bin/sh` and `/bin/bash` are cash, as the names are (D7).
+pub(crate) fn tool_named_by_path(
+    shell: &crate::Shell<impl crate::extensions::ShellExtensions>,
+    spelled: &str,
+) -> Option<String> {
+    let enabled = |name: &str| shell.builtins().get(name).is_some_and(|r| !r.disabled);
+    if let Some(tool) = cash_win32::path::virtual_tool(spelled) {
+        return enabled(&tool).then_some(tool);
+    }
+    let name = cash_win32::path::system_tool(spelled, &shell.pathext())?;
+    (enabled(&name) || runs_cash_itself(&name)).then_some(name)
+}
+
 /// Resolves a command name the way the shell does when it is about to run it.
 ///
 /// Returns the first executable in search order, or -- if there is none -- the first entry
