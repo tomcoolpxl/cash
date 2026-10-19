@@ -208,6 +208,36 @@ impl builtins::Command for DeclareCommand {
     }
 }
 
+/// The line and file the function `registration` was defined on, as `declare -F` gives
+/// them with `extdebug`: the file as it was named to `source` or to the shell, and the
+/// shell's `$0` for a function defined in a `-c` string.
+fn defined_at(
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+    registration: &cash_core::functions::Registration,
+) -> (usize, String) {
+    use cash_core::parser::ast::SourceLocation as _;
+
+    let source = registration.source();
+    let offset = source
+        .start
+        .as_ref()
+        .map_or(0, |start| start.line.saturating_sub(1));
+    let line = registration
+        .definition()
+        .location()
+        .map_or(0, |span| span.start.line + offset);
+    let file = if source.source.is_empty() || source.source == "-c" || source.source == "main" {
+        context
+            .shell
+            .current_shell_name()
+            .map(|name| name.into_owned())
+            .unwrap_or_default()
+    } else {
+        source.source.clone()
+    };
+    (line, file)
+}
+
 impl DeclareCommand {
     fn try_display_declaration(
         &self,
@@ -235,6 +265,12 @@ impl DeclareCommand {
                 if self.function_names_only {
                     if self.print {
                         writeln!(context.stdout(), "declare -f{flags} {name}")?;
+                    } else if context.shell.options().enable_debugger {
+                        // `shopt -s extdebug`: the line and file the function was defined
+                        // on, as Bash gives them; bashunit keeps the tests a file defines
+                        // so, and found none.
+                        let (line, file) = defined_at(context, func_registration);
+                        writeln!(context.stdout(), "{name} {line} {file}")?;
                     } else {
                         writeln!(context.stdout(), "{name}")?;
                     }

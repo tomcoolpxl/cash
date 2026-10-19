@@ -105,6 +105,11 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// `RETURN` trap sees, as in Bash. Taken when the function or sourced file ends.
     status_before_return: Option<u8>,
 
+    /// Whether the last pipeline failed where `set -e` does not act (the left of `&&`, a
+    /// `!` pipeline, a condition): a loop, `if`, `case` or `{ }` whose status it gives
+    /// does not end the shell either, as in Bash.
+    failure_ignored_by_errexit: bool,
+
     /// The status of each of the commands in the last pipeline.
     last_pipeline_statuses: Vec<u8>,
 
@@ -246,6 +251,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             last_exit_status: self.last_exit_status,
             last_exit_status_change_count: self.last_exit_status_change_count,
             status_before_return: self.status_before_return,
+            failure_ignored_by_errexit: self.failure_ignored_by_errexit,
             last_pipeline_statuses: self.last_pipeline_statuses.clone(),
             name: self.name.clone(),
             args: self.args.clone(),
@@ -643,6 +649,16 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         } else {
             keywords::KEYWORDS.contains(s)
         }
+    }
+
+    /// Whether the last pipeline failed where `set -e` does not act (`failure_ignored_by_errexit`).
+    pub(crate) const fn failure_ignored_by_errexit(&self) -> bool {
+        self.failure_ignored_by_errexit
+    }
+
+    /// Records whether the pipeline that just ended failed where `set -e` does not act.
+    pub(crate) const fn note_failure_ignored_by_errexit(&mut self, ignored: bool) {
+        self.failure_ignored_by_errexit = ignored;
     }
 
     /// Records `$?` as `return` finds it, for the `RETURN` trap to see.

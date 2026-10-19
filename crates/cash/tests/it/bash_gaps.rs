@@ -2556,3 +2556,34 @@ fn an_empty_arrays_alternative_in_quotes_is_no_word() {
     );
     assert_eq!((status, out.as_str()), (0, "0 0 0 1 1 2"));
 }
+
+#[test]
+fn set_e_lets_a_compound_command_pass_on_a_failure_it_ignored() {
+    // A loop, `if`, `case` or `{ }` whose status is a failure `set -e` did not act on inside
+    // it (the left of `&&`, a `!` pipeline) does not end the shell, as in Bash; a function,
+    // `source` and `( )` still do. bashunit's `for ...; do [ -n "$v" ] && ...; done` ended
+    // its script.
+    let (status, out) = output(
+        "set -e; for i in 1; do false && true; done; echo for; { false && true; }; echo group; \
+         if true; then ! true; fi; echo if; case a in a) false && true;; esac; echo case; \
+         ( false && true ); echo never",
+    );
+    assert_eq!((status, out.as_str()), (1, "for\ngroup\nif\ncase"));
+    let (status, out) = output("set -e; f() { false && true; }; f; echo never");
+    assert_eq!((status, out.as_str()), (1, ""));
+}
+
+#[test]
+fn declare_f_with_extdebug_gives_the_line_and_file() {
+    // bashunit keeps the tests a file defines by `declare -F` under extdebug, which gives
+    // `NAME LINE FILE` in Bash; cash gave the name alone, and bashunit found no tests.
+    let root = Scratch::new("declare-f-extdebug");
+    std::fs::write(root.path().join("defs.sh"), "f() { :; }\n\ng() {\n:\n}\n").unwrap();
+    assert_eq!(
+        output_in(
+            root.path(),
+            "source defs.sh; shopt -s extdebug; declare -F f g; shopt -u extdebug; declare -F f"
+        ),
+        (0, "f 1 defs.sh\ng 3 defs.sh\nf".into())
+    );
+}

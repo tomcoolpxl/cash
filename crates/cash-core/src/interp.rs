@@ -773,6 +773,33 @@ impl Execute for ast::AndOrList {
     }
 }
 
+/// Whether `pipeline`, which ended with `result`, is a loop, `if`, `case` or `{ }` whose
+/// status is that of a failure inside it that `set -e` did not act on (the left of `&&`, a
+/// `!` pipeline): it passes too, as in Bash. bashunit's `for ...; do [ -n "$v" ] && ...;
+/// done` ended the script. A `( … )` subshell, a function and `source` still end it.
+const fn status_from_ignored_failure(
+    pipeline: &ast::Pipeline,
+    shell: &Shell<impl extensions::ShellExtensions>,
+    result: &ExecutionResult,
+) -> bool {
+    !result.is_success()
+        && shell.failure_ignored_by_errexit()
+        && matches!(
+            pipeline.seq.as_slice(),
+            [ast::Command::Compound(
+                ast::CompoundCommand::BraceGroup(_)
+                    | ast::CompoundCommand::ForClause(_)
+                    | ast::CompoundCommand::ArithmeticForClause(_)
+                    | ast::CompoundCommand::SelectClause(_)
+                    | ast::CompoundCommand::CaseClause(_)
+                    | ast::CompoundCommand::IfClause(_)
+                    | ast::CompoundCommand::WhileClause(_)
+                    | ast::CompoundCommand::UntilClause(_),
+                _
+            )]
+        )
+}
+
 #[async_trait::async_trait]
 impl Execute for ast::Pipeline {
     async fn execute(
@@ -859,6 +886,12 @@ impl Execute for ast::Pipeline {
         // Update exit status.
         shell.set_last_exit_status(result.exit_code.into());
 
+        let status_from_ignored_failure = status_from_ignored_failure(self, shell, &result);
+        shell.note_failure_ignored_by_errexit(
+            !result.is_success()
+                && (params.suppress_errexit || self.bang || status_from_ignored_failure),
+        );
+
         // Fire the ERR trap if the pipeline failed in a non-conditional context.
         // We reuse `suppress_errexit` here because bash suppresses the ERR trap in
         // exactly the same contexts it suppresses errexit (conditionals, `!`-prefixed
@@ -867,6 +900,7 @@ impl Execute for ast::Pipeline {
         if !result.is_success()
             && !params.suppress_errexit
             && !self.bang
+            && !status_from_ignored_failure
             && had_err_trap
             && !matches!(
                 result.next_control_flow,
@@ -889,7 +923,7 @@ impl Execute for ast::Pipeline {
         }
 
         // Apply errexit if not suppressed (and not negated)
-        if !params.suppress_errexit && !self.bang {
+        if !params.suppress_errexit && !self.bang && !status_from_ignored_failure {
             shell.apply_errexit_if_enabled(&mut result);
         }
 
