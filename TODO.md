@@ -30,14 +30,15 @@ for working through it. What is done, phases and findings, is in DONE.md.
 The user's picks after 1.32.0 (decisions.md, "The phase after 1.32.0"), in this order,
 each described under "Found along the way" until it is done:
 
-1. the three `cd` gaps;
-2. `set -o history` in a script;
-3. ROADMAP.md section 6 brought up to date;
-4. the benchmark tool for all five shells;
-5. `who`, `pinky` and `users` on Windows' session API;
-6. `split --filter`;
+1. the three `cd` gaps: done (2026-10-19, DONE.md);
+2. `set -o history` in a script: done (2026-10-19, DONE.md);
+3. ROADMAP.md section 6 brought up to date: done (2026-10-19, DONE.md);
+4. the benchmark tool for all five shells: done (2026-10-19, DONE.md), the comparison
+   itself the user's to run;
+5. `who`, `pinky` and `users` on Windows' session API: done (2026-10-19, DONE.md);
+6. `split --filter`: done (2026-10-19, DONE.md);
 7. another corpus round, its sources and their terms put to the user before any
-   download.
+   download: done (2026-10-19, DONE.md).
 
 ## The phase before (2026-10-18, done)
 

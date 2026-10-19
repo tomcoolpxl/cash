@@ -1,0 +1,15 @@
+5
+1..5
+ok 1 addition
+ok 2 run captures output and status
+ok 3 setup ran
+ok 4 skipped # skip not today
+not ok 5 failing
+# (in test file t.bats, line 22)
+#   `[ "$status" -eq 0 ]' failed
+status: 1
+1..2
+ok 1 addition
+ok 2 setup ran
+filtered: 0
+Bats 1.14.0

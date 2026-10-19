@@ -166,9 +166,10 @@ awk target POSIX, so each mismatch is classified as a Cash bug, a GNU/gawk-only 
 a Windows divergence. The first run (209 cases) found 19 mismatches, among them an awk
 compiler panic on `for` loops with an empty clause.
 
-**Status:** 305 cases (129 sed, 72 awk, 104 bash), the bash ones including real scripts
+**Status:** 311 cases (129 sed, 72 awk, 110 bash), the bash ones including real scripts
 run unchanged: JSON.sh, spark, getoptions, mo, ansi, nvm.sh's helpers, semver-tool,
-wait-for-it, shUnit2, shFlags, bashmarks and two git-extras commands
+wait-for-it, shUnit2, shFlags, bashmarks, two git-extras commands, z, bash-tpl,
+bash-yaml, rbenv, git-flow AVH and bats-core
 ([`tests/corpus/SOURCES.md`](tests/corpus/SOURCES.md)). `run.ps1 -Freeze` writes Git Bash's
 output beside each case, and the `it` test `corpus_goldens` checks cash against it on every
 CI run. Each fix has a focused regression; besides those named in the commit history, the

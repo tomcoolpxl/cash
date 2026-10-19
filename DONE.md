@@ -2514,3 +2514,17 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   split runs `$SHELL`: `split -l 1000 --filter='gzip > $FILE.gz' big.log`. A failing
   filter is reported at each piece with status 1, where GNU stops at the first with its
   status; that edge was left.
+- **A corpus round: six real programs** (2026-10-19, the phase after 1.32.0, item 7, the
+  user's pick of the sources): z, bash-tpl, bash-yaml, rbenv, git-flow AVH and bats-core,
+  unchanged, with their terms in `tests/corpus/SOURCES.md`; the golden test copies
+  fixture directories now, and a case may take `# timeout: N`. Five fixes came of it.
+  `declare -a a="(...)"` made the text one element where Bash makes it the array of the
+  words inside (bash-tpl's `.INCLUDE`). `exec NAME` left the search to Windows, which
+  finds programs alone, so rbenv's `exec rbenv---version`, a script on PATH, was not
+  found. A `$(...)` in a trap's handler ran the trap again, with functrace, to the limit
+  of 500 calls (bats' DEBUG handler). `"${a[@]+word}"` gave one empty word for an empty
+  array where Bash gives none (bats' tags). And `ln -s` to a file without Developer Mode
+  copies it, with a warning, as Git Bash's `ln` does (the user's pick, D27): bats links
+  each test file. Two of cash's `C:/` spellings showed and went on the differences page:
+  z's `-x` deletes with a sed address delimited by `:`, and rbenv climbs the tree with
+  `${root%/*}` until it is empty, which `C:` never is.
