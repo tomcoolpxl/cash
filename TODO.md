@@ -27,14 +27,24 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ## Picked by the user (the current phase, 2026-10-19)
 
+The user's picks after 1.34.0 (decisions.md, "The phase after 1.34.0"), in this order,
+each described under "Found along the way" until it is done:
+
+1. `--inherit-fd FD` does nothing;
+2. a `case` of more than 64 patterns with brackets or extended globs;
+3. another corpus round: JSON.sh, argbash, asdf's core and bash-oo-framework, the
+   downloads approved in the same pick.
+
+## The phase before (2026-10-19, done)
+
 The user's picks after 1.33.0 (decisions.md, "The phase after 1.33.0"):
 
 1. 1.33.0 published through Scoop: tagged, released, and the bucket's Excavator run
    (2026-10-19);
 2. another corpus round: bashunit, git-subrepo and shellspec done (2026-10-19,
-   DONE.md); bash-commons left out (it writes through `sudo`).
+   DONE.md); bash-commons left out (it writes through `sudo`). 1.34.0 ended it.
 
-## The phase before (2026-10-19, done)
+## The phase before that (2026-10-19, done)
 
 The user's picks after 1.32.0 (decisions.md, "The phase after 1.32.0"), in this order,
 each described under "Found along the way" until it is done:
@@ -122,17 +132,12 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   started after, "No such file" for files they had just written); the run after passed.
   No test or corpus case was found removing temporary directories other than its own,
   and `mktemp -d` gave 40 cash processes started at once distinct names. Watch for it.
-- **`--inherit-fd FD` does nothing** (2026-10-19, found passing descriptors to a child
-  cash): the option is Unix's, for descriptors a parent left open in the child; on
-  Windows nothing is behind it (`sys::fd::try_get_file_for_open_fd` gives none), and a
-  child cash now takes what its parent passes without it. It is listed in `--help`
-  among the standard options. Remove it, or say what it does. Small.
 - **A `case` of more than 64 patterns with brackets or extended globs** compiles each
   pattern again on every pass: compiled patterns are kept in an LRU of 64, which a
   cycle through more misses every time. Patterns of characters, `?` and `*` match
   without a regular expression since 2026-10-18, which covers option parsers; brackets
-  (`-[abc]`, `[Yy]*`) could be matched directly too, as Bash's strmatch does, if a
-  script shows the need. Small to medium; the bracket rules must stay exactly the
+  (`-[abc]`, `[Yy]*`) could be matched directly too, as Bash's strmatch does (the
+  user's pick after 1.34.0). Small to medium; the bracket rules must stay exactly the
   regular expression's (ranges by code point, ASCII classes, a lone `[` literal).
 
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;

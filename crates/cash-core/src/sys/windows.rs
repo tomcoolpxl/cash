@@ -1,7 +1,6 @@
 pub use crate::sys::stubs::async_pipe;
 pub use crate::sys::stubs::commands;
 pub(crate) mod env;
-pub use crate::sys::stubs::fd;
 pub(crate) mod fs;
 /// Key sequences as xterm sends them, for bindings spelled as the key sends it.
 #[path = "windows/input.rs"]

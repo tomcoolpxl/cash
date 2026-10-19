@@ -1097,7 +1097,7 @@ fn a_unix_system_tools_path_runs_cashs_command() {
 
 #[test]
 fn process_substitution_works_via_temp_files() {
-    // Windows has no /dev/fd and a child cannot inherit an arbitrary descriptor (D26),
+    // Windows has no /dev/fd and a native program cannot be handed a descriptor (D26),
     // so the pipe-and-/dev/fd/63 approach upstream uses cannot work. D17 passes the path
     // of a named pipe instead (the name of this test is from when it was a temp file).
     assert_eq!(cash("cat <(echo hello)").stdout, "hello");

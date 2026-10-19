@@ -880,7 +880,14 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
 - **The phase after 1.33.0** (the user, 2026-10-19): 1.33.0 published through Scoop, and
   another corpus round. In it, `time` became a command too, for a variable, `command`,
   `xargs` and `/usr/bin/time`, with GNU time's options (the user: "if we do not have a
-  time command, we should create it").
+  time command, we should create it"). A cash started by cash was given the descriptors
+  above 2 (D26), and every program start went through `cash_win32::spawn` (the user:
+  "if you reuse things amongst multiple components, then make it a central component").
+- **The phase after 1.34.0** (the user, 2026-10-19): two small cleanups, `--inherit-fd`
+  and a `case` of bracket patterns matched without a regular expression; and another
+  corpus round, of JSON.sh, argbash, asdf's core and bash-oo-framework, downloaded with
+  the user's OK in the same pick. Left out: `sudo -E` through a handle, 7z at 7-Zip's
+  speed (parked).
 
 ## 8. Archives and compression
 

@@ -2557,3 +2557,7 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   bashunit's case unsets `GITHUB_ACTIONS`, under which it writes annotations for CI.
   shellspec 0.28.1 joined the corpus: a spec translated and run, a failing example's
   report, Skip, the TAP formatter and a focused example, as in Bash.
+- **`--inherit-fd` removed** (2026-10-19, the phase after 1.34.0, item 1): the option
+  was Unix's, for descriptors a parent left open in its child, and listed in `--help`;
+  on Windows nothing was behind it. A child cash takes what its parent passes without
+  it (D26). The stubs that answered for it went with it.
