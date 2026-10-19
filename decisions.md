@@ -863,6 +863,12 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   own copies of the seven most used). `cp` giving a copy the time it was made. An
   alias read as text, so a quote it opens goes on into the line. The fixes come
   first, as they change pages already written.
+- **The phase after 1.32.0** (the user, 2026-10-19): the small items first, then the
+  larger: the three `cd` gaps, `set -o history` in a script, ROADMAP section 6 brought
+  up to date, the benchmark tool for five shells; then `who`, `pinky` and `users` on
+  Windows' session API, `split --filter`, and another corpus round, its sources put to
+  the user before any download. Left out: zstd's levels (parked), winget (not now), a
+  `case` of more than 64 bracket patterns (only when a script shows the need).
 
 ## 8. Archives and compression
 

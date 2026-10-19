@@ -25,10 +25,25 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the current phase, 2026-10-18)
+## Picked by the user (the current phase, 2026-10-19)
+
+The user's picks after 1.32.0 (decisions.md, "The phase after 1.32.0"), in this order,
+each described under "Found along the way" until it is done:
+
+1. the three `cd` gaps;
+2. `set -o history` in a script;
+3. ROADMAP.md section 6 brought up to date;
+4. the benchmark tool for all five shells;
+5. `who`, `pinky` and `users` on Windows' session API;
+6. `split --filter`;
+7. another corpus round, its sources and their terms put to the user before any
+   download.
+
+## The phase before (2026-10-18, done)
 
 The user's picks after 1.27.0 (decisions.md, "The phase after 1.27.0"), in this order.
-The phases before, released as 1.22.0 to 1.27.0, are in DONE.md.
+The phases before, released as 1.22.0 to 1.27.0, are in DONE.md. Items 3 (zstd, parked)
+and 4 (winget, not now) stay open.
 
 After 1.28.0 (decisions.md, "The phase after 1.28.0"): first the four findings picked
 to be fixed, as they change pages already written: the case of a Windows variable's
@@ -133,13 +148,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   (2026-10-18, found checking the man page samples): both work now, as in GNU sed
   (`s/\bcat\b/dog/g`, `:a ;s/a/x/;ta`), and the corpus has three known differences, not
   four. The section's status paragraph is out of date. Small.
-
-- **Three `cd` gaps against Git Bash 5.3** (2026-10-18, found writing the man page
-  samples): `cd C:` sets `$PWD` to `C:`, where Git Bash goes to the drive's root
-  (`/c`); `shopt -s cdable_vars` has no effect, so `cd src` with `src=C:/Windows` says
-  "No such file or directory" where Git Bash goes to the directory the variable names; and
-  `cd -@` says "not yet implemented" with status 99, where Git Bash refuses `-@` as an
-  invalid option with its usage line and status 2. Small each.
 
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,

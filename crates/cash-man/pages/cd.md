@@ -86,7 +86,8 @@ How the directory is found:
 
 1. No DIRECTORY: `$HOME`. If `HOME` is not set, `cd` fails.
 2. `-`: `$OLDPWD`, and the directory is printed.
-3. A DIRECTORY starting with `/`, a drive (`C:`), `~` or `//`: that directory.
+3. A DIRECTORY starting with `/`, a drive (`C:`), `~` or `//`: that directory. A
+   drive alone, `cd D:`, is that drive's root, as in Git Bash.
 4. A DIRECTORY starting with `.` or `..`: from the current directory.
 5. Any other relative DIRECTORY: from each entry of `CDPATH` in turn, then from the
    current directory. One found through a `CDPATH` entry is printed.

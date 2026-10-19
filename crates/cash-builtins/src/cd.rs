@@ -16,14 +16,13 @@ pub(crate) struct CdCommand {
     #[arg(short = 'P', overrides_with = "force_follow_symlinks")]
     use_physical_dir: bool,
 
+    // cash resolves the real name before it enters the directory, so one whose real name
+    // cannot be found is not entered, and the status is 1 with `-e` or without it: it said
+    // "not yet implemented". `-@` is refused as an invalid option, as in Git Bash: Windows
+    // has no extended attributes to show as a directory.
     /// Exit with non zero exit status if current working directory resolution fails.
     #[arg(short = 'e')]
-    exit_on_failed_cwd_resolution: bool,
-
-    /// Show file with extended attributes as a dir with extended
-    /// attributes.
-    #[arg(short = '@')]
-    file_with_xattr_as_dir: bool,
+    _exit_on_failed_cwd_resolution: bool,
 
     /// By default it is the value of the HOME shell variable. If `TARGET_DIR` is "-", it is
     /// converted to $OLDPWD.
@@ -37,11 +36,6 @@ impl builtins::Command for CdCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        // TODO(cd): implement 'cd -@'
-        if self.file_with_xattr_as_dir {
-            return error::unimp("cd -@");
-        }
-
         let mut should_print = false;
         let mut target_dir = if let Some(target_dir) = &self.target_dir {
             // `cd -', equivalent to `cd $OLDPWD'
@@ -53,8 +47,11 @@ impl builtins::Command for CdCommand {
                     writeln!(context.error_stream(), "OLDPWD not set")?;
                     return Ok(ExecutionResult::general_error());
                 }
+            } else if let Some(root) = drive_root(target_dir) {
+                // `cd C:` is the drive's root, as in Git Bash: Windows keeps a directory
+                // for each drive, which cash does not, and `$PWD` was `C:`.
+                root
             } else {
-                // TODO(cd): remove clone, and use temporary lifetime extension after rust 1.75
                 target_dir.clone()
             }
         // `cd' without arguments is equivalent to `cd $HOME'
@@ -81,17 +78,26 @@ impl builtins::Command for CdCommand {
             }
         }
 
+        // `shopt -s cdable_vars`: a name that is no directory is a variable's, holding the
+        // directory to go to, which is printed, as Bash does. It had no effect.
+        if context.shell.options().cdable_vars
+            && !context.shell.absolute_path(&target_dir).is_dir()
+            && let Some(dir) = self.target_dir.as_ref().and_then(|name| {
+                let value = context.shell.env_str(&name.to_string_lossy())?;
+                (!value.is_empty()).then(|| cash_win32::path::accept_path(&value))
+            })
+            && context.shell.absolute_path(&dir).is_dir()
+        {
+            target_dir = dir;
+            should_print = true;
+        }
+
         if self.use_physical_dir
             || context
                 .shell
                 .options()
                 .do_not_resolve_symlinks_when_changing_dir
         {
-            // -e is only relevant in physical mode.
-            if self.exit_on_failed_cwd_resolution {
-                return error::unimp("cd -e");
-            }
-
             match context.shell.absolute_path(&target_dir).canonicalize() {
                 Ok(resolved) => target_dir = resolved,
                 Err(error) => return report_failure(&context, &target_dir, &error.into()),
@@ -116,6 +122,18 @@ impl builtins::Command for CdCommand {
         }
 
         Ok(ExecutionResult::success())
+    }
+}
+
+/// The root of the drive `target` names when it is a drive alone, `C:` or `c:`.
+fn drive_root(target: &std::path::Path) -> Option<PathBuf> {
+    let text = target.to_str()?;
+    let mut chars = text.chars();
+    match (chars.next(), chars.next(), chars.next()) {
+        (Some(drive), Some(':'), None) if drive.is_ascii_alphabetic() => {
+            Some(PathBuf::from(format!("{text}/")))
+        }
+        _ => None,
     }
 }
 

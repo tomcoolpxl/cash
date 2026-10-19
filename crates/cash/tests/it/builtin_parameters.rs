@@ -1130,6 +1130,21 @@ fn shift_past_the_end_fails_with_one_and_shifts_nothing() {
     );
 }
 
+#[test]
+fn cd_goes_to_a_drive_root_and_a_variables_directory_and_takes_e() {
+    // `cd C:` set `$PWD` to `C:`; `cdable_vars` had no effect; `cd -P -e` and `cd -@` said
+    // "not yet implemented", where Git Bash goes there and refuses `-@` as invalid.
+    let out = cash(
+        "cd C: && echo \"$PWD\"; shopt -s cdable_vars; win=C:/Windows; cd win; \
+         echo \"$PWD\"; cd -P -e /c/Users && echo \"$PWD\"; cd -@ 2>/dev/null; echo $?",
+    );
+    assert_eq!(
+        out.stdout, "C:/\nC:/Windows\nC:/Windows\nC:/Users\n2",
+        "{}",
+        out.stderr
+    );
+}
+
 // ===========================================================================
 // 23. dirs, pushd, and popd directory stack
 // ===========================================================================

@@ -2468,3 +2468,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   give itself more time with a `# timeout: N` line. git-summary's author column is
   matched without its padding: util-linux `column` pads a cell holding a tab as if the
   tab were its escape.
+- **Three `cd` gaps closed** (2026-10-19, the phase after 1.32.0, item 1): `cd C:` set
+  `$PWD` to `C:`; it is the drive's root, as in Git Bash. `shopt -s cdable_vars` had no
+  effect; a name that is no directory goes to the directory its variable holds, which is
+  printed, as Bash prints it. `cd -@` said "not yet implemented" with status 99; it is an
+  invalid option with the usage line and status 2, as in Git Bash. `cd -P -e` said "not
+  yet implemented" too: cash resolves the real name before it enters the directory, so
+  `-e` changes nothing and is taken.
