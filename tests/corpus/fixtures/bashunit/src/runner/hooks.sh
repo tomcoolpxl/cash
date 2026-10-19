@@ -1,0 +1,537 @@
+#!/usr/bin/env bash
+
+function bashunit::runner::cleanup_on_exit() {
+  if [ -f "${_BASHUNIT_RUNNER_TIMEOUT_MARKER_FILE:-}" ]; then
+    # A late group TERM must not abort cleanup; the watchdog still bounds it with KILL.
+    trap '' TERM
+  fi
+
+  local test_file="$1"
+  local exit_code="$2"
+
+  # Disable coverage trap before cleanup to avoid interference
+  if [ "${_BASHUNIT_COVERAGE_ON:-0}" = 1 ]; then
+    bashunit::coverage::disable_trap
+  fi
+
+  set +e
+
+  # Settle a bashunit::assert_once marker the test body left open, before
+  # tear_down runs its own assertions and before the counters are exported.
+  bashunit::assert::once_flush
+
+  # Detect unexpected subshell exit during set_up (Issue #611).
+  # When 'source' of a non-existent file fails under set -eE, the ERR trap
+  # does not fire. On macOS Bash 3.2, $? is 0 in the EXIT trap; on Linux
+  # Bash 5.x, $? is 1. In both cases the hook failure is not recorded.
+  # Additionally, the stdout redirect from execute_test_hook leaks into the
+  # EXIT trap. Restore stdout from saved FD 5 so export_subshell_context
+  # output reaches test_execution_result.
+  if [ "${_BASHUNIT_SETUP_COMPLETED:-true}" != "true" ]; then
+    exec 1>&5
+    if [ "$exit_code" -eq 0 ]; then
+      exit_code=1
+    fi
+    if [ -z "${_BASHUNIT_TEST_HOOK_FAILURE:-}" ]; then
+      bashunit::state::set_test_hook_failure "set_up"
+      bashunit::state::set_test_hook_message "Hook 'set_up' failed unexpectedly (e.g., source of non-existent file)"
+    fi
+  fi
+
+  # Don't use || here - it disables ERR trap in the entire call chain
+  bashunit::runner::run_tear_down "$test_file"
+  local teardown_status=$?
+  bashunit::runner::clear_mocks
+  bashunit::cleanup_testcase_temp_files
+
+  if [ $teardown_status -ne 0 ]; then
+    bashunit::state::set_test_exit_code "$teardown_status"
+  else
+    bashunit::state::set_test_exit_code "$exit_code"
+  fi
+
+  # A command the sandbox blocked fails the test even when the body swallowed
+  # its status. The code travels in the payload, which is the only channel a
+  # --parallel worker has to the parent.
+  if bashunit::sandbox::peek_violation; then
+    bashunit::state::set_test_exit_code 127
+  fi
+
+  bashunit::state::export_subshell_context
+}
+
+function bashunit::runner::record_file_hook_failure() {
+  local hook_name="$1"
+  local test_file="$2"
+  local hook_output="$3"
+  local status="$4"
+  local render_header="${5:-false}"
+
+  if [ "$render_header" = true ]; then
+    bashunit::runner::render_running_file_header "$test_file" true
+  fi
+
+  if [ -z "$hook_output" ]; then
+    hook_output="Hook '$hook_name' failed with exit code $status"
+  fi
+
+  bashunit::state::add_tests_failed
+  bashunit::console_results::print_error_test "$hook_name" "$hook_output"
+  local _normalized_hook
+  _normalized_hook="$(bashunit::helper::normalize_test_function_name "$hook_name")"
+  bashunit::reports::add_test_failed "$test_file" "$_normalized_hook" 0 0 "$hook_output"
+  bashunit::runner::write_failure_result_output "$test_file" "$hook_name" "$hook_output"
+
+  return "$status"
+}
+
+_BASHUNIT_RUNNER_HOOK_FILE=""
+
+##
+# Names the file a hook's output is captured in, in _BASHUNIT_RUNNER_HOOK_FILE.
+#
+# A fixed path in the run dir, not a `temp_file`: minting one forked `mktemp`,
+# removing it forked `rm -f`, and the temp-owner marker `mktemp` leaves behind
+# made the EXIT trap `rm -rf` the test's temp files as well, even when the test
+# created none. Five forks per test in any file defining `set_up` or
+# `tear_down`, which cost 3.3x a hookless test (28.3ms vs 8.5ms) (#1345). The
+# `>` redirect truncates, so the name may be reused and nothing has to remove
+# it; the run-dir cleanup takes it with the rest at the end.
+#
+# The key has to survive concurrency, and a Bash 3 subshell inherits both `$$`
+# and the `RANDOM` state from its parent. So it is built the way result.sh
+# names `.result` files (#851): the folded file path, which keeps two files
+# sharing a basename apart (#959), plus the per-suite ordinal the dispatcher
+# assigns before forking, which keeps a file's parallel test workers apart.
+# The hook name closes the last gap, between a file hook and a test hook that
+# share an ordinal.
+#
+# Arguments: $1 - the hook name
+##
+function bashunit::runner::hook_output_path() {
+  if ! bashunit::env::ensure_run_output_dir; then
+    _BASHUNIT_RUNNER_HOOK_FILE=/dev/null
+    return 0
+  fi
+
+  local slot="${_BASHUNIT_RUNNER_FILE_SLOT}_${_BASHUNIT_RUNNER_RESULT_ORDINAL:-0}_$1"
+  _BASHUNIT_RUNNER_HOOK_FILE="${_BASHUNIT_RUN_OUTPUT_DIR}/hook_${slot}"
+}
+
+function bashunit::runner::execute_file_hook() {
+  local hook_name="$1"
+  local test_file="$2"
+  local render_header="${3:-false}"
+
+  declare -F "$hook_name" >/dev/null 2>&1 || return 0
+
+  local hook_output=""
+  local status=0
+  local hook_output_file
+  bashunit::runner::file_path_to_slot "$test_file"
+  bashunit::runner::hook_output_path "$hook_name"
+  hook_output_file=$_BASHUNIT_RUNNER_HOOK_FILE
+
+  # Enable errtrace to catch any failing command in the hook.
+  # Using -E (errtrace) without -e (errexit) prevents the main process from
+  # exiting on source failures (Bash 3.2 doesn't trigger ERR trap with -eE).
+  # The ERR trap saves the exit status to a global variable, cleans up shell
+  # options, and returns from the hook function to prevent subsequent commands
+  # from executing.
+  # Variables set before the failure are preserved since we don't use a subshell.
+  _BASHUNIT_HOOK_ERR_STATUS=0
+  set -E
+  if bashunit::env::is_strict_mode_enabled; then
+    set -uo pipefail
+  fi
+  # The trap returns from the function where the failure occurred (early-exit
+  # semantics for intermediate failing commands) — but only when that frame is
+  # NOT this executor: on Bash >= 4 the trap also fires HERE when the hook call
+  # itself returns non-zero, and an unconditional return skipped
+  # record_file_hook_failure entirely (silent failures, off-by-one counts, #836).
+  trap '_BASHUNIT_HOOK_ERR_STATUS=$?
+    if [ "${FUNCNAME[0]:-}" != "bashunit::runner::execute_file_hook" ]; then
+      set +Eu +o pipefail
+      trap - ERR
+      return $_BASHUNIT_HOOK_ERR_STATUS
+    fi' ERR
+
+  {
+    "$hook_name"
+  } >"$hook_output_file" 2>&1
+  # Real exit status of the hook, read from $? (this function runs without -e,
+  # so a failing compound does not exit). The ERR-trap global alone is not
+  # enough: a hook ending in a failing `cmd && var=x` guard returns non-zero
+  # without ever firing the trap (&& lists are ERR-exempt), which silently
+  # swallowed the failure (#836).
+  status=$?
+  if [ "$status" -eq 0 ]; then
+    status=$_BASHUNIT_HOOK_ERR_STATUS
+  fi
+
+  trap - ERR
+  set +Eu +o pipefail
+
+  if [ -f "$hook_output_file" ]; then
+    hook_output=""
+    local line
+    while IFS= read -r line; do
+      [ -z "$hook_output" ] && hook_output="$line" || hook_output="$hook_output"$'\n'"$line"
+    done <"$hook_output_file"
+  fi
+
+  if [ $status -ne 0 ]; then
+    bashunit::runner::record_file_hook_failure "$hook_name" "$test_file" "$hook_output" "$status" "$render_header"
+    return $status
+  fi
+
+  if [ -n "$hook_output" ] && bashunit::env::is_verbose_enabled; then
+    printf "%s\n" "$hook_output"
+  fi
+
+  return 0
+}
+
+function bashunit::runner::run_set_up() {
+  bashunit::internal_log "run_set_up"
+  bashunit::runner::file_path_to_slot "${1-}"
+  bashunit::runner::execute_test_hook 'set_up'
+}
+
+function bashunit::runner::run_set_up_before_script() {
+  local test_file="$1"
+  bashunit::internal_log "run_set_up_before_script"
+
+  # Check if hook exists first
+  if ! declare -F "set_up_before_script" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local start_time
+  bashunit::clock::now_to_slot
+  start_time=$_BASHUNIT_CLOCK_NOW_OUT
+
+  # Enable coverage trap to attribute lines executed during set_up_before_script
+  if [ "${_BASHUNIT_COVERAGE_ON:-0}" = 1 ]; then
+    bashunit::coverage::enable_trap
+  fi
+
+  # Execute the hook (render_header=false since header is already rendered)
+  bashunit::runner::execute_file_hook 'set_up_before_script' "$test_file" false
+  local status=$?
+
+  # Disable coverage trap after hook execution
+  if [ "${_BASHUNIT_COVERAGE_ON:-0}" = 1 ]; then
+    bashunit::coverage::disable_trap
+  fi
+
+  local end_time
+  bashunit::clock::now_to_slot
+  end_time=$_BASHUNIT_CLOCK_NOW_OUT
+  local duration_ns=$((end_time - start_time))
+  local duration_ms=$((duration_ns / 1000000))
+
+  # Print completion message only if hook succeeded
+  if [ $status -eq 0 ]; then
+    bashunit::console_results::print_hook_completed "set_up_before_script" "$duration_ms"
+  fi
+
+  return $status
+}
+
+function bashunit::runner::run_tear_down() {
+  bashunit::internal_log "run_tear_down"
+  bashunit::runner::file_path_to_slot "${1-}"
+  bashunit::runner::execute_test_hook 'tear_down'
+}
+
+function bashunit::runner::execute_test_hook() {
+  local hook_name="$1"
+
+  declare -F "$hook_name" >/dev/null 2>&1 || return 0
+
+  local hook_output=""
+  local status=0
+  local hook_output_file
+  bashunit::runner::hook_output_path "$hook_name"
+  hook_output_file=$_BASHUNIT_RUNNER_HOOK_FILE
+
+  # Enable errtrace to catch any failing command in the hook.
+  # Using -E (errtrace) without -e (errexit) prevents the subshell from
+  # exiting on source failures (Bash 3.2 doesn't trigger ERR trap with -eE).
+  # The ERR trap saves the exit status to a global variable, cleans up shell
+  # options, and returns from the hook function to prevent subsequent commands
+  # from executing.
+  # Variables set before the failure are preserved since we don't use a subshell.
+  _BASHUNIT_HOOK_ERR_STATUS=0
+  set -E
+  if bashunit::env::is_strict_mode_enabled; then
+    set -uo pipefail
+  fi
+  # See the twin comment in execute_file_hook: conditional return keeps the
+  # early-exit semantics for intermediate failures without silently returning
+  # from THIS executor when the trap re-fires here on Bash >= 4 (#836).
+  trap '_BASHUNIT_HOOK_ERR_STATUS=$?
+    if [ "${FUNCNAME[0]:-}" != "bashunit::runner::execute_test_hook" ]; then
+      set +Eu +o pipefail
+      trap - ERR
+      return $_BASHUNIT_HOOK_ERR_STATUS
+    fi' ERR
+
+  {
+    "$hook_name"
+  } >"$hook_output_file" 2>&1
+  # Real hook status from $?; the trap global alone misses failing
+  # `cmd && var=x` guards (&& lists are ERR-exempt) (#836).
+  status=$?
+  if [ "$status" -eq 0 ]; then
+    status=$_BASHUNIT_HOOK_ERR_STATUS
+  fi
+
+  trap - ERR
+  set +Eu +o pipefail
+
+  if [ -f "$hook_output_file" ]; then
+    hook_output=""
+    local line
+    while IFS= read -r line; do
+      [ -z "$hook_output" ] && hook_output="$line" || hook_output="$hook_output"$'\n'"$line"
+    done <"$hook_output_file"
+  fi
+
+  if [ $status -ne 0 ]; then
+    local message="$hook_output"
+    if [ -n "$hook_output" ]; then
+      printf "%s" "$hook_output"
+    else
+      message="Hook '$hook_name' failed with exit code $status"
+      printf "%s\n" "$message" >&2
+    fi
+    bashunit::runner::record_test_hook_failure "$hook_name" "$message" "$status"
+    return "$status"
+  fi
+
+  if [ -n "$hook_output" ]; then
+    printf "%s" "$hook_output"
+  fi
+
+  return 0
+}
+
+function bashunit::runner::record_test_hook_failure() {
+  local hook_name="$1"
+  local hook_message="$2"
+  local status="$3"
+
+  if [ -n "$_BASHUNIT_TEST_HOOK_FAILURE" ]; then
+    return "$status"
+  fi
+
+  bashunit::state::set_test_hook_failure "$hook_name"
+  bashunit::state::set_test_hook_message "$hook_message"
+
+  return "$status"
+}
+
+function bashunit::runner::clear_mocks() {
+  if [ "${#_BASHUNIT_MOCKED_FUNCTIONS[@]}" -eq 0 ]; then
+    return
+  fi
+
+  local i
+  for i in "${!_BASHUNIT_MOCKED_FUNCTIONS[@]}"; do
+    bashunit::unmock "${_BASHUNIT_MOCKED_FUNCTIONS[$i]:-}"
+  done
+}
+
+# The file whose tear_down_after_script this shell still owes, empty when it owes
+# none. --stop-on-failure exits from inside the test loop, so the loop's own
+# teardown call is never reached and the hook has to run from the exit path
+# instead (#1321).
+_BASHUNIT_FILE_TEARDOWN_PENDING=""
+
+##
+# Records that $1's file teardown is still owed by this shell.
+#
+# Gated on the file declaring the hook, not on setup having run: with no hook
+# declared run_tear_down_after_script prints a blank line, which is console
+# decoration belonging to the normal path. Emitting it from the halt path would
+# change the output of every halted run that defines no teardown.
+# Arguments: $1 - the test file
+##
+function bashunit::runner::mark_file_teardown_pending() {
+  if declare -F tear_down_after_script >/dev/null 2>&1; then
+    _BASHUNIT_FILE_TEARDOWN_PENDING="$1"
+  fi
+}
+
+##
+# Runs the file teardown this shell still owes, if any, and clears the debt.
+#
+# For the paths that leave the test loop without reaching its own teardown call.
+# The debt is cleared before the hook runs, so a hook that re-enters this path
+# cannot run twice.
+##
+function bashunit::runner::run_pending_file_teardown() {
+  local test_file="$_BASHUNIT_FILE_TEARDOWN_PENDING"
+  [ -n "$test_file" ] || return 0
+
+  _BASHUNIT_FILE_TEARDOWN_PENDING=""
+  bashunit::runner::run_tear_down_after_script "$test_file"
+}
+
+# The process groups of the tests this worker still has in flight, empty when it
+# has none. Written by call_test_functions as it dispatches, read by the handler
+# below, which is the only frame that can reach them.
+_BASHUNIT_WORKER_TEST_PIDS=""
+
+##
+# The per-file worker's SIGTERM handler.
+#
+# Since #1320 the worker owns the file's tear_down_after_script, and nothing above
+# it can run the hook: several files are in flight under --parallel and the hook is
+# unset and redefined as the loop advances, so by interrupt time the parent no
+# longer holds the right function body (#1331).
+#
+# TERM only, and not INT. A shell sets SIGINT to SIG_IGN in a job it backgrounds,
+# and a signal ignored on entry can be neither trapped nor reset, so a `trap ...
+# INT` in here would be dead code -- measured the same on bash 3.2 and 5.3. Ctrl-C
+# reaches this frame as the SIGTERM that main::cleanup pkills it with.
+##
+function bashunit::runner::cleanup_worker_on_signal() {
+  # Back to the default disposition first: the hook below is user code and may
+  # never return, and a handler that cannot itself be interrupted would leave no
+  # way out but SIGKILL, the same reasoning as main::cleanup.
+  trap - TERM
+  # Whole group per test, so the signal reaches the body subshell AND the command
+  # it is blocked on. Signalling the body alone is not enough: bash defers a trap
+  # until the running foreground command returns, so a body sitting in the test's
+  # own `sleep` never reaches the EXIT trap where tear_down lives. The body is a
+  # great-grandchild of the runner under --parallel, which is why a single
+  # `pkill -P` from anywhere above cannot do this.
+  local test_pid
+  for test_pid in $_BASHUNIT_WORKER_TEST_PIDS; do
+    kill -TERM -"$test_pid" 2>/dev/null
+  done
+  # No `pkill -P $$` sweep to go with the loop. `$$` stays the runner's pid inside
+  # a subshell, so the sweep signalled the runner's children -- this worker among
+  # them -- and killed the handler before it reached the hook below. On bash 5 it
+  # lost that race every time. `$BASHPID` would name the worker, and it is Bash 4+.
+  #
+  # A file that opted out of per-test parallelism runs its bodies unforked, so it
+  # never reaches this handler while a test is running: the worker sits in a
+  # command substitution, and bash defers a trap until the running foreground
+  # command returns. Both hooks still run for such a file, when the body finishes
+  # rather than when the signal lands, so nothing is leaked and the interrupt just
+  # does not cut that test short.
+  #
+  # After the kills, so the per-test tear_down that each body's EXIT trap runs
+  # comes first, as it does in a normal run.
+  bashunit::runner::run_pending_file_teardown || true
+  exit 143
+}
+
+function bashunit::runner::run_tear_down_after_script() {
+  local test_file="$1"
+  bashunit::internal_log "run_tear_down_after_script"
+
+  # Check if hook exists first
+  if ! declare -F "tear_down_after_script" >/dev/null 2>&1; then
+    # Add blank line after tests if no tear_down hook.
+    #
+    # Console decoration, so it must not reach json or junit: those write one
+    # document at the end of the run, and this landed in front of it.
+    # `bashunit --output junit` -- sequential being the default -- produced XML
+    # that no parser accepts, and the json document gained a leading blank line
+    # that went unnoticed only because JSON tolerates leading whitespace
+    # (#1243).
+    #
+    # Named per format rather than via is_machine_output_enabled, which also
+    # covers tap: TAP streams line by line, so a blank line between files is
+    # valid there and is what its snapshots record.
+    if ! bashunit::env::is_simple_output_enabled &&
+      ! bashunit::env::is_failures_only_enabled &&
+      ! bashunit::env::is_no_progress_enabled &&
+      ! bashunit::env::is_json_output_enabled &&
+      ! bashunit::env::is_junit_output_enabled &&
+      ! bashunit::parallel::is_enabled; then
+      echo ""
+    fi
+    return 0
+  fi
+
+  local start_time
+  bashunit::clock::now_to_slot
+  start_time=$_BASHUNIT_CLOCK_NOW_OUT
+
+  # Enable coverage trap to attribute lines executed during tear_down_after_script
+  if [ "${_BASHUNIT_COVERAGE_ON:-0}" = 1 ]; then
+    bashunit::coverage::enable_trap
+  fi
+
+  # Execute the hook
+  bashunit::runner::execute_file_hook 'tear_down_after_script' "$test_file"
+  local status=$?
+
+  # Disable coverage trap after hook execution
+  if [ "${_BASHUNIT_COVERAGE_ON:-0}" = 1 ]; then
+    bashunit::coverage::disable_trap
+  fi
+
+  local end_time
+  bashunit::clock::now_to_slot
+  end_time=$_BASHUNIT_CLOCK_NOW_OUT
+  local duration_ns=$((end_time - start_time))
+  local duration_ms=$((duration_ns / 1000000))
+
+  # Print completion message only if hook succeeded
+  if [ $status -eq 0 ]; then
+    bashunit::console_results::print_hook_completed "tear_down_after_script" "$duration_ms"
+  fi
+
+  # Add blank line after tear_down output.
+  #
+  # Same guards as the early-return path above, json and junit included: this
+  # line is console decoration, and under `--output` it landed on stdout ahead
+  # of the document. XML wants its declaration at byte 0, so an ordinary
+  # tear_down_after_script -- the hook did not have to fail -- was enough to
+  # make the report malformed. JSON tolerates leading whitespace, which is why
+  # only the XML showed it. tap is still excluded on purpose: it streams line
+  # by line, so a blank line between files is valid there.
+  if ! bashunit::env::is_simple_output_enabled &&
+    ! bashunit::env::is_failures_only_enabled &&
+    ! bashunit::env::is_no_progress_enabled &&
+    ! bashunit::env::is_json_output_enabled &&
+    ! bashunit::env::is_junit_output_enabled &&
+    ! bashunit::parallel::is_enabled; then
+    echo ""
+  fi
+
+  return $status
+}
+
+##
+# Unset a file's test functions once the file has been processed.
+#
+# Test files are sourced into the main shell, and their functions used to stay
+# defined for the whole run: every test's $() subshell then forked an
+# ever-growing shell, making multi-file runs quadratic in file count (#829).
+# In parallel mode the file's workers have already forked (with their own copy
+# of the functions) by the time this runs, so unsetting here is race-free.
+# Arguments: $1 - whitespace-separated test function names
+##
+function bashunit::runner::clean_script_test_functions() {
+  local IFS=$' \t\n'
+  local fn
+  for fn in $1; do
+    unset -f "$fn" 2>/dev/null || true
+  done
+}
+
+function bashunit::runner::clean_set_up_and_tear_down_after_script() {
+  bashunit::internal_log "clean_set_up_and_tear_down_after_script"
+  bashunit::helper::unset_if_exists 'set_up'
+  bashunit::helper::unset_if_exists 'tear_down'
+  bashunit::helper::unset_if_exists 'set_up_before_script'
+  bashunit::helper::unset_if_exists 'tear_down_after_script'
+}

@@ -870,6 +870,10 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   Windows' session API, `split --filter`, and another corpus round, its sources put to
   the user before any download. Left out: zstd's levels (parked), winget (not now), a
   `case` of more than 64 bracket patterns (only when a script shows the need).
+- **The phase after 1.33.0** (the user, 2026-10-19): 1.33.0 published through Scoop, and
+  another corpus round. In it, `time` became a command too, for a variable, `command`,
+  `xargs` and `/usr/bin/time`, with GNU time's options (the user: "if we do not have a
+  time command, we should create it").
 
 ## 8. Archives and compression
 

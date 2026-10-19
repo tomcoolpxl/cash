@@ -1,0 +1,342 @@
+#!/usr/bin/env bash
+
+function bashunit::console_header::print_version_with_env() {
+  local filter=${1:-}
+  shift || true
+
+  if ! bashunit::env::is_show_header_enabled; then
+    return
+  fi
+
+  bashunit::console_header::print_version "$filter" "$@"
+
+  if bashunit::env::is_dev_mode_enabled; then
+    printf "%sDev log:%s %s\n" \
+      "${_BASHUNIT_COLOR_INCOMPLETE}" "${_BASHUNIT_COLOR_DEFAULT}" "$BASHUNIT_DEV_LOG"
+  fi
+}
+
+##
+# Prints the seed used to randomize test order, so a failing run can be replayed
+# with `--seed <n>`.
+##
+function bashunit::console_header::print_random_order_seed() {
+  local seed=$1
+  printf "%sRandomized with seed:%s %s\n" \
+    "${_BASHUNIT_COLOR_INCOMPLETE}" "${_BASHUNIT_COLOR_DEFAULT}" "$seed"
+}
+
+function bashunit::console_header::print_version() {
+  local filter=${1:-}
+  shift || true
+
+  # Bash 3.0 compatible: check argument count after shift
+  local files_count=$#
+  local total_tests
+  if [ "$files_count" -eq 0 ]; then
+    total_tests=0
+  elif bashunit::parallel::is_enabled && bashunit::env::is_simple_output_enabled; then
+    # Skip counting in parallel+simple mode for faster startup
+    total_tests=0
+  else
+    # Read via the return slot, not $(...): the capture subshell would discard
+    # the provider-map cache find_total_tests builds per file, forcing the
+    # runner to re-scan each file with a second awk fork.
+    bashunit::helper::find_total_tests "$filter" "$@" >/dev/null
+    total_tests=$_BASHUNIT_HELPER_TOTAL_TESTS_OUT
+  fi
+
+  if bashunit::env::is_header_ascii_art_enabled; then
+    cat <<EOF
+_               _                   _
+| |__   __ _ ___| |__  __ __ ____ (_) |_
+| '_ \ / _' / __| '_ \| | | | '_ \| | __|
+| |_) | (_| \__ \ | | | |_| | | | | | |_
+|_.__/ \__,_|___/_| |_|\___/|_| |_|_|\__|
+EOF
+    if [ "$total_tests" -eq 0 ]; then
+      printf "%s\n" "$BASHUNIT_VERSION"
+    else
+      printf "%s | Tests: %s\n" "$BASHUNIT_VERSION" "$total_tests"
+    fi
+    return
+  fi
+
+  if [ "$total_tests" -eq 0 ]; then
+    printf "%s%sbashunit%s - %s\n" \
+      "$_BASHUNIT_COLOR_BOLD" "$_BASHUNIT_COLOR_PASSED" "$_BASHUNIT_COLOR_DEFAULT" "$BASHUNIT_VERSION"
+  else
+    printf "%s%sbashunit%s - %s | Tests: %s\n" \
+      "${_BASHUNIT_COLOR_BOLD}" "${_BASHUNIT_COLOR_PASSED}" "${_BASHUNIT_COLOR_DEFAULT}" \
+      "$BASHUNIT_VERSION" "$total_tests"
+  fi
+}
+
+function bashunit::console_header::print_help() {
+  cat <<EOF
+Usage: bashunit <command> [arguments] [options]
+
+Commands:
+  test [path]         Run tests (default command)
+  bench [path]        Run benchmarks
+  assert <fn> <args>  Run standalone assertion
+  doc [filter]        Display assertion documentation
+  init [dir]          Initialize a new test directory
+  watch [path]        Watch files and re-run tests on change
+  upgrade             Upgrade bashunit to latest version
+
+Global Options:
+  -h, --help        Show this help message
+  -v, --version     Display the current version
+
+Run 'bashunit <command> --help' for command-specific options.
+
+Examples:
+  bashunit test tests/                Run all tests in directory
+  bashunit tests/                     Run all tests (shorthand)
+  bashunit bench                      Run all benchmarks
+  bashunit assert equals "foo" "foo"  Run standalone assertion
+  bashunit doc contains               Show docs for 'contains' assertions
+  bashunit init                       Initialize test directory
+
+More info: https://bashunit.com/command-line
+EOF
+}
+
+function bashunit::console_header::print_test_help() {
+  cat <<EOF
+Usage: bashunit test [path] [options]
+  bashunit [path] [options]
+
+Run test files. If no path is provided, searches for tests in BASHUNIT_DEFAULT_PATH.
+
+Arguments:
+  path                        File or directory containing tests
+    - Directories: runs all '*test.sh' files
+    - Wildcards: supported to match multiple files
+
+Options:
+  -a, --assert <fn> <args>    Run a standalone assert function (deprecated: use 'bashunit assert')
+  -e, --env, --boot <file>    Load a custom env/bootstrap file  (supports args)
+  -f, --filter <name>         Only run tests matching the name
+  --exclude-filter <name>     Skip tests whose name matches (repeatable)
+  --suite <name>              Run a [suite:<name>] from .bashunitrc (repeatable)
+  --list-suites               Print the suites defined in .bashunitrc and exit
+  --tag <expr>                Only run tests with matching @tag (repeatable, OR logic).
+                              Supports 'a&&b' (AND) and '!a' (NOT)
+  --exclude-tag <name>        Skip tests with matching @tag (repeatable, exclude wins)
+  --sandbox                   Fail a test that runs an external command it did not mock
+  --sandbox-allow <cmd,...>   Commands the sandbox still allows (repeatable)
+  --log-junit, --report-junit <file>  Write JUnit XML report
+  --log-gha <file>            Write GitHub Actions annotations to a file
+  --gha-annotations <mode>    Annotations on stdout: auto (in GitHub Actions), always or never
+  -j, --jobs <N|auto>         Run tests in parallel with max N concurrent jobs ("auto" = CPU cores)
+  -p, --parallel              Run tests in parallel (unlimited concurrency)
+  --no-parallel               Run tests sequentially
+  -r, --report-html <file>    Write HTML report
+  --report-tap <file>         Write TAP version 13 report
+  --report-json <file>        Write machine-readable JSON report
+  --report-md <file>          Write a Markdown summary (auto-appended to \$GITHUB_STEP_SUMMARY)
+  -s, --simple                Simple output (dots)
+  --detailed                  Detailed output (default)
+  --output <format>           Report on stdout: text (default), tap, json or junit
+  -R, --run-all               Run all assertions (don't stop on first failure)
+  -S, --stop-on-failure       Stop on first failure
+      --pass-with-no-tests    Exit 0 when the run selects no tests
+  --test-timeout <seconds>    Fail a test if it runs longer than N seconds (0 = off)
+  --retry <n>                 Re-run a failed test up to N extra times (0 = off)
+  --repeat <n>                Run each selected test N times; it fails if any iteration fails
+  --random-order              Randomize test execution order
+  --order-by <mode>           Execution order: defined (default), defects (last run's failures first) or random
+  --seed <n>                  Seed for --random-order (reproducible shuffle)
+  --shard <i>/<n>             Run shard i of n (split the suite across runners)
+  --rerun-failed              Replay only the tests that failed on the last run (.bashunit/last-failed)
+  --changed [<ref>]           Run only the test files changed since <ref> (default: origin/HEAD, then HEAD)
+  --list, --dry-run           Print the tests that would run, then exit without running them
+  --list-format <fmt>         Rendering for --list: text (default) or json
+  --list-tags                 Print the tags of the selected files, one per line, then exit
+  -u, --snapshot-update       Rewrite existing snapshots from the actual value (combine with --filter)
+  --no-snapshot-create        Fail on a missing snapshot instead of recording it (for CI)
+  --snapshot-report-unused    List snapshot files no test resolved (full runs only, deletes nothing)
+  --snapshot-prune            Delete the snapshot files no test resolved (full runs only)
+  -vvv, --verbose             Show execution details
+  --debug [file]              Enable shell debug mode
+  --no-output                 Suppress all output
+  --failures-only             Only show failures (suppress passed/skipped/incomplete)
+  --show-skipped              Show the skipped tests summary at the end
+  --show-incomplete           Show the incomplete tests summary at the end
+  --fail-on-risky             Treat risky tests (no assertions) as failures
+  --fail-on-flaky             Treat flaky tests (passed only after a retry) as failures
+  --profile                   Report the slowest tests (count: BASHUNIT_PROFILE_COUNT, default 10)
+  --no-progress               Suppress real-time progress, show only final results
+  --show-output               Show test output on failure (default: enabled)
+  --no-output-on-failure      Hide test output on failure
+  --strict                    Enable strict shell mode (set -euo pipefail)
+  --skip-env-file             Skip .env loading, use shell environment only
+  -l, --login                 Run tests in login shell context
+  -w, --watch                 Watch for changes and re-run tests
+  --no-color                  Disable colored output (honors NO_COLOR env var)
+  -h, --help                  Show this help message
+
+Coverage:
+  --coverage                   Enable code coverage tracking
+  --coverage-paths <paths>     Source paths to track (default: auto-discover)
+  --coverage-exclude <pats>    Patterns to exclude (comma-separated)
+  --coverage-report [file]     Output file (default: coverage/lcov.info)
+  --coverage-report-html [dir] HTML report (default: coverage/html)
+  --coverage-report-cobertura [file] Cobertura XML for GitLab/Azure/Jenkins (default: coverage/cobertura.xml)
+  --coverage-min <pct>         Fail if coverage below percentage
+  --coverage-diff <ref>        Report coverage only for lines changed since ref
+  --no-coverage-report         Disable file output, console only
+
+Examples:
+  bashunit test tests/
+  bashunit test tests/unit/ --parallel
+  bashunit test --filter "user" tests/
+  bashunit test -a equals "foo" "foo"
+  bashunit test tests/ --coverage
+  bashunit test tests/ --coverage --coverage-min 80
+  bashunit test tests/ --coverage-report-html
+EOF
+}
+
+function bashunit::console_header::print_bench_help() {
+  cat <<EOF
+Usage: bashunit bench [path] [options]
+
+Run benchmark files. Searches for '*bench.sh' files.
+
+Arguments:
+  path                        File or directory containing benchmarks
+
+Options:
+  -e, --env, --boot <file>    Load a custom env/bootstrap file (supports args)
+  -f, --filter <name>         Only run benchmarks matching the name
+  --baseline <file>           Compare against a previous --report-json result
+  --baseline-tolerance <pct>  Allowed regression before failing (default: 10)
+  --baseline-update <file>    Write this run as the new baseline
+  --report-json <file>        Write machine-readable benchmark results
+  --report-junit <file>       Write JUnit XML benchmark results
+  -s, --simple                Simple output
+  --detailed                  Detailed output (default)
+  -vvv, --verbose             Show execution details
+  --skip-env-file             Skip .env loading, use shell environment only
+  -l, --login                 Run in login shell context
+  --no-color                  Disable colored output (honors NO_COLOR env var)
+  -h, --help                  Show this help message
+
+Examples:
+  bashunit bench
+  bashunit bench benchmarks/
+  bashunit bench --filter "parse"
+  bashunit bench --report-json bench.json
+  bashunit bench --baseline bench.json --baseline-tolerance 5
+EOF
+}
+
+function bashunit::console_header::print_doc_help() {
+  cat <<EOF
+Usage: bashunit doc [options] [filter]
+
+Display documentation for assertion functions.
+
+Arguments:
+filter                      Optional filter to show only matching assertions
+
+Options:
+--custom                    Show only the assertions your project defines
+-e, --env, --boot <file>    Load a bootstrap file defining custom assertions
+
+Examples:
+bashunit doc                Show all assertions
+bashunit doc equals         Show assertions containing 'equals'
+bashunit doc file           Show file-related assertions
+bashunit doc --custom       Show only your project's own assertions
+EOF
+}
+
+function bashunit::console_header::print_init_help() {
+  cat <<EOF
+Usage: bashunit init [directory]
+
+Initialize a new test directory with sample files.
+
+Arguments:
+  directory                   Target directory (default: tests)
+
+Creates:
+  - bootstrap.sh              Setup file for test configuration
+  - example_test.sh           Sample test file to get started
+  - .github/workflows/tests.yml  CI workflow using the official action
+
+Examples:
+  bashunit init               Create tests/ directory
+  bashunit init spec          Create spec/ directory
+EOF
+}
+
+
+function bashunit::console_header::print_upgrade_help() {
+  cat <<EOF
+Usage: bashunit upgrade
+
+Upgrade bashunit to the latest version.
+
+Downloads and installs the newest release from GitHub.
+EOF
+}
+
+function bashunit::console_header::print_assert_help() {
+  cat <<EOF
+Usage: bashunit assert <function> [args...]
+  bashunit assert "<command>" <assertion1> <arg1> [<assertion2> <arg2>...]
+
+Run standalone assertion(s) without creating a test file.
+
+Single assertion:
+  bashunit assert equals "foo" "foo"
+  bashunit assert same "1" "1"
+  bashunit assert contains "world" "hello world"
+  bashunit assert exit_code 0 "echo 'success'"
+
+Multiple assertions on command output:
+  bashunit assert "echo 'error' && exit 1" exit_code "1" contains "error"
+  bashunit assert "./my_script.sh" exit_code "0" contains "success" not_contains "error"
+
+Arguments:
+  function                    Assertion function name (with or without 'assert_' prefix)
+  command                     Command to execute (for multi-assertion mode)
+  assertion                   Assertion name (exit_code, contains, equals, etc.)
+  arg                         Expected value for the assertion
+
+Note: You can also use 'bashunit test --assert <fn> <args>' (deprecated).
+  The 'bashunit assert' subcommand is the recommended approach.
+
+More info: https://bashunit.com/standalone
+EOF
+}
+
+function bashunit::console_header::print_watch_help() {
+  cat << 'ENDOFHELP'
+Usage: bashunit watch [path] [test-options]
+
+Watch .sh files for changes and automatically re-run tests.
+
+Arguments:
+  [path]          Directory or file to watch and test (default: .)
+
+Options:
+  -h, --help      Show this help message
+  Any option accepted by 'bashunit test' is also accepted here.
+
+Requirements:
+  Linux:  inotifywait  (sudo apt install inotify-tools)
+  macOS:  fswatch      (brew install fswatch)
+
+Examples:
+  bashunit watch                      Watch current directory
+  bashunit watch tests/               Watch the tests/ directory
+  bashunit watch tests/ --filter user Watch and filter by name
+  bashunit watch tests/ --simple      Watch with simple output
+ENDOFHELP
+}

@@ -1,0 +1,962 @@
+#!/usr/bin/env bash
+
+# Static line classification and reading recorded hit data.
+
+
+# Check if a line is executable (used by get_executable_lines and report_lcov)
+#
+# Every tracked line is classified twice per run (once by precompute_file_stats,
+# once by report_lcov), so this is the report phase's hottest path and stays
+# fork-free. It used to fall back to one `grep -E` per unclassified line against
+# a combined regex; 286 source lines cost 1055 grep forks and roughly half of a
+# `--coverage` run's wall time (#1005). The pure-Bash rules below reproduce that
+# regex exactly, quirks included — see the comments on the individual cases.
+#
+# Non-executable lines are: comments and the shebang, brace-only lines, a bare
+# line continuation, control-flow keywords, loop terminators with a redirection
+# or pipe, function declarations, and case patterns.
+#
+# Arguments: line content, line number
+# Returns: 0 if executable, 1 if not
+function bashunit::coverage::is_executable_line() {
+  local line="$1"
+  local lineno="$2"
+
+  # Unused but kept for API compatibility
+  : "$lineno"
+
+  # Skip empty lines (line with only whitespace) — built-in, no subshell
+  [ -z "${line// /}" ] && return 1
+
+  # Fast path: pure Bash checks for common non-executable patterns (no subshell)
+  local stripped="${line#"${line%%[![:space:]]*}"}"
+  local _trail="${stripped##*[![:space:]]}"
+  local trimmed="${stripped%"$_trail"}"
+
+  case "$trimmed" in
+  '#'*) return 1 ;;             # Comments (including shebang)
+  '{' | '}' | [\\]) return 1 ;; # Braces only, or a bare line continuation
+  esac
+
+  # A keyword may butt straight up against a trailing comment (`done#note`),
+  # so end the token at a `#` as well as at whitespace.
+  local first="${trimmed%%[[:space:]]*}"
+  first="${first%%'#'*}"
+  case "$first" in
+  'then' | 'else' | 'fi' | 'do' | 'done' | 'esac' | 'in' | ';;' | ';;&' | ';&' | ')')
+    local rest="${trimmed#"$first"}"
+    local _rl="${rest%%[![:space:]]*}"
+    rest="${rest#"$_rl"}"
+    case "$rest" in '' | '#'*) return 1 ;; esac
+    # A loop terminator still terminates a loop when a redirection or a pipe
+    # follows it: `done < file`, `done | sort`. Reaching here means `done` was
+    # followed by whitespace and something that is not a comment.
+    if [ "$first" = 'done' ]; then
+      return 1
+    fi
+    ;;
+  esac
+
+  # Function declarations: `[function ]name()` with an optional trailing `{`.
+  # No trailing comment is allowed, matching the pattern this replaced.
+  case "$trimmed" in
+  *'()'*)
+    local fn_rest="$trimmed"
+    case "$fn_rest" in
+    'function'[[:space:]]*)
+      fn_rest="${fn_rest#function}"
+      fn_rest="${fn_rest#"${fn_rest%%[![:space:]]*}"}"
+      ;;
+    esac
+    case "$fn_rest" in
+    *'{')
+      fn_rest="${fn_rest%'{'}"
+      fn_rest="${fn_rest%"${fn_rest##*[![:space:]]}"}"
+      ;;
+    esac
+    case "$fn_rest" in
+    *'()')
+      local fn_name="${fn_rest%'()'}"
+      fn_name="${fn_name%"${fn_name##*[![:space:]]}"}"
+      case "$fn_name" in
+      [a-zA-Z_]*)
+        case "${fn_name#?}" in
+        *[!a-zA-Z0-9_:]*) : ;;
+        *) return 1 ;;
+        esac
+        ;;
+      esac
+      ;;
+    esac
+    ;;
+  esac
+
+  # Case patterns: something, then `)`, then end of line or a comment —
+  # `--option)`, `*) # note`. A case arm is a decision, and the decision is
+  # already accounted for by branch coverage, so an arm line counts as
+  # non-executable.
+  #
+  # The `)` has to actually close an arm. Any `(` earlier on the line means it
+  # closes that instead -- `x=$(foo)`, `((i++))`, `cmd <(sub)` -- and those are
+  # statements. The rule this replaced asked a different question: its leading
+  # segment was spelled `[^\)]+`, and inside a POSIX bracket expression a
+  # backslash is a literal member of the set, so a backslash anywhere before
+  # the `)` suppressed the match. That made `x=$(foo)` non-executable while
+  # `x=$(printf '%s\n')` was executable, and dropped 236 real statements of
+  # this repo's own src/ out of every denominator (#1055).
+  case "$line" in
+  *')'*)
+    local cp_before="${line%%')'*}"
+    case "$cp_before" in
+    '' | *'('*) : ;;
+    *)
+      local cp_after="${line#*')'}"
+      cp_after="${cp_after#"${cp_after%%[![:space:]]*}"}"
+      case "$cp_after" in '' | '#'*) return 1 ;; esac
+      ;;
+    esac
+    ;;
+  esac
+
+  return 0
+}
+
+function bashunit::coverage::get_executable_lines() {
+  local file="$1"
+  local count=0
+  local lineno=0
+  local line
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    ((++lineno))
+    bashunit::coverage::is_executable_line "$line" "$lineno" && ((++count))
+  done <"$file"
+
+  echo "$count"
+}
+
+function bashunit::coverage::get_hit_lines() {
+  local file="$1"
+
+  if [ ! -f "$_BASHUNIT_COVERAGE_DATA_FILE" ]; then
+    echo "0"
+    return
+  fi
+
+  # Get unique hit line numbers
+  local hit_lines
+  hit_lines=$( (grep "^${file}:" "$_BASHUNIT_COVERAGE_DATA_FILE" 2>/dev/null || true) |
+    cut -d: -f2 | sort -u)
+
+  if [ -z "$hit_lines" ]; then
+    echo "0"
+    return
+  fi
+
+  # Only count hits that correspond to executable lines
+  # This prevents >100% coverage when DEBUG trap fires on non-executable lines
+
+  # Pre-load file lines into indexed array (avoids sed per line)
+  local -a file_lines=()
+  local _idx=0 _fl
+  while IFS= read -r _fl || [ -n "$_fl" ]; do
+    file_lines[_idx]="$_fl"
+    ((++_idx))
+  done <"$file"
+
+  local count=0
+  local line_num
+  for line_num in $hit_lines; do
+    local line_content="${file_lines[$((line_num - 1))]:-}"
+    [ -z "$line_content" ] && continue
+    if bashunit::coverage::is_executable_line "$line_content" "$line_num"; then
+      ((++count))
+    fi
+  done
+
+  echo "$count"
+}
+
+# Compute executable + hit counts for a file in a single source-file pass.
+# Reuses get_all_line_hits to avoid scanning the coverage data per line.
+# Output format: "executable:hit"
+function bashunit::coverage::compute_file_coverage() {
+  local file="$1"
+
+  bashunit::coverage::load_hits_by_line "$file"
+
+  local executable=0 hit=0 lineno=0 line line_hits
+  local -a cv_lines=()
+  local _cli=0 _cl
+  while IFS= read -r _cl || [ -n "$_cl" ]; do
+    cv_lines[_cli]="$_cl"
+    ((++_cli))
+  done <"$file"
+
+  for line in "${cv_lines[@]}"; do
+    ((++lineno))
+    bashunit::coverage::is_executable_line "$line" "$lineno" || continue
+    ((++executable))
+    line_hits=${_BASHUNIT_COVERAGE_HITS_BY_LINE[lineno]:-0}
+    [ "$line_hits" -gt 0 ] && ((++hit))
+  done
+
+  echo "${executable}:${hit}"
+}
+
+# Detect whether a source line ends with a Bash line-continuation, i.e. an
+# odd number of unescaped trailing backslashes with no trailing whitespace.
+# Comment lines never continue. Used to propagate coverage hits from a
+# statement's starting line to its continuation lines (see #722).
+function bashunit::coverage::_ends_with_continuation() {
+  local line="$1"
+  local lead="${line#"${line%%[![:space:]]*}"}"
+  case "$lead" in '#'*) return 1 ;; esac
+  local trailing="${line##*[!\\]}"
+  case "$line" in *[!\\]*) : ;; *) trailing="$line" ;; esac
+  [ $((${#trailing} % 2)) -eq 1 ]
+}
+
+# The multi-line statement scanner (#1338).
+#
+# A backslash chain is not the only way one statement covers several physical
+# lines, and the DEBUG trap reports the whole statement on ONE of them -- which
+# one depends on the Bash version. For `local commands=(` .. `)`, Bash 3.2
+# reports the closing `)` (a line the classifier calls non-executable, so the
+# hit was discarded entirely) and Bash 5.x reports the opening line. Either way
+# the rest of the statement read as uncovered.
+#
+# So the reader needs to know which lines belong to one statement. This is a
+# small shell lexer: it consumes a line at a time and carries its state forward,
+# the way the classifier consumes a line at a time without one.
+#
+# The state is a stack of open contexts, innermost last, one character each:
+#
+#   S  a single-quoted string      D  a double-quoted string
+#   A  an array literal `name=(`   C  a command/process substitution
+#   R  an arithmetic parenthesis  P  any other parenthesis
+#   Q  a case awaiting its subject H  a case header after its subject
+#   K  a case expecting a pattern B  a case arm body
+#
+# plus a pending heredoc delimiter. A line is *open* -- the statement continues
+# onto the next line -- when the stack holds an S, D or A, when a heredoc is
+# pending, or when it ends with a backslash continuation.
+#
+# C, R and P deliberately do NOT open a span. The lines inside a multi-line `$( )`
+# are real commands that get their own DEBUG hits, so crediting them from the
+# line that opened the substitution would report lines that never ran. They are
+# still tracked, because their parentheses have to balance for the ones that do.
+_BASHUNIT_COVERAGE_SCAN_STACK=""
+_BASHUNIT_COVERAGE_SCAN_HEREDOC=""
+_BASHUNIT_COVERAGE_SCAN_HEREDOC_TAB=0
+_BASHUNIT_COVERAGE_SCAN_CONTINUES=0
+_BASHUNIT_COVERAGE_SCAN_CONTINUATION_DEPTHS=""
+_BASHUNIT_COVERAGE_SCAN_COMMAND_START=1
+
+##
+# Clears the scanner state. Call once before the first line of a file.
+##
+function bashunit::coverage::scan_reset() {
+  _BASHUNIT_COVERAGE_SCAN_STACK=""
+  _BASHUNIT_COVERAGE_SCAN_HEREDOC=""
+  _BASHUNIT_COVERAGE_SCAN_HEREDOC_TAB=0
+  _BASHUNIT_COVERAGE_SCAN_CONTINUES=0
+  _BASHUNIT_COVERAGE_SCAN_CONTINUATION_DEPTHS=""
+  _BASHUNIT_COVERAGE_SCAN_COMMAND_START=1
+}
+
+# Records the delimiter of a heredoc from the text that follows `<<`. The
+# quoting of a delimiter only decides whether the body expands, so it is
+# stripped: `<<'EOF'`, `<<"EOF"`, `<<\EOF` and `<<EOF` all end at `EOF`.
+# Arguments: $1 - the rest of the line after `<<`
+function bashunit::coverage::_scan_heredoc_start() {
+  local rest="$1"
+
+  _BASHUNIT_COVERAGE_SCAN_HEREDOC_TAB=0
+  case "$rest" in
+  '-'*)
+    _BASHUNIT_COVERAGE_SCAN_HEREDOC_TAB=1
+    rest="${rest#-}"
+    ;;
+  esac
+  rest="${rest#"${rest%%[![:space:]]*}"}"
+
+  local word="${rest%%[[:space:];&|<>)]*}"
+  word="${word//\\/}"
+  word="${word//\'/}"
+  word="${word//\"/}"
+  _BASHUNIT_COVERAGE_SCAN_HEREDOC="$word"
+}
+
+# Keeps a backslash-continuation span at the command-substitution depth where
+# it started. Deeper child commands suspend it; returning to its depth closes
+# it unless that boundary line continues again.
+function bashunit::coverage::_scan_update_continuation_span() { # $1 = stack, $2 = command-start flag
+  local stack="$1" command_start="$2"
+  local commands depth kept="" item
+  commands="${stack//[^C]/}"
+  depth=${#commands}
+  for item in $_BASHUNIT_COVERAGE_SCAN_CONTINUATION_DEPTHS; do
+    if [ "$item" -lt "$depth" ]; then
+      kept="${kept:+$kept }$item"
+    fi
+  done
+  if [ "$_BASHUNIT_COVERAGE_SCAN_CONTINUES" -eq 1 ]; then
+    kept="${kept:+$kept }$depth"
+    _BASHUNIT_COVERAGE_SCAN_COMMAND_START=$command_start
+  else
+    _BASHUNIT_COVERAGE_SCAN_COMMAND_START=1
+  fi
+  _BASHUNIT_COVERAGE_SCAN_CONTINUATION_DEPTHS="$kept"
+}
+
+##
+# Advances the scanner over one source line.
+#
+# Only the characters that can change the state are visited: the line is cut to
+# the next one of them with a single parameter expansion, so the loop runs once
+# per quote, paren, backslash, `#` or `<` rather than once per character.
+# Arguments: $1 - the source line
+##
+function bashunit::coverage::scan_line() {
+  local line="$1"
+
+  _BASHUNIT_COVERAGE_SCAN_CONTINUES=0
+
+  # A heredoc body is data, not shell text: nothing in it changes the state, and
+  # its terminator is the last line of the span.
+  if [ -n "$_BASHUNIT_COVERAGE_SCAN_HEREDOC" ]; then
+    local body="$line"
+    if [ "$_BASHUNIT_COVERAGE_SCAN_HEREDOC_TAB" -eq 1 ]; then
+      body="${body#"${body%%[!	]*}"}"
+    fi
+    if [ "$body" = "$_BASHUNIT_COVERAGE_SCAN_HEREDOC" ]; then
+      _BASHUNIT_COVERAGE_SCAN_HEREDOC=""
+    fi
+    bashunit::coverage::_scan_update_continuation_span \
+      "$_BASHUNIT_COVERAGE_SCAN_STACK" 1
+    return 0
+  fi
+
+  local stack="$_BASHUNIT_COVERAGE_SCAN_STACK"
+  local lead="${line#"${line%%[![:space:]]*}"}"
+  local keyword="${lead%%[[:space:];&|)]*}"
+  local command_start=$_BASHUNIT_COVERAGE_SCAN_COMMAND_START
+
+  # With nothing open, a line holding no quote, backslash, `(` or `<` cannot
+  # change the state unless it starts with a reserved word that introduces a
+  # command. One glob test skips the walk for most lines, while a continued
+  # command must still consume its word.
+  if [ -z "$stack" ] && [ -z "$_BASHUNIT_COVERAGE_SCAN_CONTINUATION_DEPTHS" ] &&
+    [ "$command_start" -eq 1 ]; then
+    case "$keyword" in
+    case | if | while | until | then | do | else | elif | '{' | '!') : ;;
+    *)
+      case "$line" in
+      *[\'\"\\\(\<\;\&\|]*) : ;;
+      *)
+        _BASHUNIT_COVERAGE_SCAN_STACK="$stack"
+        _BASHUNIT_COVERAGE_SCAN_COMMAND_START=1
+        return 0
+        ;;
+      esac
+      ;;
+    esac
+  fi
+
+  # A local copy, written back once: the global's name is longer than most of
+  # the statements that touch it.
+  local rest="$line" prev="" head tail char top words token
+  while [ -n "$rest" ]; do
+    top="${stack#"${stack%?}"}"
+    case "$top" in
+    'S') head="${rest%%[\']*}" ;;
+    'D') head="${rest%%[\"\\$]*}" ;;
+    *) head="${rest%%[\'\"\\#()<;&|]*}" ;;
+    esac
+
+    # `prev` is what sits immediately left of the character we stopped on: it is
+    # the last character of the skipped text, or -- when nothing was skipped --
+    # the character the previous iteration stopped on.
+    [ -n "$head" ] && prev="${head#"${head%?}"}"
+
+    # Reserved words only have meaning at a shell command boundary. Consume
+    # just enough ordinary text to find case/in/esac in source order; quoted
+    # words and comments never reach this branch. Keeping case phases on the
+    # syntax stack prevents an arm delimiter from closing a C below it.
+    if [ "$command_start" -eq 1 ] && [ "$top" != 'S' ] &&
+      [ "$top" != 'D' ] && [ "$top" != 'A' ] && [ "$top" != 'R' ]; then
+      words="$head"
+      while [ "$command_start" -eq 1 ] && [ -n "$words" ]; do
+        words="${words#"${words%%[![:space:]]*}"}"
+        [ -z "$words" ] && break
+        token="${words%%[[:space:]]*}"
+        words="${words#"$token"}"
+        top="${stack#"${stack%?}"}"
+        case "$top:$token" in
+        'Q:'*)
+          # A case subject may itself be the word `in`.
+          stack="${stack%?}H"
+          command_start=1
+          ;;
+        'H:in')
+          stack="${stack%?}K"
+          command_start=1
+          ;;
+        'H:'*)
+          # Subject words continue until the unquoted `in` keyword.
+          command_start=1
+          ;;
+        'K:esac' | 'B:esac')
+          stack="${stack%?}"
+          command_start=0
+          ;;
+        'K:'*)
+          # At this point `case` is a pattern word, not a nested command.
+          command_start=0
+          ;;
+        *':case')
+          stack="${stack}Q"
+          command_start=1
+          ;;
+        *':if' | *':while' | *':until' | *':then' | *':do' | *':else' | *':elif' | *':{' | *':!')
+          command_start=1
+          ;;
+        *) command_start=0 ;;
+        esac
+      done
+    fi
+
+    [ "$head" = "$rest" ] && break
+    tail="${rest#"$head"}"
+    char="${tail%"${tail#?}"}"
+    rest="${tail#?}"
+    top="${stack#"${stack%?}"}"
+
+    # Nothing but the closing quote is reported inside `'..'`.
+    if [ "$top" = 'S' ]; then
+      stack="${stack%?}"
+      case "${stack#"${stack%?}"}" in
+      'Q') stack="${stack%?}H"; command_start=1 ;;
+      'H') command_start=1 ;;
+      esac
+      prev="$char"
+      continue
+    fi
+
+    # A backslash escapes the next character in both remaining contexts. Inside
+    # `'..'` it is literal, and the branch above has already taken that case.
+    case "$char" in
+    [\\])
+      [ -z "$rest" ] && _BASHUNIT_COVERAGE_SCAN_CONTINUES=1
+      [ -n "$rest" ] && command_start=0
+      prev="${rest%"${rest#?}"}"
+      rest="${rest#?}"
+      continue
+      ;;
+    esac
+
+    if [ "$top" = 'D' ]; then
+      case "$char" in
+      '"')
+        stack="${stack%?}"
+        case "${stack#"${stack%?}"}" in
+        'Q') stack="${stack%?}H"; command_start=1 ;;
+        'H') command_start=1 ;;
+        esac
+        ;;
+      '$')
+        # `"$(cmd 'a"b')"`: a command substitution reopens an unquoted context,
+        # so the quotes inside it are not the outer string's.
+        case "$rest" in
+        '(('*)
+          stack="${stack}RR"
+          command_start=0
+          rest="${rest#??}"
+          prev='('
+          continue
+          ;;
+        '('*)
+          stack="${stack}C"
+          command_start=1
+          rest="${rest#?}"
+          prev='('
+          continue
+          ;;
+        esac
+        ;;
+      esac
+      prev="$char"
+      continue
+    fi
+
+    case "$char" in
+    "'")
+      stack="${stack}S"
+      case "$top" in A | Q | H) : ;; *) command_start=0 ;; esac
+      ;;
+    '"')
+      stack="${stack}D"
+      case "$top" in A | Q | H) : ;; *) command_start=0 ;; esac
+      ;;
+    '#')
+      # `#` only opens a comment at the start of a word, so `${x#y}` and
+      # `${#arr[@]}` are not comments. The rest of the line is not shell text.
+      case "$prev" in
+      '' | ' ' | '	' | ';' | '&' | '|') break ;;
+      esac
+      ;;
+    '(')
+      # An optional `(` before a case pattern is not a grouping context.
+      if [ "$top" = 'K' ] && [ "$command_start" -eq 1 ]; then
+        command_start=0
+        prev="$char"
+        continue
+      fi
+      case "$rest" in
+      '('*)
+        stack="${stack}RR"
+        rest="${rest#?}"
+        prev='('
+        continue
+        ;;
+      esac
+      # An array literal is the one parenthesis whose contents are words of a
+      # single statement, and it is the one that opens right after a `=`.
+      case "$prev:$top" in
+      '$:'*) stack="${stack}C"; command_start=1 ;;
+      *:R) stack="${stack}R" ;;
+      '<:'* | '>:'*) stack="${stack}C"; command_start=1 ;;
+      '=:'*) stack="${stack}A" ;;
+      *) stack="${stack}P" ;;
+      esac
+      ;;
+    ')')
+      # A case arm delimiter starts its command body. Popping an empty stack is
+      # a no-op.
+      if [ "$top" = 'K' ]; then
+        stack="${stack%?}B"
+        command_start=1
+      else
+        stack="${stack%?}"
+        case "${stack#"${stack%?}"}" in
+        'Q') stack="${stack%?}H"; command_start=1 ;;
+        'H') command_start=1 ;;
+        *) command_start=0 ;;
+        esac
+      fi
+      ;;
+    ';')
+      # `;;`, `;&` and `;;&` finish an arm and make the next word a pattern.
+      if [ "$top" = 'B' ]; then
+        case "$rest" in
+        ';'* | '&'*) stack="${stack%?}K" ;;
+        esac
+      fi
+      command_start=1
+      ;;
+    '&') command_start=1 ;;
+    '|')
+      # Pattern alternatives remain pattern words, even when named `esac`.
+      if [ "$top" = 'K' ]; then command_start=0; else command_start=1; fi
+      ;;
+    '<')
+      # In arithmetic, `<<` is a bit shift, not a heredoc redirection.
+      if [ "$top" = 'R' ]; then
+        prev="$char"
+        continue
+      fi
+      case "$rest" in
+      '<<'*)
+        # A here-string has no body.
+        rest="${rest#??}"
+        prev='<'
+        continue
+        ;;
+      '<'*)
+        rest="${rest#?}"
+        bashunit::coverage::_scan_heredoc_start "$rest"
+        prev='<'
+        continue
+        ;;
+      esac
+      ;;
+    esac
+    prev="$char"
+  done
+
+  bashunit::coverage::_scan_update_continuation_span "$stack" "$command_start"
+  _BASHUNIT_COVERAGE_SCAN_STACK="$stack"
+
+  return 0
+}
+
+##
+# Whether the statement on the last scanned line continues onto the next one.
+# Returns: 0 when the line is open, 1 when the statement ended with it
+##
+function bashunit::coverage::scan_is_open() {
+  [ "$_BASHUNIT_COVERAGE_SCAN_CONTINUES" -eq 1 ] && return 0
+  [ -n "$_BASHUNIT_COVERAGE_SCAN_HEREDOC" ] && return 0
+  # A substitution starts a new command context even inside a quote or array.
+  # Only literals opened INSIDE the innermost substitution may propagate hits.
+  case "${_BASHUNIT_COVERAGE_SCAN_STACK##*C}" in
+  *[SDA]*) return 0 ;;
+  esac
+  return 1
+}
+
+# Describes the literal spans held by a scanner stack. A command substitution
+# starts a new command depth; S, D and A contexts belong to the depth at which
+# they opened. A parent literal can therefore stay alive while child commands
+# at a deeper depth remain outside its line membership.
+_BASHUNIT_COVERAGE_SCAN_COMMAND_DEPTH=0
+_BASHUNIT_COVERAGE_SCAN_SPAN_DEPTHS=""
+
+function bashunit::coverage::_scan_span_state() { # $1 = stack, $2 = continuation depths
+  local stack="$1" continuations="$2" char depth=0 spans="" item
+  while [ -n "$stack" ]; do
+    char="${stack%"${stack#?}"}"
+    stack="${stack#?}"
+    case "$char" in
+    C) depth=$((depth + 1)) ;;
+    S | D | A)
+      case " $spans " in
+      *" $depth "*) : ;;
+      *) spans="${spans:+$spans }$depth" ;;
+      esac
+      ;;
+    esac
+  done
+  for item in $continuations; do
+    case " $spans " in
+    *" $item "*) : ;;
+    *) spans="${spans:+$spans }$item" ;;
+    esac
+  done
+  _BASHUNIT_COVERAGE_SCAN_COMMAND_DEPTH=$depth
+  _BASHUNIT_COVERAGE_SCAN_SPAN_DEPTHS="$spans"
+}
+
+# Get all line hits for a file in one pass (performance optimization)
+# Output format: one "lineno:count" per line
+
+# The one-pass hit aggregation, and where each file's block lives.
+#
+# The capture path writes one record per execution event ("<file>:<line>"), so
+# counting used to mean scanning the whole data file per tracked file. One awk
+# pass now groups every record by file and line and writes a small block per
+# file, which the report reads directly: the data file is read once per run
+# instead of once per file.
+_BASHUNIT_COVERAGE_HITS_AGGREGATED=false
+_BASHUNIT_COVERAGE_HITS_FILE_OUT=""
+
+##
+# The path of the aggregated block for a source file, into
+# _BASHUNIT_COVERAGE_HITS_FILE_OUT (empty when coverage has no data dir).
+#
+# The name is the source path with everything but [a-zA-Z0-9] collapsed, the
+# same rule the lookup keys use; two sources can therefore share a block name,
+# so each block records the path it belongs to on its first line.
+# Arguments: $1 - source file
+##
+function bashunit::coverage::hits_file_for() {
+  _BASHUNIT_COVERAGE_HITS_FILE_OUT=""
+  [ -n "${_BASHUNIT_COVERAGE_DATA_FILE:-}" ] || return 0
+
+  local dir="${_BASHUNIT_COVERAGE_DATA_FILE%/*}/hits"
+  local name="${1//[^a-zA-Z0-9]/_}"
+  _BASHUNIT_COVERAGE_HITS_FILE_OUT="$dir/$name"
+}
+
+# The path of the manifest written by write_batch_manifest, empty when there is
+# nothing to report on.
+_BASHUNIT_COVERAGE_MANIFEST_OUT=""
+
+##
+# Writes a "<hits block>\t<source>" line per tracked file into $1 under the
+# coverage data dir, for the awk passes that do the whole run in one call
+# (#1088, #1090). The source path comes last so a path holding a tab still
+# reads back whole.
+#
+# Sets _BASHUNIT_COVERAGE_MANIFEST_OUT to the manifest path, or to the empty
+# string when nothing is tracked. Returns 1 when there is nowhere to write it,
+# which is the caller's signal to use the per-file path instead.
+# Arguments: $1 - manifest file name
+##
+function bashunit::coverage::write_batch_manifest() {
+  _BASHUNIT_COVERAGE_MANIFEST_OUT=""
+
+  local data_dir="${_BASHUNIT_COVERAGE_DATA_FILE%/*}"
+  { [ -n "${_BASHUNIT_COVERAGE_DATA_FILE:-}" ] && [ -d "$data_dir" ]; } || return 1
+
+  bashunit::coverage::ensure_hits_aggregated
+
+  local manifest="$data_dir/$1"
+  local tracked=0 file
+  {
+    while IFS= read -r file; do
+      { [ -z "$file" ] || [ ! -f "$file" ]; } && continue
+      tracked=$((tracked + 1))
+      bashunit::coverage::hits_file_for "$file"
+      printf '%s\t%s\n' "$_BASHUNIT_COVERAGE_HITS_FILE_OUT" "$file"
+    done < <(bashunit::coverage::get_tracked_files)
+  } >"$manifest" 2>/dev/null || return 1
+
+  if [ "$tracked" -gt 0 ]; then
+    _BASHUNIT_COVERAGE_MANIFEST_OUT="$manifest"
+  fi
+  return 0
+}
+
+##
+# Invalidates the aggregation. Called wherever the data file grows, so a report
+# never reads counts that predate the records it is reporting on.
+##
+function bashunit::coverage::invalidate_hits_aggregation() {
+  _BASHUNIT_COVERAGE_HITS_AGGREGATED=false
+  # The loaded array came from the old aggregation, so it is stale too.
+  _BASHUNIT_COVERAGE_HITS_BY_LINE_FILE=""
+}
+
+##
+# Groups the coverage data file by file and line, once per run.
+##
+function bashunit::coverage::ensure_hits_aggregated() {
+  if [ "$_BASHUNIT_COVERAGE_HITS_AGGREGATED" = true ]; then
+    return 0
+  fi
+  _BASHUNIT_COVERAGE_HITS_AGGREGATED=true
+
+  [ -n "${_BASHUNIT_COVERAGE_DATA_FILE:-}" ] || return 0
+  [ -f "$_BASHUNIT_COVERAGE_DATA_FILE" ] || return 0
+
+  local dir="${_BASHUNIT_COVERAGE_DATA_FILE%/*}/hits"
+  rm -rf "$dir" 2>/dev/null || true
+  mkdir -p "$dir" 2>/dev/null || return 0
+
+  # The record is "<path>:<line>", and a path may itself contain a colon, so the
+  # split is on the LAST one. Each block is written sorted by line number, which
+  # is the order the reader wants and awk can produce here because the counts
+  # are only known at END.
+  env LC_ALL=C awk -v dir="$dir" '
+    {
+      i = length($0)
+      while (i > 0 && substr($0, i, 1) != ":") { i-- }
+      if (i == 0) { next }
+      path = substr($0, 1, i - 1)
+      line = substr($0, i + 1)
+      if (line !~ /^[0-9]+$/) { next }
+      key = path SUBSEP line
+      if (!(key in counts)) { order[++n] = key }
+      counts[key]++
+    }
+    END {
+      for (j = 1; j <= n; j++) {
+        split(order[j], parts, SUBSEP)
+        name = parts[1]
+        gsub(/[^a-zA-Z0-9]/, "_", name)
+        print parts[2], counts[order[j]] > (dir "/" name)
+      }
+      for (j = 1; j <= n; j++) {
+        split(order[j], parts, SUBSEP)
+        name = parts[1]
+        gsub(/[^a-zA-Z0-9]/, "_", name)
+        close(dir "/" name)
+      }
+    }
+  ' "$_BASHUNIT_COVERAGE_DATA_FILE" 2>/dev/null || true
+}
+
+#
+# Bash's DEBUG trap attributes a multi-line statement's execution to the line
+# where the statement starts; backslash continuation lines never receive their
+# own hit. To match the report's expectation that continuation lines are
+# covered, the start line's count is propagated forward across the
+# continuation chain (see #722).
+function bashunit::coverage::get_all_line_hits() {
+  local file="$1"
+
+  if [ ! -f "$_BASHUNIT_COVERAGE_DATA_FILE" ]; then
+    return
+  fi
+
+  # Read this file's counts out of the per-file block the aggregation wrote.
+  # This used to be `grep | cut | sort | uniq -c` over the WHOLE data file, run
+  # once per tracked file: 4 forks and a full scan each, so 484 forks and 121
+  # scans at 121 files (#1057). The aggregation is one awk pass for the run,
+  # triggered by load_hits_by_line in the parent shell; a direct caller of this
+  # function (a unit test) gets it here instead.
+  bashunit::coverage::ensure_hits_aggregated
+
+  local -a counts=()
+  local count lineno maxln=0
+  local hits_file
+  bashunit::coverage::hits_file_for "$file"
+  hits_file=$_BASHUNIT_COVERAGE_HITS_FILE_OUT
+
+  if [ -n "$hits_file" ] && [ -f "$hits_file" ]; then
+    while read -r lineno count; do
+      if [ -n "$count" ]; then
+        counts[lineno]=$count
+        [ "$lineno" -gt "$maxln" ] && maxln=$lineno
+      fi
+    done <"$hits_file"
+  fi
+
+  if [ "$maxln" -eq 0 ]; then
+    return
+  fi
+
+  # Read the source so continuation lines can be detected.
+  local -a src=()
+  local _i=0 _l
+  while IFS= read -r _l || [ -n "$_l" ]; do
+    src[_i]="$_l"
+    ((++_i))
+  done <"$file"
+
+  local total=$_i
+  [ "$maxln" -gt "$total" ] && total=$maxln
+
+  # Group the lines into statement spans and give every line of a span the
+  # highest count recorded anywhere in it. Span-max rather than a forward carry
+  # because the trap may have attributed the statement to the LAST line of the
+  # span -- which is what Bash 3.2 does with an array literal (#1338). For a
+  # backslash chain, where only the first line can carry a hit, it produces
+  # exactly what the forward carry did (#722).
+  local idx start=1 max=0 fill h is_open
+  local before_stack before_continuations before_depth before_spans after_depth after_spans
+  local depth seen was_active is_active member current
+  local -a span_lines=()
+  local -a span_max=()
+  bashunit::coverage::scan_reset
+  for ((idx = 1; idx <= total; idx++)); do
+    h=${counts[idx]:-0}
+    [ "$h" -gt "$max" ] && max=$h
+
+    before_stack="$_BASHUNIT_COVERAGE_SCAN_STACK"
+    before_continuations=$_BASHUNIT_COVERAGE_SCAN_CONTINUATION_DEPTHS
+    bashunit::coverage::_scan_span_state "$before_stack" "$before_continuations"
+    before_depth=$_BASHUNIT_COVERAGE_SCAN_COMMAND_DEPTH
+    before_spans=$_BASHUNIT_COVERAGE_SCAN_SPAN_DEPTHS
+
+    bashunit::coverage::scan_line "${src[idx - 1]:-}"
+    bashunit::coverage::_scan_span_state \
+      "$_BASHUNIT_COVERAGE_SCAN_STACK" "$_BASHUNIT_COVERAGE_SCAN_CONTINUATION_DEPTHS"
+    after_depth=$_BASHUNIT_COVERAGE_SCAN_COMMAND_DEPTH
+    after_spans=$_BASHUNIT_COVERAGE_SCAN_SPAN_DEPTHS
+
+    is_open=0
+    bashunit::coverage::scan_is_open && is_open=1
+    if [ "$is_open" -eq 0 ]; then
+      if [ "$max" -gt 0 ] && [ "$start" -lt "$idx" ]; then
+        for ((fill = start; fill <= idx; fill++)); do
+          counts[fill]=$max
+        done
+      fi
+      start=$((idx + 1))
+      max=0
+    fi
+
+    # A literal around a substitution is one statement with discontiguous line
+    # membership. Its opening and closing boundary lines belong to the parent;
+    # lines wholly inside the child command do not. Keep the member list until
+    # the literal at that command depth closes, then apply its highest hit.
+    seen=""
+    for depth in $before_spans $after_spans; do
+      case " $seen " in *" $depth "*) continue ;; esac
+      seen="${seen:+$seen }$depth"
+
+      was_active=0
+      is_active=0
+      case " $before_spans " in *" $depth "*) was_active=1 ;; esac
+      case " $after_spans " in *" $depth "*) is_active=1 ;; esac
+
+      member=0
+      if { [ "$was_active" -eq 1 ] && [ "$before_depth" -eq "$depth" ]; } ||
+        { [ "$is_active" -eq 1 ] && [ "$after_depth" -eq "$depth" ]; } ||
+        [ "$was_active" -ne "$is_active" ]; then
+        member=1
+      fi
+      if [ "$member" -eq 1 ]; then
+        span_lines[depth]="${span_lines[depth]:-} $idx"
+        [ "$h" -gt "${span_max[depth]:-0}" ] && span_max[depth]=$h
+      fi
+
+      if [ "$was_active" -eq 1 ] && [ "$is_active" -eq 0 ]; then
+        if [ "${span_max[depth]:-0}" -gt 0 ]; then
+          for fill in ${span_lines[depth]:-}; do
+            current=${counts[fill]:-0}
+            [ "${span_max[depth]}" -gt "$current" ] && counts[fill]=${span_max[depth]}
+          done
+        fi
+        span_lines[depth]=""
+        span_max[depth]=0
+      fi
+    done
+  done
+
+  local ln
+  for ((ln = 1; ln <= total; ln++)); do
+    [ "${counts[ln]:-0}" -gt 0 ] && echo "${ln}:${counts[ln]}"
+  done
+
+  # The for loop's exit status leaks the last `[ -gt ]` test, which is 1 when the
+  # final line has no hits; return 0 explicitly so callers under `set -e` (strict
+  # mode) don't treat a successful run as a failure (see #722).
+  return 0
+}
+
+
+# Populates the shared _BASHUNIT_COVERAGE_HITS_BY_LINE array (sparse, keyed by
+# line number -> hit count) from get_all_line_hits for $1.
+#
+# Seven call sites used to repeat this "while IFS=: read ... done < <(get_all_line_hits)"
+# parse loop into their own `local -a hits_by_line`. Bash 3.0 cannot return an
+# array from a function or pass one by reference, and copying a sparse array
+# with `local -a x=("${src[@]}")` silently renumbers it from 0, which would
+# corrupt the line-number keys -- so this loader writes one shared global
+# instead (return-slot pattern, see bash-style.md). Callers must consume the
+# result before the next call; there is no adjacent-call isolation.
+declare -a _BASHUNIT_COVERAGE_HITS_BY_LINE
+# Which file the array currently holds. report_lcov loads a file and then calls
+# compute_branch_hits, which used to load the same file again and clobber it;
+# every other report section reloaded it too. Remembering the file makes the
+# repeat a no-op instead of a second pass (#1057).
+_BASHUNIT_COVERAGE_HITS_BY_LINE_FILE=""
+
+function bashunit::coverage::load_hits_by_line() {
+  local file="$1"
+
+  if [ -n "$file" ] && [ "$file" = "$_BASHUNIT_COVERAGE_HITS_BY_LINE_FILE" ]; then
+    return 0
+  fi
+
+  # Here, not inside get_all_line_hits: that runs in the process substitution
+  # below, and a flag set in a subshell dies with it -- the aggregation would
+  # run again for every file, which is slower than the scan it replaced.
+  bashunit::coverage::ensure_hits_aggregated
+
+  _BASHUNIT_COVERAGE_HITS_BY_LINE=()
+  _BASHUNIT_COVERAGE_HITS_BY_LINE_FILE="$file"
+  local hl_lineno hl_count
+  while IFS=: read -r hl_lineno hl_count; do
+    [ -n "$hl_lineno" ] && _BASHUNIT_COVERAGE_HITS_BY_LINE[hl_lineno]=$hl_count
+  done < <(bashunit::coverage::get_all_line_hits "$file")
+}
+
+# Get all test hits for a file in one pass (performance optimization)
+# Output format: lineno|test_file:test_function (may have duplicates, one per hit)
+function bashunit::coverage::get_all_line_tests() {
+  local file="$1"
+
+  if [ ! -f "${_BASHUNIT_COVERAGE_TEST_HITS_FILE:-}" ]; then
+    return
+  fi
+
+  # Format in file: source_file:line|test_file:test_function
+  # Output: lineno|test_file:test_function
+  grep "^${file}:" "$_BASHUNIT_COVERAGE_TEST_HITS_FILE" 2>/dev/null |
+    sed "s|^${file}:||" | sort -u
+}

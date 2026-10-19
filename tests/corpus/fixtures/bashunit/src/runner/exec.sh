@@ -1,0 +1,876 @@
+#!/usr/bin/env bash
+
+_BASHUNIT_RUNNER_ORDERED_FNS_OUT=""
+
+##
+# Puts a file's already-filtered test functions in the order they will run,
+# into _BASHUNIT_RUNNER_ORDERED_FNS_OUT.
+#
+# Under --random-order the seed is mixed with a stable per-file value (cksum of
+# the path) so different files get different orders while staying reproducible
+# for the resolved seed. Extracted from call_test_functions so `--list` reports
+# the order a run would actually use instead of re-deriving it (#1007).
+#
+# Arguments: $1 script path, $2 space-separated test function names
+##
+function bashunit::runner::order_functions_for_script() {
+  local script="$1"
+  local fns="${2:-}"
+  local IFS=$' \t\n'
+
+  local -a ordered=()
+  local fn
+  for fn in $fns; do
+    [ -z "$fn" ] && continue
+    ordered[${#ordered[@]}]="$fn"
+  done
+
+  if bashunit::env::is_defects_order_enabled && [ "${#ordered[@]}" -gt 1 ]; then
+    local -a _defect_fns=()
+    local _defect_fn
+    for _defect_fn in $(bashunit::rerun::order_functions "$script" "${ordered[*]+${ordered[*]}}"); do
+      _defect_fns[${#_defect_fns[@]}]=$_defect_fn
+    done
+    ordered=("${_defect_fns[@]+"${_defect_fns[@]}"}")
+  fi
+
+  if bashunit::env::is_random_order_enabled && [ "${#ordered[@]}" -gt 1 ]; then
+    local _base _crc _fn_seed
+    _base=$(bashunit::env::seed)
+    _crc=$(printf '%s' "$script" | cksum | cut -d' ' -f1)
+    _fn_seed=$(((_base + _crc) & 2147483647))
+    local -a _shuffled_fns=()
+    local _sfn
+    # Here-string, not `< <(…)`: the same per-file descriptor leak documented in
+    # helper/provider.sh applies here whenever --random-order is used (#1271).
+    while IFS= read -r _sfn; do
+      [ -n "$_sfn" ] && _shuffled_fns[${#_shuffled_fns[@]}]=$_sfn
+    done <<<"$(printf '%s\n' "${ordered[@]+"${ordered[@]}"}" | bashunit::math::shuffle "$_fn_seed")"
+    ordered=("${_shuffled_fns[@]+"${_shuffled_fns[@]}"}")
+  fi
+
+  _BASHUNIT_RUNNER_ORDERED_FNS_OUT="${ordered[*]+${ordered[*]}}"
+}
+
+function bashunit::runner::report_unusable_provider() {
+  local test_file="$1"
+  local fn_name="$2"
+  local provider="$3"
+
+  # Both cases drop the test; only the wording differs, and the difference is
+  # exactly what tells a typo apart from a provider that returned nothing.
+  local reason
+  if declare -F "$provider" >/dev/null 2>&1; then
+    reason="data provider '$provider' produced no data, so the test never ran"
+  else
+    reason="data provider '$provider' is not defined, so the test never ran"
+  fi
+
+  bashunit::runner::report_provider_error "$test_file" "$fn_name" "$reason"
+}
+
+function bashunit::runner::report_provider_error() {
+  local test_file="$1"
+  local fn_name="$2"
+  local reason="$3"
+
+  bashunit::state::add_tests_failed
+  bashunit::console_results::print_error_test "$fn_name" "$reason"
+  local _normalized_fn
+  _normalized_fn="$(bashunit::helper::normalize_test_function_name "$fn_name")"
+  bashunit::reports::add_test_failed "$test_file" "$_normalized_fn" 0 0 "$reason"
+  bashunit::runner::write_failure_result_output "$test_file" "$fn_name" "$reason"
+
+  # Under --parallel the per-file loop is a background subshell, so the counter
+  # above dies with it and only .result files reach the aggregate. Without this
+  # the run printed the error and still exited 0. TEST_EXIT_CODE marks the test
+  # failed without inventing a failed assertion -- none ran.
+  if bashunit::parallel::is_enabled; then
+    bashunit::runner::parallel_suite_dir_to_slot "$test_file"
+    local suite_dir=$_BASHUNIT_RUNNER_SUITE_DIR_OUT
+    [ -d "$suite_dir" ] || mkdir -p "$suite_dir"
+    local payload="##ASSERTIONS_FAILED=0##ASSERTIONS_PASSED=0##ASSERTIONS_SKIPPED=0"
+    payload="$payload##ASSERTIONS_INCOMPLETE=0##ASSERTIONS_SNAPSHOT=0##TEST_EXIT_CODE=1##"
+    printf '%s\n' "$payload" \
+      >"${suite_dir}/${_BASHUNIT_RUNNER_RESULT_ORDINAL}.result"
+  fi
+}
+
+function bashunit::runner::run_test_parallel() {
+  _BASHUNIT_REPORTS_RECORD_SCOPE=worker
+  bashunit::runner::run_test "$@"
+}
+
+##
+# Runs the given test functions of a script (sequentially, or one background
+# worker per test under --parallel).
+# Arguments: $1 script path, $2 space-separated test function names, already
+# filter/tag/rerun-filtered by load_test_files (never empty: the caller skips
+# the file when no function survives filtering).
+##
+function bashunit::runner::call_test_functions() {
+  local script="$1"
+  local cached_functions="${2:-}"
+  local IFS=$' \t\n'
+  local -a functions_to_run=()
+  local functions_to_run_count=0
+
+  bashunit::runner::order_functions_for_script "$script" "$cached_functions"
+  local _ofn
+  for _ofn in $_BASHUNIT_RUNNER_ORDERED_FNS_OUT; do
+    functions_to_run[functions_to_run_count]="$_ofn"
+    functions_to_run_count=$((functions_to_run_count + 1))
+  done
+
+  if [ "$functions_to_run_count" -le 0 ]; then
+    return
+  fi
+
+  # The duplicate check runs in load_test_files, before this function is
+  # dispatched: under --parallel this body is a background subshell, so state
+  # set here never reaches the summary (#1147).
+
+  local -a provider_data=()
+  local provider_data_count=0
+  local -a parsed_data=()
+  local parsed_data_count=0
+  local provider_arg_file=""
+  # Monotonic within this file, including tests executed synchronously.
+  local _test_ordinal=0
+
+  # Scan the file once; per-test provider lookups below are pure-bash (#763).
+  # The same pass also detects the no-parallel-tests opt-out (#774) and the
+  # per-test @timeout/@retry/@skip annotations (#1020).
+  bashunit::helper::build_provider_map "$script"
+  # Before anything runs: a value the runner cannot honour would otherwise run
+  # a different test than the annotation asked for. Reported up to the caller,
+  # which owns the file's teardown, rather than exited from here (#1329).
+  if ! bashunit::helper::annotations_validate "$script"; then
+    # Recorded here rather than by the caller, which only has the exit status:
+    # this frame still holds the offending function and the reason (#1335).
+    bashunit::runner::report_annotation_abort "$script"
+    return 1
+  fi
+
+  local allow_test_parallel=true
+  if [ "$_BASHUNIT_PROVIDER_MAP_NO_PARALLEL" = true ]; then
+    allow_test_parallel=false
+  fi
+
+  # Reset before the first dispatch below: the worker's signal handler group-kills
+  # every pid recorded here, and a pid left over from the previous file may belong
+  # to something else by now (#1331).
+  _BASHUNIT_WORKER_TEST_PIDS=""
+
+  # Pre-create the file's result dir before spawning test workers: they all
+  # publish into it, and checking `[ -d ]` inside a worker races its siblings
+  # (every worker would still pay the mkdir fork).
+  if bashunit::parallel::is_enabled && [ "$allow_test_parallel" = true ]; then
+    bashunit::runner::parallel_suite_dir_to_slot "$script"
+    mkdir -p "$_BASHUNIT_RUNNER_SUITE_DIR_OUT" 2>/dev/null || true
+  fi
+
+  for fn_name in "${functions_to_run[@]+"${functions_to_run[@]}"}"; do
+    if bashunit::parallel::is_enabled && bashunit::parallel::must_stop_on_failure; then
+      break
+    fi
+
+    # No data provider found: run once without forking to capture provider output.
+    bashunit::helper::provider_for_function "$fn_name"
+    if [ -z "$_BASHUNIT_PROVIDER_FN_OUT" ]; then
+      _test_ordinal=$((_test_ordinal + 1))
+      _BASHUNIT_RUNNER_RESULT_ORDINAL=$_test_ordinal
+      if bashunit::parallel::is_enabled && [ "$allow_test_parallel" = true ]; then
+        bashunit::runner::wait_for_job_slot
+        bashunit::runner::run_test_parallel "$script" "$fn_name" &
+        _BASHUNIT_WORKER_TEST_PIDS="$_BASHUNIT_WORKER_TEST_PIDS $!"
+      else
+        bashunit::runner::run_test "$script" "$fn_name"
+      fi
+      unset -v fn_name
+      continue
+    fi
+
+    provider_data=()
+    provider_data_count=0
+    local line
+    while IFS=" " read -r line; do
+      [ -z "$line" ] && continue
+      provider_data[provider_data_count]="$line"
+      provider_data_count=$((provider_data_count + 1))
+    done <<<"$(bashunit::helper::execute_function_if_exists "$_BASHUNIT_PROVIDER_FN_OUT")"
+
+    # No data sets means the per-data-set loop below never runs, so the test
+    # would leave the run without a trace and the summary would blame a missing
+    # test rather than the provider that produced nothing (#1145).
+    if [ "$provider_data_count" -eq 0 ]; then
+      # Claim an ordinal the same way the dispatch branches do, so the .result
+      # file the reporter writes cannot collide with a worker's.
+      _test_ordinal=$((_test_ordinal + 1))
+      _BASHUNIT_RUNNER_RESULT_ORDINAL=$_test_ordinal
+      bashunit::runner::report_unusable_provider \
+        "$script" "$fn_name" "$_BASHUNIT_PROVIDER_FN_OUT"
+      unset -v fn_name
+      continue
+    fi
+
+    local data
+    for data in "${provider_data[@]+"${provider_data[@]}"}"; do
+      parsed_data=()
+      parsed_data_count=0
+      local transport_error=""
+      if ! bashunit::env::ensure_run_output_dir; then
+        transport_error="argument storage could not be created"
+      elif [ -z "$provider_arg_file" ] || [ ! -f "$provider_arg_file" ]; then
+        local provider_arg_dir="$_BASHUNIT_RUN_OUTPUT_DIR"
+        case "$provider_arg_dir" in
+        /*) ;;
+        *) provider_arg_dir="$BASHUNIT_WORKING_DIR/$provider_arg_dir" ;;
+        esac
+        provider_arg_file="$("$MKTEMP" "$provider_arg_dir/provider-args.XXXXXXX")" ||
+          transport_error="argument storage could not be created"
+      fi
+      local line
+      # The parser's eval must stay in a subshell so expansions cannot change runner state.
+      if [ -z "$transport_error" ]; then
+        # Bash 3 does not invert a compound command's redirect failure with `!`.
+        if (bashunit::runner::parse_data_provider_args "$data" nul) >"$provider_arg_file"; then
+          if {
+            while IFS= read -r -d '' line; do
+              parsed_data[parsed_data_count]="$line"
+              parsed_data_count=$((parsed_data_count + 1))
+            done
+          } <"$provider_arg_file"; then
+            :
+          else
+            transport_error="arguments could not be read"
+          fi
+        else
+          transport_error="arguments could not be written"
+        fi
+      fi
+      if [ -n "$transport_error" ]; then
+        _test_ordinal=$((_test_ordinal + 1))
+        _BASHUNIT_RUNNER_RESULT_ORDINAL=$_test_ordinal
+        bashunit::runner::report_provider_error \
+          "$script" "$fn_name" "data provider '$_BASHUNIT_PROVIDER_FN_OUT' $transport_error"
+        break
+      fi
+      _test_ordinal=$((_test_ordinal + 1))
+      _BASHUNIT_RUNNER_RESULT_ORDINAL=$_test_ordinal
+      if bashunit::parallel::is_enabled && [ "$allow_test_parallel" = true ]; then
+        bashunit::runner::wait_for_job_slot
+        bashunit::runner::run_test_parallel "$script" "$fn_name" ${parsed_data+"${parsed_data[@]}"} &
+        _BASHUNIT_WORKER_TEST_PIDS="$_BASHUNIT_WORKER_TEST_PIDS $!"
+      else
+        bashunit::runner::run_test "$script" "$fn_name" ${parsed_data+"${parsed_data[@]}"}
+      fi
+    done
+    unset -v fn_name
+  done
+
+  # Wait for all parallel tests within this file to complete
+  if bashunit::parallel::is_enabled && [ "$allow_test_parallel" = true ]; then
+    wait
+  fi
+}
+
+# Result slots for the timeout-aware execution path (see run_with_timeout).
+_BASHUNIT_RUNNER_EXEC_OUT=""
+_BASHUNIT_RUNNER_TIMED_OUT="false"
+_BASHUNIT_RUNNER_TIMEOUT_MARKER_FILE=""
+# The timeout in force for the test being run: the run-wide setting unless a
+# `# @timeout` annotation overrides it.
+_BASHUNIT_RUNNER_TIMEOUT_SECS=0
+
+##
+# Runs a single test inside the capture subshell: sets up the EXIT trap that
+# encodes assertion counts/exit code, runs set_up, applies the shell mode and
+# finally invokes the test function. Meant to be called from a subshell (either
+# the `$(...)` capture or a backgrounded job), so its `set`/`trap`/`exit` calls
+# stay isolated. Emits the test stdout (with stderr merged) followed by the
+# encoded context from cleanup_on_exit.
+# Arguments: $1 test file, $2 function name, $@ test args
+##
+function bashunit::runner::execute_test_body() {
+  local test_file=$1
+  shift
+  local fn_name=$1
+  shift
+
+  # Save subshell stdout to FD 5 so the EXIT trap can restore it.
+  # When set -e kills the subshell during a redirected block in
+  # execute_test_hook, the redirect leaks into the EXIT trap,
+  # causing export_subshell_context output to be lost.
+  exec 5>&1
+  # The path travels in a variable, never interpolated into the trap string. A
+  # trap body is re-evaluated by the shell when it fires, so a path holding
+  # `` `cmd` `` or `$(cmd)` used to RUN it -- the surrounding double quotes stop
+  # word splitting but not command substitution. A file's name is data, and the
+  # exposure was a CI job running `bashunit tests/` over a checked-out branch:
+  # whoever could add a file to the tree chose the command.
+  #
+  # Single quotes below, so nothing expands until the trap fires, and then only
+  # as an ordinary parameter expansion -- which does not re-scan its value.
+  _BASHUNIT_RUNNER_EXIT_FILE=$test_file
+  # shellcheck disable=SC2154 # assigned inside the trap body, read by cleanup_on_exit (runner/hooks.sh)
+  trap 'exit_code=$?; bashunit::runner::cleanup_on_exit "$_BASHUNIT_RUNNER_EXIT_FILE" "$exit_code"' EXIT
+  # A timed-out test is killed by the watchdog's group SIGTERM (run_with_timeout).
+  # Bash runs no EXIT trap for a fatal signal it does not have a trap for, so
+  # tear_down was skipped and whatever set_up acquired for that test was leaked
+  # (#1324). Trapping TERM and exiting hands control to the EXIT trap above, which
+  # is where tear_down lives. 143 is the conventional 128+SIGTERM.
+  #
+  # Best effort on purpose: the watchdog SIGKILLs the group shortly after, so a
+  # tear_down slower than that grace is cut off. A hook that never returns must
+  # not outlive the timeout it is cleaning up after.
+  trap 'exit 143' TERM
+  bashunit::state::initialize_assertions_count
+
+  if bashunit::env::is_login_shell_enabled; then
+    bashunit::runner::source_login_shell_profiles
+  fi
+
+  # Enable coverage tracking early to include set_up/tear_down hooks
+  if [ "${_BASHUNIT_COVERAGE_ON:-0}" = 1 ]; then
+    bashunit::coverage::enable_trap
+  fi
+
+  # `# @skip` is applied here rather than by filtering the function out earlier:
+  # inside the capture subshell the skip is reported, counted and carried into
+  # the reports by the same path bashunit::skip uses, and not even set_up runs.
+  # It must precede _BASHUNIT_SETUP_COMPLETED=false: cleanup_on_exit reads that
+  # flag as "the subshell died inside set_up" and would report a hook failure.
+  bashunit::helper::annotations_for_function "$fn_name"
+  if [ "$_BASHUNIT_ANNOT_SKIP_OUT" = true ]; then
+    bashunit::helper::normalize_test_function_name_to_slot "$fn_name"
+    bashunit::skip::__mark_with_label \
+      "$_BASHUNIT_HELPER_NORMALIZED_OUT" "$_BASHUNIT_ANNOT_REASON_OUT"
+    exit 0
+  fi
+
+  # From here on the test may only reach what it mocked or the run allowed.
+  # Placed before set_up so a hook cannot smuggle a real command in either.
+  bashunit::sandbox::activate
+
+  # Run set_up and capture exit code without || to preserve errexit behavior
+  _BASHUNIT_SETUP_COMPLETED=false
+
+  local setup_exit_code=0
+  bashunit::runner::run_set_up "$test_file"
+  setup_exit_code=$?
+  _BASHUNIT_SETUP_COMPLETED=true
+  if [ $setup_exit_code -ne 0 ]; then
+    exit $setup_exit_code
+  fi
+
+  # Apply shell mode setting for test execution
+  if bashunit::env::is_strict_mode_enabled; then
+    set -eu
+    # Bash 3.0 ships a broken pipefail; only enable it where it is reliable.
+    if bashunit::runner::_supports_reliable_pipefail; then
+      set -o pipefail
+    else
+      set +o pipefail
+    fi
+  else
+    set +euo pipefail
+  fi
+
+  # 2>&1: Redirects the std-error (FD 2) to the std-output (FD 1).
+  # points to the original std-output.
+  "$fn_name" "$@" 2>&1
+}
+
+##
+# Prints an encoded subshell result for a test that timed out: empty assertion
+# counters and exit code 124 (the conventional "timed out" code, already mapped
+# by classify_kill_signal). The empty TEST_HOOK_MESSAGE/TITLE/OUTPUT fields would
+# base64-encode to an empty string anyway, so the line is emitted directly rather
+# than mutating the shared _BASHUNIT_* globals (it mirrors the layout produced by
+# bashunit::state::export_subshell_context). Bash 3.0+ compatible.
+##
+function bashunit::runner::build_timeout_result() {
+  printf '%s' "##ASSERTIONS_FAILED=0##ASSERTIONS_PASSED=0##ASSERTIONS_SKIPPED=0\
+##ASSERTIONS_INCOMPLETE=0##ASSERTIONS_SNAPSHOT=0##TEST_EXIT_CODE=124\
+##TEST_HOOK_FAILURE=##TEST_HOOK_MESSAGE=##TEST_TITLE=##TEST_OUTPUT=##"
+}
+
+##
+# Runs the test body with a watchdog that kills it after BASHUNIT_TEST_TIMEOUT
+# seconds. The body runs as a backgrounded job in its own process group (set -m)
+# so the watchdog can SIGTERM/SIGKILL the whole tree — a hanging test usually
+# blocks in a child process, which signalling the subshell alone cannot reach.
+# Writes the captured result to _BASHUNIT_RUNNER_EXEC_OUT and "true"/"false" to
+# _BASHUNIT_RUNNER_TIMED_OUT. Bash 3.0+ compatible (validated on Bash 3.2).
+# Arguments: $1 test file, $2 function name, $@ test args
+##
+function bashunit::runner::run_with_timeout() {
+  local test_file=$1
+  shift
+  local fn_name=$1
+  shift
+  # Resolved per test by run_test: the annotation may raise, lower or disable
+  # the run-wide value.
+  local secs=$_BASHUNIT_RUNNER_TIMEOUT_SECS
+
+  # NOTE: these must NOT use bashunit::temp_file — that prefixes the current
+  # test id, and cleanup_on_exit (run inside the test subshell) would unlink
+  # them via cleanup_testcase_temp_files before we read them back here.
+  local tmp_dir="${BASHUNIT_TEMP_DIR:-${TMPDIR:-/tmp}}"
+  local out_file marker_file
+  out_file="$("$MKTEMP" "$tmp_dir/bashunit_timeout_out.XXXXXXX")"
+  marker_file="$("$MKTEMP" "$tmp_dir/bashunit_timeout_marker.XXXXXXX")"
+  rm -f "$marker_file"
+  local _BASHUNIT_RUNNER_TIMEOUT_MARKER_FILE="$marker_file"
+
+  # Both jobs run in their own process group (set -m) so each can be killed as a
+  # whole tree. The body MUST run in an explicit ( ) subshell: a backgrounded { }
+  # group does not run its EXIT trap on normal completion, which would drop the
+  # encoded assertion context.
+  set -m
+  (bashunit::runner::execute_test_body "$test_file" "$fn_name" "$@") >"$out_file" 2>&1 &
+  local test_pid=$!
+  (
+    # The watchdog is the one process here that can outlive its parent: the
+    # group kill below intermittently misses it, and a SIGKILLed run never
+    # reaches that kill at all. Detaching 0/1/2 is not enough, because both
+    # descriptors bashunit keeps open are dups of a stdout it does not own --
+    # FD 3 for the test body, FD 5 for the EXIT trap -- and a nested run
+    # inherits the OUTER run's pair on top of its own. An orphaned `sleep` held
+    # those, so the caller reading the run's output waited out the whole timeout
+    # budget for an EOF that no visible writer was delaying (#1137).
+    #
+    # `exec` closes for good; a per-command `3>&- 5>&-` would not, because bash
+    # implements it by dup'ing each descriptor to a fd >= 10 to restore it
+    # after, and that copy is not close-on-exec, so the child inherits the very
+    # pipe the close was meant to withhold (`ls -l /dev/fd` inside `cmd 5>&-`
+    # lists fd 11).
+    exec 3>&- 5>&-
+    # Wait in steps rather than one `sleep $secs`, giving up as soon as there is
+    # nothing left to police. A watchdog can outlive its parent -- the group kill
+    # below "intermittently misses", per the note there, and a killed run never
+    # reaches that kill at all -- and one that stays armed sleeps out the budget
+    # and then signals a process GROUP by a pid the kernel is free to have handed
+    # to something else by then. `$$` is the runner's pid even in here, so the
+    # two checks read as "is my run still going, and is the test still running?".
+    waited=0
+    while [ "$waited" -lt "$secs" ]; do
+      kill -0 "$$" 2>/dev/null || exit 0
+      kill -0 "$test_pid" 2>/dev/null || exit 0
+      sleep 1
+      waited=$((waited + 1))
+    done
+    # Only a still-running test can have timed out. Without this guard a watchdog
+    # that outlived a missed teardown (see below) would mark an already-finished
+    # fast test as timed out.
+    kill -0 "$test_pid" 2>/dev/null || exit 0
+    # Cancellation must leave the watchdog alive once cleanup needs its KILL bound.
+    trap '' TERM
+    : >"$marker_file"
+    kill -TERM -"$test_pid" 2>/dev/null
+    # Poll for the body to go instead of sleeping a flat window. The TERM has to
+    # kill whatever the body blocked on, wake bash, reach the EXIT trap and run
+    # tear_down; a flat 0.3s was a scheduling hiccup, not a grace, and on a
+    # loaded machine the body had not reached tear_down when the SIGKILL landed.
+    # Bounded at 2s so a hook that hangs cannot outlive the run, and the common
+    # case leaves as soon as the body is reaped -- sooner than the old sleep.
+    grace_ticks=0
+    while [ "$grace_ticks" -lt 20 ]; do
+      kill -0 "$test_pid" 2>/dev/null || break
+      sleep 0.1
+      grace_ticks=$((grace_ticks + 1))
+    done
+    kill -KILL -"$test_pid" 2>/dev/null
+  ) </dev/null >/dev/null 2>&1 &
+  local watchdog_pid=$!
+  set +m
+
+  wait "$test_pid" 2>/dev/null
+  # Stop the watchdog by its pid AND its group. `set -m` does not reliably make a
+  # backgrounded subshell a group leader in a non-interactive shell, so the
+  # group-only kill intermittently misses, letting the watchdog sleep its full
+  # timeout and fire against a test that already passed. The direct-pid signal is
+  # always deliverable; the group signal also reaps the `sleep` child.
+  kill -TERM "$watchdog_pid" 2>/dev/null
+  kill -TERM -"$watchdog_pid" 2>/dev/null
+  wait "$watchdog_pid" 2>/dev/null
+
+  if [ -f "$marker_file" ]; then
+    _BASHUNIT_RUNNER_TIMED_OUT="true"
+    _BASHUNIT_RUNNER_EXEC_OUT="$(bashunit::runner::build_timeout_result)"
+  else
+    _BASHUNIT_RUNNER_TIMED_OUT="false"
+    _BASHUNIT_RUNNER_EXEC_OUT="$(cat "$out_file" 2>/dev/null)"
+  fi
+
+  rm -f "$out_file" "$marker_file"
+}
+
+function bashunit::runner::run_test() {
+  local start_time=0
+
+  local test_file="$1"
+  shift
+  local fn_name="$1"
+  shift
+
+  bashunit::internal_log "Running test" "$fn_name" "$*"
+  bashunit::runner::export_test_identity "$test_file" "$fn_name"
+
+  bashunit::state::reset_test_title
+  bashunit::runner::apply_interpolated_title "$fn_name" "$@"
+  local interpolated_fn_name=$_BASHUNIT_RUNNER_INTERP_OUT
+  local current_assertions_failed="$_BASHUNIT_ASSERTIONS_FAILED"
+  local current_assertions_snapshot="$_BASHUNIT_ASSERTIONS_SNAPSHOT"
+  local current_assertions_incomplete="$_BASHUNIT_ASSERTIONS_INCOMPLETE"
+  local current_assertions_skipped="$_BASHUNIT_ASSERTIONS_SKIPPED"
+
+  # (FD = File Descriptor)
+  # Duplicate the current std-output (FD 1) and assigns it to FD 3.
+  # This means that FD 3 now points to wherever the std-output was pointing.
+  #
+  # Nothing in src/ reads it, but a test body can: `exec 2>&3 2>log` is how a
+  # test detaches its stderr from the runner's 2>&1 merge, and
+  # tests/unit/project/redirect_error_test.sh pins that. It is therefore part of
+  # what a test is handed, and every process the test forks inherits it -- see
+  # the watchdog in run_with_timeout, which must close it (#1137).
+  exec 3>&1
+
+  local test_execution_result
+  local timed_out="false"
+
+  # Per-test annotations override the run-wide flags in both directions: a test
+  # may be stricter than --test-timeout, and `@timeout 0` opts out of it while
+  # the rest of the suite keeps it (#1020).
+  bashunit::helper::annotations_for_function "$fn_name"
+  if bashunit::env::is_test_timeout_enabled; then
+    _BASHUNIT_RUNNER_TIMEOUT_SECS=${BASHUNIT_TEST_TIMEOUT:-0}
+  else
+    _BASHUNIT_RUNNER_TIMEOUT_SECS=0
+  fi
+  if [ -n "$_BASHUNIT_ANNOT_TIMEOUT_OUT" ]; then
+    _BASHUNIT_RUNNER_TIMEOUT_SECS=$_BASHUNIT_ANNOT_TIMEOUT_OUT
+  fi
+
+  # Names this test's violation file before the body forks, so the shims and
+  # the check below agree on where it is.
+  bashunit::sandbox::begin_test
+
+  bashunit::env::resolve_retry_count
+  local retry_max=$_BASHUNIT_RETRY_VALIDATED
+  if [ -n "$_BASHUNIT_ANNOT_RETRY_OUT" ]; then
+    retry_max=$_BASHUNIT_ANNOT_RETRY_OUT
+  fi
+  local retries_used=0
+  # The losing attempts are overwritten by the next iteration, so the first
+  # failure -- the only evidence of what the flakiness looks like -- is kept here
+  # before it is lost.
+  local first_attempt_result=""
+  bashunit::env::resolve_repeat_count
+  local repeat_max=$_BASHUNIT_REPEAT_VALIDATED
+  local iteration=0
+  local failed_iteration=0
+  local measure_duration=false
+  bashunit::runner::needs_test_duration && measure_duration=true
+  # Retry wraps ONLY execution: a failed attempt is judged from its encoded
+  # result without committing, so the parse/report/counter path below still runs
+  # exactly once (on the final attempt) and nothing is double-counted. Each fork
+  # in --parallel retries itself before writing its single .result file.
+  # --repeat is the OUTER loop and --retry the inner one: an iteration gets its
+  # full retry budget before the next iteration starts. Iterating stops at the
+  # first failure, since the test is already going to be reported failed and the
+  # remaining iterations cannot change that.
+  while [ "$iteration" -lt "$repeat_max" ]; do
+    iteration=$((iteration + 1))
+    retries_used=0
+    first_attempt_result=""
+    while :; do
+      if [ "$measure_duration" = true ]; then
+        bashunit::clock::now_to_slot
+        start_time=$_BASHUNIT_CLOCK_NOW_OUT
+      fi
+      if [ "$_BASHUNIT_RUNNER_TIMEOUT_SECS" -gt 0 ]; then
+        bashunit::runner::run_with_timeout "$test_file" "$fn_name" "$@"
+        test_execution_result="$_BASHUNIT_RUNNER_EXEC_OUT"
+        timed_out="$_BASHUNIT_RUNNER_TIMED_OUT"
+      else
+        test_execution_result=$(bashunit::runner::execute_test_body "$test_file" "$fn_name" "$@")
+      fi
+
+      local attempt_runtime_output="${test_execution_result%%##ASSERTIONS_*}"
+      # Counts first: detect_runtime_error consults the exit code when the output
+      # text is translated and matches nothing. extract_result_counts is a pure
+      # read, so moving it ahead commits nothing.
+      bashunit::runner::extract_result_counts "$test_execution_result"
+      bashunit::runner::detect_runtime_error "$attempt_runtime_output" \
+        "$_BASHUNIT_RUNNER_COUNTS_EXIT_CODE_OUT"
+      local attempt_runtime_error=$_BASHUNIT_RUNNER_RUNTIME_ERROR_OUT
+      local attempt_display_output=$_BASHUNIT_RUNNER_RUNTIME_OUTPUT_OUT
+      # Mirror the commit-phase failure test exactly (runtime error, non-zero exit,
+      # or a failed assertion); snapshot/incomplete/skipped/risky are not failures.
+      if [ -z "$attempt_runtime_error" ] &&
+        [ "$_BASHUNIT_RUNNER_COUNTS_EXIT_CODE_OUT" -eq 0 ] &&
+        [ "$_BASHUNIT_RUNNER_COUNTS_FAILED_OUT" -eq 0 ]; then
+        break
+      fi
+      # Only reached when the attempt failed, so this is the first failure.
+      if [ -z "$first_attempt_result" ]; then
+        first_attempt_result="$test_execution_result"
+      fi
+      [ "$retries_used" -ge "$retry_max" ] && break
+      retries_used=$((retries_used + 1))
+    done
+
+    # The inner loop only exits with a failure once the retries are exhausted,
+    # so reaching here with one means this iteration is the verdict.
+    if [ -n "$attempt_runtime_error" ] ||
+      [ "$_BASHUNIT_RUNNER_COUNTS_EXIT_CODE_OUT" -ne 0 ] ||
+      [ "$_BASHUNIT_RUNNER_COUNTS_FAILED_OUT" -ne 0 ]; then
+      failed_iteration=$iteration
+      break
+    fi
+  done
+
+  # The retry count lives in this shell, not in the test subshell that built the
+  # payload, so it is appended here. Every decoder matches its key greedily and
+  # stops at the next `##`, which makes a trailing field additive-safe; without
+  # it the count never crosses the fork and --parallel could not see flakiness.
+  test_execution_result="$test_execution_result##TEST_RETRIES=$retries_used##"
+
+  # Closes FD 3, which was used temporarily to hold the original stdout.
+  exec 3>&-
+
+  local duration=0
+  if [ "$measure_duration" = true ]; then
+    bashunit::clock::now_to_slot
+    local end_time=$_BASHUNIT_CLOCK_NOW_OUT
+    duration=$(((end_time - start_time) / 1000000))
+  fi
+
+  if bashunit::env::is_profile_enabled; then
+    bashunit::runner::record_profile "$duration" "$interpolated_fn_name" "$test_file"
+  fi
+
+  if bashunit::env::is_verbose_enabled; then
+    bashunit::runner::print_verbose_test_summary \
+      "$test_file" "$fn_name" "$duration" "$test_execution_result"
+  fi
+
+  bashunit::runner::decode_subshell_output "$test_execution_result"
+  local subshell_output=$_BASHUNIT_RUNNER_SUBSHELL_OUTPUT_OUT
+
+  if [ -n "$subshell_output" ]; then
+    bashunit::runner::extract_subshell_type "$subshell_output"
+    local type=$_BASHUNIT_RUNNER_TYPE_OUT
+    bashunit::runner::format_subshell_output "$subshell_output"
+    subshell_output=$_BASHUNIT_RUNNER_OUTPUT_OUT
+    if ! bashunit::env::is_failures_only_enabled; then
+      bashunit::console_results::print_line "$type" "$subshell_output"
+    fi
+  fi
+
+  # Reuse the final attempt's values (the loop always runs at least once and
+  # its locals persist in this function scope), instead of recomputing and
+  # forking detect_runtime_error a second time (#764).
+  local runtime_output=$attempt_display_output
+  local runtime_error=$attempt_runtime_error
+
+  # Retain the test's captured output for the report writers (JUnit
+  # <system-out>): add_test consumes it in whichever status branch fires below.
+  bashunit::reports::set_current_test_output "$runtime_output"
+
+  # parse_result accumulates _BASHUNIT_TEST_EXIT_CODE; reset it so each test's
+  # exit code is read in isolation (a non-zero/timed-out test must not poison
+  # the next one).
+  _BASHUNIT_TEST_EXIT_CODE=0
+  bashunit::runner::parse_result "$fn_name" "$test_execution_result" "$@"
+
+  local test_exit_code="$_BASHUNIT_TEST_EXIT_CODE"
+
+  bashunit::runner::compute_total_assertions "$test_execution_result"
+  local total_assertions=$_BASHUNIT_RUNNER_TOTAL_OUT
+
+  bashunit::runner::extract_encoded_field "$test_execution_result" "TEST_TITLE"
+  local encoded_test_title=$_BASHUNIT_RUNNER_FIELD_OUT
+  bashunit::runner::extract_encoded_field "$test_execution_result" "TEST_HOOK_FAILURE"
+  local hook_failure=$_BASHUNIT_RUNNER_FIELD_OUT
+  bashunit::runner::extract_encoded_field "$test_execution_result" "TEST_HOOK_MESSAGE"
+  local encoded_hook_message=$_BASHUNIT_RUNNER_FIELD_OUT
+
+  local test_title=""
+  [ -n "$encoded_test_title" ] && test_title="$(bashunit::helper::decode_base64 "$encoded_test_title")"
+  local hook_message=""
+  [ -n "$encoded_hook_message" ] && hook_message="$(bashunit::helper::decode_base64 "$encoded_hook_message")"
+
+  bashunit::set_test_title "$test_title"
+  bashunit::helper::normalize_test_function_name_to_slot "$fn_name" "$interpolated_fn_name"
+  local label=$_BASHUNIT_HELPER_NORMALIZED_OUT
+  bashunit::state::reset_test_title
+  bashunit::state::reset_current_test_interpolated_function_name
+
+  # Under --repeat the test is reported once, so the message has to say which
+  # iteration produced the failure or the count is unactionable.
+  local repeat_note=""
+  if [ "$repeat_max" -gt 1 ] && [ "$failed_iteration" -gt 0 ]; then
+    repeat_note=" (failed on iteration $failed_iteration of $repeat_max)"
+  fi
+
+  local failure_label="$label"
+  local failure_function="$fn_name"
+  if [ -n "$hook_failure" ]; then
+    bashunit::helper::normalize_test_function_name_to_slot "$hook_failure"
+    failure_label=$_BASHUNIT_HELPER_NORMALIZED_OUT
+    failure_function="$hook_failure"
+  fi
+
+  # A failed assertion already explains a non-zero exit status, so it must not be
+  # reported a second time as an execution error. `bashunit::assert_that` returns
+  # 1 on failure by design, so any custom assertion ending with it makes the test
+  # body exit 1 and used to print a spurious `✗ Error` on top of the `✗ Failed`.
+  # A real runtime error still wins: it sets $runtime_error regardless of counts.
+  local exit_code_is_unexplained=false
+  if [ "$test_exit_code" -ne 0 ] &&
+    [ "$_BASHUNIT_RUNNER_COUNTS_FAILED_OUT" -eq 0 ]; then
+    exit_code_is_unexplained=true
+  fi
+
+  if [ -n "$runtime_error" ] || [ "$exit_code_is_unexplained" = true ]; then
+    bashunit::state::add_tests_failed
+    bashunit::rerun::record "$test_file" "$fn_name"
+    local error_message="$runtime_error"
+    if [ -n "$hook_failure" ] && [ -n "$hook_message" ]; then
+      error_message="$hook_message"
+    elif [ -z "$error_message" ] && [ -n "$hook_message" ]; then
+      error_message="$hook_message"
+    fi
+
+    # When the test was killed by a signal (or timed out), replace an empty or
+    # generic "Killed" message with a specific cause.
+    if [ -z "$hook_failure" ]; then
+      local kill_message
+      kill_message=$(bashunit::runner::classify_kill_signal "$test_exit_code")
+      if [ -n "$kill_message" ]; then
+        case "$error_message" in
+        '' | *[Kk]illed* | *[Tt]erminated*) error_message="$kill_message" ;;
+        esac
+      fi
+    fi
+
+    # A test that exceeded BASHUNIT_TEST_TIMEOUT gets a clear, specific message.
+    if [ "$timed_out" = "true" ]; then
+      error_message="Test timed out after ${_BASHUNIT_RUNNER_TIMEOUT_SECS}s"
+    fi
+
+    error_message="$error_message$repeat_note"
+    bashunit::console_results::print_error_test "$failure_function" "$error_message" "$runtime_output"
+    bashunit::reports::add_test_failed "$test_file" "$failure_label" "$duration" "$total_assertions" "$error_message"
+    bashunit::runner::write_failure_result_output "$test_file" "$failure_function" "$error_message" "$runtime_output"
+    bashunit::internal_log "Test error" "$failure_label" "$error_message"
+
+    bashunit::runner::halt_if_stop_on_failure
+    return
+  fi
+
+  if [ "$current_assertions_failed" != "$_BASHUNIT_ASSERTIONS_FAILED" ]; then
+    bashunit::state::add_tests_failed
+    bashunit::rerun::record "$test_file" "$fn_name"
+    bashunit::reports::add_test_failed \
+      "$test_file" "$label" "$duration" "$total_assertions" "$subshell_output$repeat_note"
+    if [ -n "$repeat_note" ]; then
+      bashunit::console_results::print_line "failed" "${repeat_note# }"
+    fi
+    local assertion_runtime_output
+    assertion_runtime_output="$(
+      bashunit::runner::extract_assertion_runtime_output "$runtime_output" "$subshell_output"
+    )"
+    bashunit::runner::write_failure_result_output \
+      "$test_file" "$fn_name" "$subshell_output" "$assertion_runtime_output"
+
+    bashunit::internal_log "Test failed" "$label"
+
+    bashunit::runner::halt_if_stop_on_failure
+    return
+  fi
+
+  if [ "$current_assertions_snapshot" != "$_BASHUNIT_ASSERTIONS_SNAPSHOT" ]; then
+    bashunit::state::add_tests_snapshot
+    # In failures-only mode, suppress snapshot test output
+    if ! bashunit::env::is_failures_only_enabled; then
+      bashunit::console_results::print_snapshot_test "$label"
+    fi
+    bashunit::reports::add_test_snapshot "$test_file" "$label" "$duration" "$total_assertions"
+    bashunit::internal_log "Test snapshot" "$label"
+    return
+  fi
+
+  if [ "$current_assertions_incomplete" != "$_BASHUNIT_ASSERTIONS_INCOMPLETE" ]; then
+    bashunit::state::add_tests_incomplete
+    bashunit::reports::add_test_incomplete "$test_file" "$label" "$duration" "$total_assertions"
+    bashunit::runner::write_incomplete_result_output "$test_file" "$fn_name" "$subshell_output"
+    bashunit::internal_log "Test incomplete" "$label"
+    return
+  fi
+
+  if [ "$current_assertions_skipped" != "$_BASHUNIT_ASSERTIONS_SKIPPED" ]; then
+    bashunit::state::add_tests_skipped
+    bashunit::reports::add_test_skipped "$test_file" "$label" "$duration" "$total_assertions"
+    bashunit::runner::write_skipped_result_output "$test_file" "$fn_name" "$subshell_output"
+    bashunit::internal_log "Test skipped" "$label"
+    return
+  fi
+
+  # Check for risky test (zero assertions)
+  if [ "$total_assertions" -eq 0 ]; then
+    if bashunit::env::is_fail_on_risky_enabled; then
+      local risky_msg="Test has no assertions (risky)"
+      bashunit::state::add_tests_failed
+      bashunit::rerun::record "$test_file" "$fn_name"
+      bashunit::console_results::print_error_test "$fn_name" "$risky_msg"
+      bashunit::reports::add_test_failed "$test_file" "$label" "$duration" "$total_assertions" "$risky_msg"
+      bashunit::runner::write_failure_result_output "$test_file" "$fn_name" "$risky_msg"
+      bashunit::internal_log "Test failed (risky)" "$label"
+      bashunit::runner::halt_if_stop_on_failure
+      return
+    fi
+    bashunit::state::add_tests_risky
+    if ! bashunit::env::is_failures_only_enabled; then
+      bashunit::console_results::print_risky_test "${label}" "$duration"
+    fi
+    bashunit::reports::add_test_risky "$test_file" "$label" "$duration" "$total_assertions"
+    bashunit::runner::write_risky_result_output "$test_file" "$fn_name"
+    bashunit::internal_log "Test risky" "$label"
+    return
+  fi
+
+  # A test that only passed after retrying is annotated so flakiness stays visible.
+  _BASHUNIT_RETRY_NOTE=""
+  if [ "$retries_used" -gt 0 ]; then
+    _BASHUNIT_RETRY_NOTE=" (retry $retries_used/$retry_max)"
+  fi
+  # In failures-only mode, suppress successful test output
+  if ! bashunit::env::is_failures_only_enabled; then
+    if [ "$fn_name" = "$interpolated_fn_name" ]; then
+      bashunit::console_results::print_successful_test "${label}" "$duration" "$@"
+    else
+      bashunit::console_results::print_successful_test "${label}" "$duration"
+    fi
+  fi
+  _BASHUNIT_RETRY_NOTE=""
+  bashunit::state::add_tests_passed
+  # Flaky is a facet of passed, never a replacement for it: the test did pass, so
+  # the exit code only changes under --fail-on-flaky.
+  if [ "$retries_used" -gt 0 ]; then
+    bashunit::state::add_tests_flaky
+    bashunit::runner::decode_subshell_output "$first_attempt_result"
+    local first_failure=$_BASHUNIT_RUNNER_SUBSHELL_OUTPUT_OUT
+    bashunit::runner::format_subshell_output "$first_failure"
+    first_failure=$_BASHUNIT_RUNNER_OUTPUT_OUT
+    bashunit::reports::add_test_flaky \
+      "$test_file" "$label" "$duration" "$total_assertions" "$first_failure" "$retries_used"
+    bashunit::internal_log "Test flaky" "$label" "retries:$retries_used"
+    return
+  fi
+  bashunit::reports::add_test_passed "$test_file" "$label" "$duration" "$total_assertions"
+  bashunit::internal_log "Test passed" "$label"
+}

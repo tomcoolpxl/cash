@@ -27,6 +27,15 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ## Picked by the user (the current phase, 2026-10-19)
 
+The user's picks after 1.33.0 (decisions.md, "The phase after 1.33.0"):
+
+1. 1.33.0 published through Scoop: the tag is the user's to push; then the release
+   workflow, and the bucket's Excavator run;
+2. another corpus round: bashunit and git-subrepo done (2026-10-19, DONE.md);
+   bash-commons left out (it writes through `sudo`); shellspec waits on the item below.
+
+## The phase before (2026-10-19, done)
+
 The user's picks after 1.32.0 (decisions.md, "The phase after 1.32.0"), in this order,
 each described under "Found along the way" until it is done:
 
@@ -106,6 +115,16 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   the standard handles, would lift the limit.
 
 ## Found along the way
+
+- **Descriptors above 2 do not reach a child cash** (2026-10-19, found running shellspec):
+  shellspec opens descriptors 3 to 5 and starts `sh SCRIPT 3>&2`, whose script writes to
+  `>&3`; Windows hands a child no descriptor above 2 (D26), so the child says "3: Bad
+  file descriptor". A child cash could be given them: the handles inherited, and their
+  numbers in a variable the child reads as it starts. Large; a design for the user first.
+- **`env NAME` runs no cash builtin but the bundled tools** (2026-10-19, found writing
+  `time`'s page): `env` is a program of its own and looks NAME up on PATH, so `env time`
+  and `env echo` find nothing or Git's. It could run a cash builtin by re-entering cash, as
+  a virtual path does. Small to medium.
 
 - **A `case` of more than 64 patterns with brackets or extended globs** compiles each
   pattern again on every pass: compiled patterns are kept in an LRU of 64, which a

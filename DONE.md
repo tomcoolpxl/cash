@@ -2528,3 +2528,15 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   each test file. Two of cash's `C:/` spellings showed and went on the differences page:
   z's `-x` deletes with a sed address delimited by `:`, and rbenv climbs the tree with
   `${root%/*}` until it is empty, which `C:` never is.
+- **A corpus round: bashunit and git-subrepo** (2026-10-19, the phase after 1.33.0, the
+  user's pick of the sources): bashunit 0.52.0 and git-subrepo 0.4.9, unchanged. Four
+  fixes came of it. `set -e` ended the script on a loop, `if`, `case` or `{ }` whose status
+  was a failure it ignored inside (bashunit's `[ -n "$v" ] && ...` at a loop's end); as in
+  Bash, only a function, `source` or `( )` ends it then. `declare -F` with `extdebug` gave
+  the name alone, where Bash gives `NAME LINE FILE` (bashunit's test discovery). `time`
+  reached through a variable, `command`, `xargs` or `/usr/bin/time` is now a command with
+  GNU time's options (`-p -f -o -a -v -q`), the keyword unchanged (the user's call:
+  shellspec runs `$SHELLSPEC_TIME cmd`). And a descriptor a builtin's own command
+  redirects (`time CMD 3>&2`) is held around the command it runs, not refused for it.
+  bash-commons was left out: its file functions write through `sudo`, which in cash
+  elevates. shellspec waits on descriptors above 2 reaching a child cash (TODO.md).

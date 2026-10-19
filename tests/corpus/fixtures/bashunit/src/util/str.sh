@@ -1,0 +1,235 @@
+#!/usr/bin/env bash
+
+_BASHUNIT_STR_STRIPPED_OUT=""
+
+# Fork-free random alphanumeric string. Lives in this leaf module (not globals.sh)
+# because env.sh calls it at source time to build the run-unique scratch paths:
+# a helper used by the lowest layer must not sit above it.
+function bashunit::random_str() {
+  local length=${1:-6}
+  local chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  local str=''
+  local i
+  for ((i = 0; i < length; i++)); do
+    str="$str${chars:RANDOM%${#chars}:1}"
+  done
+  echo "$str"
+}
+
+_BASHUNIT_STR_LPAD_OUT=""
+
+##
+# Right-aligns $2 in a field of $1 characters, into _BASHUNIT_STR_LPAD_OUT.
+#
+# The first version-gated helper in the tree, and the shape every later one
+# follows: a column-0 `if/else` on a flag from src/system/bash.sh, two bodies,
+# one picked at load time. See adrs/adr-013-bash-version-gated-fast-paths.md.
+#
+# `printf -v` is Bash 3.1, and writing into a variable is the whole difference:
+# the 3.0 body has to capture, which forks. Both bodies hand the same format
+# and the same value to the same `printf`, so the padded result is identical
+# by construction -- the only thing the gate changes is the fork. A gate that
+# changed what came out would be a bug, not an optimisation.
+#
+# Arguments: $1 - the field width, $2 - the value to pad
+##
+if [ "$_BASHUNIT_BASH_GE_31" = 1 ]; then
+  function bashunit::str::lpad_to_slot() {
+    printf -v _BASHUNIT_STR_LPAD_OUT "%${1}s" "$2"
+  }
+else
+  function bashunit::str::lpad_to_slot() {
+    _BASHUNIT_STR_LPAD_OUT=$(printf "%${1}s" "$2")
+  }
+fi
+
+# Strip ANSI escape codes and control characters, writing the result into the
+# global slot _BASHUNIT_STR_STRIPPED_OUT (no fork on the plain-text fast path).
+# Callers on hot paths (assert_equals/assert_not_equals) use this to avoid the
+# per-call command-substitution fork. See bash-style.md (return-slot pattern).
+function bashunit::str::strip_ansi_to_slot() {
+  local input="$1"
+  # Fast path: plain text with no backslash (echo -e no-op) and no control
+  # bytes (nothing for sed to strip) passes through unchanged, zero forks.
+  case "$input" in
+  *\\* | *[[:cntrl:]]*) ;;
+  *)
+    _BASHUNIT_STR_STRIPPED_OUT=$input
+    return
+    ;;
+  esac
+  # Pure-bash path for short strings without backslashes: display lines (e.g.
+  # the per-test "✓ Passed … 3ms" alignment on systems whose clock is fork-free)
+  # land here, so a colored line does not cost a sed fork per test. Strip
+  # CSI sequences segment-wise, then sweep remaining control bytes; the size
+  # guard avoids bash's quadratic pattern-substitution on large captures and
+  # `*\\*` still defers to `echo -e` semantics below.
+  case "$input" in
+  *\\*) ;;
+  *)
+    if [ "${#input}" -le 1024 ]; then
+      local out="" rest="$input" params
+      while :; do
+        case "$rest" in
+        *$'\x1b'\[*)
+          out="$out${rest%%$'\x1b'\[*}"
+          rest="${rest#*$'\x1b'\[}"
+          params=""
+          while :; do
+            case "$rest" in
+            [0-9\;]*)
+              params="$params${rest%"${rest#?}"}"
+              rest="${rest#?}"
+              ;;
+            *) break ;;
+            esac
+          done
+          case "$rest" in
+          # Same finals sed strips; anything else keeps its printable residue
+          # (the ESC itself falls to the control-byte sweep, exactly like sed).
+          m* | K*) rest="${rest#?}" ;;
+          *) out="${out}[${params}" ;;
+          esac
+          ;;
+        *)
+          out="$out$rest"
+          break
+          ;;
+        esac
+      done
+      _BASHUNIT_STR_STRIPPED_OUT=${out//[[:cntrl:]]/}
+      return
+    fi
+    ;;
+  esac
+  # `printf '%s'`, never `echo -e`: this normalizes ANSI and control bytes for
+  # the comparison, and interpreting backslash escapes on the way made
+  # assert_equals read `C:\` and `C:\\` as the same value, and a literal
+  # `\t` as a real tab (#1108). Normalizing must not rewrite what it compares.
+  _BASHUNIT_STR_STRIPPED_OUT=$(printf '%s' "$input" | sed -E 's/\x1B\[[0-9;]*[mK]//g; s/[[:cntrl:]]//g')
+}
+
+# Strip ANSI escape codes and control characters, echoing the result.
+# Thin wrapper over the return-slot variant for callers that want stdout.
+function bashunit::str::strip_ansi() {
+  bashunit::str::strip_ansi_to_slot "$1"
+  echo "$_BASHUNIT_STR_STRIPPED_OUT"
+}
+
+# A run of spaces, doubled on demand. Padding is a slice of it, because the
+# only fork-free `printf` into a variable is `printf -v`, which is Bash 3.1
+# and this project floors at 3.0.
+_BASHUNIT_STR_SPACES="        "
+_BASHUNIT_STR_RPAD_OUT=""
+
+##
+# Return-slot variant of rpad: writes the padded line into
+# _BASHUNIT_STR_RPAD_OUT, without the trailing newline `$( )` used to strip.
+#
+# This runs once per passing test wherever per-test timing is on, and the
+# function was already fork-free inside -- the capture subshell around it was
+# the entire cost (#1348).
+##
+function bashunit::str::rpad_to_slot() {
+  local left_text="$1"
+  local right_word="$2"
+  local width_padding="${3:-$TERMINAL_WIDTH}"
+  # Subtract 1 more to account for the extra space
+  local padding=$((width_padding - ${#right_word} - 1))
+  if ((padding < 0)); then
+    padding=0
+  fi
+
+  # Remove ANSI escape sequences (non-visible characters) for length calculation
+  bashunit::str::strip_ansi_to_slot "$left_text"
+  local clean_left_text=$_BASHUNIT_STR_STRIPPED_OUT
+
+  local is_truncated=false
+  # If the visible left text exceeds the padding, truncate it and add "..."
+  if [ ${#clean_left_text} -gt $padding ]; then
+    local truncation_length=$((padding < 3 ? 0 : padding - 3))
+    clean_left_text="${clean_left_text:0:$truncation_length}"
+    is_truncated=true
+  fi
+
+  local result_left_text
+  local remaining_space
+  if $is_truncated; then
+    # Rebuild char-by-char with ANSI codes intact, applying the truncation.
+    result_left_text=""
+    local i=0
+    local j=0
+    while [ $i -lt ${#clean_left_text} ] && [ $j -lt ${#left_text} ]; do
+      local char="${clean_left_text:$i:1}"
+      local original_char="${left_text:$j:1}"
+
+      # If the current character is part of an ANSI sequence, skip it and copy it
+      if [ "$original_char" = $'\x1b' ]; then
+        while [ "${left_text:$j:1}" != "m" ] && [ $j -lt ${#left_text} ]; do
+          result_left_text="$result_left_text${left_text:$j:1}"
+          ((++j))
+        done
+        result_left_text="$result_left_text${left_text:$j:1}" # Append the final 'm'
+        ((++j))
+      elif [ "$char" = "$original_char" ]; then
+        # Match the actual character
+        result_left_text="$result_left_text$char"
+        ((++i))
+        ((++j))
+      else
+        ((++j))
+      fi
+    done
+    result_left_text="$result_left_text..."
+    # 1: due to a blank space
+    # 3: due to the appended ...
+    remaining_space=$((width_padding - ${#clean_left_text} - ${#right_word} - 1 - 3))
+  else
+    # Not truncated: the visible text fits, so the original (ANSI intact) is
+    # already correct — skip the per-character rebuild entirely.
+    result_left_text="$left_text"
+    remaining_space=$((width_padding - ${#clean_left_text} - ${#right_word} - 1))
+  fi
+
+  # Ensure the right word is placed exactly at the far right of the screen
+  # filling the remaining space with padding
+  if [ $remaining_space -lt 0 ]; then
+    remaining_space=0
+  fi
+
+  while [ ${#_BASHUNIT_STR_SPACES} -lt "$remaining_space" ]; do
+    _BASHUNIT_STR_SPACES="$_BASHUNIT_STR_SPACES$_BASHUNIT_STR_SPACES"
+  done
+
+  _BASHUNIT_STR_RPAD_OUT="${result_left_text}${_BASHUNIT_STR_SPACES:0:$remaining_space} $right_word"
+}
+
+# Pads and echoes the result. Thin wrapper over the return-slot variant, the
+# same shape strip_ansi has over strip_ansi_to_slot.
+function bashunit::str::rpad() {
+  bashunit::str::rpad_to_slot "$@"
+  echo "$_BASHUNIT_STR_RPAD_OUT"
+}
+
+##
+# Escapes $1 for HTML: &, <, > and ". Multi-line input keeps its lines.
+#
+# Lives here because both HTML writers need it: the test report (src/reports)
+# and the coverage pages (src/coverage). util/index.sh is sourced before both,
+# so one copy serves them and neither has to reach into the other's module.
+#
+# awk, not ${var//&/&amp;}: a bare `&` in a bash replacement means "the matched
+# text" from 5.2 on while staying literal on 3.2, and no spelling is right
+# across the supported range (#1096). The same rule applies to gsub, hence the
+# escaped \\& below.
+# Arguments: $1 - the text to escape
+##
+function bashunit::str::html_escape() {
+  printf '%s' "$1" | awk '{
+    gsub(/&/, "\\&amp;")
+    gsub(/</, "\\&lt;")
+    gsub(/>/, "\\&gt;")
+    gsub(/"/, "\\&quot;")
+    print
+  }'
+}

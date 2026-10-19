@@ -1,0 +1,10 @@
+clone: 0
+lib v1
+main
+0.4.9
+git subrepo clone ../upstream vendor/lib
+pull: 0
+lib v2
+Git subrepo 'vendor/lib':
+0.4.9
+unknown: 1

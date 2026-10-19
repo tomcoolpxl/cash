@@ -1,0 +1,491 @@
+#!/usr/bin/env bash
+
+# Input validation shared by every subcommand parser: unknown options, integer and path checks, shard parsing.
+
+##
+# Prints an "unknown option" error and exits non-zero.
+# Arguments: $1 - the offending argument, $2 - subcommand to name in the hint
+##
+function bashunit::main::abort_unknown_option() {
+  printf "%sError: unknown option '%s'. Run 'bashunit %s --help' to list the available options.%s\n" \
+    "${_BASHUNIT_COLOR_FAILED}" "$1" "$2" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+  exit 1
+}
+
+##
+# Exits non-zero unless the value is a non-negative integer.
+# Arguments: $1 - value, $2 - the setting name to quote in the error
+##
+function bashunit::main::require_non_negative_int_or_exit() {
+  case "$1" in
+  '' | *[!0-9]*)
+    printf "%sError: %s must be a non-negative integer, got '%s'.%s\n" \
+      "${_BASHUNIT_COLOR_FAILED}" "$2" "$1" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+    exit 1
+    ;;
+  esac
+}
+
+##
+# Exits non-zero unless the path can be written: either it already exists and is
+# writable, or its parent directory exists and is writable. Reports are produced
+# after the suite has finished, so an unwritable destination used to surface as a
+# raw redirect error on a run that had already reported success (#875).
+# Arguments: $1 - path, $2 - the setting name to quote in the error
+##
+##
+# Exits with the same shape as the writability errors, but says which mistake
+# it was: "cannot be written" sends the reader to permissions, and a directory
+# is almost always a forgotten filename.
+# Arguments: $1 - path, $2 - setting name
+##
+function bashunit::main::report_path_is_a_directory() {
+  printf "%sError: %s is a directory, not a file: '%s'.%s\n" \
+    "$_BASHUNIT_COLOR_FAILED" "${2:-path}" "$1" "$_BASHUNIT_COLOR_DEFAULT" >&2
+  exit 1
+}
+
+
+##
+# Reports an unreadable bootstrap file and exits.
+#
+# `-e/--env/--boot` takes "file arg1 arg2", so it splits its value on the first
+# space. That is deliberate, and it makes a path containing a space unusable --
+# but the plain message then names a truncated path the user never typed
+# (`--env "my boot.sh"` reported `'my'`), telling them a file that is right
+# there does not exist. When the whole value is readable, say what happened and
+# name the way out: BASHUNIT_BOOTSTRAP is not split (#1247).
+# Arguments: $1 - the file after the split, $2 - the whole flag value
+##
+function bashunit::main::report_unreadable_bootstrap() {
+  local boot_file=$1
+  local raw=${2-}
+
+  # Name the actual cause. All three used to report "cannot read", which is true
+  # of only one: a directory *is* readable -- the check that rejects it is -f,
+  # not -r -- and for a missing path "cannot read" understates "is not there".
+  # Pointing --env at a directory or mistyping a filename are ordinary mistakes,
+  # and one message sent the reader to permissions for both (#1262).
+  if [ ! -e "$boot_file" ]; then
+    printf "%sError: the bootstrap file does not exist: '%s'.%s\n" \
+      "$_BASHUNIT_COLOR_FAILED" "$boot_file" "$_BASHUNIT_COLOR_DEFAULT" >&2
+  elif [ -d "$boot_file" ]; then
+    printf "%sError: the bootstrap path is a directory, not a file: '%s'.%s\n" \
+      "$_BASHUNIT_COLOR_FAILED" "$boot_file" "$_BASHUNIT_COLOR_DEFAULT" >&2
+  elif [ ! -f "$boot_file" ]; then
+    # Readable, but not a regular file -- /dev/null and friends. The caller
+    # rejects on -f, so say that rather than blame permissions.
+    printf "%sError: the bootstrap path is not a regular file: '%s'.%s\n" \
+      "$_BASHUNIT_COLOR_FAILED" "$boot_file" "$_BASHUNIT_COLOR_DEFAULT" >&2
+  else
+    printf "%sError: cannot read the bootstrap file: '%s'.%s\n" \
+      "$_BASHUNIT_COLOR_FAILED" "$boot_file" "$_BASHUNIT_COLOR_DEFAULT" >&2
+  fi
+
+  if [ "$raw" != "$boot_file" ] && [ -r "$raw" ]; then
+    printf "%s--env splits its value on the first space to pass bootstrap arguments,%s\n" \
+      "$_BASHUNIT_COLOR_FAINT" "$_BASHUNIT_COLOR_DEFAULT" >&2
+    printf "%sso a path containing one cannot be used. Set BASHUNIT_BOOTSTRAP='%s' instead.%s\n" \
+      "$_BASHUNIT_COLOR_FAINT" "$raw" "$_BASHUNIT_COLOR_DEFAULT" >&2
+  fi
+
+  exit 1
+}
+
+
+##
+# Aborts unless a positional path argument exists on disk.
+#
+# An empty result is a real answer -- a directory with no test files, a filter
+# matching nothing, an empty shard -- and every one of those keeps saying "No
+# tests found". A path that is not there is a wrong invocation instead, and
+# giving the first answer to the second question sent the reader after test
+# naming, filters and the discovery glob rather than the typo (#1263).
+#
+# Shared by `test` and `bench` on purpose: #1199 closed exactly the gap where
+# the two disagreed about a path that is not there, and a second copy of this
+# rule is how they would drift apart again.
+#
+# Deliberately NOT part of validate_config_or_exit, which runs before argv is
+# expanded: these are positional arguments, not configuration, and they do not
+# exist yet at that point.
+#
+# Arguments: $1 - the path as the caller typed it
+##
+function bashunit::main::require_existing_path_or_exit() {
+  local path=$1
+
+  # A `*` is exempt: nullglob is off, so a pattern the shell could not expand
+  # arrives literally, and matching nothing is an empty selection.
+  # find_files_recursive decides glob-ness on `*` alone; use the same test here
+  # or the two disagree about what a path even is.
+  case "$path" in
+  *"*"*) return 0 ;;
+  esac
+
+  # -e, not -f: a directory is a valid argument, and a broken symlink is not.
+  [ -e "$path" ] && return 0
+
+  printf "%sError: no such path: '%s'.%s\n" \
+    "${_BASHUNIT_COLOR_FAILED}" "$path" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+  exit 1
+}
+
+
+##
+# Whether a `test` option consumes the argument after it as its value.
+#
+# `watch` is the caller: it has to tell an option's value apart from the path it
+# polls, and knowing only `-f/--filter` meant every other value landed in the
+# positional branch -- `watch --tag slow tests/` polled a directory named
+# `slow`, and silently polled the wrong one whenever the value named a real
+# directory.
+#
+# Kept in step with cmd_test's parser by tests/unit/main/option_values_test.sh,
+# which derives the list from that parser rather than repeating it.
+#
+# Arguments: $1 - the option as typed
+# Returns: 0 when it takes a value, 1 otherwise
+##
+function bashunit::main::option_takes_value() {
+  case "$1" in
+  -a | --assert | -e | --env | --boot | -f | --filter | --exclude-filter | \
+    --tag | --exclude-tag | --sandbox-allow | --output | --list-format | \
+    -j | --jobs | -r | --retry | --repeat | --test-timeout | --order-by | \
+    --seed | --shard | --suite | --coverage-min | --coverage-paths | \
+    --coverage-exclude | --coverage-diff | --log-junit | --log-gha | \
+    --gha-annotations | --report-html | --report-json | --report-junit | \
+    --report-md | --report-tap)
+    return 0
+    ;;
+  esac
+  return 1
+}
+
+
+function bashunit::main::require_writable_path_or_exit() {
+  local path=$1
+  local parent=${1%/*}
+  [ "$parent" = "$1" ] && parent="."
+  [ -z "$parent" ] && parent="/"
+
+  # A directory satisfies both -e and -w, so it used to pass here and fail much
+  # later inside the writer -- with a raw bash message naming a bashunit source
+  # file, and an exit status of 0 (#1177).
+  if [ -d "$path" ]; then
+    bashunit::main::report_path_is_a_directory "$path" "${2:-}"
+  fi
+
+  if [ -e "$path" ]; then
+    [ -w "$path" ] && return 0
+  elif [ -d "$parent" ] && [ -w "$parent" ]; then
+    return 0
+  fi
+
+  printf "%sError: %s cannot be written: '%s'.%s\n" \
+    "${_BASHUNIT_COLOR_FAILED}" "$2" "$path" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+  exit 1
+}
+
+##
+# Like require_writable_path_or_exit, but for writers that mkdir -p their
+# target directory: missing ancestors are acceptable as long as the first
+# existing one is a writable directory, so `coverage/cobertura.xml` passes
+# with no coverage/ dir while `/unwritable/x.xml` still fails fast.
+#
+# The first existing ancestor must be a directory, not merely writable: a
+# regular file in the path prefix makes `mkdir -p` impossible for every user,
+# root included, and root passes a bare -w test on it.
+# Arguments: $1 - path, $2 - setting name for the error message
+##
+function bashunit::main::require_creatable_path_or_exit() {
+  local path=$1
+  local ancestor=$1
+  while [ -n "$ancestor" ] && [ ! -e "$ancestor" ]; do
+    case "$ancestor" in
+      */*) ancestor=${ancestor%/*} ;;
+      *) ancestor="." ;;
+    esac
+  done
+  [ -z "$ancestor" ] && ancestor="/"
+
+  if [ -d "$path" ]; then
+    bashunit::main::report_path_is_a_directory "$path" "${2:-}"
+  fi
+
+  if [ -d "$ancestor" ] && [ -w "$ancestor" ] &&
+    { [ ! -e "$path" ] || [ -w "$path" ]; }; then
+    return 0
+  fi
+
+  printf "%sError: %s cannot be written: '%s'.%s\n" \
+    "${_BASHUNIT_COLOR_FAILED}" "$2" "$path" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+  exit 1
+}
+
+##
+# Validates the resolved configuration and exits non-zero on a bad value.
+# Runs after flag parsing so it covers both the flags and the BASHUNIT_* env
+# vars, which bypass the parser entirely. The numeric settings are compared with
+# `[ -lt ]`, which errors instead of returning false on a non-integer operand: the
+# job-slot poll looped forever and the rest silently dropped the setting (#873).
+##
+function bashunit::main::validate_config_or_exit() {
+  if [ "${BASHUNIT_PARALLEL_JOBS:-0}" != "0" ]; then
+    bashunit::main::require_non_negative_int_or_exit \
+      "${BASHUNIT_PARALLEL_JOBS}" "BASHUNIT_PARALLEL_JOBS (--jobs)"
+  fi
+  bashunit::main::require_non_negative_int_or_exit \
+    "${BASHUNIT_RETRY:-0}" "BASHUNIT_RETRY (--retry)"
+  bashunit::main::require_non_negative_int_or_exit \
+    "${BASHUNIT_TEST_TIMEOUT:-0}" "BASHUNIT_TEST_TIMEOUT (--test-timeout)"
+  bashunit::main::require_non_negative_int_or_exit \
+    "${BASHUNIT_REPEAT:-1}" "BASHUNIT_REPEAT (--repeat)"
+  # 0 passes the non-negative check but means "run nothing", which would be a
+  # silent no-op rather than the usage error it is.
+  if [ "${BASHUNIT_REPEAT:-1}" -lt 1 ]; then
+    printf "%sError: BASHUNIT_REPEAT (--repeat) must be at least 1, got '%s'.%s\n" \
+      "${_BASHUNIT_COLOR_FAILED}" "${BASHUNIT_REPEAT}" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+    exit 1
+  fi
+  # Empty is the documented "no minimum" default, so only a set value is checked.
+  if [ -n "${BASHUNIT_COVERAGE_MIN:-}" ]; then
+    bashunit::main::require_non_negative_int_or_exit \
+      "${BASHUNIT_COVERAGE_MIN}" "BASHUNIT_COVERAGE_MIN (--coverage-min)"
+  fi
+  # Env-only (no CLI flag). Compared with `[ -ge ]` in
+  # bashunit::coverage::get_coverage_class, which errors instead of returning
+  # false on a non-integer operand, leaking a raw shell error into the
+  # coverage report and silently mis-bucketing every file's class (#879).
+  bashunit::main::require_non_negative_int_or_exit \
+    "${BASHUNIT_COVERAGE_THRESHOLD_LOW:-$_BASHUNIT_DEFAULT_COVERAGE_THRESHOLD_LOW}" \
+    "BASHUNIT_COVERAGE_THRESHOLD_LOW"
+  bashunit::main::require_non_negative_int_or_exit \
+    "${BASHUNIT_COVERAGE_THRESHOLD_HIGH:-$_BASHUNIT_DEFAULT_COVERAGE_THRESHOLD_HIGH}" \
+    "BASHUNIT_COVERAGE_THRESHOLD_HIGH"
+
+  if [ -n "${BASHUNIT_SEED:-}" ]; then
+    bashunit::main::require_non_negative_int_or_exit "${BASHUNIT_SEED}" "BASHUNIT_SEED (--seed)"
+  fi
+
+  # BASHUNIT_SHARD_INDEX/BASHUNIT_SHARD_TOTAL set directly (e.g. via .bashunitrc)
+  # bypass bashunit::main::set_shard_or_exit's parsing, which only runs on the
+  # --shard flag path. Left unchecked, a non-numeric or zero total reached the
+  # raw arithmetic in main/run.sh as a "division by 0" shell error, and an
+  # out-of-range index silently produced "No tests found" instead of a clear
+  # message -- the same failure shape this function already closed for other
+  # settings (#873, #879).
+  if bashunit::env::is_shard_enabled; then
+    bashunit::main::require_non_negative_int_or_exit \
+      "${BASHUNIT_SHARD_INDEX}" "BASHUNIT_SHARD_INDEX"
+    bashunit::main::require_non_negative_int_or_exit \
+      "${BASHUNIT_SHARD_TOTAL}" "BASHUNIT_SHARD_TOTAL"
+    if [ "$BASHUNIT_SHARD_TOTAL" -lt 1 ] || [ "$BASHUNIT_SHARD_INDEX" -lt 1 ] ||
+      [ "$BASHUNIT_SHARD_INDEX" -gt "$BASHUNIT_SHARD_TOTAL" ]; then
+      printf "%sError: BASHUNIT_SHARD_INDEX/BASHUNIT_SHARD_TOTAL must satisfy 1 <= index <= total.%s\n" \
+        "${_BASHUNIT_COLOR_FAILED}" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+      exit 1
+    fi
+  fi
+
+  # --changed asks git a question, and both ways of asking it wrongly return
+  # "nothing changed": outside a work tree, and with a ref that does not exist.
+  # Left unchecked that is a green run of zero tests, the #871 failure shape.
+  if bashunit::env::is_changed_enabled; then
+    if ! bashunit::helper::git_is_repo; then
+      printf "%sError: --changed needs a git work tree; '%s' is not inside one.%s\n" \
+        "${_BASHUNIT_COLOR_FAILED}" "$PWD" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+      exit 1
+    fi
+    local _changed_ref
+    _changed_ref="$(bashunit::helper::git_changed_ref)"
+    if ! bashunit::helper::git_ref_exists "$_changed_ref"; then
+      printf "%sError: --changed cannot resolve the git ref '%s'.%s\n" \
+        "${_BASHUNIT_COLOR_FAILED}" "$_changed_ref" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+      exit 1
+    fi
+  fi
+
+  local _report_var _report_path
+  for _report_var in BASHUNIT_LOG_JUNIT BASHUNIT_LOG_GHA BASHUNIT_REPORT_HTML \
+    BASHUNIT_REPORT_TAP BASHUNIT_REPORT_JSON BASHUNIT_REPORT_MD; do
+    _report_path=${!_report_var:-}
+    if [ -n "$_report_path" ]; then
+      bashunit::main::require_writable_path_or_exit "$_report_path" "$_report_var"
+    fi
+  done
+
+  # The coverage writers mkdir -p their target directory, so missing ancestors
+  # are fine; what must fail fast is a target whose first existing ancestor
+  # cannot be written, which otherwise surfaces as a raw mkdir error after the
+  # whole suite already ran (#875).
+  if [ -n "${BASHUNIT_COVERAGE_REPORT_COBERTURA:-}" ]; then
+    bashunit::main::require_creatable_path_or_exit \
+      "$BASHUNIT_COVERAGE_REPORT_COBERTURA" "BASHUNIT_COVERAGE_REPORT_COBERTURA"
+  fi
+
+  # An unrecognised name used to fall back to the default renderer without a
+  # word, so `--output tpa` looked like it worked.
+  case "${BASHUNIT_OUTPUT_FORMAT:-}" in
+  '' | text | tap | json | junit) ;;
+  *)
+    printf "%sError: unsupported output format '%s' for --output. Supported: text, tap, json, junit.%s\n" \
+      "${_BASHUNIT_COLOR_FAILED}" "${BASHUNIT_OUTPUT_FORMAT}" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+    exit 1
+    ;;
+  esac
+
+  # A typo'd allowlist silently narrows the sandbox instead of widening it, so
+  # the shape is checked here rather than discovered as a blocked command.
+  case "${BASHUNIT_SANDBOX_ALLOW:-}" in
+  '') ;;
+  *[!A-Za-z0-9_.+,-]*)
+    printf "%sError: invalid --sandbox-allow value '%s'. Expected a comma-separated list of commands.%s\n" \
+      "${_BASHUNIT_COLOR_FAILED}" "${BASHUNIT_SANDBOX_ALLOW}" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+    exit 1
+    ;;
+  esac
+
+  # Same shape as --output above: an unrecognised mode would otherwise fall back
+  # to auto and look like it was honoured.
+  case "${BASHUNIT_GHA_ANNOTATIONS:-auto}" in
+  auto | always | never) ;;
+  *)
+    printf "%sError: unsupported mode '%s' for --gha-annotations. Supported: auto, always, never.%s\n" \
+      "${_BASHUNIT_COLOR_FAILED}" "${BASHUNIT_GHA_ANNOTATIONS}" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+    exit 1
+    ;;
+  esac
+
+  # Same shape as --output above: an unrecognised mode would otherwise leave the
+  # suite in definition order and look like it was honoured.
+  case "${BASHUNIT_ORDER_BY:-defined}" in
+  defined | defects | random) ;;
+  *)
+    printf "%sError: unsupported order '%s' for --order-by. Supported: defined, defects, random.%s\n" \
+      "${_BASHUNIT_COLOR_FAILED}" "${BASHUNIT_ORDER_BY}" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+    exit 1
+    ;;
+  esac
+
+  # --coverage-diff needs a repository and a resolvable ref. Left unchecked, a
+  # shallow CI clone (where the base ref is simply absent) would report every
+  # file as "no changed lines" and pass a diff threshold while measuring
+  # nothing — a silent false pass, not a missing feature.
+  if [ -n "${BASHUNIT_COVERAGE_DIFF:-}" ]; then
+    if ! bashunit::dependencies::has_git; then
+      printf "%sError: --coverage-diff needs git, which was not found.%s\n" \
+        "${_BASHUNIT_COLOR_FAILED}" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+      exit 1
+    fi
+    if ! bashunit::helper::git_is_repo; then
+      printf "%sError: --coverage-diff needs a git repository; '%s' is not inside one.%s\n" \
+        "${_BASHUNIT_COLOR_FAILED}" "$(pwd)" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+      exit 1
+    fi
+    if ! bashunit::helper::git_ref_exists "${BASHUNIT_COVERAGE_DIFF}"; then
+      printf "%sError: --coverage-diff base '%s' does not resolve to a commit. \
+On a shallow clone, fetch it first (git fetch --depth=... origin %s).%s\n" \
+        "${_BASHUNIT_COLOR_FAILED}" "${BASHUNIT_COVERAGE_DIFF}" \
+        "${BASHUNIT_COVERAGE_DIFF}" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+      exit 1
+    fi
+  fi
+
+  # Same shape as --output above: an unrecognised name would otherwise fall
+  # through to the default renderer and look like it worked.
+  case "${BASHUNIT_LIST_FORMAT:-}" in
+  text | json) ;;
+  *)
+    printf "%sError: unsupported list format '%s' for --list-format. Supported: text, json.%s\n" \
+      "${_BASHUNIT_COLOR_FAILED}" "${BASHUNIT_LIST_FORMAT}" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+    exit 1
+    ;;
+  esac
+}
+
+##
+# Validates a `--tag` value and exits non-zero on a malformed expression.
+#
+# A value is a comma-separated list of expressions, each `term&&term&&...` with
+# an optional leading `!` per term. An empty term (`a&&`, `&&`, a bare `!`) can
+# never match, so without this check the flag would silently select nothing —
+# the failure shape #871/#873 closed for other settings.
+# Arguments: $1 - the raw --tag value
+##
+function bashunit::main::require_valid_tag_expression_or_exit() {
+  local value="${1:-}"
+  local IFS=','
+  local expression
+  for expression in $value; do
+    local rest="$expression"
+    local term more=true
+    # Mirrors bashunit::helper::tag_expression_matches: one term per iteration,
+    # stopping after the last, so `a&&` produces an empty final term instead of
+    # ending the loop early and looking valid.
+    while [ "$more" = true ]; do
+      case "$rest" in
+      *"&&"*)
+        term="${rest%%&&*}"
+        rest="${rest#*&&}"
+        ;;
+      *)
+        term="$rest"
+        rest=""
+        more=false
+        ;;
+      esac
+      term="${term#"${term%%[![:space:]]*}"}"
+      term="${term%"${term##*[![:space:]]}"}"
+      case "$term" in
+      '!'*)
+        term="${term#!}"
+        term="${term#"${term%%[![:space:]]*}"}"
+        ;;
+      esac
+      if [ -z "$term" ]; then
+        printf "%sError: invalid tag expression '%s' for --tag. \
+Use 'a', 'a&&b', '!a' or 'a&&!b'.%s\n" \
+          "${_BASHUNIT_COLOR_FAILED}" "$expression" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+        exit 1
+      fi
+    done
+  done
+}
+
+##
+# Validates a `--shard <index>/<total>` spec and exports the parts, or prints an
+# error and exits non-zero. Requires numeric index/total with 1 <= index <= total.
+##
+function bashunit::main::set_shard_or_exit() {
+  local spec="${1:-}"
+  local index total
+  case "$spec" in
+  */*)
+    index="${spec%%/*}"
+    total="${spec##*/}"
+    ;;
+  *)
+    index=""
+    total=""
+    ;;
+  esac
+  case "$index" in '' | *[!0-9]*) index="" ;; esac
+  case "$total" in '' | *[!0-9]*) total="" ;; esac
+
+  if [ -z "$index" ] || [ -z "$total" ] ||
+    [ "$total" -lt 1 ] || [ "$index" -lt 1 ] || [ "$index" -gt "$total" ]; then
+    printf "%sError: --shard must be <index>/<total> with 1 <= index <= total (e.g. 1/4).%s\n" \
+      "${_BASHUNIT_COLOR_FAILED}" "${_BASHUNIT_COLOR_DEFAULT}" >&2
+    exit 1
+  fi
+
+  BASHUNIT_SHARD_INDEX="$index"
+  export -n BASHUNIT_SHARD_INDEX
+  BASHUNIT_SHARD_TOTAL="$total"
+  export -n BASHUNIT_SHARD_TOTAL
+}
+
+#############################
+# Subcommand: test
+#############################

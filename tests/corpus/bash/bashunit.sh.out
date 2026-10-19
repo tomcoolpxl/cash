@@ -1,0 +1,48 @@
+Running example_test.sh
+✓ Passed: Addition
+✓ Passed: Contains
+✓ Passed: Set up ran
+✓ Passed: Empty
+✗ Failed: Fails
+    Expected 'expected'
+    but got  'actual'
+    at example_test.sh:6
+
+There was 1 failure:
+
+|1) example_test.sh:6
+|✗ Failed: Fails
+|    Expected 'expected'
+|    but got  'actual'
+|    at example_test.sh:6
+
+Tests:      4 passed, 1 failed, 5 total
+Assertions: 5 passed, 1 failed, 6 total
+
+ Some tests failed 
+status: 1
+Running example_test.sh
+✓ Passed: Addition
+
+Tests:      1 passed, 1 total
+Assertions: 1 passed, 1 total
+
+ All tests passed 
+filtered: 0
+....F
+
+There was 1 failure:
+
+|1) example_test.sh:6
+|✗ Failed: Fails
+|    Expected 'expected'
+|    but got  'actual'
+|    at example_test.sh:6
+
+
+
+Tests:      4 passed, 1 failed, 5 total
+Assertions: 5 passed, 1 failed, 6 total
+
+ Some tests failed 
+simple: 1

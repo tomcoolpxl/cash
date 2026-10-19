@@ -1,0 +1,302 @@
+#!/usr/bin/env bash
+
+# @data_provider resolution and the per-script provider map.
+
+_BASHUNIT_PROVIDER_HEADER_CACHE_SEEDING=false
+_BASHUNIT_PROVIDER_HEADER_CACHE_PATHS=()
+_BASHUNIT_PROVIDER_HEADER_CACHE_CONTENTS=()
+_BASHUNIT_PROVIDER_HEADER_CACHE_ROWS=()
+_BASHUNIT_PROVIDER_HEADER_CACHE_NEXT=0
+_BASHUNIT_PROVIDER_SHORT_CONTENT_OUT=""
+
+# EOF completes the snapshot; a NUL or the size limit makes it unusable.
+function bashunit::helper::_read_short_provider_script() {
+  _BASHUNIT_PROVIDER_SHORT_CONTENT_OUT=""
+  [ -r "$1" ] || return 1
+  IFS= read -r -n 513 -d '' _BASHUNIT_PROVIDER_SHORT_CONTENT_OUT 2>/dev/null <"$1" && return 1
+  return 0
+}
+
+#
+# Resolves a script path, applying the issue #529 working-dir fallback.
+# Writes the resolved path into _BASHUNIT_PROVIDER_RESOLVED_OUT (empty if unreadable).
+#
+_BASHUNIT_PROVIDER_RESOLVED_OUT=""
+function bashunit::helper::_resolve_provider_script() {
+  local script=$1
+  # Handle directory changes in set_up_before_script (issue #529)
+  if [ ! -f "$script" ] && [ -n "${BASHUNIT_WORKING_DIR:-}" ]; then
+    script="$BASHUNIT_WORKING_DIR/$script"
+  fi
+  if [ ! -f "$script" ]; then
+    _BASHUNIT_PROVIDER_RESOLVED_OUT=""
+    return
+  fi
+  _BASHUNIT_PROVIDER_RESOLVED_OUT=$script
+}
+
+
+#
+# Scans provider pairs, annotations and test discovery metadata for the current script.
+# Arguments: $1 - path to the test script
+#
+function bashunit::helper::build_provider_map() {
+  bashunit::helper::_resolve_provider_script "$1"
+  local script=$_BASHUNIT_PROVIDER_RESOLVED_OUT
+
+  if [ -z "$script" ]; then
+    # Unreadable path: reset to an empty map keyed to this argument so a
+    # follow-up lookup returns empty without rescanning.
+    _BASHUNIT_PROVIDER_MAP_SCRIPT="$1"
+    _BASHUNIT_PROVIDER_MAP_FNS=()
+    _BASHUNIT_PROVIDER_MAP_PROVIDERS=()
+    _BASHUNIT_PROVIDER_MAP_NO_PARALLEL=false
+    bashunit::helper::annotations_reset
+    return
+  fi
+
+  if [ "$script" = "$_BASHUNIT_PROVIDER_MAP_SCRIPT" ]; then
+    return
+  fi
+
+  local scan_rows="" cache_index="" index cache_size=${#_BASHUNIT_PROVIDER_HEADER_CACHE_PATHS[@]}
+  if [ "$_BASHUNIT_PROVIDER_HEADER_CACHE_SEEDING" != true ] && [ "$cache_size" -gt 0 ]; then
+    index=$_BASHUNIT_PROVIDER_HEADER_CACHE_NEXT
+    if [ "${_BASHUNIT_PROVIDER_HEADER_CACHE_PATHS[index]:-}" != "$script" ]; then
+      index=""
+      local candidate
+      for candidate in "${!_BASHUNIT_PROVIDER_HEADER_CACHE_PATHS[@]}"; do
+        if [ "${_BASHUNIT_PROVIDER_HEADER_CACHE_PATHS[candidate]}" = "$script" ]; then
+          index=$candidate
+          break
+        fi
+      done
+    fi
+    if [ -n "$index" ]; then
+      if bashunit::helper::_read_short_provider_script "$script" &&
+        [ "$_BASHUNIT_PROVIDER_SHORT_CONTENT_OUT" = "${_BASHUNIT_PROVIDER_HEADER_CACHE_CONTENTS[index]}" ]; then
+        scan_rows="${_BASHUNIT_PROVIDER_HEADER_CACHE_ROWS[index]}"
+        cache_index=$index
+      fi
+      _BASHUNIT_PROVIDER_HEADER_CACHE_PATHS[index]=""
+      while [ "$_BASHUNIT_PROVIDER_HEADER_CACHE_NEXT" -lt "$cache_size" ] &&
+        [ -z "${_BASHUNIT_PROVIDER_HEADER_CACHE_PATHS[_BASHUNIT_PROVIDER_HEADER_CACHE_NEXT]:-}" ]; do
+        _BASHUNIT_PROVIDER_HEADER_CACHE_NEXT=$((_BASHUNIT_PROVIDER_HEADER_CACHE_NEXT + 1))
+      done
+      if [ "$_BASHUNIT_PROVIDER_HEADER_CACHE_NEXT" -eq "$cache_size" ]; then
+        _BASHUNIT_PROVIDER_HEADER_CACHE_PATHS=()
+        _BASHUNIT_PROVIDER_HEADER_CACHE_CONTENTS=()
+        _BASHUNIT_PROVIDER_HEADER_CACHE_ROWS=()
+      fi
+    fi
+  fi
+
+  _BASHUNIT_PROVIDER_MAP_SCRIPT="$script"
+  _BASHUNIT_PROVIDER_MAP_FNS=()
+  _BASHUNIT_PROVIDER_MAP_PROVIDERS=()
+  _BASHUNIT_PROVIDER_MAP_NO_PARALLEL=false
+  _BASHUNIT_PROVIDER_MAP_TEST_FNS=""
+  _BASHUNIT_PROVIDER_MAP_DYNAMIC=false
+
+  bashunit::helper::annotations_reset
+
+  local count=0
+  local fn provider annot_timeout annot_retry annot_skip annot_reason
+  if [ -z "$cache_index" ]; then
+    local before_content="" can_cache=false
+    if [ "$_BASHUNIT_PROVIDER_HEADER_CACHE_SEEDING" = true ] &&
+      bashunit::helper::_read_short_provider_script "$script"; then
+      before_content=$_BASHUNIT_PROVIDER_SHORT_CONTENT_OUT
+      can_cache=true
+    fi
+    local awk_program='
+    /^# bashunit: no-parallel-tests/ { no_parallel = 1; next }
+    /^[[:space:]]*#[[:space:]]*@?data_provider[[:space:]]+/ {
+      p = $0
+      sub(/^[[:space:]]*#[[:space:]]*@?data_provider[[:space:]]+/, "", p)
+      sub(/[[:space:]]+$/, "", p)
+      pending = p
+      pending_line = NR
+      next
+    }
+    /^[[:space:]]*#[[:space:]]*@timeout([[:space:]]|=)/ {
+      v = $0
+      sub(/^[[:space:]]*#[[:space:]]*@timeout[[:space:]=]+/, "", v)
+      sub(/[[:space:]]+$/, "", v)
+      a_timeout = v
+      next
+    }
+    /^[[:space:]]*#[[:space:]]*@retry([[:space:]]|=)/ {
+      v = $0
+      sub(/^[[:space:]]*#[[:space:]]*@retry[[:space:]=]+/, "", v)
+      sub(/[[:space:]]+$/, "", v)
+      a_retry = v
+      next
+    }
+    /^[[:space:]]*#[[:space:]]*@skip([[:space:]]|$)/ {
+      v = $0
+      sub(/^[[:space:]]*#[[:space:]]*@skip[[:space:]]*/, "", v)
+      sub(/[[:space:]]+$/, "", v)
+      a_skip = 1
+      a_reason = v
+      next
+    }
+    # Any other comment keeps the block open, the same rule @tag follows.
+    /^[[:space:]]*#/ { next }
+    {
+      is_fn = match($0, /^[[:space:]]*(function[[:space:]]+)?[A-Za-z_][A-Za-z0-9_:]*[[:space:]]*\(\)/)
+      if (is_fn) {
+        fn = $0
+        sub(/^[[:space:]]*(function[[:space:]]+)?/, "", fn)
+        sub(/[[:space:]]*\(\).*/, "", fn)
+      }
+
+      # A definition at column 0 is one this scan can be sure the file defines
+      # unconditionally, which is what lets the header count without sourcing.
+      # Anything that could define a function this scan cannot see -- eval,
+      # a nested source, an indented (so conditional or nested) definition --
+      # marks the file dynamic and sends the count back to sourcing.
+      if (match($0, /^(function[[:space:]]+)?[A-Za-z_][A-Za-z0-9_:]*[[:space:]]*\(\)/)) {
+        # Accumulated, not emitted per definition: the read loop below runs
+        # once per row, and a row per function cost about as much as counting
+        # statically saved.
+        top_level_fns = top_level_fns " " fn
+      } else if (is_fn) {
+        dynamic = 1
+      }
+      # A heredoc marks the file dynamic too, for the opposite reason: an
+      # acceptance test writes its fixtures with one, and a `function test_x()`
+      # in that body is text, not a definition -- counted statically it would
+      # inflate the header. So does a line whose quotes do not balance, which
+      # is how the rest of them write a fixture: a multi-line string whose
+      # continuation lines start at column 0 and look exactly like definitions.
+      # Escapes and balanced spans come out first, so an apostrophe inside a
+      # double-quoted string is not mistaken for one -- that alone was flagging
+      # a fifth of the suite.
+      #
+      # Both are flagged rather than parsed. This pass also builds the provider
+      # map, so a line-skipping bug here would mis-wire real tests; and a rule
+      # that guesses wrong about where a string ends can hide a real function,
+      # which is the one error a count must never make. Over-flagging only
+      # costs the file its fast path.
+      if (index($0, "<<") > 0) {
+        dynamic = 1
+      }
+      _t = $0
+      gsub(/\\./, "", _t)
+      gsub(/"[^"]*"/, "", _t)
+      gsub(/\047[^\047]*\047/, "", _t)
+      if (index(_t, "\047") > 0 || index(_t, "\"") > 0) {
+        dynamic = 1
+      }
+      if (match($0, /(^|[^[:alnum:]_])eval([^[:alnum:]_]|$)/) ||
+          match($0, /^[[:space:]]*(\.|source)[[:space:]]/)) {
+        dynamic = 1
+      }
+
+      if (pending != "" && NR - pending_line <= 2) {
+        if (is_fn) {
+          printf "%s\t%s\n", fn, pending
+          pending = ""
+        }
+      } else if (pending != "" && NR - pending_line > 2) {
+        pending = ""
+      }
+
+      if (is_fn && (a_timeout != "" || a_retry != "" || a_skip != "")) {
+        # Tab is an IFS whitespace character, so `read` collapses a run of them
+        # and an empty interior field would shift every later one. Absent
+        # values therefore travel as a sentinel; the reason is last and may be
+        # empty.
+        printf "@@annot@@\t%s\t%s\t%s\t%s\t%s\n", fn,
+          (a_timeout == "" ? "@@none@@" : a_timeout),
+          (a_retry == "" ? "@@none@@" : a_retry),
+          (a_skip == "" ? "0" : a_skip), a_reason
+      }
+      # A blank or code line ends the block for the next definition, whether or
+      # not this line was one.
+      a_timeout = ""
+      a_retry = ""
+      a_skip = ""
+      a_reason = ""
+    }
+    END {
+      printf "@@no_parallel@@\t%d\n", no_parallel
+      if (dynamic) { printf "@@dynamic@@\t1\n" }
+      else { printf "@@testfns@@\t%s\n", top_level_fns }
+    }
+  '
+    if [ "$can_cache" = true ]; then
+      # The scanner must see the same bytes the cache later validates.
+      scan_rows=$(awk "$awk_program" 2>/dev/null <<<"$before_content") || can_cache=false
+    else
+      scan_rows=$(awk "$awk_program" "$script" 2>/dev/null)
+    fi
+    if [ "$can_cache" = true ]; then
+      index=${#_BASHUNIT_PROVIDER_HEADER_CACHE_PATHS[@]}
+      _BASHUNIT_PROVIDER_HEADER_CACHE_PATHS[index]="$script"
+      _BASHUNIT_PROVIDER_HEADER_CACHE_CONTENTS[index]="$before_content"
+      _BASHUNIT_PROVIDER_HEADER_CACHE_ROWS[index]="$scan_rows"
+    fi
+  fi
+
+  # A here-string avoids the descriptor leak from process substitution on Bash 3.
+  while IFS=$'\t' read -r fn provider annot_timeout annot_retry annot_skip annot_reason; do
+    [ -z "$fn" ] && continue
+    if [ "$fn" = "@@no_parallel@@" ]; then
+      [ "$provider" = "1" ] && _BASHUNIT_PROVIDER_MAP_NO_PARALLEL=true
+      continue
+    fi
+    if [ "$fn" = "@@testfns@@" ]; then
+      _BASHUNIT_PROVIDER_MAP_TEST_FNS="$provider"
+      continue
+    fi
+    if [ "$fn" = "@@dynamic@@" ]; then
+      _BASHUNIT_PROVIDER_MAP_DYNAMIC=true
+      continue
+    fi
+    if [ "$fn" = "@@annot@@" ]; then
+      [ "$annot_timeout" = "@@none@@" ] && annot_timeout=""
+      [ "$annot_retry" = "@@none@@" ] && annot_retry=""
+      bashunit::helper::annotations_record \
+        "$provider" "$annot_timeout" "$annot_retry" "$annot_skip" "$annot_reason"
+      continue
+    fi
+    _BASHUNIT_PROVIDER_MAP_FNS[count]="$fn"
+    _BASHUNIT_PROVIDER_MAP_PROVIDERS[count]="$provider"
+    count=$((count + 1))
+  done <<<"$scan_rows"
+}
+
+
+#
+# Pure-bash lookup against the cached provider map.
+# Writes the provider-function name (or empty) into _BASHUNIT_PROVIDER_FN_OUT.
+# Arguments: $1 - test-function name
+#
+function bashunit::helper::provider_for_function() {
+  local function_name=$1
+  local i=0
+  local total=${#_BASHUNIT_PROVIDER_MAP_FNS[@]}
+  while [ "$i" -lt "$total" ]; do
+    if [ "${_BASHUNIT_PROVIDER_MAP_FNS[i]}" = "$function_name" ]; then
+      _BASHUNIT_PROVIDER_FN_OUT="${_BASHUNIT_PROVIDER_MAP_PROVIDERS[i]}"
+      return
+    fi
+    i=$((i + 1))
+  done
+  _BASHUNIT_PROVIDER_FN_OUT=""
+}
+
+
+function bashunit::helper::get_provider_data() {
+  local function_name="$1"
+  local script="$2"
+
+  bashunit::helper::build_provider_map "$script"
+  bashunit::helper::provider_for_function "$function_name"
+
+  if [ -n "$_BASHUNIT_PROVIDER_FN_OUT" ]; then
+    bashunit::helper::execute_function_if_exists "$_BASHUNIT_PROVIDER_FN_OUT"
+  fi
+}

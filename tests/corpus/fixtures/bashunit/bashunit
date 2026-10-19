@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+declare -r BASHUNIT_MIN_BASH_VERSION="3.0"
+
+function _check_bash_version() {
+  local current_version
+  if [[ -n ${BASHUNIT_TEST_BASH_VERSION:-} ]]; then
+    # Checks if BASHUNIT_TEST_BASH_VERSION is set (typically for testing purposes)
+    current_version="${BASHUNIT_TEST_BASH_VERSION}"
+  elif [[ -n ${BASH_VERSINFO+set} ]]; then
+    # Checks if the special Bash array BASH_VERSINFO exists. This array is only defined in Bash.
+    current_version="${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}"
+  else
+    # If not in Bash (e.g., running from Zsh). The pipeline extracts just the major.minor version (e.g., 3.0).
+    current_version="$(bash --version | head -n1 | cut -d' ' -f4 | cut -d. -f1,2)"
+  fi
+
+  # Compare against the declared minimum, minor included: comparing only the
+  # major would accept any 3.x whatever the floor says.
+  local major minor min_major min_minor
+  IFS=. read -r major minor <<<"$current_version"
+  IFS=. read -r min_major min_minor <<<"$BASHUNIT_MIN_BASH_VERSION"
+  # Keep leading digits only, so a suffixed version (3.2.57(1)-release) compares.
+  major=${major%%[!0-9]*}
+  minor=${minor%%[!0-9]*}
+
+  if ((10#${major:-0} < 10#$min_major)) ||
+    { ((10#${major:-0} == 10#$min_major)) && ((10#${minor:-0} < 10#${min_minor:-0})); }; then
+    printf 'Bashunit requires Bash >= %s. Current version: %s\n' "$BASHUNIT_MIN_BASH_VERSION" "$current_version" >&2
+    exit 1
+  fi
+}
+
+_check_bash_version
+
+# shellcheck disable=SC2034
+declare -r BASHUNIT_VERSION="0.52.0"
+
+# shellcheck disable=SC2155
+# `${x%/*}` rather than `$(dirname "$x")`: one fork on every invocation, and
+# the acceptance suite spawns hundreds of them (#1124). The expansion differs
+# from dirname only when the path holds no slash -- invoked as a bare name off
+# PATH -- which is what the guard covers.
+_bashunit_root="${BASH_SOURCE[0]%/*}"
+# No slash means a bare name off PATH (dirname: "."); empty means the
+# filesystem root (dirname: "/").
+case "$_bashunit_root" in
+"${BASH_SOURCE[0]}") _bashunit_root="." ;;
+"") _bashunit_root="/" ;;
+esac
+declare -r BASHUNIT_ROOT_DIR="$_bashunit_root"
+unset _bashunit_root
+export BASHUNIT_ROOT_DIR
+
+# Capture working directory at startup (before any test changes it)
+declare -r BASHUNIT_WORKING_DIR="$PWD"
+export BASHUNIT_WORKING_DIR
+
+# Early scan for flags that must be set before loading env.sh
+for arg in "$@"; do
+  case "$arg" in
+  --skip-env-file)
+    # this-process-only (see the flag-parse loop in src/main/test.sh) (#837)
+    BASHUNIT_SKIP_ENV_FILE=true
+    export -n BASHUNIT_SKIP_ENV_FILE
+    ;;
+  -l | --login)
+    BASHUNIT_LOGIN_SHELL=true
+    export -n BASHUNIT_LOGIN_SHELL
+    ;;
+  --no-color)
+    # shellcheck disable=SC2034
+    BASHUNIT_NO_COLOR=true
+    ;;
+  esac
+done
+
+source "$BASHUNIT_ROOT_DIR/src/dev/debug.sh"
+source "$BASHUNIT_ROOT_DIR/src/system/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/util/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/api/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/config/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/coverage/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/state/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/console/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/helper/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/cli/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/assert/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/reports/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/runner/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/benchmark/index.sh"
+source "$BASHUNIT_ROOT_DIR/src/main/index.sh"
+
+# check_os.sh runs its own init when sourced, above; calling it again here cost
+# a second `uname` on every invocation, plus the `grep /etc/os-release` inside
+# is_nixos on Linux (#1124). The tests re-init deliberately with a mocked
+# `uname`, so the function itself must stay re-runnable.
+bashunit::clock::init
+
+# Subcommand detection
+_SUBCOMMAND=""
+# Whether the subcommand was typed or inferred. A deprecation warning quotes the
+# invocation back to the user, so it has to know which one they actually ran.
+_SUBCOMMAND_IS_EXPLICIT=false
+
+case "${1:-}" in
+  test | bench | doc | init | upgrade | assert | watch)
+    _SUBCOMMAND="$1"
+    _SUBCOMMAND_IS_EXPLICIT=true
+    shift
+    ;;
+  learn)
+    printf "%sError: 'learn' was removed. Learn bashunit at https://bashunit.com%s\n" \
+      "$_BASHUNIT_COLOR_FAILED" "$_BASHUNIT_COLOR_DEFAULT" >&2
+    exit 1
+    ;;
+  -v | --version)
+    bashunit::console_header::print_version
+    exit 0
+    ;;
+  -h | --help)
+    bashunit::console_header::print_help
+    exit 0
+    ;;
+  -*)
+    # Flag without subcommand → assume "test"
+    _SUBCOMMAND="test"
+    ;;
+  "")
+    # No arguments → assume "test" (uses BASHUNIT_DEFAULT_PATH)
+    _SUBCOMMAND="test"
+    ;;
+  *)
+    # Path argument → assume "test"
+    _SUBCOMMAND="test"
+    ;;
+esac
+
+# Route to subcommand handler
+case "$_SUBCOMMAND" in
+  test) bashunit::main::cmd_test "$@" ;;
+  bench) bashunit::main::cmd_bench "$@" ;;
+  doc) bashunit::main::cmd_doc "$@" ;;
+  init) bashunit::main::cmd_init "$@" ;;
+  upgrade) bashunit::main::cmd_upgrade "$@" ;;
+  assert) bashunit::main::cmd_assert "$@" ;;
+  watch) bashunit::main::cmd_watch "$@" ;;
+esac
