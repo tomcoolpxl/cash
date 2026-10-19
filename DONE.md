@@ -2540,3 +2540,8 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   redirects (`time CMD 3>&2`) is held around the command it runs, not refused for it.
   bash-commons was left out: its file functions write through `sudo`, which in cash
   elevates. shellspec waits on descriptors above 2 reaching a child cash (TODO.md).
+- **`env` and `timeout` run a cash builtin by its name** (2026-10-19, found writing
+  `time`'s page): they are programs of their own and looked their command up on PATH, so
+  `env time -p cmd` and `env echo x` found nothing, or Git's echo. A bare name that is a
+  cash builtin now runs in cash, as the shell runs it: a bundled tool at once, another
+  builtin in a cash started for it.

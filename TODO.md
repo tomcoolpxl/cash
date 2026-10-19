@@ -121,11 +121,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   `>&3`; Windows hands a child no descriptor above 2 (D26), so the child says "3: Bad
   file descriptor". A child cash could be given them: the handles inherited, and their
   numbers in a variable the child reads as it starts. Large; a design for the user first.
-- **`env NAME` runs no cash builtin but the bundled tools** (2026-10-19, found writing
-  `time`'s page): `env` is a program of its own and looks NAME up on PATH, so `env time`
-  and `env echo` find nothing or Git's. It could run a cash builtin by re-entering cash, as
-  a virtual path does. Small to medium.
-
 - **A `case` of more than 64 patterns with brackets or extended globs** compiles each
   pattern again on every pass: compiled patterns are kept in an LRU of 64, which a
   cycle through more misses every time. Patterns of characters, `?` and `*` match

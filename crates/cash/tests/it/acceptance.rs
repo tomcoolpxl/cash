@@ -1024,6 +1024,21 @@ fn timeout_and_env_run_a_script() {
 }
 
 #[test]
+fn env_and_timeout_run_a_cash_builtin_by_its_name() {
+    // `env` and `timeout` are programs of their own and looked their command up on PATH,
+    // so `env time -p cmd` and `env echo x` found nothing, or Git's echo.
+    let out = cash(
+        "env time -p true 2>&1 | sed 's/[0-9]/N/g'; env echo from-env; \
+         timeout 5 printf '%s\\n' via-timeout; env nosuch_q 2>/dev/null; echo $?",
+    );
+    assert_eq!(
+        out.stdout, "real N.NN\nuser N.NN\nsys N.NN\nfrom-env\nvia-timeout\n127",
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn exec_of_a_bundled_tool_runs_cashs_own() {
     // `exec mktemp` searched PATH and ran Git's GNU mktemp, whose `/tmp` name cash's
     // other tools cannot open: shunit2 makes its temp directory so.

@@ -41,7 +41,7 @@ wall clock) and how much processor time it used (`user`, in the program itself, 
 `TIMEFORMAT` sets the format otherwise.
 
 A keyword is one only when it is written as such. `time` reached any other way, through
-a variable (`t=time; $t cmd`), `command time`, `xargs time` or `/usr/bin/time`, is the
+a variable (`t=time; $t cmd`), `command time`, `env time`, `xargs time` or `/usr/bin/time`, is the
 `time` command, with the options of GNU's `time` program: `-p` for the POSIX format, `-f`
 for a format of your own, `-v` for every measure, `-o FILE` to write the report to FILE
 (`-a` to add to it), and `-q` to leave out the line that says the command ended with a

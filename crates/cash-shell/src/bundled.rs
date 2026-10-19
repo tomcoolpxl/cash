@@ -238,7 +238,9 @@ pub fn maybe_dispatch() -> Option<i32> {
     }
 
     #[cfg(feature = "bundled-coreutils")]
-    let argv = relaying_msys_command(cash_for_scripts(cash_for_shell_names(argv)));
+    let argv = relaying_msys_command(cash_for_scripts(cash_for_builtins(cash_for_shell_names(
+        argv,
+    ))));
 
     // A tool that runs a command hands it its standard output, which would keep the
     // relay's pipe open after the tool is done.
@@ -324,6 +326,48 @@ fn cash_for_shell_names(argv: Vec<OsString>) -> Vec<OsString> {
     if let Some(slot) = args.get_mut(operand.index) {
         exe.as_os_str().clone_into(slot);
     }
+    args
+}
+
+/// `argv` for a bundled `env` or `timeout` whose command is a cash builtin by its bare
+/// name: cash runs it, as the shell runs the name (D48), where the tool's own search of
+/// PATH found Git's program or nothing: `env time -p cmd` and `env echo x` were not found.
+/// A bundled tool is started at once (`cash --invoke-bundled NAME`); another builtin in a
+/// cash started for it, `cash -c '"$0" "$@"' NAME ARGS...`, where a name from a variable
+/// is no keyword, so `time` is the command.
+#[cfg(feature = "bundled-coreutils")]
+fn cash_for_builtins(argv: Vec<OsString>) -> Vec<OsString> {
+    let Some(operand) = cash_coreutils_builtins::command_operand(&argv) else {
+        return argv;
+    };
+    let Some(program) = operand.args.get(operand.index) else {
+        return argv;
+    };
+    let name = program.to_string_lossy().into_owned();
+    if name.is_empty() || name.contains(['/', '\\']) {
+        return argv;
+    }
+    let bundled = registry().is_some_and(|tools| tools.contains_key(&name));
+    let builtin = bundled
+        || cash_builtins::default_builtins::<cash_core::extensions::DefaultShellExtensions>(
+            cash_builtins::BuiltinSet::BashMode,
+        )
+        .contains_key(&name);
+    let (true, Some(exe)) = (builtin, self_exe()) else {
+        return argv;
+    };
+    let mut args = operand.args;
+    let tail = args.split_off(operand.index);
+    if bundled {
+        args.extend([exe.as_os_str().to_owned(), OsString::from(DISPATCH_FLAG)]);
+    } else {
+        args.extend([
+            exe.as_os_str().to_owned(),
+            OsString::from("-c"),
+            OsString::from(r#""$0" "$@""#),
+        ]);
+    }
+    args.extend(tail);
     args
 }
 
