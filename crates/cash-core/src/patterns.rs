@@ -10,7 +10,8 @@ use std::{
 
 /// A pattern compiled to match a whole text: a regular expression, or for a pattern
 /// with `!(…)`, which no regular expression can express, the backtracking matcher, or
-/// for one of characters, `?` and `*` alone, those, matched as Bash matches them.
+/// for one of characters, `?`, `*` and brackets alone, those, matched as Bash matches
+/// them.
 #[derive(Debug)]
 pub(crate) enum PatternMatcher {
     Regex(std::sync::Arc<fancy_regex::Regex>),
@@ -29,8 +30,8 @@ impl PatternMatcher {
     }
 }
 
-/// A piece of a pattern made of characters, `?` and `*` alone.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// A piece of a pattern made of characters, `?`, `*` and brackets alone.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Wildcard {
     /// This character.
     Char(char),
@@ -38,6 +39,204 @@ pub(crate) enum Wildcard {
     Any,
     /// `*`: any characters, none too.
     Many,
+    /// `[...]`: one character among the members, or with `!` or `^` first, one not among
+    /// them.
+    Bracket {
+        /// Whether it takes the characters not among the members.
+        negated: bool,
+        /// The members; a range whose ends are the wrong way round is none.
+        members: Vec<BracketMember>,
+    },
+}
+
+/// A member of a bracket, as the regular expression made of it reads it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BracketMember {
+    /// This character.
+    Char(char),
+    /// The characters from the first to the second, by code point.
+    Range(char, char),
+    /// `[:name:]`: a class of ASCII characters.
+    Class(AsciiClass),
+}
+
+/// The classes a bracket may name, of ASCII characters only, as the regular expression
+/// has them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AsciiClass {
+    Alnum,
+    Alpha,
+    Blank,
+    Cntrl,
+    Digit,
+    Graph,
+    Lower,
+    Print,
+    Punct,
+    Space,
+    Upper,
+    Xdigit,
+}
+
+impl AsciiClass {
+    /// The class `name` names.
+    fn named(name: &str) -> Option<Self> {
+        Some(match name {
+            "alnum" => Self::Alnum,
+            "alpha" => Self::Alpha,
+            "blank" => Self::Blank,
+            "cntrl" => Self::Cntrl,
+            "digit" => Self::Digit,
+            "graph" => Self::Graph,
+            "lower" => Self::Lower,
+            "print" => Self::Print,
+            "punct" => Self::Punct,
+            "space" => Self::Space,
+            "upper" => Self::Upper,
+            "xdigit" => Self::Xdigit,
+            _ => return None,
+        })
+    }
+
+    /// Whether `c` is in the class.
+    const fn has(self, c: char) -> bool {
+        match self {
+            Self::Alnum => c.is_ascii_alphanumeric(),
+            Self::Alpha => c.is_ascii_alphabetic(),
+            Self::Blank => matches!(c, ' ' | '\t'),
+            Self::Cntrl => c.is_ascii_control(),
+            Self::Digit => c.is_ascii_digit(),
+            Self::Graph => c.is_ascii_graphic(),
+            Self::Lower => c.is_ascii_lowercase(),
+            Self::Print => c.is_ascii_graphic() || c == ' ',
+            Self::Punct => c.is_ascii_punctuation(),
+            // With the vertical tab, which `is_ascii_whitespace` leaves out.
+            Self::Space => matches!(c, '\t' | '\n' | '\x0B' | '\x0C' | '\r' | ' '),
+            Self::Upper => c.is_ascii_uppercase(),
+            Self::Xdigit => c.is_ascii_hexdigit(),
+        }
+    }
+}
+
+impl Wildcard {
+    /// Whether this piece, not `*`, takes the character `c`.
+    fn takes(&self, c: char) -> bool {
+        match self {
+            Self::Char(own) => *own == c,
+            Self::Any => true,
+            Self::Many => false,
+            Self::Bracket { negated, members } => {
+                let among = members.iter().any(|member| match *member {
+                    BracketMember::Char(own) => own == c,
+                    BracketMember::Range(from, to) => (from..=to).contains(&c),
+                    BracketMember::Class(class) => class.has(c),
+                });
+                among != *negated
+            }
+        }
+    }
+}
+
+/// What follows a `[` in a pattern, read as the regular expression is made from it
+/// (`cash_parser::pattern`).
+enum BracketRead {
+    /// No `]` ends it, so the `[` is a character.
+    Unended,
+    /// It holds a letter or digit after a `\`, which the regular expression reads as a
+    /// class (`\d`, `\w`) where a shell reads the character.
+    LeftToRegex,
+    /// The bracket.
+    Bracket(Wildcard),
+}
+
+/// Reads the bracket whose `[` was just taken from `chars`, and takes it from `chars` when
+/// it is one. The rules are the parser's, which makes the regular expression: a `]` first
+/// is a member, a range is by code point and one the wrong way round is none, a known
+/// `[:name:]` is a class, and a `\` makes the character after it a member.
+fn read_bracket(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> BracketRead {
+    /// A member of one character, and with its `\`, what follows it. `Err` for what the
+    /// regular expression reads otherwise: a `\` before anything but ASCII punctuation
+    /// (`\d` is its class of digits, `\<` an error), and `&` and `~`, of which two make
+    /// its intersection and symmetric difference of classes.
+    fn single(
+        it: &mut std::iter::Peekable<std::str::Chars<'_>>,
+        first: bool,
+    ) -> Option<Result<char, ()>> {
+        match it.peek().copied()? {
+            '\\' => {
+                let mut ahead = it.clone();
+                ahead.next();
+                let c = ahead.next()?;
+                *it = ahead;
+                Some(if c.is_ascii_punctuation() && !matches!(c, '<' | '>') {
+                    Ok(c)
+                } else {
+                    Err(())
+                })
+            }
+            ']' if !first => None,
+            '&' | '~' => Some(Err(())),
+            c => {
+                it.next();
+                Some(Ok(c))
+            }
+        }
+    }
+
+    let mut it = chars.clone();
+    let negated = it.next_if(|c| matches!(c, '!' | '^')).is_some();
+    let mut members = Vec::new();
+    // Whether a `]` is a member here rather than the end: first, after any `!` or `^`.
+    let mut first = true;
+    loop {
+        if !first && it.next_if_eq(&']').is_some() {
+            break;
+        }
+        if it.peek().is_none() {
+            return BracketRead::Unended;
+        }
+        // `[:name:]`, before a range or a character, as the parser tries them.
+        if it.peek() == Some(&'[') {
+            let rest: String = it.clone().collect();
+            if let Some(name) = rest
+                .strip_prefix("[:")
+                .and_then(|rest| rest.split_once(":]"))
+                .map(|(name, _)| name)
+                && let Some(class) = AsciiClass::named(name)
+            {
+                for _ in 0..name.len() + 4 {
+                    it.next();
+                }
+                members.push(BracketMember::Class(class));
+                first = false;
+                continue;
+            }
+        }
+        let from = match single(&mut it, first) {
+            Some(Ok(c)) => c,
+            Some(Err(())) => return BracketRead::LeftToRegex,
+            None => return BracketRead::Unended,
+        };
+        first = false;
+        // `from-to`, when a member follows the `-`; otherwise the `-` is a member itself.
+        let mut ahead = it.clone();
+        if ahead.next_if_eq(&'-').is_some() {
+            match single(&mut ahead, false) {
+                Some(Ok(to)) => {
+                    it = ahead;
+                    if from <= to {
+                        members.push(BracketMember::Range(from, to));
+                    }
+                    continue;
+                }
+                Some(Err(())) => return BracketRead::LeftToRegex,
+                None => {}
+            }
+        }
+        members.push(BracketMember::Char(from));
+    }
+    *chars = it;
+    BracketRead::Bracket(Wildcard::Bracket { negated, members })
 }
 
 /// Whether the whole of `text` matches `pattern`: each `*` takes as few characters as
@@ -48,12 +247,11 @@ fn wildcards_match(pattern: &[Wildcard], text: &str) -> bool {
     let mut last_star: Option<(usize, usize)> = None;
     while t < text.len() {
         match pattern.get(p) {
-            Some(Wildcard::Any) => (p, t) = (p + 1, t + 1),
-            Some(Wildcard::Char(c)) if *c == text[t] => (p, t) = (p + 1, t + 1),
             Some(Wildcard::Many) => {
                 last_star = Some((p, t));
                 p += 1;
             }
+            Some(piece) if piece.takes(text[t]) => (p, t) = (p + 1, t + 1),
             _ => match last_star {
                 Some((star, taken)) => {
                     last_star = Some((star, taken + 1));
@@ -748,12 +946,13 @@ impl Pattern {
         })
     }
 
-    /// The pattern as characters, `?` and `*`, when it holds nothing else and they match
-    /// as its regular expression would: across lines, with case as written. Read as
-    /// the regular expression is made from `glob_text`, a bracket, an extended pattern
-    /// and a last lone `\` left to it. A `case` of a few hundred options, as option
-    /// parsers have, compiled a regular expression for each pattern each time: the
-    /// cache keeps 64, and a cycle through more misses every one.
+    /// The pattern as characters, `?`, `*` and brackets, when it holds nothing else and
+    /// they match as its regular expression would: across lines, with case as written.
+    /// Read as the regular expression is made from `glob_text`, an extended pattern, a
+    /// last lone `\` and a bracket the regular expression reads otherwise ([`read_bracket`])
+    /// left to it. A `case` of a few hundred options, as option parsers have, compiled a
+    /// regular expression for each pattern each time: the cache keeps 64, and a cycle
+    /// through more misses every one.
     fn wildcards(&self) -> Option<Vec<Wildcard>> {
         if self.case_insensitive || !self.multiline {
             return None;
@@ -768,7 +967,11 @@ impl Pattern {
             wildcards.push(match c {
                 _ if extended => return None,
                 '\\' => Wildcard::Char(chars.next()?),
-                '[' => return None,
+                '[' => match read_bracket(&mut chars) {
+                    BracketRead::Unended => Wildcard::Char('['),
+                    BracketRead::LeftToRegex => return None,
+                    BracketRead::Bracket(bracket) => bracket,
+                },
                 '?' => Wildcard::Any,
                 '*' => Wildcard::Many,
                 c => Wildcard::Char(c),
@@ -1564,11 +1767,101 @@ mod tests {
         Ok(())
     }
 
-    /// Brackets, extended patterns, a last lone `\`, nocasematch and patterns that stop
-    /// at line ends are left to the regular expression.
+    /// Brackets for the brackets' test: members, ranges both ways, classes, a `]` first,
+    /// `-` at either end, escapes, and some with no end.
+    const BRACKET_PATTERNS: [&str; 52] = [
+        "[ab]",
+        "[!ab]",
+        "[^ab]",
+        "[a-c]",
+        "[c-a]",
+        "[!c-a]",
+        "[c-ax]",
+        "[]a]",
+        "[!]a]",
+        "[^]]",
+        "[]-a]",
+        "[a-]",
+        "[-a]",
+        "[--z]",
+        "[[:digit:]]",
+        "[[:alpha:][:digit:]]",
+        "[![:space:]]",
+        "[[:foo:]]",
+        "[a-[:digit:]]",
+        "[[:digit:]-z]",
+        "[[]",
+        "[[a]",
+        "[]",
+        "[!]",
+        "[a",
+        "x[",
+        "[\\]]",
+        "[\\-a]",
+        "[\\\\]",
+        "[\\!a]",
+        "[a-\\]]",
+        "*[0-9]",
+        "-[abc]*",
+        "[Yy]*",
+        "--opt[0-9][0-9]",
+        "[*?]",
+        "[日-本]",
+        "[[:upper:]][[:lower:]]*",
+        "[[:punct:]]",
+        "[[:xdigit:]]",
+        "[[:cntrl:]]",
+        "[[:blank:]]",
+        "[[:graph:]]",
+        "[[:print:]]",
+        "[[:alnum:]]",
+        "[[:space:]]",
+        "[[:lower:]]",
+        "a[]b]c",
+        "[a]x",
+        "[!a-z]*[0-9]",
+        "[:alpha:]",
+        "[[:alpha:]",
+    ];
+
+    /// Texts for the brackets' test, besides the wildcards'.
+    const BRACKET_TEXTS: [&str; 36] = [
+        "]", "-", "[", "!", "^", "0", "5", "9", "Z", "z", " ", "\t", "\x0B", "\x0C", "\x7F",
+        "\x01", "~", "日", "本", "x", "y", "Y", "yes", "--opt12", "-ab", "a]c", "Ab", "aB", ":",
+        "é", "x[", "[a", "a1", "q9", "ab0", "A",
+    ];
+
+    /// Every bracket the parser makes a regular expression of, and the regular expression
+    /// reads as a shell does, matches as that regular expression does.
+    #[test]
+    fn brackets_match_as_the_regular_expression_does() -> Result<()> {
+        for text in BRACKET_PATTERNS {
+            let pattern = Pattern::from(text);
+            let wildcards = pattern
+                .wildcards()
+                .unwrap_or_else(|| panic!("{text:?} is matched without a regular expression"));
+            let regex = pattern.to_regex(true, true)?;
+            for subject in WILDCARD_TEXTS.iter().chain(&BRACKET_TEXTS) {
+                assert_eq!(
+                    wildcards_match(&wildcards, subject),
+                    regex.is_match(subject)?,
+                    "{text:?} against {subject:?}"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Extended patterns, a last lone `\`, a bracket the regular expression reads as no
+    /// shell does, nocasematch and patterns that stop at line ends are left to the
+    /// regular expression.
     #[test]
     fn other_patterns_are_left_to_the_regular_expression() {
-        assert!(Pattern::from("-[ab]").wildcards().is_none());
+        assert!(Pattern::from("-[ab]").wildcards().is_some());
+        // `\d` is the regular expression's class of digits, `&&` its intersection.
+        assert!(Pattern::from("[\\d]").wildcards().is_none());
+        assert!(Pattern::from("[a&&b]").wildcards().is_none());
+        assert!(Pattern::from("[a-\\z]").wildcards().is_none());
         let extended = Pattern::from("+(a)").set_extended_globbing(true);
         assert!(extended.wildcards().is_none());
         assert!(Pattern::from("+(a)").wildcards().is_some());

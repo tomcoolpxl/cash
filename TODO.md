@@ -132,13 +132,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   started after, "No such file" for files they had just written); the run after passed.
   No test or corpus case was found removing temporary directories other than its own,
   and `mktemp -d` gave 40 cash processes started at once distinct names. Watch for it.
-- **A `case` of more than 64 patterns with brackets or extended globs** compiles each
-  pattern again on every pass: compiled patterns are kept in an LRU of 64, which a
-  cycle through more misses every time. Patterns of characters, `?` and `*` match
-  without a regular expression since 2026-10-18, which covers option parsers; brackets
-  (`-[abc]`, `[Yy]*`) could be matched directly too, as Bash's strmatch does (the
-  user's pick after 1.34.0). Small to medium; the bracket rules must stay exactly the
-  regular expression's (ranges by code point, ASCII classes, a lone `[` literal).
 
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,

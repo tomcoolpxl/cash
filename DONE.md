@@ -2561,3 +2561,12 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   was Unix's, for descriptors a parent left open in its child, and listed in `--help`;
   on Windows nothing was behind it. A child cash takes what its parent passes without
   it (D26). The stubs that answered for it went with it.
+- **Brackets in a pattern matched without a regular expression** (2026-10-19, the phase
+  after 1.34.0, item 2): a `case` of more than 64 patterns with brackets compiled each
+  one again on every pass, as the compiled ones are kept 64 at a time; 300 passes over
+  200 patterns such as `--opt5[xy]` took 15.7 s on a debug build, 0.48 s now, as the
+  same with `?`. Brackets are read by the parser's rules, the regular expression's: a
+  `]` first is a member, ranges by code point (one the wrong way round is none), the
+  ASCII classes, a lone `[` a character. A bracket the regular expression reads as no
+  shell does (`[\d]`, its digits; `[a&&b]`, an intersection) is still left to it. A
+  test compares the two on 52 brackets and 72 texts.
