@@ -15,7 +15,10 @@ and in the fewest places it can.
 - `pwd` prints `C:/src`, not `/c/src`: printed paths become arguments to Windows
   programs. `$PATH` alone reads `/c/...`, because its entries are separated
   by colons; an entry a script adds from `$PWD` or `$HOME` keeps `C:/`, which a
-  split on `:` cuts in two (`help paths`).
+  split on `:` cuts in two (`help paths`). The same colon ends a `sed` address
+  delimited by `:` that holds `$PWD`, and a loop that climbs the tree with
+  `dir=${dir%/*}` until `dir` is empty never ends, as `C:` has no `/` left to cut:
+  test for `*/*` instead.
 - Globbing and `find -name` ignore case, as the file system does; `shopt -u nocaseglob`
   turns that off.
 - Reading a variable from Windows, or one cash sets as it starts, ignores case when no

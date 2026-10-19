@@ -1,0 +1,18 @@
+init: 0
+develop
+feature/
+develop
+main
+1
+* login
+feature finish: 0
+release start: 0
+release finish: 0
+1.0
+develop
+main
+Merge branch 'release/1.0'
+init
+login
+1.12.3 (AVH Edition)
+unknown: 1

@@ -1,0 +1,24 @@
+rbenv 1.3.2
+root
+2.7.8
+3.3.1
+2.7.8
+.ruby-version
+global: 0
+3.3.1
+3.3.1
+local: 0
+3.3.1
+3.3.1 (set by project/sub/.ruby-version)
+2.7.8 (set by .ruby-version)
+.ruby-version
+project/sub/.ruby-version
+2.7.8 (set by RBENV_VERSION environment variable)
+rbenv: version `9.9.9' not installed
+unknown version: 1
+rbenv: no such command `nosuchcommand'
+unknown command: 1
+unset: 0
+0
+2.7.8
+22

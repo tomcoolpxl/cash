@@ -210,14 +210,20 @@ fn read(path: &Path) -> String {
         .replace("\r\n", "\n")
 }
 
-/// The fixtures every case runs beside, as `run.ps1` copies them.
+/// The fixtures every case runs beside, as `run.ps1` copies them: directories too, for a
+/// program of many files (bats-core, rbenv, git-flow).
 fn copy_fixtures(from: &Path, to: &Path) {
     for entry in std::fs::read_dir(from)
         .expect("read the fixtures")
         .flatten()
     {
-        if entry.path().is_file() {
-            std::fs::copy(entry.path(), to.join(entry.file_name())).expect("copy a fixture");
+        let path = entry.path();
+        let target = to.join(entry.file_name());
+        if path.is_dir() {
+            std::fs::create_dir_all(&target).expect("make a fixture directory");
+            copy_fixtures(&path, &target);
+        } else if path.is_file() {
+            std::fs::copy(&path, &target).expect("copy a fixture");
         }
     }
 }

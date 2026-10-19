@@ -1,0 +1,31 @@
+name=("cash")
+version=("\"1.32.0\"")
+build_jobs=("8")
+build_profile=("release")
+build_flags__=("-locked")
+build_flags__=("-offline")
+authors__name+=("Ann")
+authors__role+=("dev")
+authors__name+=("Bob")
+authors__role+=("ops")
+with_dash_key=("yes")
+---
+conf_authors__name+=("Ann")
+conf_authors__name+=("Bob")
+conf_authors__role+=("dev")
+conf_authors__role+=("ops")
+conf_build_flags__=("-locked")
+conf_build_flags__=("-offline")
+conf_build_jobs=("8")
+conf_build_profile=("release")
+conf_name=("cash")
+conf_version=("\"1.32.0\"")
+conf_with_dash_key=("yes")
+---
+cash "1.32.0", jobs 8, 0 flags: 
+authors: Ann Bob as dev ops
+with_dash_key=yes
+after unset: [unset] [unset]
+cli_name=("cash")
+cli_version=("\"1.32.0\"")
+cli_build_jobs=("8")

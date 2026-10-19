@@ -1,0 +1,18 @@
+made: 0
+1
+0
+Names:
+- ann ( ann )
+  * item 1
+- bob ( bob )
+  * item 2
+Count: 002
+Shout: ANN
+Braces: 2 names
+Names:
+Count: 000
+Shout: NONE
+Braces: 0 names
+Piped: in
+v0.9.1
+missing: 1
