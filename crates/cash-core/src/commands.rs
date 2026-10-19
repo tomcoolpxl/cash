@@ -1179,6 +1179,12 @@ pub async fn run_for_builtin_exporting<SE: extensions::ShellExtensions>(
         value.export();
         shell.env_mut().set_global(*variable, value)?;
     }
+    // A descriptor above 2 that the builtin's own command redirected (`time CMD 3>&2`,
+    // `nohup CMD 3>x`) is the builtin's, held around the command it runs as `{ ...; }
+    // 3>x` holds one (D26): shellspec's `$SHELLSPEC_TIME ... 3>&2` failed to start its
+    // command with "fd redirections".
+    let mut params = params;
+    params.command_redirected_fds.clear();
     let mut command = SimpleCommand::new(
         ShellForCommand::ParentShell(&mut shell),
         params,

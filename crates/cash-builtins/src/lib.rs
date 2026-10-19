@@ -167,6 +167,7 @@ mod sync;
 mod stat;
 
 mod nohup;
+mod time_command;
 
 mod install;
 

@@ -774,6 +774,27 @@ fn declare_integer_attribute() {
 }
 
 #[test]
+fn time_reached_as_a_command_runs_with_gnu_times_options() {
+    // A keyword is one only when written as such: `time` through a variable, `command`
+    // or `xargs` is a command, as `/usr/bin/time` is on Linux. cash had the keyword alone,
+    // and shellspec's `$SHELLSPEC_TIME cmd` (`time -p`) failed with 127.
+    let out = cash(
+        r#"t=time; $t -p true 2>&1 | sed 's/[0-9]/N/g'
+        command time -f '%x [%C]' sh -c 'exit 3' 2>&1; echo "rc $?"
+        echo x | xargs time -q -f done echo y 2>&1
+        command time nosuch_q 2>/dev/null; echo "rc $?"
+        type -t time"#,
+    );
+    assert_eq!(
+        out.stdout,
+        "real N.NN\nuser N.NN\nsys N.NN\nCommand exited with non-zero status 3\n\
+         3 [sh -c exit 3]\nrc 3\ny x\ndone\nrc 127\nkeyword",
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn a_quoted_parenthesised_value_for_an_array_is_its_elements() {
     // Bash takes `declare -a a="(...)"` as the array of the words inside, expanded as in
     // `a=(...)`; cash made the whole text one element, and bash-tpl's `.INCLUDE FILE`

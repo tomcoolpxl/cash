@@ -25,23 +25,38 @@ impl StopwatchTime {
     }
 }
 
-pub(crate) struct Stopwatch {
+/// A stopwatch started by [`start_timing`], for `time` the keyword and the command.
+pub struct Stopwatch {
     start: StopwatchTime,
 }
 
 impl Stopwatch {
+    /// What has passed since the stopwatch started.
+    ///
+    /// # Errors
+    ///
+    /// When the system clock went back, or the process times cannot be read.
     pub fn stop(&self) -> Result<StopwatchTiming, error::Error> {
         let end = get_current_stopwatch_time()?;
         end.minus(&self.start)
     }
 }
-pub(crate) struct StopwatchTiming {
+/// What a [`Stopwatch`] measured.
+pub struct StopwatchTiming {
+    /// The wall clock.
     pub wall: std::time::Duration,
+    /// User time, of this process and the programs it waited for.
     pub user: std::time::Duration,
+    /// System time, of this process and the programs it waited for.
     pub system: std::time::Duration,
 }
 
-pub(crate) fn start_timing() -> Result<Stopwatch, error::Error> {
+/// Starts a stopwatch.
+///
+/// # Errors
+///
+/// When the process times cannot be read.
+pub fn start_timing() -> Result<Stopwatch, error::Error> {
     Ok(Stopwatch {
         start: get_current_stopwatch_time()?,
     })
