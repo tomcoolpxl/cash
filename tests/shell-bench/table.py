@@ -1,5 +1,7 @@
-"""One table from hyperfine's JSON exports: each benchmark's median per shell, and the cost
-of one iteration once a shell's start (the `startup` benchmark) is taken off."""
+"""One table from the shell benchmarks run.sh keeps in results/: each workload's median per
+shell, and the cost of one iteration once a shell's start (the `startup` workload) is taken
+off. With no arguments, the latest run of each system (windows, linux); with arguments, the
+run directories given. Each run's machine follows the table, from its machine.txt."""
 import json
 import pathlib
 import sys
@@ -17,36 +19,79 @@ ITERATIONS = {
     "ls": 50,
 }
 
-means = {}
-for directory in sys.argv[1:]:
-    for name in ITERATIONS:
-        path = pathlib.Path(directory) / f"{name}.json"
-        if not path.exists():
-            continue
-        for result in json.loads(path.read_text(encoding="utf-8"))["results"]:
-            wall = result["summary"]["time_wall_clock"]["median"]
-            means.setdefault(name, {})[result["name"]] = wall
-
-shells = []
-for row in means.values():
-    for shell in row:
-        if shell not in shells:
-            shells.append(shell)
+RESULTS = pathlib.Path(__file__).resolve().parent / "results"
 
 
-def cell(name, shell):
-    mean = means.get(name, {}).get(shell)
-    if mean is None:
+def run_order(run):
+    """A run directory's place in time: DATE-SYSTEM, or DATE-HHMM-SYSTEM for a later run
+    of the same day."""
+    parts = run.name.split("-")
+    return (parts[:3], parts[3] if len(parts) == 5 else "0000")
+
+
+def latest_runs():
+    latest = {}
+    if RESULTS.is_dir():
+        for run in sorted((p for p in RESULTS.iterdir() if p.is_dir()), key=run_order):
+            latest[run.name.rsplit("-", 1)[-1]] = run
+    # Windows' four shells first, then Linux's bash.
+    return sorted(latest.values(), key=lambda run: run.name.endswith("-linux"))
+
+
+def median(result):
+    """The median wall-clock time of one command, from hyperfine 2's export or 1's."""
+    if "summary" in result:
+        return result["summary"]["time_wall_clock"]["median"]
+    return result["median"]
+
+
+runs = [pathlib.Path(arg) for arg in sys.argv[1:]] or latest_runs()
+if not runs:
+    sys.exit(f"no results in {RESULTS}: run run.sh first")
+
+found = []  # (run, workload, shell, seconds)
+for run in runs:
+    for path in sorted(run.rglob("*.json")):
+        if path.stem in ITERATIONS:
+            for result in json.loads(path.read_text(encoding="utf-8"))["results"]:
+                shell = result.get("name") or result["command"]
+                found.append((run, path.stem, shell, median(result)))
+
+# A shell is its own column; one that two runs give is told apart by the run.
+owners = {}
+for run, _, shell, _ in found:
+    owners.setdefault(shell, set()).add(run)
+medians = {}
+columns = []
+for run, workload, shell, seconds in found:
+    column = shell if len(owners[shell]) == 1 else f"{shell} ({run.name})"
+    medians.setdefault(workload, {})[column] = seconds
+    if column not in columns:
+        columns.append(column)
+
+
+def cell(workload, column):
+    seconds = medians.get(workload, {}).get(column)
+    if seconds is None:
         return "-"
-    if name == "startup":
-        return f"{mean * 1000:.1f} ms"
-    start = means.get("startup", {}).get(shell, 0.0)
-    each = (mean - start) / ITERATIONS[name] * 1e6
-    return f"{mean * 1000:.0f} ms ({each:.1f} us each)" if each < 1000 else f"{mean * 1000:.0f} ms ({each / 1000:.2f} ms each)"
+    if workload == "startup":
+        return f"{seconds * 1000:.1f} ms"
+    start = medians.get("startup", {}).get(column, 0.0)
+    each = (seconds - start) / ITERATIONS[workload] * 1e6
+    if each < 1000:
+        return f"{seconds * 1000:.0f} ms ({each:.1f} us each)"
+    return f"{seconds * 1000:.0f} ms ({each / 1000:.2f} ms each)"
 
 
-print("| benchmark | " + " | ".join(shells) + " |")
-print("|---|" + "---|" * len(shells))
-for name in ITERATIONS:
-    if name in means:
-        print(f"| {name} | " + " | ".join(cell(name, s) for s in shells) + " |")
+print("| benchmark | " + " | ".join(columns) + " |")
+print("|---|" + "---|" * len(columns))
+for workload in ITERATIONS:
+    if workload in medians:
+        print(f"| {workload} | " + " | ".join(cell(workload, c) for c in columns) + " |")
+
+for run in runs:
+    machine = run / "machine.txt"
+    print(f"\n{run.name}:")
+    if machine.exists():
+        for line in machine.read_text(encoding="utf-8").splitlines():
+            print(f"- {line}")

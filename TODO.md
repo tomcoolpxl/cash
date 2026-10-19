@@ -130,16 +130,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   script shows the need. Small to medium; the bracket rules must stay exactly the
   regular expression's (ranges by code point, ASCII classes, a lone `[` literal).
 
-- **A benchmark tool in the repo for all five shells** (the user, 2026-10-18): cash, Git
-  Bash, PowerShell 7 and WSL2's bash on Windows, and bash on native Linux, the same
-  machine rebooted, so the results make one comparison. `tests/shell-bench` has most of
-  it: `bench.sh` runs the workloads under hyperfine and already runs as plain bash inside
-  WSL, so it runs on Linux as it is. What it lacks: an entry point for Linux (`run.sh`
-  assumes Git Bash and `cygpath`), each run's results written into the repo
-  (`tests/shell-bench/results/<date>-<os>/`, hyperfine's JSON and the machine: CPU,
-  OS, shell versions), and `table.py` reading every results directory into one table. Not
-  too complex: bash and hyperfine on both systems, Python only for the table. Small.
-
 - **A benchmark of 1.10.0's compressors** (parked by the user, 2026-10-17, decisions.md;
   the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against

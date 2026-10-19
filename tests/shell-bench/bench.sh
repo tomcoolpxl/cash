@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The shell benchmarks: the same workloads in each shell given, timed by hyperfine
-# (`scoop install hyperfine`, `pacman -S hyperfine`), one JSON file per workload in OUTDIR.
-# run.sh runs it for cash, Git Bash, PowerShell 7 and WSL's bash, and prints the table.
+# (`scoop install hyperfine`, `apt install hyperfine`), one JSON file per workload in
+# OUTDIR. run.sh runs it for cash, Git Bash, PowerShell 7 and WSL's bash on Windows, and
+# for bash on Linux, keeps the results and prints the table.
 #
 #   bash tests/shell-bench/bench.sh OUTDIR NAME=SHELL...
 #
@@ -10,7 +11,8 @@
 # crates/cash-shell/benches (start, loop, echo, arithmetic, expansion, function call),
 # what costs a process (a command substitution, a program: hostname.exe on Windows,
 # /bin/true on Linux; a pipe into cat), and `ls -la` of a directory of 200 files.
-# PowerShell has no process for `$(...)`, and pipes into Out-Null.
+# PowerShell has no process for `$(...)`, and pipes into Out-Null. BENCH_WARMUP and
+# BENCH_MIN_RUNS give hyperfine other counts than 2 and 10, for a quick try.
 set -u
 out=$1
 shift
@@ -39,8 +41,8 @@ bench() {
                 args+=(-n "${shell%%=*}" "\"$command\" -c '$script'") ;;
         esac
     done
-    if hyperfine -N --warmup 2 --min-runs 10 --export-json "$out/$name.json" "${args[@]}" \
-        > "$out/$name.txt" 2>&1; then
+    if hyperfine -N --warmup "${BENCH_WARMUP:-2}" --min-runs "${BENCH_MIN_RUNS:-10}" \
+        --export-json "$out/$name.json" "${args[@]}" > "$out/$name.txt" 2>&1; then
         echo "done: $name"
     else
         echo "FAILED: $name (see $out/$name.txt)"

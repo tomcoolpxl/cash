@@ -2489,3 +2489,12 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   3): its status paragraph counted 209 cases and four differences, two of them GNU sed's
   `\b` and space-ended labels, which work now. It gives the 305 cases, the real scripts
   among them, the golden test, and the six cases that differ, each with its reason.
+- **The benchmark tool for all five shells** (2026-10-19, the phase after 1.32.0, item 4):
+  `tests/shell-bench/run.sh` runs on Windows from Git Bash (cash, Git Bash, PowerShell 7,
+  then WSL's bash inside WSL) and on Linux (its bash), and keeps each run in
+  `tests/shell-bench/results/DATE-windows` or `DATE-linux`: hyperfine's reports and
+  `machine.txt`, the system, CPU, threads, memory and each shell's version. `table.py`
+  shows every system's latest run in one table, the machines under it, and reads
+  hyperfine 1's exports as well as 2's. `BENCH_WARMUP` and `BENCH_MIN_RUNS` shorten a
+  try. Both sides were tried, Linux inside WSL; the comparison itself is the user's to
+  run, on the machine rebooted and idle.
