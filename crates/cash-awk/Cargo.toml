@@ -12,6 +12,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+cash-win32 = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 pest = "2.9.2"
 pest_derive = "2.9.2"

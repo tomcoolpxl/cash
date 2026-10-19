@@ -601,12 +601,14 @@ async fn instantiate_shell_from_args(
         cash_builtins::BuiltinSet::BashMode
     };
 
-    // Identify the file descriptors to inherit.
-    let fds = args
+    // Identify the file descriptors to inherit: those above 2 the cash that started this
+    // one passed to it (D26).
+    let mut fds: std::collections::HashMap<_, _> = args
         .inherited_fds
         .iter()
         .filter_map(|&fd| cash_core::sys::fd::try_get_file_for_open_fd(fd).map(|file| (fd, file)))
         .collect();
+    fds.extend(cash_core::openfiles::OpenFile::received_from_parent());
 
     // cash (D13): an interactive shell takes Ctrl-C back from a parent that ignored it, so
     // that the programs it runs can be interrupted.

@@ -609,6 +609,7 @@ dependencies = [
 name = "cash-awk"
 version = "1.33.0"
 dependencies = [
+ "cash-win32",
  "clap",
  "lexical",
  "pest",
@@ -880,6 +881,7 @@ dependencies = [
 name = "cash-reedline"
 version = "1.33.0"
 dependencies = [
+ "cash-win32",
  "chrono",
  "crossterm",
  "fd-lock",
@@ -904,6 +906,7 @@ name = "cash-sed"
 version = "1.33.0"
 dependencies = [
  "assert_fs",
+ "cash-win32",
  "clap",
  "ctor",
  "fancy-regex",

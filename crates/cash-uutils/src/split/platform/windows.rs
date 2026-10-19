@@ -42,12 +42,13 @@ impl FilterWriter {
     /// Starts the shell running `command` with `$FILE` set to `filepath`.
     fn new(command: &str, filepath: &OsStr) -> Result<Self> {
         let cash = std::env::current_exe().unwrap_or_else(|_| "cash".into());
-        let shell_process = Command::new(cash)
-            .env("CASH_ARGV0", "cash")
-            .env("FILE", filepath)
-            .args(["--norc", "--noprofile", "-c", command])
-            .stdin(Stdio::piped())
-            .spawn()?;
+        let shell_process = cash_win32::spawn::spawn(
+            Command::new(cash)
+                .env("CASH_ARGV0", "cash")
+                .env("FILE", filepath)
+                .args(["--norc", "--noprofile", "-c", command])
+                .stdin(Stdio::piped()),
+        )?;
         Ok(Self { shell_process })
     }
 

@@ -13,7 +13,13 @@ pub(crate) fn spawn(
     kill_on_drop: bool,
     params: &crate::interp::ExecutionParameters,
 ) -> std::io::Result<Child> {
-    let mut command = {
+    // Not once cash is letting go of its programs to exit: one started then would outlive
+    // it. Held until the program is in its job.
+    let Some(_starting) = cash_win32::session::may_start() else {
+        return Err(std::io::Error::other("cash is exiting"));
+    };
+
+    let (mut command, creating) = {
         use std::os::windows::process::CommandExt;
         const CREATE_SUSPENDED: u32 = 0x0000_0004;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
@@ -27,17 +33,15 @@ pub(crate) fn spawn(
             .priority_class
             .map_or(0, cash_win32::priority::PriorityClass::raw);
         cmd.creation_flags(CREATE_SUSPENDED | group | class);
+        // The lock every start takes, with the descriptors a child cash is passed (D26).
+        let creating = cash_win32::spawn::prepare(&mut cmd)?;
         let mut tokio_cmd = tokio::process::Command::from(cmd);
         tokio_cmd.kill_on_drop(kill_on_drop);
-        tokio_cmd
+        (tokio_cmd, creating)
     };
-
-    // Not once cash is letting go of its programs to exit: one started then would outlive
-    // it. Held until the program is in its job.
-    let Some(_starting) = cash_win32::session::may_start() else {
-        return Err(std::io::Error::other("cash is exiting"));
-    };
-    let mut child = command.spawn()?;
+    let child = command.spawn();
+    drop(creating);
+    let mut child = child?;
     // A program on the console may leave it as the prompt cannot use it; the prompt puts
     // it back (`repair_before_prompt`).
     cash_win32::console::note_program_started();

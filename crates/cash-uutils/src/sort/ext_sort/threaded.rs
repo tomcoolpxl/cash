@@ -54,12 +54,12 @@ pub fn ext_sort(
     let mut effective_settings = settings.clone();
     if let Some(ref prog) = settings.compress_prog {
         // Test the compression program by trying to spawn it
-        match std::process::Command::new(prog)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-        {
+        match cash_win32::spawn::spawn(
+            std::process::Command::new(prog)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null()),
+        ) {
             Ok(mut child) => {
                 // Kill the test process immediately
                 let _ = child.kill();

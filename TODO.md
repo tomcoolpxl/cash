@@ -29,10 +29,10 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 The user's picks after 1.33.0 (decisions.md, "The phase after 1.33.0"):
 
-1. 1.33.0 published through Scoop: the tag is the user's to push; then the release
-   workflow, and the bucket's Excavator run;
-2. another corpus round: bashunit and git-subrepo done (2026-10-19, DONE.md);
-   bash-commons left out (it writes through `sudo`); shellspec waits on the item below.
+1. 1.33.0 published through Scoop: tagged, released, and the bucket's Excavator run
+   (2026-10-19);
+2. another corpus round: bashunit, git-subrepo and shellspec done (2026-10-19,
+   DONE.md); bash-commons left out (it writes through `sudo`).
 
 ## The phase before (2026-10-19, done)
 
@@ -116,11 +116,17 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
-- **Descriptors above 2 do not reach a child cash** (2026-10-19, found running shellspec):
-  shellspec opens descriptors 3 to 5 and starts `sh SCRIPT 3>&2`, whose script writes to
-  `>&3`; Windows hands a child no descriptor above 2 (D26), so the child says "3: Bad
-  file descriptor". A child cash could be given them: the handles inherited, and their
-  numbers in a variable the child reads as it starts. Large; a design for the user first.
+- **Two oracle tests lost their directory part way, once** (2026-10-19, a full `it`
+  run): `column_cases.sh` and `bzip2_cases.sh`, running at the same moment, found the
+  directory `mktemp -d` had made for them gone ("Not a directory" for each program they
+  started after, "No such file" for files they had just written); the run after passed.
+  No test or corpus case was found removing temporary directories other than its own,
+  and `mktemp -d` gave 40 cash processes started at once distinct names. Watch for it.
+- **`--inherit-fd FD` does nothing** (2026-10-19, found passing descriptors to a child
+  cash): the option is Unix's, for descriptors a parent left open in the child; on
+  Windows nothing is behind it (`sys::fd::try_get_file_for_open_fd` gives none), and a
+  child cash now takes what its parent passes without it. It is listed in `--help`
+  among the standard options. Remove it, or say what it does. Small.
 - **A `case` of more than 64 patterns with brackets or extended globs** compiles each
   pattern again on every pass: compiled patterns are kept in an LRU of 64, which a
   cycle through more misses every time. Patterns of characters, `?` and `*` match

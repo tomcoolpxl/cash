@@ -598,12 +598,15 @@ fn own_help(name: &str) -> Option<String> {
     ["--help", "-h"].iter().find_map(|flag| {
         // The help text depends on nothing of the shell's; the process's environment is
         // as good as any.
-        let output = std::process::Command::new(exe)
-            .args([DISPATCH_FLAG, name, flag])
-            .stdin(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .output()
-            .ok()?;
+        let output = cash_win32::spawn::spawn(
+            std::process::Command::new(exe)
+                .args([DISPATCH_FLAG, name, flag])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null()),
+        )
+        .and_then(std::process::Child::wait_with_output)
+        .ok()?;
         let text = String::from_utf8_lossy(&output.stdout).into_owned();
         (output.status.success() && !text.trim().is_empty()).then_some(text)
     })

@@ -2545,3 +2545,15 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `env time -p cmd` and `env echo x` found nothing, or Git's echo. A bare name that is a
   cash builtin now runs in cash, as the shell runs it: a bundled tool at once, another
   builtin in a cash started for it.
+- **Descriptors above 2 reach a child cash; shellspec** (2026-10-19, found running
+  shellspec; the user's pick of the design): shellspec starts `sh SCRIPT 3>&2` and the
+  script writes its report to 3, which the child cash did not have ("3: Bad file
+  descriptor"). A cash started by cash is now given every descriptor above 2 the shell
+  has open, as a child of Bash inherits them: copies of the handles made inheritable for
+  that one start and named in a variable the child takes first thing, then closed. Every
+  program cash starts goes through one place for it (`cash_win32::spawn`), the shell's
+  commands and the programs of awk, sed, sort, split, completion and the editor alike,
+  under one lock, so that no program started at the same moment inherits the copies.
+  bashunit's case unsets `GITHUB_ACTIONS`, under which it writes annotations for CI.
+  shellspec 0.28.1 joined the corpus: a spec translated and run, a failing example's
+  report, Skip, the TAP formatter and a focused example, as in Bash.

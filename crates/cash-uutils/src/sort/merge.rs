@@ -592,12 +592,12 @@ impl WriteableTmpFile for WriteableCompressedTmpFile {
         let compress_prog = compress_prog.expect("a compress program");
         let mut command = Command::new(compress_prog);
         command.stdin(Stdio::piped()).stdout(file);
-        let mut child = command
-            .spawn()
-            .map_err(|err| SortError::CompressProgExecutionFailed {
+        let mut child = cash_win32::spawn::spawn(&mut command).map_err(|err| {
+            SortError::CompressProgExecutionFailed {
                 prog: compress_prog.to_owned(),
                 error: err,
-            })?;
+            }
+        })?;
         #[expect(
             clippy::expect_used,
             reason = "the child was started with its standard input piped"
@@ -633,12 +633,12 @@ impl ClosedTmpFile for ClosedCompressedTmpFile {
         let file =
             File::open(&self.path).map_err(|error| SortError::OpenTmpFileFailed { error })?;
         command.stdin(file).stdout(Stdio::piped()).arg("-d");
-        let mut child = command
-            .spawn()
-            .map_err(|err| SortError::CompressProgExecutionFailed {
+        let mut child = cash_win32::spawn::spawn(&mut command).map_err(|err| {
+            SortError::CompressProgExecutionFailed {
                 prog: self.compress_prog.clone(),
                 error: err,
-            })?;
+            }
+        })?;
         #[expect(
             clippy::expect_used,
             reason = "the child was started with its standard output piped"

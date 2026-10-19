@@ -105,7 +105,7 @@ impl builtins::Command for ExecCommand {
         //
         // Note the no-argument form above (`exec 3>&1`, `exec > log`) needs none of
         // this: it only replaces the shell's own open files, exactly as in bash.
-        let status = match cmd.status() {
+        let status = match cash_win32::spawn::status(&mut cmd) {
             Ok(status) => status,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // A name is searched for and not found; a path is a file that is not

@@ -6,6 +6,7 @@
 //! (`tool.exe 3>x`) is the documented error. A redirection on an enclosing compound
 //! command or function call does not count as "on the command": `while read -u 3 ...;
 //! done 3<file` wraps whatever runs inside it, and the loop body has no say in that.
+//! A cash started by cash is given them all, as a child of Bash is.
 
 #![allow(
     clippy::tests_outside_test_module,
@@ -167,6 +168,46 @@ fn held_descriptors_do_not_reach_pipelines_subshells_or_substitutions() {
         out.stderr
     );
     assert_eq!(read(dir.path(), "p.log"), "piped\n");
+}
+
+#[test]
+fn a_child_cash_gets_every_descriptor_above_2() {
+    // shellspec runs `sh -c '...' 3>&2` and writes its report to 3. Bash's child
+    // inherits the shell's whole table; a cash started by cash is given it (D26).
+    let dir = fixture("child");
+    std::fs::write(dir.join("in.txt"), "from a file\n").unwrap();
+    let out = cash_in(
+        dir.path(),
+        "sh -c 'echo on the command >&3' 3>&1; \
+         exec 4>&1; sh -c 'echo held by exec >&4'; \
+         { sh -c 'echo around a group >&3'; } 3>&1; \
+         sh -c 'cat <&5' 5<in.txt; \
+         sh -c 'cat <&3' 3< <(echo from a substitution); \
+         sh -c \"sh -c 'echo two levels down >&3'\" 3>&1; \
+         echo \"captured: $(sh -c 'echo by a substitution >&3' 3>&1)\"; \
+         sh -c 'echo to a file >&6' 6>out.txt; cat out.txt",
+    );
+    assert_eq!(
+        out.stdout,
+        "on the command\nheld by exec\naround a group\nfrom a file\nfrom a substitution\n\
+         two levels down\ncaptured: by a substitution\nto a file\n",
+        "stderr: {}",
+        out.stderr
+    );
+    assert!(!out.stderr.contains(REFUSAL), "stderr: {}", out.stderr);
+}
+
+#[test]
+fn the_variable_naming_passed_handles_reaches_no_other_program() {
+    // The child takes it out of its environment first thing; a program it starts, or one
+    // started without descriptors to pass, sees nothing of it.
+    let dir = fixture("variable");
+    let out = cash_in(
+        dir.path(),
+        "sh -c 'cmd.exe /d /c \"if defined CASH_FDS (echo seen) else (echo unseen)\"; \
+         cmd.exe /d /c \"if defined CASH_PASS_FDS (echo seen) else (echo unseen)\"' 3>&1",
+    );
+    assert_eq!(out.stdout, "unseen\nunseen\n", "stderr: {}", out.stderr);
 }
 
 #[test]

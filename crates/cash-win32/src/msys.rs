@@ -134,7 +134,7 @@ pub fn relay(tool: &str, program: &OsStr, args: &[OsString]) -> i32 {
     // SAFETY: `ignore` is a valid handler for the life of the process and touches nothing.
     unsafe { SetConsoleCtrlHandler(Some(ignore), TRUE) };
     let job = crate::job::JobObject::for_pipeline().ok();
-    let mut child = match command.spawn() {
+    let mut child = match crate::spawn::spawn(&mut command) {
         Ok(child) => child,
         Err(err) => {
             eprintln!("{tool}: {}: {err}", program.to_string_lossy());

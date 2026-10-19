@@ -355,9 +355,7 @@ fn shell_command(cmd: &OsStr) -> std::process::Command {
 /// what is wrong with it, as GNU sed's shell does; it was refused.
 fn shell_stdout(cmd: &[u8]) -> UResult<Vec<u8>> {
     let os_cmd = std::ffi::OsString::from(String::from_utf8_lossy(cmd).into_owned());
-    shell_command(&os_cmd)
-        .stdout(std::process::Stdio::piped())
-        .spawn()
+    cash_win32::spawn::spawn(shell_command(&os_cmd).stdout(std::process::Stdio::piped()))
         .and_then(|mut child| {
             let mut stdout = child
                 .stdout

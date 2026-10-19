@@ -174,6 +174,81 @@ impl OpenFile {
         })
     }
 
+    /// The handle a child cash is given for this file as a descriptor above 2, and what
+    /// it is to make of it (D26); none for a stream of cash's own.
+    pub(crate) fn passable(
+        &self,
+    ) -> Option<(
+        std::os::windows::io::BorrowedHandle<'_>,
+        cash_win32::spawn::Passed,
+    )> {
+        use cash_win32::spawn::Passed;
+
+        if let Self::Socket(socket) = self {
+            // SAFETY: a Windows socket is a kernel handle, open for as long as `socket`
+            // is, which outlives this borrow.
+            let handle = unsafe {
+                std::os::windows::io::BorrowedHandle::borrow_raw(
+                    socket.as_raw_socket() as std::os::windows::io::RawHandle
+                )
+            };
+            let kind = match **socket {
+                crate::net::Socket::Tcp(_) => Passed::Tcp,
+                crate::net::Socket::Udp(_) => Passed::Udp,
+            };
+            return Some((handle, kind));
+        }
+        let (handle, reads, writes) = self.handle()?;
+        let pipe = matches!(self.kind(), FileKind::Pipe { .. });
+        let kind = match (self, pipe) {
+            (Self::PipeReader(_), _) => Passed::PipeReader,
+            (Self::PipeWriter(_), _) => Passed::PipeWriter,
+            (Self::Stdin(_) | Self::Stdout(_) | Self::Stderr(_), true) if reads && !writes => {
+                Passed::PipeReader
+            }
+            (Self::Stdin(_) | Self::Stdout(_) | Self::Stderr(_), true) => Passed::PipeWriter,
+            _ => Passed::File,
+        };
+        Some((handle, kind))
+    }
+
+    /// The open file a descriptor the parent cash passed is, of the handle this process
+    /// inherited (D26).
+    pub fn received(
+        handle: std::os::windows::io::OwnedHandle,
+        kind: cash_win32::spawn::Passed,
+    ) -> Self {
+        use cash_win32::spawn::Passed;
+        use std::os::windows::io::{FromRawSocket as _, IntoRawHandle as _};
+
+        match kind {
+            Passed::File => std::fs::File::from(handle).into(),
+            Passed::PipeReader => std::io::PipeReader::from(handle).into(),
+            Passed::PipeWriter => std::io::PipeWriter::from(handle).into(),
+            Passed::Tcp => {
+                let raw = handle.into_raw_handle() as std::os::windows::io::RawSocket;
+                // SAFETY: the handle is a socket the parent passed as one, and owned here
+                // alone; it was taken out of `handle`, which no longer closes it.
+                let stream = unsafe { std::net::TcpStream::from_raw_socket(raw) };
+                Self::Socket(Arc::new(crate::net::Socket::Tcp(stream)))
+            }
+            Passed::Udp => {
+                let raw = handle.into_raw_handle() as std::os::windows::io::RawSocket;
+                // SAFETY: as for a TCP connection above.
+                let socket = unsafe { std::net::UdpSocket::from_raw_socket(raw) };
+                Self::Socket(Arc::new(crate::net::Socket::Udp(socket)))
+            }
+        }
+    }
+
+    /// The descriptors above 2 the cash that started this one passed to it (D26).
+    pub fn received_from_parent() -> Vec<(ShellFd, Self)> {
+        cash_win32::spawn::received()
+            .into_iter()
+            .map(|(fd, handle, kind)| (fd, Self::received(handle, kind)))
+            .collect()
+    }
+
     /// Whether the file is on a disk, where a reader may read ahead and then give back
     /// what it did not use ([`Self::move_back`]), as Bash's `read` does in a regular file.
     pub fn is_disk_file(&self) -> bool {

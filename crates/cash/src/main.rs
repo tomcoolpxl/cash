@@ -25,6 +25,7 @@ static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 fn main() {
     // Read first, while cash has a single thread, so it can be removed safely.
     let invoked_as = take_invoked_name();
+    cash_win32::spawn::receive();
     long_temp_directories();
 
     // D6's outermost guarantee, installed before anything can spawn.

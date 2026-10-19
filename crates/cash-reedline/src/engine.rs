@@ -2336,7 +2336,7 @@ impl Reedline {
                 // below the old one.
                 let suspended_state = self.painter.state_before_suspension();
                 {
-                    let mut child = command.spawn()?;
+                    let mut child = cash_win32::spawn::spawn(command)?;
                     // The child owns the tty now; invalidate eagerly so
                     // any `?` early-return below still leaves the
                     // painter in a safe state.

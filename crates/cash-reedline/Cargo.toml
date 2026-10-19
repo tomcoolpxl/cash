@@ -18,6 +18,7 @@ path = "src/lib.rs"
 bench = false
 
 [dependencies]
+cash-win32 = { workspace = true }
 chrono = { version = "0.4.19", default-features = false, features = ["clock", "serde"] }
 crossterm = { workspace = true, features = ["serde"] }
 fd-lock = "4.0.2"

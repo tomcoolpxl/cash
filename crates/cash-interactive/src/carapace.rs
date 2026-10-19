@@ -249,12 +249,13 @@ fn parse_export(output: &[u8]) -> Option<Vec<Candidate>> {
 /// Runs `command` and returns its standard output, or `None` if it failed to start, failed,
 /// or ran past [`TIMEOUT`], in which case it is killed.
 fn run(mut command: Command) -> Option<Vec<u8>> {
-    let mut child = command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+    let mut child = cash_win32::spawn::spawn(
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null()),
+    )
+    .ok()?;
     // Read on a thread of its own: a large answer would otherwise fill the pipe and stall
     // carapace before it exits.
     let mut stdout = child.stdout.take()?;

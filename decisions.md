@@ -423,6 +423,13 @@ descriptors, so `tool.exe 3>x` is an error, not a silent no-op; descriptors the 
 holds are not passed and do not stop the command. Turned down: the MSVC CRT's
 `STARTUPINFO` table, which Go and Rust programs never read; Bash's passing a group's fd 3
 to a program.
+Added (2026-10-19, the user's pick, as shellspec runs `sh -c '...' 3>&2`): a cash
+started by cash is given every descriptor above 2 the shell has open. Copies of the
+handles are made inheritable for that one start and named in a variable the child
+reads first thing, then closed; every program start in cash takes one lock, so no
+program started at the same moment inherits them. Turned down: a named pipe per
+descriptor, relayed by the parent, which costs a thread each and turns a file into a
+pipe.
 
 ### D64 — `CHLD` is cash's own event
 

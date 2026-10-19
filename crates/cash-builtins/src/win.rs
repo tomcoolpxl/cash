@@ -1530,7 +1530,7 @@ fn run_program<SE: cash_core::ShellExtensions>(
 ) -> Result<ExecutionResult, cash_core::Error> {
     let mut command =
         cash_core::commands::compose_std_command(context, program, name, args, false)?;
-    match command.status() {
+    match cash_win32::spawn::status(&mut command) {
         Ok(status) => {
             let code = status.code().unwrap_or(1);
             #[expect(

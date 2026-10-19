@@ -716,7 +716,7 @@ impl WritePipes {
                 let command_str = command.as_str().to_string();
                 let mut cmd = create_shell_command(&command_str)?;
                 cmd.stdin(std::process::Stdio::piped());
-                let child = cmd.spawn().map_err(|e| e.to_string())?;
+                let child = cash_win32::spawn::spawn(&mut cmd).map_err(|e| e.to_string())?;
                 e.insert(child)
             }
         };
@@ -794,7 +794,7 @@ impl PipeRecordReader {
     pub fn open(command: &str) -> Result<Self, String> {
         let mut cmd = create_shell_command(command)?;
         cmd.stdout(std::process::Stdio::piped());
-        let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+        let mut child = cash_win32::spawn::spawn(&mut cmd).map_err(|e| e.to_string())?;
         let stdout = child
             .stdout
             .take()

@@ -20,6 +20,7 @@ name = "sed"
 path = "src/bin/sed.rs"
 
 [dependencies]
+cash-win32 = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "cargo"] }
 fancy-regex = { workspace = true }
 memchr = "2.7.4"

@@ -789,7 +789,7 @@ pub(crate) fn call_simple_builtin(
 fn run_system(command: &str) -> Result<i32, String> {
     let mut command_proc = super::io::create_shell_command(command)?;
 
-    Ok(match command_proc.status() {
+    Ok(match cash_win32::spawn::status(&mut command_proc) {
         Ok(status) => status.code().unwrap_or(-1),
         Err(_) => -1,
     })
