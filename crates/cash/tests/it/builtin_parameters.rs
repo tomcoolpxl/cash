@@ -1544,6 +1544,33 @@ fn history_inspection_and_clear() {
     assert_eq!(out.code, 0);
 }
 
+#[test]
+fn a_script_with_set_o_history_keeps_its_lines() {
+    // Bash keeps what a script reads once `set -o history` is on, a command's lines as one
+    // entry, and `history` lists them; cash kept none. A script has no HISTFILE, as in
+    // Bash, so the prompt's history file gets nothing of it.
+    let scratch = Scratch::new("script-history");
+    let script = scratch.path().join("h.sh");
+    std::fs::write(
+        &script,
+        "echo before\nset -o history\necho a\nif true; then\n  echo b\nfi\nhistory\n\
+         set +o history\necho \"[$HISTFILE]\"; history | wc -l\n",
+    )
+    .unwrap();
+    let out = output_of(
+        cash_command()
+            .env_remove("HISTFILE")
+            .args(["--noprofile", "--norc"])
+            .arg(&script),
+    );
+    assert_eq!(
+        out.stdout.replace(char::is_whitespace, " "),
+        "before a b     1  echo a     2  if true; then   echo b; fi     3  history [] 4",
+        "{}",
+        out.stderr
+    );
+}
+
 // ===========================================================================
 // 40. readarray (mapfile alias)
 // ===========================================================================

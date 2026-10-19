@@ -486,9 +486,11 @@ pub(crate) async fn execute_program(
             break;
         }
 
+        // The rest is read a command at a time once a command changed how it parses, and
+        // once a script turned history on, which keeps each command's lines as read.
         if let Some(parsed_as) = parsed_as
             && index + 1 < program.complete_commands.len()
-            && shell.parser_options() != *parsed_as
+            && (shell.parser_options() != *parsed_as || shell.reads_into_history())
         {
             return Ok((result, Some(index + 1)));
         }

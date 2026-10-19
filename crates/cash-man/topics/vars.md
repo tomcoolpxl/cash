@@ -43,7 +43,8 @@ or one cash sets as it starts (`$seconds` reads `SECONDS`), is read in another c
   cash follows.
 - `OSTYPE` is `windows`; `MACHTYPE` is like `x86_64-pc-windows`; `HOSTNAME` is the
   machine's name.
-- `HISTFILE`: `~/.cash_history` unless set, so cash's history does not mix with Git Bash's.
+- `HISTFILE`: `~/.cash_history` in an interactive shell unless set, so cash's history
+  does not mix with Git Bash's; a script has none, as in Bash.
 - `PS1`: `\s-\v\$ ` in an interactive shell unless set; `PS2` `> `; `PS4` `+ `.
 - `SHLVL`, `PWD`, `OLDPWD`, `PPID`, `UID`, `EUID`, `RANDOM`, `SECONDS`, `EPOCHSECONDS`,
   `PIPESTATUS`, `FUNCNAME`, `BASH_SOURCE`, `LINENO` and the rest work as in Bash.

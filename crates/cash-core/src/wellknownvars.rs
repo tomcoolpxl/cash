@@ -366,8 +366,10 @@ pub(crate) fn init_well_known_vars(
     histcmd_var.treat_as_integer();
     shell.env_mut().set_global("HISTCMD", histcmd_var)?;
 
-    // HISTFILE (if not already set)
-    if !shell.env().is_set("HISTFILE")
+    // HISTFILE (if not already set), in an interactive shell only, as in Bash: a script
+    // that turns history on keeps it in memory, and the prompt's file gets none of it.
+    if shell.options().interactive
+        && !shell.env().is_set("HISTFILE")
         && let Some(home_dir) = shell.home_dir()
     {
         let histfile = home_dir.join(".cash_history");

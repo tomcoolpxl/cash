@@ -478,6 +478,13 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                 }
             };
 
+            // A script with `set -o history` on keeps what it reads, before it runs, as
+            // Bash does: the lines of each command, as one entry.
+            let into_history = matches!(origin, TextOrigin::Whole) && self.reads_into_history();
+            if into_history {
+                self.keep_script_lines(&pending);
+            }
+
             let parsed_as = self.parser_options();
             self.call_stack.increment_current_line_offset(lines_before);
             let ran = self
@@ -498,6 +505,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             if matches!(reading, Reading::AfterAChange)
                 && lines.peek().is_some()
                 && self.parser_options() == parsed_as
+                && !(matches!(origin, TextOrigin::Whole) && self.reads_into_history())
             {
                 return Ok(Err(lines_before));
             }

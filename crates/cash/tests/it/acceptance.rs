@@ -164,8 +164,15 @@ fn home_agrees_with_pwd() {
 #[test]
 fn paths_derived_from_home_are_canonical_too() {
     // $HISTFILE is built by joining onto the home directory, and a naive join inserts a
-    // backslash separator.
-    let histfile = cash("echo $HISTFILE").stdout;
+    // backslash separator. An interactive shell sets it, as Bash does; a script has none.
+    let histfile = output_of(cash_command().env_remove("HISTFILE").args([
+        "--norc",
+        "-i",
+        "-c",
+        "echo $HISTFILE",
+    ]))
+    .stdout;
+    assert_eq!(cash("echo \"[$HISTFILE]\"").stdout, "[]");
     assert!(!histfile.is_empty(), "HISTFILE unset");
     assert!(
         !histfile.contains('\\'),

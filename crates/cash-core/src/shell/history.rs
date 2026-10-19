@@ -160,6 +160,42 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Ok(())
     }
 
+    /// Whether what the shell reads now goes into its history as Bash puts a script's
+    /// there: the text of a script that is run (not one sourced, nor `eval`'s or a `-c`
+    /// string) by a shell that is not interactive, with `set -o history` on. cash kept
+    /// none, and `history` listed nothing.
+    pub(crate) fn reads_into_history(&self) -> bool {
+        self.options.enable_command_history
+            && !self.options.interactive
+            && self
+                .call_stack
+                .current_frame()
+                .is_some_and(|frame| frame.frame_type.is_run_script())
+    }
+
+    /// Keeps `text`, the lines a script's command took, as one entry, joined as Bash joins
+    /// them ([`script_entry`]), and appends it to `HISTFILE` when one is set, as the prompt's
+    /// lines are (D44). The first time, the history is read from `HISTFILE`, as Bash reads
+    /// it when a script turns history on.
+    pub(crate) fn keep_script_lines(&mut self, text: &[u8]) {
+        let text = String::from_utf8_lossy(text);
+        let entries = if self.options.save_multiline_cmds_in_history {
+            vec![script_entry(
+                &text,
+                self.options.embed_newlines_in_multiline_cmds_in_history,
+            )]
+        } else {
+            text.lines().map(str::to_owned).collect()
+        };
+        if self.history.is_none() {
+            self.history = Some(self.load_history().ok().flatten().unwrap_or_default());
+        }
+        for entry in entries.iter().filter(|entry| !entry.trim().is_empty()) {
+            let _ = self.add_to_history(entry);
+        }
+        let _ = self.save_history();
+    }
+
     /// Counts a visit to the current directory, once a prompt, when it is not the one counted
     /// last (D80).
     pub fn note_directory_visit(&mut self) {
@@ -255,6 +291,156 @@ impl HistoryControl {
             }
         }
         control
+    }
+}
+
+/// The history entry Bash makes of `text`, the lines one command took (`cmdhist`): each
+/// line after the first joined to the one before by `; `; by a space after a word or
+/// operator a `;` may not follow (`then`, `do`, `{`, `|`, `&&` and the like); by a newline
+/// inside a quoted string or a here-document, and for every line with `literal`
+/// (`lithist`); directly after a backslash that continues a line, which goes. A blank line
+/// adds nothing.
+fn script_entry(text: &str, literal: bool) -> String {
+    let mut entry = String::new();
+    let mut scan = LineScan::default();
+    let mut previous: Option<(String, bool)> = None;
+    for line in text.lines() {
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        match &previous {
+            None => entry.push_str(line),
+            Some(_) if line.trim().is_empty() && !scan.open() => continue,
+            // A backslash that continues a line goes, with its newline, as the lexer drops
+            // them.
+            Some((_, true)) if !literal => {
+                entry.pop();
+                entry.push_str(line);
+            }
+            Some((before, _)) => {
+                entry.push_str(if literal || scan.open() {
+                    "\n"
+                } else if takes_no_semicolon(before) {
+                    " "
+                } else {
+                    "; "
+                });
+                entry.push_str(line);
+            }
+        }
+        let code = scan.feed(line);
+        let continued = !scan.open() && line.ends_with('\\') && !line.ends_with("\\\\");
+        previous = Some((code, continued));
+    }
+    entry
+}
+
+/// Whether `code`, a line's code without its comment, ends in a word or operator Bash
+/// puts no `;` after when it joins the next line on (`no_semi_successors`).
+fn takes_no_semicolon(code: &str) -> bool {
+    let code = code.trim_end();
+    if code.is_empty() || code.ends_with(['{', '(', ')', ';', '&', '|']) {
+        return true;
+    }
+    let last = code
+        .rsplit(|c: char| c.is_whitespace() || c == ';')
+        .next()
+        .unwrap_or("");
+    matches!(
+        last,
+        "case" | "do" | "else" | "elif" | "if" | "then" | "until" | "while" | "in"
+    )
+}
+
+/// What [`script_entry`] knows at the end of each line: whether a quote or a
+/// here-document is still open, so the next line is in it.
+#[derive(Default)]
+struct LineScan {
+    single: bool,
+    double: bool,
+    /// The end words of the here-documents begun on the line, which start after it.
+    begun: Vec<(String, bool)>,
+    /// The here-document whose body the lines are, with whether its `<<-` strips tabs.
+    body: Option<(String, bool)>,
+    /// The `((` not yet closed, in which `<<` is a shift.
+    arithmetic: usize,
+}
+
+impl LineScan {
+    const fn open(&self) -> bool {
+        self.single || self.double || self.body.is_some()
+    }
+
+    /// Reads `line`, and gives its code without a comment, for [`takes_no_semicolon`].
+    fn feed(&mut self, line: &str) -> String {
+        if let Some((end, strip)) = &self.body {
+            let word = if *strip {
+                line.trim_start_matches('\t')
+            } else {
+                line
+            };
+            if word == end {
+                self.body = (!self.begun.is_empty()).then(|| self.begun.remove(0));
+            }
+            return String::new();
+        }
+        let chars: Vec<char> = line.chars().collect();
+        let mut code = String::new();
+        let mut i = 0;
+        while i < chars.len() {
+            let c = chars[i];
+            if self.single {
+                self.single = c != '\'';
+            } else if c == '\\' {
+                code.push(c);
+                i += 1;
+                if let Some(&next) = chars.get(i) {
+                    code.push(next);
+                }
+                i += 1;
+                continue;
+            } else if self.double {
+                self.double = c != '"';
+            } else if c == '\'' {
+                self.single = true;
+            } else if c == '"' {
+                self.double = true;
+            } else if c == '#' && (i == 0 || chars[i - 1].is_whitespace()) {
+                break;
+            } else if c == '(' && chars.get(i + 1) == Some(&'(') {
+                self.arithmetic += 1;
+                code.push_str("((");
+                i += 2;
+                continue;
+            } else if c == ')' && chars.get(i + 1) == Some(&')') && self.arithmetic > 0 {
+                self.arithmetic -= 1;
+                code.push_str("))");
+                i += 2;
+                continue;
+            } else if c == '<'
+                && chars.get(i + 1) == Some(&'<')
+                && chars.get(i + 2) != Some(&'<')
+                && self.arithmetic == 0
+            {
+                let strip = chars.get(i + 2) == Some(&'-');
+                let mut j = i + 2 + usize::from(strip);
+                while chars.get(j).is_some_and(|c| *c == ' ' || *c == '\t') {
+                    j += 1;
+                }
+                let word: String = chars[j..]
+                    .iter()
+                    .take_while(|c| !c.is_whitespace() && !matches!(c, ';' | '|' | '&' | ')'))
+                    .filter(|c| !matches!(c, '\'' | '"' | '\\'))
+                    .collect();
+                if !word.is_empty() {
+                    self.begun.push((word, strip));
+                }
+            }
+            code.push(c);
+            i += 1;
+        }
+        if !self.single && !self.double && !self.begun.is_empty() {
+            self.body = Some(self.begun.remove(0));
+        }
+        code
     }
 }
 
@@ -368,6 +554,45 @@ mod tests {
         shell.options_mut().enable_command_history = false;
         shell.add_to_history("ls").unwrap();
         assert!(lines(&shell).is_empty(), "{:?}", lines(&shell));
+    }
+
+    #[test]
+    fn a_scripts_lines_are_joined_as_bash_joins_them() {
+        for (text, literal, entry) in [
+            ("f() {\n  echo in f\n}\n", false, "f() {   echo in f; }"),
+            (
+                "if true; then\n  echo x\nfi\n",
+                false,
+                "if true; then   echo x; fi",
+            ),
+            (
+                "case a in\na) echo m ;;\nesac\n",
+                false,
+                "case a in a) echo m ;; esac",
+            ),
+            ("echo a &&\n  echo b\n", false, "echo a &&   echo b"),
+            ("echo \"a\nb\"\n", false, "echo \"a\nb\""),
+            ("cat <<EOF\nx\nEOF\n", false, "cat <<EOF\nx\nEOF"),
+            (
+                "cat <<-'E' | tr a b\n\ta\n\tE\n",
+                false,
+                "cat <<-'E' | tr a b\n\ta\n\tE",
+            ),
+            ("echo one \\\n  two\n", false, "echo one   two"),
+            ("x=$((1 << 2)); y\n", false, "x=$((1 << 2)); y"),
+            (
+                "if true; then # why\n\n  echo x\nfi\n",
+                false,
+                "if true; then # why   echo x; fi",
+            ),
+            (
+                "if true; then\n  echo x\nfi\n",
+                true,
+                "if true; then\n  echo x\nfi",
+            ),
+        ] {
+            assert_eq!(script_entry(text, literal), entry, "{text:?}");
+        }
     }
 
     #[test]

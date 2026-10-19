@@ -47,6 +47,11 @@ writes, numbered. At the prompt, Up and Down walk through it and Ctrl-R searches
 The list is read from `HISTFILE` as the shell starts and written back when it ends;
 `HISTSIZE` sets how many are kept in memory and `HISTFILESIZE` how many in the file.
 
+A script keeps no list unless it turns one on with `set -o history`. From then on each
+command it reads is kept, its lines joined into one entry, and `history` in the script
+lists them; what it sources or runs through `eval` is not kept. A script has no
+`HISTFILE` unless it sets one, so the prompt's file gets none of it.
+
 `!` at the prompt reuses a line from the list: `!!` the last command, `!42` entry 42,
 `!-2` the one before last, `!ssh` the last that started with ssh, `!$` the last word
 of the last command. The line is shown as it was expanded before it runs.
@@ -71,7 +76,7 @@ Exit status: 0, or 1 for an offset that is not there.
 
 ## Different in cash
 
-- The file is `~/.cash_history` unless `HISTFILE` names another, so cash's history
-  does not mix with Git Bash's `~/.bash_history`.
+- An interactive shell's file is `~/.cash_history` unless `HISTFILE` names another, so
+  cash's history does not mix with Git Bash's `~/.bash_history`.
 - Ctrl-R offers this directory's commands first: cash remembers the directory each
   command ran in, unless `CASH_NO_RECORDS` is set (see `help vars`).
