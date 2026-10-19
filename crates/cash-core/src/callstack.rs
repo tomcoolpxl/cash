@@ -733,6 +733,13 @@ impl CallStack {
         self.active_trap_signals.clear();
     }
 
+    /// Marks the trap handlers running in `parent` as running here too, as a command
+    /// substitution's shell sees them in Bash.
+    pub(crate) fn keep_active_trap_signals_of(&mut self, parent: &Self) {
+        self.active_trap_signals
+            .clone_from(&parent.active_trap_signals);
+    }
+
     /// Returns whether the given trap signal is currently suppressed.
     pub const fn is_trap_delivery_suppressed(&self) -> bool {
         self.trap_delivery_suppress_count > 0

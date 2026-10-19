@@ -2529,3 +2529,18 @@ fn a_braced_expansion_or_substitution_on_a_here_document_line_keeps_its_words() 
         echo \"${y:-$(cat <<EOF)}\"\nd\nEOF\n";
     assert_eq!(output(script), (0, "a X\nc\nb\nd".into()));
 }
+
+#[test]
+fn a_trap_running_is_running_in_its_command_substitutions() {
+    // A `$(...)` in a DEBUG trap's handler ran the trap again with functrace on, and again
+    // in that one's, to the limit of 500 calls: bats normalises a `C:/` path so in its
+    // handler. Bash runs none there; a `( ... )` subshell starts with none running.
+    let (status, out) = output(
+        "set -T; n=0; trap 'n=$((n + 1)); x=$(echo sub)' DEBUG; : one; : two; trap - DEBUG; \
+         echo \"debug ran $n times\"; trap 'echo parent; (trap \"echo child\" EXIT; true)' EXIT",
+    );
+    assert_eq!(
+        (status, out.as_str()),
+        (0, "debug ran 3 times\nparent\nchild")
+    );
+}

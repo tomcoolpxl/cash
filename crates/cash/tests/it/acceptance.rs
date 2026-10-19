@@ -1037,6 +1037,24 @@ fn exec_of_a_bundled_tool_runs_cashs_own() {
 }
 
 #[test]
+fn exec_of_a_name_finds_a_script_on_path_as_running_it_does() {
+    // rbenv runs `exec rbenv---version`, a script without an extension in a directory it
+    // put on PATH: Windows' search finds programs alone, and it was not found.
+    let scratch = Scratch::new("exec-script-on-path");
+    std::fs::create_dir(scratch.path().join("bin")).unwrap();
+    std::fs::write(
+        scratch.path().join("bin").join("myscript"),
+        "#!/usr/bin/env bash\necho \"script ran: $*\"\n",
+    )
+    .unwrap();
+    let out = output_of(cash_command().current_dir(scratch.path()).args([
+        "-c",
+        "PATH=\"$PWD/bin:$PATH\"; (exec myscript a b); (exec nosuchprog_q) 2>/dev/null; echo $?",
+    ]));
+    assert_eq!(out.stdout, "script ran: a b\n127", "{}", out.stderr);
+}
+
+#[test]
 fn a_unix_system_tools_path_runs_cashs_command() {
     // `/bin/rm` and `/usr/bin/env` name the system's own tools to a script written for
     // Unix, and Windows has no such directory: bashmarks deletes a bookmark with `/bin/mv`

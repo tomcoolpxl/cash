@@ -409,6 +409,19 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         subshell
     }
 
+    /// The shell for a command substitution: [`Self::subshell_that_catches_errors`]'s, with
+    /// the trap handlers running here still running there, as in Bash, where a `( … )`
+    /// subshell starts with none. A `$(...)` in a DEBUG trap's handler ran the trap again
+    /// inside it with functrace on, and again in that one's, to the limit of 500 calls:
+    /// bats' handler normalises a `C:/` path with `$(cd "$path"; pwd)`.
+    pub(crate) fn substitution_shell(&mut self) -> Self {
+        let mut shell = self.subshell_that_catches_errors();
+        shell
+            .call_stack
+            .keep_active_trap_signals_of(&self.call_stack);
+        shell
+    }
+
     /// Keeps the end of a process substitution expanded inside a word until the command the
     /// word belongs to takes it ([`Self::take_word_substitution_ends`]).
     pub(crate) fn keep_word_substitution_end(&mut self, end: crate::interp::SubstitutionEnd) {

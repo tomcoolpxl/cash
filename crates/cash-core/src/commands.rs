@@ -705,6 +705,44 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     ))
 }
 
+/// The process that runs cash's own command for `command_name`, which is no file.
+///
+/// A path that names a cash command, `which`'s (`C:/…/cash.exe/ls`, ROADMAP item 12) or a
+/// Unix system tool's (`/bin/rm`), runs that command, as when typed. So does a bundled
+/// tool's name (D48): `exec mktemp` searched PATH and ran Git's GNU `mktemp`, whose `/tmp`
+/// name cash's other tools cannot open (shunit2). The bundled tools are the builtins run as
+/// a process of their own (`spawn_func`), started here at once; another command named by a
+/// path re-enters cash. `enable -n` gives a name back to PATH.
+fn cash_tool_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
+    context: &ExecutionContext<'_, SE>,
+    command_name: &str,
+    args: &[S],
+) -> Option<std::process::Command> {
+    let by_path = command_name.contains(['/', '\\']);
+    let tool = if by_path {
+        crate::pathsearch::tool_named_by_path(context.shell, command_name)?
+    } else {
+        command_name.to_owned()
+    };
+    let bundled = context
+        .shell
+        .builtins()
+        .get(&tool)
+        .is_some_and(|b| b.spawn_func.is_some() && !b.disabled);
+    if bundled && let Ok(own) = std::env::current_exe() {
+        // process state: the shell's spawn layer sets the directory and environment.
+        let mut c = std::process::Command::new(&own);
+        c.args(["--invoke-bundled", tool.as_str()]);
+        push_native_args(&mut c, &own, args);
+        return Some(c);
+    }
+    by_path.then(|| {
+        let mut command = cash_win32::path::reentry_command(&tool);
+        command.args(args);
+        command
+    })
+}
+
 fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
     command_name: &str,
@@ -735,50 +773,34 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         _ => candidate,
     };
 
-    // A path that names a cash command, `which`'s (`C:/…/cash.exe/ls`, ROADMAP item 12) or
-    // a Unix system tool's (`/bin/rm`), runs that command, as when typed. So does a bundled
-    // tool's name (D48): `exec mktemp` searched PATH and ran Git's GNU `mktemp`, whose
-    // `/tmp` name cash's other tools cannot open (shunit2). The bundled tools are the
-    // builtins run as a process of their own (`spawn_func`), started here at once; another
-    // command named by a path re-enters cash. `enable -n` gives a name back to PATH.
-    if !candidate.is_file() {
-        let by_path = command_name.contains(['/', '\\']);
-        let tool = if by_path {
-            crate::pathsearch::tool_named_by_path(context.shell, command_name)
-        } else {
-            Some(command_name.to_owned())
-        };
-        if let Some(tool) = tool {
-            let bundled = context
-                .shell
-                .builtins()
-                .get(&tool)
-                .is_some_and(|b| b.spawn_func.is_some() && !b.disabled);
-            if bundled && let Ok(own) = std::env::current_exe() {
-                // process state: the shell's spawn layer sets the directory and environment.
-                let mut c = std::process::Command::new(&own);
-                c.args(["--invoke-bundled", tool.as_str()]);
-                push_native_args(&mut c, &own, args);
-                return Ok((c, Extras::default()));
-            }
-            if by_path {
-                let mut command = cash_win32::path::reentry_command(&tool);
-                command.args(args);
-                return Ok((command, Extras::default()));
-            }
-        }
+    if !candidate.is_file()
+        && let Some(command) = cash_tool_command(context, command_name, args)
+    {
+        return Ok((command, Extras::default()));
     }
+
+    let path_var = context
+        .shell
+        .env()
+        .get_str("PATH", context.shell)
+        .unwrap_or_default();
+    let entries: Vec<PathBuf> =
+        crate::sys::fs::split_paths_preserving_empty(path_var.as_ref()).collect();
+
+    // A bare name is looked for on the shell's PATH, as the shell looks for a command, so a
+    // script without an extension runs by its `#!` line: `exec rbenv---version`, one of
+    // rbenv's own commands, was not found, as Windows' search finds programs alone.
+    let candidate = if !candidate.is_file() && !command_name.contains(['/', '\\']) {
+        crate::pathsearch::resolve_command(&entries, command_name, &context.shell.pathext())
+            .filter(|found| found.is_file())
+            .unwrap_or(candidate)
+    } else {
+        candidate
+    };
 
     if !candidate.is_file() {
         // A bare name, as `exec grep` passes: `Command::new` searches PATH for it, so
         // search the shell's PATH too, to know which encoding its arguments need.
-        let path_var = context
-            .shell
-            .env()
-            .get_str("PATH", context.shell)
-            .unwrap_or_default();
-        let entries: Vec<PathBuf> =
-            crate::sys::fs::split_paths_preserving_empty(path_var.as_ref()).collect();
         let target = cash_win32::msys::locate(
             OsStr::new(command_name),
             &entries,
@@ -2092,7 +2114,7 @@ pub(crate) async fn invoke_command_in_subshell_and_get_output(
     s: String,
 ) -> Result<String, error::Error> {
     // Instantiate a subshell to run the command in.
-    let mut subshell = shell.subshell_that_catches_errors();
+    let mut subshell = shell.substitution_shell();
     subshell.enter_substitution();
 
     // Command substitutions don't inherit errexit by default. Only inherit it when
