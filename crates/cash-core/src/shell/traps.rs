@@ -15,6 +15,24 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Ok(())
     }
 
+    /// `exit` in the shell itself: runs its `EXIT` trap there and then, as Bash does, so
+    /// that the trap sees where `exit` was called (in a function, `FUNCNAME` is `f main`);
+    /// the trap is then spent, and the shell's end runs it no more. A subshell's `exit`
+    /// leaves its own trap to [`Self::end_subshell`]. Returns the status to exit with,
+    /// which an `exit` in the trap changes.
+    pub async fn run_exit_trap_for_exit(&mut self, status: u8, params: &ExecutionParameters) -> u8 {
+        if self.is_subshell() || !self.traps.handles(TrapSignal::Exit) {
+            return status;
+        }
+        self.last_exit_status = status;
+        let outcome = self.invoke_trap_handler(TrapSignal::Exit, params).await;
+        self.traps.remove_handlers(TrapSignal::Exit);
+        match outcome {
+            Ok(result) if result.is_exit() => result.exit_code.into(),
+            _ => status,
+        }
+    }
+
     /// Ends a subshell (`( … )`, a command substitution, a compound pipeline stage, a
     /// background job) that ended with `status`: runs its `EXIT` trap, under `params`, if
     /// it set one itself, as Bash does as the subshell exits. The parent's, which the copy
@@ -132,6 +150,10 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // `run_string()`. This is safe because `result` is captured into a variable
         // (never early-returned with `?`), so `leave_trap_handler()` always runs.
         self.enter_trap_handler(signal, Some(&handler));
+        let previous_before_exit_trap = self.status_before_exit_trap;
+        if signal == TrapSignal::Exit {
+            self.status_before_exit_trap = Some(orig_last_exit_status);
+        }
 
         // Bash 5.3: `$BASH_TRAPSIG` holds the running trap's number, and its previous
         // value (normally none) comes back afterwards.
@@ -156,6 +178,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         };
 
         self.leave_trap_handler();
+        self.status_before_exit_trap = previous_before_exit_trap;
         self.last_exit_status = orig_last_exit_status;
 
         result

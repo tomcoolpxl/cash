@@ -926,7 +926,16 @@ impl Execute for ast::Pipeline {
 
         // Apply errexit if not suppressed (and not negated)
         if !params.suppress_errexit && !self.bang && !status_from_ignored_failure {
+            let was_exiting = result.is_exit();
             shell.apply_errexit_if_enabled(&mut result);
+            // `set -e` ends the shell here, and its `EXIT` trap runs here, inside a
+            // function too, as `exit`'s does.
+            if result.is_exit() && !was_exiting {
+                let status = shell
+                    .run_exit_trap_for_exit(result.exit_code.into(), &params)
+                    .await;
+                result.exit_code = ExecutionExitCode::from(status);
+            }
         }
 
         // If requested, report timing.

@@ -261,6 +261,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             last_exit_status_change_count: 0,
             status_before_return: None,
             failure_ignored_by_errexit: false,
+            status_before_exit_trap: None,
             last_pipeline_statuses: vec![0],
             depth: 0,
             subshell_level: 0,

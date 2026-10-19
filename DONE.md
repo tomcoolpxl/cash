@@ -2595,3 +2595,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   gives `(file script)`. And the script's `EXIT` trap ran after the script was gone, so
   it saw no `$@` and no `BASH_SOURCE`; it runs inside the script now. getopts' message for
   a missing argument differs in its wording only, and the case leaves it out.
+- **The `EXIT` trap runs where `exit` or `set -e` ends the shell** (2026-10-20, the phase
+  after 1.36.0, item 1, found in the corpus round before): Bash runs it there, so inside
+  a function `FUNCNAME` in the trap holds the function; cash ran it once the functions
+  had returned, and `FUNCNAME` was empty. `exit` and errexit in the shell itself run the
+  trap at once, which is then spent; a subshell's stays its own. An `exit` with no status
+  in the trap exits with the status the shell was exiting with, as in Bash, which running
+  the trap inside `exit` would otherwise have lost.

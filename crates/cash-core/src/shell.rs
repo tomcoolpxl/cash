@@ -110,6 +110,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// does not end the shell either, as in Bash.
     failure_ignored_by_errexit: bool,
 
+    /// `$?` as it was when the `EXIT` trap started, while it runs: an `exit` in it with no
+    /// status exits with that one, as in Bash.
+    status_before_exit_trap: Option<u8>,
+
     /// The status of each of the commands in the last pipeline.
     last_pipeline_statuses: Vec<u8>,
 
@@ -252,6 +256,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             last_exit_status_change_count: self.last_exit_status_change_count,
             status_before_return: self.status_before_return,
             failure_ignored_by_errexit: self.failure_ignored_by_errexit,
+            status_before_exit_trap: self.status_before_exit_trap,
             last_pipeline_statuses: self.last_pipeline_statuses.clone(),
             name: self.name.clone(),
             args: self.args.clone(),
@@ -654,6 +659,12 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     /// Whether the last pipeline failed where `set -e` does not act (`failure_ignored_by_errexit`).
     pub(crate) const fn failure_ignored_by_errexit(&self) -> bool {
         self.failure_ignored_by_errexit
+    }
+
+    /// `$?` as it was when the running `EXIT` trap started, if one runs: what `exit` with
+    /// no status exits with there.
+    pub const fn status_before_exit_trap(&self) -> Option<u8> {
+        self.status_before_exit_trap
     }
 
     /// Records whether the pipeline that just ended failed where `set -e` does not act.

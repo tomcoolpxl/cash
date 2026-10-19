@@ -2664,3 +2664,27 @@ fn bash_source_holds_the_sourcing_files_outside_a_function_and_in_the_exit_trap(
         "lib: ./lib.sh main.sh\ntrap: [changed one] [main.sh]\n"
     );
 }
+
+#[test]
+fn the_exit_trap_runs_where_exit_or_errexit_ends_the_shell() {
+    // As in Bash: inside a function, `FUNCNAME` in the trap holds it (`f main` in a script),
+    // for `exit` and `set -e` alike; it runs once; and an `exit` in it with no status keeps
+    // the status the shell was exiting with.
+    let trap = "trap 'echo \"trap [$?] [${FUNCNAME[*]-}]\"' EXIT";
+    assert_eq!(
+        output(&format!("{trap}; f() {{ exit 7; }}; f; echo no")),
+        (7, "trap [7] [f]".into())
+    );
+    assert_eq!(
+        output(&format!("set -e; {trap}; h() {{ false; }}; h")),
+        (1, "trap [1] [h]".into())
+    );
+    assert_eq!(
+        output("trap 'echo in trap; exit' EXIT; exit 9"),
+        (9, "in trap".into())
+    );
+    assert_eq!(
+        output("trap 'echo outer' EXIT; (trap 'echo sub' EXIT; exit 3); echo \"sub $?\"; exit 1"),
+        (1, "sub\nsub 3\nouter".into())
+    );
+}
