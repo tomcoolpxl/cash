@@ -1,0 +1,18 @@
+testAddition
+testStrings
+testTrue
+testNull
+testSetUp
+
+Ran 5 tests.
+
+OK
+passing: 0
+testFails
+ASSERT:the sum expected:<5> but was:<4>
+testPasses
+
+Ran 2 tests.
+
+FAILED (failures=1)
+failing: 1

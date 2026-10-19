@@ -1,0 +1,11 @@
+no host: 1
+help: 1
+unknown argument: 1
+closed port: 124
+strict, closed: 124
+runs anyway
+not strict, closed: 0
+port 135 answers
+open port: 0
+no timeout
+open port, no timeout: 0

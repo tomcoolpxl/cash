@@ -1,0 +1,23 @@
+
+ project     : demo
+ branch:     : main
+ active on   : 2 days
+ commits     : 3
+ files       : 2
+ uncommitted : 0
+ authors     : 
+     2	Ann 66.7%
+     1	Bob 33.3%
+demo / active on 2 days / commits: 3 / uncommitted: 0 / branch: main
+
+  path       commits    active days
+
+  a.txt..... 2           1
+
+
+  path       commits    active days
+
+
+above: 0
+error: argument to --above was not an integer
+bad above: 1

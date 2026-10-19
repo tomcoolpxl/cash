@@ -15,6 +15,9 @@ What each source allows, and the notices its terms ask to be kept with the copie
 | `bash/ansi-codes.sh` and `fixtures/ansi` | [ansi](https://github.com/fidian/ansi), © 2015 Tyler Akins, unchanged | the same terms as mo's, below |
 | `bash/nvm-helpers.sh` and `fixtures/nvm.sh` | [nvm](https://github.com/nvm-sh/nvm)'s `nvm.sh`, unchanged | MIT: Copyright (c) 2010 Tim Caswell, Copyright (c) 2014 Jordan Harband, under the MIT notice below |
 | `bash/semver-tool.sh` and `fixtures/semver` | [semver-tool](https://github.com/fsaintjacques/semver-tool) 3.4.0's `src/semver`, unchanged | Apache License 2.0, as the script's SPDX line says; the text is in [`licenses/`](../../licenses/) (`*-Apache-2.0.txt`) |
+| `bash/wait-for-it.sh` and `fixtures/wait-for-it.sh` | [wait-for-it](https://github.com/vishnubob/wait-for-it), unchanged | MIT: Copyright (c) 2016 Giles Hall, under the MIT notice below |
+| `bash/shunit2.sh` and `fixtures/shunit2` | [shUnit2](https://github.com/kward/shunit2), © 2008-2021 Kate Ward, unchanged | Apache License 2.0, as the script's header says; the text is in [`licenses/`](../../licenses/) (`*-Apache-2.0.txt`) |
+| `bash/git-extras.sh`, `fixtures/git-summary` and `fixtures/git-effort` | [git-extras](https://github.com/tj/git-extras)' `bin/git-summary` and `bin/git-effort`, unchanged | MIT: Copyright (c) 2010 TJ Holowaychuk and Contributors, under the MIT notice below |
 | `awk/*` citing `onetrueawk` | [The One True Awk](https://github.com/onetrueawk/awk)'s `testdir`, the test programs of *The AWK Programming Language* | Lucent's permission notice, below |
 | `sed/pement-*`, `awk/pement-*` | Eric Pement's one-liners, [sed](https://www.pement.org/sed/sed1line.txt) and [awk](https://www.pement.org/awk/awk1line.txt) | No licence stated; one-liners, cited by URL |
 | `sed/*` citing `gnu.org` | The [GNU sed manual](https://www.gnu.org/software/sed/manual/)'s examples | GNU Free Documentation License 1.3 or later |
