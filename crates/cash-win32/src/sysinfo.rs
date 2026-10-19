@@ -764,7 +764,7 @@ pub fn long_paths_enabled() -> bool {
 ///
 /// `RegGetValueW` is the one call that opens, reads, and expands in one step, and it
 /// NUL-terminates for us — which the older `RegQueryValueEx` notoriously does not.
-fn registry_string(subkey: &str, value: &str) -> Option<String> {
+pub(crate) fn registry_string(subkey: &str, value: &str) -> Option<String> {
     use windows_sys::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW};
 
     let subkey = to_wide_nul(subkey);

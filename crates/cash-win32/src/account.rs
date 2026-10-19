@@ -8,7 +8,7 @@
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _, OwnedHandle};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use windows_sys::Win32::Foundation::{
     ERROR_MORE_DATA, ERROR_SUCCESS, GENERIC_ALL, GENERIC_EXECUTE, LocalFree,
@@ -498,6 +498,53 @@ fn dacl_grants_execute(dacl: *const ACL, trustees: &[Sid]) -> bool {
         }
     }
     false
+}
+
+/// The full name a local account `user` was given, `pinky`'s "In real life"; `None` when
+/// it has none or there is no such local account.
+#[must_use]
+pub fn full_name(user: &str) -> Option<String> {
+    use windows_sys::Win32::NetworkManagement::NetManagement::{
+        NERR_Success, NetApiBufferFree, NetUserGetInfo, USER_INFO_10,
+    };
+
+    let wide = to_wide_nul(user);
+    let mut buffer: *mut USER_INFO_10 = std::ptr::null_mut();
+    // SAFETY: a null server is this machine; the name is NUL-terminated and the out-param
+    // valid.
+    let status = unsafe {
+        NetUserGetInfo(
+            std::ptr::null(),
+            wide.as_ptr(),
+            10,
+            (&raw mut buffer).cast(),
+        )
+    };
+    if status != NERR_Success || buffer.is_null() {
+        return None;
+    }
+    // SAFETY: on success the buffer holds one USER_INFO_10.
+    let full_name = unsafe { (*buffer).usri10_full_name };
+    // SAFETY: the name is a NUL-terminated string in the buffer, which is still held.
+    let name = (!full_name.is_null()).then(|| unsafe { crate::net::widestring_at(full_name) });
+    // SAFETY: the buffer was allocated by the call above and is not used again.
+    unsafe { NetApiBufferFree(buffer.cast()) };
+    name.filter(|name| !name.is_empty())
+}
+
+/// The profile directory of the account `sid` (`C:\Users\tom`), from the machine's list
+/// of profiles; `None` for an account that has never logged on.
+#[must_use]
+pub fn profile_directory(sid: &Sid) -> Option<PathBuf> {
+    crate::sysinfo::registry_string(
+        &format!(
+            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\{}",
+            sid.text()
+        ),
+        "ProfileImagePath",
+    )
+    .filter(|path| !path.is_empty())
+    .map(PathBuf::from)
 }
 
 /// The local accounts that are enabled, by name, for Tab after `su`: an account that is

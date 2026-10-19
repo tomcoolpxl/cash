@@ -2498,3 +2498,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   hyperfine 1's exports as well as 2's. `BENCH_WARMUP` and `BENCH_MIN_RUNS` shorten a
   try. Both sides were tried, Linux inside WSL; the comparison itself is the user's to
   run, on the machine rebooted and idle.
+- **`who`, `pinky` and `users` on Windows' session API** (2026-10-19, the phase after
+  1.32.0, item 5): they read `quser.exe`'s text, whose dates followed the locale and
+  which Windows Home lacks; now Windows' sessions (`WTSEnumerateSessionsW`), loaded
+  when asked. `who` takes GNU's options: `-a`, `-b` (the boot), `-u` (idle time and the
+  pid of the session's `explorer.exe`), `-T`, `-s`, `--lookup`, and `-d -l -p -r -t`,
+  which find nothing on Windows; a remote session's computer is its comment, a
+  disconnected session's line `disconnected`. `pinky` takes `-l -b -h -p -s -f -w -i -q`,
+  with the account's full name, profile directory, `.project` and `.plan`. `users` names an
+  account once for each session, as GNU does. A FILE of login records is refused. All
+  three keep GNU's layouts, times as `2026-10-19 08:12`.

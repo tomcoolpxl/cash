@@ -151,6 +151,7 @@ mod chown;
 // cash (D48): uutils' `id` is Unix-only, and the MSYS stand-in reports a uid Windows
 // does not have.
 mod identity;
+mod logins;
 
 // Native Windows-optimized pure-Rust `ls` builtin.
 mod ls;

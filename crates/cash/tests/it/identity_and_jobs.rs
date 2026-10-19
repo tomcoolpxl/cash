@@ -264,44 +264,113 @@ fn hostid_prints_eight_hex_digits() {
     );
 }
 
+/// Whether `text` is a time as `who` writes it, `2026-10-19 08:12`.
+fn is_who_time(date: &str, time: &str) -> bool {
+    let digits = |s: &str, at: &[usize]| {
+        s.char_indices().all(|(i, c)| {
+            if at.contains(&i) {
+                !c.is_ascii_digit()
+            } else {
+                c.is_ascii_digit()
+            }
+        })
+    };
+    date.len() == 10 && digits(date, &[4, 7]) && time.len() == 5 && digits(time, &[2])
+}
+
 #[test]
-fn users_lists_logged_in_users() {
-    let out = cash("users");
-    assert!(!out.stdout.is_empty(), "users produced no output");
-    let user = std::env::var("USERNAME").unwrap_or_default();
-    if !user.is_empty() {
+fn users_and_who_name_windows_sessions_in_gnus_layout() {
+    // They read quser.exe's text, whose dates follow the machine's locale and which
+    // Windows Home lacks; now Windows' sessions. A service's session (CI's may be one) has
+    // no one logged on to it, so the lists may be empty; what they say must agree.
+    let count = cash("who -q");
+    let (names, total) = count
+        .stdout
+        .rsplit_once('\n')
+        .unwrap_or(("", &count.stdout));
+    let total: usize = total
+        .strip_prefix("# users=")
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("who -q: {}", count.stdout));
+    let mut names: Vec<&str> = names.split_whitespace().collect();
+    assert_eq!(names.len(), total, "{}", count.stdout);
+    let users = cash("users");
+    let mut users: Vec<&str> = users.stdout.split_whitespace().collect();
+    names.sort_unstable();
+    users.sort_unstable();
+    assert_eq!(users, names);
+
+    for line in cash("who").stdout.lines() {
+        let fields: Vec<&str> = line.split_whitespace().collect();
         assert!(
-            out.stdout.contains(&user),
-            "users missing current user: {}",
-            out.stdout
+            fields.len() >= 4 && is_who_time(fields[2], fields[3]),
+            "{line}"
         );
     }
+    let boot = cash("who -b").stdout;
+    let fields: Vec<&str> = boot.split_whitespace().collect();
+    assert!(
+        fields.len() == 4 && fields[..2] == ["system", "boot"] && is_who_time(fields[2], fields[3]),
+        "{boot}"
+    );
+    assert!(
+        cash("who -H")
+            .stdout
+            .starts_with("NAME     LINE         TIME")
+    );
+
+    let file = cash("who /var/run/utmp");
+    assert_eq!(file.code, 1);
+    assert!(
+        file.stderr.contains("no login records file"),
+        "{}",
+        file.stderr
+    );
+    let extra = cash("who a b c");
+    assert_eq!(extra.code, 1);
+    assert!(
+        extra.stderr.contains("extra operand 'c'"),
+        "{}",
+        extra.stderr
+    );
 }
 
 #[test]
-fn who_displays_session_info() {
-    let out = cash("who");
-    assert!(!out.stdout.is_empty(), "who produced no output");
-
-    let count = cash("who -q");
+fn pinky_gives_an_accounts_names_and_profile_and_takes_gnus_options() {
+    let me = cash("id -un").stdout;
+    let long = cash(&format!("pinky -l {me}"));
     assert!(
-        count.stdout.contains("# users="),
-        "who -q missing count: {}",
-        count.stdout
+        long.stdout
+            .starts_with(&format!("Login name: {me:<28}In real life: ")),
+        "{}",
+        long.stdout
+    );
+    assert!(long.stdout.contains("\nDirectory: C:/"), "{}", long.stdout);
+    let brief = cash(&format!("pinky -lb {me}"));
+    assert!(!brief.stdout.contains("Directory:"), "{}", brief.stdout);
+    assert_eq!(
+        cash("pinky -l no_such_user_zq").stdout,
+        format!("Login name: {:<28}In real life:  ???", "no_such_user_zq")
+    );
+    let missing = cash("pinky -l");
+    assert_eq!(missing.code, 1);
+    assert!(
+        missing.stderr.contains("no username specified"),
+        "{}",
+        missing.stderr
     );
 
-    let whoami = cash("who am i");
-    assert!(!whoami.stdout.is_empty(), "who am i produced no output");
-}
-
-#[test]
-fn pinky_displays_user_info() {
-    let out = cash("pinky");
     assert!(
-        out.stdout.contains("Login"),
-        "pinky header missing: {}",
-        out.stdout
+        cash("pinky")
+            .stdout
+            .starts_with("Login    Name                 TTY      Idle   When             Where")
     );
+    assert!(
+        cash("pinky -i")
+            .stdout
+            .starts_with("Login     TTY      Idle   When")
+    );
+    assert!(!cash("pinky -qf").stdout.contains("Login"));
 }
 
 #[test]

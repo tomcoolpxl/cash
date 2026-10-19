@@ -78,6 +78,7 @@ pub mod resolve;
 pub mod restart;
 pub mod scoop;
 pub mod session;
+pub mod sessions;
 pub mod shellopen;
 /// Synchronous sockets, for the `/dev/tcp` and `/dev/udp` descriptors a child can use.
 pub mod sockets;
