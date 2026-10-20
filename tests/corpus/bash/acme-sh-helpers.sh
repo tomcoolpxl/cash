@@ -1,0 +1,32 @@
+# source: https://github.com/acmesh-official/acme.sh/tree/37d064f (3.1.7, `acme.sh` unchanged, with its LICENSE.md, as the fixture directory `acme.sh`)
+# desc: acme.sh's helpers that need no network, the script sourced so that its main only shows its help: case changes with tr, the field and substring tests over grep, arithmetic, a hex dump over od, URL encoding of bytes and UTF-8, JSON decoding and normalizing with sed, egrep -o, dates both ways over date, sed -i on a file, command lookup and an IDN name left as it is
+# timeout: 30
+export HOME="$PWD/home"
+mkdir -p "$HOME"
+. ./acme.sh/acme.sh > /dev/null 2>&1
+echo "upper: $(printf 'Hello World 42' | _upper_case)"
+echo "lower: $(printf 'Hello World 42' | _lower_case)"
+_startswith "example.com" "exa" && echo "startswith: yes"
+_startswith "example.com" "com" || echo "startswith: no"
+_endswith "example.com" ".com" && echo "endswith: yes"
+_contains "a.b.c" "b.c" && echo "contains: yes"
+_contains "a.b.c" "x" || echo "contains: no"
+_hasfield "a,b,c" "b" && echo "hasfield: yes"
+_hasfield "a,b,c" "d" || echo "hasfield: no"
+echo "getfield 2: $(_getfield "a,b,c" 2)"
+echo "getfield 3 by colon: $(_getfield "x:y:z" 3 :)"
+echo "math: $(_math 6 \* 7 + 1)"
+echo "hex_dump: $(printf 'Az09' | _hex_dump)"
+echo "url_encode: $(printf 'a b&c=d/é~' | _url_encode)"
+echo "url_encode upper: $(printf 'a/b' | _url_encode upper-hex)"
+echo "json_decode: $(printf '{"url":"https:\\/\\/x\\/y"}' | _json_decode)"
+echo "egrep_o: $(printf 'id=123 name=abc' | _egrep_o 'name=[a-z]*')"
+echo "normalizeJson: $(printf '{ "a" : "b",\n  "c" :  {"d": 1}}' | _normalizeJson)"
+echo "time2str 0: $(_time2str 0)"
+echo "time2str 1700000000: $(_time2str 1700000000)"
+echo "date2time: $(_date2time '2024-02-29T12:34:56Z')"
+printf 'line one\nkey=old\n' > conf.txt
+_sed_i 's/key=old/key=new/' conf.txt && echo "sed_i: $(cat conf.txt | tr '\n' '|')"
+_exists sed && echo "exists sed: yes"
+_exists no-such-tool-zz || echo "exists no-such-tool-zz: no"
+echo "idn plain: $(_idn example.com)"

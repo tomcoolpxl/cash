@@ -1,0 +1,25 @@
+upper: HELLO WORLD 42
+lower: hello world 42
+startswith: yes
+startswith: no
+endswith: yes
+contains: yes
+contains: no
+hasfield: yes
+hasfield: no
+getfield 2: b
+getfield 3 by colon: z
+math: 43
+hex_dump:  41 7a 30 39
+url_encode: a%20b%26c%3dd%2f%c3%a9~
+url_encode upper: a%2Fb
+json_decode: {"url":"https://x/y"}
+egrep_o: name=abc
+normalizeJson: { "a":"b","c":{"d": 1}}
+time2str 0: 1970-01-01T00:00:00Z
+time2str 1700000000: 2023-11-14T22:13:20Z
+date2time: 1709210096
+sed_i: line one|key=new|
+exists sed: yes
+exists no-such-tool-zz: no
+idn plain: example.com

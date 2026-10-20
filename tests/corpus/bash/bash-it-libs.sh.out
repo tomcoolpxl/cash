@@ -1,0 +1,22 @@
+declare -rx BASH_IT_LOG_LEVEL_ALL="6"
+declare -rx BASH_IT_LOG_LEVEL_TRACE="7"
+levels are read-only
+DEBUG: default: a debug message
+ WARN: default: a warning
+ERROR: default: an error
+ERROR: default: still shown
+prefix: plugin: base
+prefix: aliases: git
+prefix: vendor: lib
+name: node
+name: git
+type: aliases
+contains red pear
+no pear
+dedup: a b c 
+singular: plugin alias completion
+plural: aliases completions
+sed exists
+no-such-tool-zz missing
+ WARN: default: from a child
+child sees level 4
