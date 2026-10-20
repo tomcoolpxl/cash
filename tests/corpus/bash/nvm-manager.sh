@@ -5,6 +5,8 @@
 # path is empty, which in cash, where $PWD is C:/..., it never is (the differences page):
 # a package.json at the top ends every search there.
 echo "{}" > package.json
+# GitHub's Windows runners set npm_config_prefix, which nvm use refuses with status 11.
+unset npm_config_prefix NPM_CONFIG_PREFIX
 export NVM_DIR="$PWD/nvmdir"
 for v in v18.20.4 v20.17.0 v22.9.0; do
   mkdir -p "$NVM_DIR/versions/node/$v/bin"
