@@ -44,6 +44,26 @@ impl CommandLineArgs {
     ) -> Result<Self, clap::Error> {
         let mut args: Vec<String> = itr.into_iter().collect();
 
+        // `-ce` as Bash takes it: `c` anywhere in a cluster of flags, with the command
+        // string the next word. clap took the rest of the cluster, `e`, for the command.
+        // Only the shell's own options, up to the first word that is none.
+        let mut takes_value = false;
+        for arg in args.iter_mut().skip(1) {
+            if std::mem::take(&mut takes_value) {
+                continue;
+            }
+            if !arg.starts_with(['-', '+']) || arg == "--" {
+                break;
+            }
+            takes_value = matches!(
+                arg.as_str(),
+                "-o" | "+o" | "-O" | "+O" | "--rcfile" | "--init-file"
+            );
+            if let Some(moved) = Self::c_flag_last(arg) {
+                *arg = moved;
+            }
+        }
+
         // In bash, `-c` treats `--` as an option terminator and takes its
         // command string from the first argument *after* `--`. (Other
         // value-taking flags like `-o` and `-O` instead consume `--` as their
@@ -122,8 +142,24 @@ impl CommandLineArgs {
         // true. For combined flags like `-ec`, verify all chars before the
         // trailing `c` are boolean flags. If any preceding char takes a value
         // (like `o`), then `c` is consumed as that flag's value, not as `-c`.
+        Self::all_boolean_flags(preceding)
+    }
+
+    /// A cluster with `c` before its end, `-ce`, with `c` moved to the end, `-ec`, when
+    /// the other letters are all boolean flags.
+    fn c_flag_last(arg: &str) -> Option<String> {
+        let flags = arg.strip_prefix('-')?;
+        if flags.starts_with('-') || flags.ends_with('c') || flags.matches('c').count() != 1 {
+            return None;
+        }
+        let others: String = flags.chars().filter(|&ch| ch != 'c').collect();
+        Self::all_boolean_flags(&others).then(|| format!("-{others}c"))
+    }
+
+    /// Whether every letter of `flags` is a short option that takes no value.
+    fn all_boolean_flags(flags: &str) -> bool {
         let cmd = Self::command();
-        preceding.chars().all(|ch| {
+        flags.chars().all(|ch| {
             cmd.get_arguments().any(|a| {
                 a.get_short() == Some(ch)
                     && !matches!(
@@ -784,6 +820,21 @@ mod tests {
             parsed_args.script_args,
             ["some-script", "-x", "1", "--option"]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn c_anywhere_in_a_cluster_takes_the_next_word_as_the_command() -> Result<()> {
+        // `-ce` took `e` for the command string; Bash runs the next word under `-e`.
+        let parsed = CommandLineArgs::try_parse_from(args(&["cash", "-ce", "false", "zero"]))?;
+        assert_eq!(parsed.command.as_deref(), Some("false"));
+        assert!(parsed.exit_on_nonzero_command_exit);
+        assert_eq!(parsed.script_args, ["zero"]);
+        let parsed =
+            CommandLineArgs::try_parse_from(args(&["cash", "-o", "posix", "-xce", "true"]))?;
+        assert_eq!(parsed.command.as_deref(), Some("true"));
+        let parsed = CommandLineArgs::try_parse_from(args(&["cash", "script", "-ce"]))?;
+        assert_eq!(parsed.script_args, ["script", "-ce"]);
         Ok(())
     }
 
