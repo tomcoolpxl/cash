@@ -799,22 +799,26 @@ const fn status_from_ignored_failure(
     shell: &Shell<impl extensions::ShellExtensions>,
     result: &ExecutionResult,
 ) -> bool {
-    !result.is_success()
-        && shell.failure_ignored_by_errexit()
-        && matches!(
-            pipeline.seq.as_slice(),
-            [ast::Command::Compound(
-                ast::CompoundCommand::BraceGroup(_)
-                    | ast::CompoundCommand::ForClause(_)
-                    | ast::CompoundCommand::ArithmeticForClause(_)
-                    | ast::CompoundCommand::SelectClause(_)
-                    | ast::CompoundCommand::CaseClause(_)
-                    | ast::CompoundCommand::IfClause(_)
-                    | ast::CompoundCommand::WhileClause(_)
-                    | ast::CompoundCommand::UntilClause(_),
-                _
-            )]
-        )
+    !result.is_success() && shell.failure_ignored_by_errexit() && is_compound_of_commands(pipeline)
+}
+
+/// Whether `pipeline` is one loop, `if`, `case` or `{ }` alone, whose status is that of the
+/// last command run inside it; not a `( … )` subshell, which Bash treats as a command.
+const fn is_compound_of_commands(pipeline: &ast::Pipeline) -> bool {
+    matches!(
+        pipeline.seq.as_slice(),
+        [ast::Command::Compound(
+            ast::CompoundCommand::BraceGroup(_)
+                | ast::CompoundCommand::ForClause(_)
+                | ast::CompoundCommand::ArithmeticForClause(_)
+                | ast::CompoundCommand::SelectClause(_)
+                | ast::CompoundCommand::CaseClause(_)
+                | ast::CompoundCommand::IfClause(_)
+                | ast::CompoundCommand::WhileClause(_)
+                | ast::CompoundCommand::UntilClause(_),
+            _
+        )]
+    )
 }
 
 #[async_trait::async_trait]
@@ -844,10 +848,14 @@ impl Execute for ast::Pipeline {
             });
         }
         // A pipeline's stages are copies of the shell, which keep their own lines; the
-        // shell's is the pipeline's while they run, the line an error in a stage names, as
-        // in Bash. It was the line of the command before.
-        if self.seq.len() > 1 {
-            shell.set_current_cmd(self);
+        // shell's is that of the last stage while they run, the line an error in a stage
+        // and an ERR trap after it name, as in Bash, where the shell passes each stage's
+        // line on its way to the last: `a \ | false` over two lines fails on the second.
+        // It was the line of the command before, then the pipeline's first.
+        if self.seq.len() > 1
+            && let Some(last) = self.seq.last()
+        {
+            shell.set_current_cmd(last);
         }
         // A busy job, below normal priority, takes turns of a millisecond, so a lock it
         // holds is not out of the foreground's reach for every other job's time slice.
@@ -915,10 +923,11 @@ impl Execute for ast::Pipeline {
         // pipelines, etc.).
         // A `return` or an `exit` leaves before Bash reaches its ERR check, so neither fires
         // ERR: `exit 1` ran bash-oo-framework's ERR handler, which threw an exception.
+        // Nor does a loop, `if`, `case` or `{ }`: the command in it that failed had its own.
         if !result.is_success()
             && !params.suppress_errexit
             && !self.bang
-            && !status_from_ignored_failure
+            && !is_compound_of_commands(self)
             && had_err_trap
             && !matches!(
                 result.next_control_flow,
