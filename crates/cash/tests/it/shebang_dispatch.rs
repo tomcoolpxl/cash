@@ -268,3 +268,24 @@ fn cash_rendered(path: &str) -> String {
         format!("{}{}", drive.to_ascii_uppercase(), chars.as_str())
     })
 }
+
+#[test]
+fn an_interpreter_named_by_a_drive_path_from_slash_runs() {
+    // `#!/c/tools/x.exe`, as Git Bash runs it: the name a command may have in cash anyway.
+    // It was not found, status 127.
+    let own = crate::common::CASH.replace('\\', "/");
+    let (drive, rest) = own.split_once(":/").expect("a drive path");
+    let scratch = Scratch::new("msys-interpreter");
+    let script = scratch.path().join("tool.sh");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/{}/{rest}\necho RAN_BY_DRIVE_PATH\n",
+            drive.to_ascii_lowercase()
+        ),
+    )
+    .expect("write");
+    let out = run_cash_cmd(&script.to_string_lossy().replace('\\', "/"));
+    assert_eq!(out.code, 0, "stderr: {}", out.stderr);
+    assert_eq!(out.stdout.trim(), "RAN_BY_DRIVE_PATH");
+}

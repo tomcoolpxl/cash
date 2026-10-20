@@ -473,9 +473,10 @@ pub fn resolve_interpreter(
         return Some((dispatch, rest.to_vec()));
     }
 
-    if (interpreter.contains('/') || interpreter.contains('\\')) && Path::new(interpreter).is_file()
-    {
-        let dispatch = classify(Path::new(interpreter));
+    // Spelled as cash takes a path anywhere: `#!/c/tools/x.exe` too, as Git Bash runs it.
+    let spelled = crate::path::accept_path(interpreter);
+    if (interpreter.contains('/') || interpreter.contains('\\')) && spelled.is_file() {
+        let dispatch = classify(&spelled);
         return Some((dispatch, args.to_vec()));
     }
 
