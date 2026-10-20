@@ -783,14 +783,23 @@ async fn exec_declaration_builtin_impl<
     let mut options = vec![];
     let mut declarations = vec![];
 
+    // Options come first, as Bash's `internal_getopt` takes them: `--` ends them, and so does
+    // the first name, so a later `--` or `-x` is a name (`typeset -f -- --`, composure). Every
+    // word that began with `-` was an option, and a second `--` was refused as one.
+    let mut options_ended = false;
     for (i, arg) in args.into_iter().enumerate() {
         match arg {
+            CommandArg::String(s) if i == 0 => options.push(s),
+            CommandArg::String(s) if !options_ended && s == "--" => options_ended = true,
             CommandArg::String(s)
-                if i == 0 || (s.len() > 1 && (s.starts_with('-') || s.starts_with('+'))) =>
+                if !options_ended && s.len() > 1 && (s.starts_with('-') || s.starts_with('+')) =>
             {
                 options.push(s);
             }
-            _ => declarations.push(arg),
+            arg => {
+                options_ended = true;
+                declarations.push(arg);
+            }
         }
     }
 

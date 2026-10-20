@@ -73,10 +73,23 @@ pub fn add_args<S: AsRef<OsStr>>(
 
     if target.is_some_and(is_msys_program) {
         for arg in args {
-            command.raw_arg(quote_arg(arg.as_ref()));
+            command.raw_arg(quote_arg(&substitutions_for_msys(arg.as_ref())));
         }
     } else {
         command.args(args);
+    }
+}
+
+/// `arg` with the path of each process substitution in it, `//./pipe/cash-procsub-…`, as
+/// an MSYS program opens it, `\\.\pipe\cash-procsub-…`: its runtime reads the forward
+/// slashes as a network path, where every other program opens the pipe either way.
+fn substitutions_for_msys(arg: &OsStr) -> std::borrow::Cow<'_, OsStr> {
+    const SHOWN: &str = "//./pipe/cash-procsub-";
+    match arg.to_str() {
+        Some(text) if text.contains(SHOWN) => {
+            std::borrow::Cow::Owned(text.replace(SHOWN, r"\\.\pipe\cash-procsub-").into())
+        }
+        _ => std::borrow::Cow::Borrowed(arg),
     }
 }
 

@@ -293,35 +293,43 @@ peg::parser! {
             --
             e:extended_test_binary_predicate() linebreak() { e }
             --
-            p:extended_unary_predicate() f:word() linebreak() { ast::ExtendedTestExpr::UnaryTest(p, ast::Word::from(f)) }
+            p:extended_unary_predicate() f:extended_test_word() linebreak() { ast::ExtendedTestExpr::UnaryTest(p, f) }
             --
             w:word() { ast::ExtendedTestExpr::UnaryTest(ast::UnaryPredicate::StringHasNonZeroLength, ast::Word::from(w)) }
         }
 
         rule extended_test_binary_predicate() -> ast::ExtendedTestExpr =
             // Arithmetic operators
-            left:word() specific_word("-eq") right:word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticEqualTo, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() specific_word("-ne") right:word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticNotEqualTo, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() specific_word("-lt") right:word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticLessThan, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() specific_word("-le") right:word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticLessThanOrEqualTo, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() specific_word("-gt") right:word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticGreaterThan, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() specific_word("-ge") right:word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticGreaterThanOrEqualTo, ast::Word::from(left), ast::Word::from(right)) } /
+            left:extended_test_word() specific_word("-eq") right:extended_test_word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticEqualTo, left, right) } /
+            left:extended_test_word() specific_word("-ne") right:extended_test_word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticNotEqualTo, left, right) } /
+            left:extended_test_word() specific_word("-lt") right:extended_test_word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticLessThan, left, right) } /
+            left:extended_test_word() specific_word("-le") right:extended_test_word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticLessThanOrEqualTo, left, right) } /
+            left:extended_test_word() specific_word("-gt") right:extended_test_word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticGreaterThan, left, right) } /
+            left:extended_test_word() specific_word("-ge") right:extended_test_word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::ArithmeticGreaterThanOrEqualTo, left, right) } /
             // Non-arithmetic binary operators
-            left:word() specific_word("-ef") right:word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::FilesReferToSameDeviceAndInodeNumbers, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() specific_word("-nt") right:word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftFileIsNewerOrExistsWhenRightDoesNot, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() specific_word("-ot") right:word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftFileIsOlderOrDoesNotExistWhenRightDoes, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() (specific_word("==") / specific_word("=")) right:word()  { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringExactlyMatchesPattern, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() specific_word("!=") right:word()  { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringDoesNotExactlyMatchPattern, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() specific_word("=~") right:regex_word()  {
+            left:extended_test_word() specific_word("-ef") right:extended_test_word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::FilesReferToSameDeviceAndInodeNumbers, left, right) } /
+            left:extended_test_word() specific_word("-nt") right:extended_test_word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftFileIsNewerOrExistsWhenRightDoesNot, left, right) } /
+            left:extended_test_word() specific_word("-ot") right:extended_test_word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftFileIsOlderOrDoesNotExistWhenRightDoes, left, right) } /
+            left:extended_test_word() (specific_word("==") / specific_word("=")) right:extended_test_word()  { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringExactlyMatchesPattern, left, right) } /
+            left:extended_test_word() specific_word("!=") right:extended_test_word()  { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringDoesNotExactlyMatchPattern, left, right) } /
+            left:extended_test_word() specific_word("=~") right:regex_word()  {
                 if right.value.starts_with(['\'', '\"']) {
                     // TODO(test): Confirm it ends with that too?
-                    ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringContainsSubstring, ast::Word::from(left), right)
+                    ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringContainsSubstring, left, right)
                 } else {
-                    ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringMatchesRegex, ast::Word::from(left), right)
+                    ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringMatchesRegex, left, right)
                 }
             } /
-            left:word() specific_operator("<") right:word()   { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftSortsBeforeRight, ast::Word::from(left), ast::Word::from(right)) } /
-            left:word() specific_operator(">") right:word()   { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftSortsAfterRight, ast::Word::from(left), ast::Word::from(right)) }
+            left:extended_test_word() specific_operator("<") right:extended_test_word()   { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftSortsBeforeRight, left, right) } /
+            left:extended_test_word() specific_operator(">") right:extended_test_word()   { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftSortsAfterRight, left, right) }
+
+        // [bash] An operand is a word, or a process substitution, which a word cannot
+        // begin with: `[[ -p <(cmd) ]]`. It was a syntax error. The substitution is kept as
+        // its text, which word expansion reads as it reads one inside a word.
+        rule extended_test_word() -> ast::Word =
+            w:word() { ast::Word::from(w) } /
+            non_posix_extensions_enabled() from:position!() process_substitution()
+            text:#{|input, pos| input.exact_text(pos, from)} { ast::Word::from(text) }
 
         rule extended_unary_predicate() -> ast::UnaryPredicate =
             specific_word("-a") { ast::UnaryPredicate::FileExists } /

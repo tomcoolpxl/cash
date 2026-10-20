@@ -77,6 +77,9 @@ pub(crate) async fn apply_unary_predicate_to_str(
     if let Some(answer) = dev_test(op, operand, shell, params) {
         return Ok(answer);
     }
+    if let Some(answer) = named_pipe_test(op, operand) {
+        return Ok(answer);
+    }
     match op {
         ast::UnaryPredicate::StringHasNonZeroLength => Ok(!operand.is_empty()),
         ast::UnaryPredicate::StringHasZeroLength => Ok(operand.is_empty()),
@@ -229,6 +232,32 @@ fn dev_node(
     let fd = crate::sys::fs::named_descriptor(&path)?;
     let open = params.try_fd(shell, fd).map(|file| file.kind());
     Some(DevNode::Descriptor(open))
+}
+
+/// The file tests of a named pipe, `\\.\pipe\name`, as a process substitution's path is,
+/// answered without opening it ([`cash_win32::pipe::exists`]): to open it took one of its
+/// instances, which a script handed `<(...)` (`bash_unit`) then had none of to read. It is
+/// there, readable, writable and a FIFO as Bash's `/dev/fd/63` is, and not a regular file,
+/// a directory or one with a size.
+fn named_pipe_test(op: &ast::UnaryPredicate, operand: &str) -> Option<bool> {
+    let path = Path::new(operand);
+    if !cash_win32::pipe::is_named_pipe(path) {
+        return None;
+    }
+    match op {
+        ast::UnaryPredicate::FileExists
+        | ast::UnaryPredicate::FileExistsAndIsReadable
+        | ast::UnaryPredicate::FileExistsAndIsWritable
+        | ast::UnaryPredicate::FileExistsAndIsFifo => Some(cash_win32::pipe::exists(path)),
+        ast::UnaryPredicate::FileExistsAndIsRegularFile
+        | ast::UnaryPredicate::FileExistsAndIsDir
+        | ast::UnaryPredicate::FileExistsAndIsNotZeroLength
+        | ast::UnaryPredicate::FileExistsAndIsExecutable
+        | ast::UnaryPredicate::FileExistsAndIsSymlink
+        | ast::UnaryPredicate::FileExistsAndIsBlockSpecialFile
+        | ast::UnaryPredicate::FileExistsAndIsCharSpecialFile => Some(false),
+        _ => None,
+    }
 }
 
 /// cash (D7): what the file test `op` says of a `/dev` name, which no file on Windows

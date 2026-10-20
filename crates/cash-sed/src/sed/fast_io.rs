@@ -326,9 +326,7 @@ impl LineReader {
 /// substitution gives. Asking for such a file's kind opens it, as a reader of the pipe,
 /// and the one reader its writer waits for is then gone: so it is opened only to be read.
 pub fn is_pipe_path(path: &Path) -> bool {
-    let name = path.as_os_str().to_string_lossy();
-    let prefix = name.get(..9).unwrap_or_default();
-    prefix.eq_ignore_ascii_case(r"\\.\pipe\") || prefix.eq_ignore_ascii_case("//./pipe/")
+    cash_win32::pipe::is_named_pipe(path)
 }
 
 /// Whether `path` is a directory, which a named pipe is not (`is_pipe_path`).

@@ -127,14 +127,11 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         };
 
         // A subshell runs the traps it set itself; of its parent's, which the copy
-        // carries, only those passed on. A sourced file is also a nested DEBUG scope in
-        // Bash: the caller's DEBUG trap is temporarily hidden unless functrace (`set -T`)
-        // is enabled. Functions need no check here: `enter_function` sets aside the
-        // traps they do not inherit, so a trap the function sets itself still fires.
+        // carries, only those passed on. Functions and sourced files need no check here:
+        // `enter_function` and `source_file` set aside the traps they do not inherit, so a
+        // trap one sets itself still fires.
         let inherited_from_a_parent = self.is_subshell() && handler.depth != self.depth();
-        let inheritance_required = inherited_from_a_parent
-            || (self.in_sourced_script() && matches!(signal, TrapSignal::Debug));
-        if inheritance_required && !self.is_trap_inherited_in_current_scope(signal) {
+        if inherited_from_a_parent && !self.is_trap_inherited_in_current_scope(signal) {
             return Ok(ExecutionResult::success());
         }
 

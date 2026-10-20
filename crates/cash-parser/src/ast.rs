@@ -12,6 +12,37 @@ thread_local! {
     /// written as they are, never indented, or the end would no longer be found
     /// (`eval "$(declare -f g)"` of a function with a here-document failed, PI-01).
     static WRITING_HERE_DOCUMENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+
+    /// The bodies of the here-documents of the command being written, held for after it,
+    /// where Bash writes them (`print_deferred_heredocs`): a list writes them after its item,
+    /// in place of its `;`, and a pipeline after its `|`. A `;` or a `|` on a line of its own
+    /// after the body did not read back (`eval "$(declare -f f)"`, composure). Outside a
+    /// list a body follows its `<<END`, as it did.
+    static HELD_HERE_DOCUMENTS: std::cell::RefCell<Vec<Vec<String>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Writes `node` with the bodies of its here-documents held ([`HELD_HERE_DOCUMENTS`]), and
+/// returns them.
+fn write_holding_here_documents(
+    f: &mut std::fmt::Formatter<'_>,
+    node: &impl Display,
+) -> Result<Vec<String>, std::fmt::Error> {
+    HELD_HERE_DOCUMENTS.with_borrow_mut(|held| held.push(Vec::new()));
+    let written = write!(f, "{node}");
+    let bodies = HELD_HERE_DOCUMENTS.with_borrow_mut(|held| held.pop().unwrap_or_default());
+    written.map(|()| bodies)
+}
+
+/// Writes the held bodies of here-documents, their lines as they are, never indented.
+fn write_here_document_bodies(
+    f: &mut std::fmt::Formatter<'_>,
+    bodies: &[String],
+) -> std::fmt::Result {
+    WRITING_HERE_DOCUMENT.set(true);
+    let written = bodies.iter().try_for_each(|body| f.write_str(body));
+    WRITING_HERE_DOCUMENT.set(false);
+    written
 }
 
 /// A writer that indents each line written through it that is not empty by
@@ -385,11 +416,23 @@ impl Display for Pipeline {
         if self.bang {
             write!(f, "! ")?;
         }
+        // The bodies of a command's here-documents come after the `|` that follows it, as
+        // Bash writes them; the last command's are its list's.
+        let last = self.seq.len().saturating_sub(1);
+        let mut bodies = Vec::new();
         for (i, command) in self.seq.iter().enumerate() {
             if i > 0 {
                 write!(f, " |")?;
+                if !bodies.is_empty() {
+                    writeln!(f)?;
+                    write_here_document_bodies(f, &std::mem::take(&mut bodies))?;
+                }
             }
-            write!(f, "{command}")?;
+            if i < last {
+                bodies = write_holding_here_documents(f, command)?;
+            } else {
+                write!(f, "{command}")?;
+            }
         }
 
         Ok(())
@@ -848,13 +891,31 @@ impl CompoundList {
         f: &mut std::fmt::Formatter<'_>,
         keep_trailing_separator: bool,
     ) -> std::fmt::Result {
+        // Whether the item before had here-documents, whose bodies took the place of the `;`
+        // after it and of the one after this, as Bash writes them (`was_heredoc`).
+        let mut after_here_documents = false;
         for (i, item) in self.0.iter().enumerate() {
             if i > 0 {
                 writeln!(f)?;
             }
 
-            // Write the and-or list.
-            write!(f, "{}", item.0)?;
+            // Write the and-or list, and then the bodies of its here-documents, a newline in
+            // place of its `;`; an `&` stays, before them.
+            let bodies = write_holding_here_documents(f, &item.0)?;
+            if !bodies.is_empty() {
+                if matches!(item.1, SeparatorOperator::Async) {
+                    write!(f, "{}", item.1)?;
+                }
+                writeln!(f)?;
+                write_here_document_bodies(f, &bodies)?;
+                after_here_documents = matches!(item.1, SeparatorOperator::Sequence);
+                continue;
+            }
+            if std::mem::take(&mut after_here_documents)
+                && matches!(item.1, SeparatorOperator::Sequence)
+            {
+                continue;
+            }
 
             // Write the separator... unless we're on the last list item and it's a ';'
             // that the enclosing construct doesn't want.
@@ -1862,6 +1923,16 @@ impl Display for IoHereDocument {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.remove_tabs {
             write!(f, "-")?;
+        }
+
+        // Inside a list, the body waits for the end of the command ([`HELD_HERE_DOCUMENTS`]).
+        let held = HELD_HERE_DOCUMENTS.with_borrow_mut(|held| {
+            held.last_mut()
+                .map(|bodies| bodies.push(format!("{}{}\n", self.doc, self.here_end)))
+                .is_some()
+        });
+        if held {
+            return write!(f, "{}", self.here_end);
         }
 
         writeln!(f, "{}", self.here_end)?;

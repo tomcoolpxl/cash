@@ -223,3 +223,27 @@ fn json_sh_patterns_reach_git_grep_intact() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+#[test]
+fn a_process_substitution_reaches_an_msys_program_as_a_pipe_it_opens() {
+    // `<(...)` is shown with forward slashes, `//./pipe/cash-procsub-...`, as every path
+    // cash shows; an MSYS program would take that for a UNC share, so it gets the
+    // backslash spelling, which it opens as the pipe.
+    let out = cash_command()
+        .env("U", usr_bin())
+        .args([
+            "-c",
+            r#"echo <(true); "$U/cat.exe" <(echo through); echo end"#,
+        ])
+        .output()
+        .expect("run cash");
+    let stdout = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n");
+    let mut lines = stdout.lines();
+    let shown = lines.next().unwrap_or_default();
+    assert!(
+        shown.starts_with("//./pipe/cash-procsub-"),
+        "{shown}; stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(lines.collect::<Vec<_>>(), ["through", "end"]);
+}

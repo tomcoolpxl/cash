@@ -2727,3 +2727,105 @@ fn bash_lineno_has_the_scripts_entry_outside_functions() {
         (0, "[] 0".into())
     );
 }
+
+#[test]
+fn a_sourced_file_runs_without_the_debug_trap_unless_functrace() {
+    // As Bash's `source` does (bashdb lives on it): the trap is set aside while the file
+    // runs and put back after, unless the file set one of its own, which stays; with
+    // `set -T` the file runs under it.
+    let root = Scratch::new("sourced-debug");
+    std::fs::write(root.join("plain.sh"), "echo \"in file\"\ntrap -p DEBUG\n").unwrap();
+    std::fs::write(root.join("sets.sh"), "trap 'echo own' DEBUG\n").unwrap();
+    let script = "trap 'echo \"debug: $BASH_COMMAND\"' DEBUG\nsource plain.sh\ntrap - DEBUG\n\
+                  trap ': outer' DEBUG\nsource sets.sh\ntrap -p DEBUG | sed 's/^/after sets: /'\n\
+                  trap - DEBUG\nset -T\ntrap ': traced' DEBUG\n\
+                  source plain.sh | sed 's/^/functrace: /'\ntrap - DEBUG\n";
+    assert_eq!(
+        output_in(root.path(), script),
+        (
+            0,
+            "debug: source plain.sh\nin file\ndebug: trap - DEBUG\nown\nown\n\
+             after sets: trap -- 'echo own' DEBUG\nown\nfunctrace: in file\n\
+             functrace: trap -- ': traced' DEBUG"
+                .into()
+        )
+    );
+}
+
+#[test]
+fn bash_argv_holds_the_arguments_of_a_file_sourced_at_the_top() {
+    // With extdebug, a `source` at the top pushes its arguments as a function call does;
+    // one in a function adds them to the function's.
+    let root = Scratch::new("source-argv");
+    std::fs::write(
+        root.join("args.sh"),
+        "echo \"argv=[${BASH_ARGV[*]}] argc=[${BASH_ARGC[*]}]\"\n",
+    )
+    .unwrap();
+    assert_eq!(
+        output_in(
+            root.path(),
+            "shopt -s extdebug; source args.sh one two; f() { source args.sh three; }; f x y"
+        ),
+        (
+            0,
+            "argv=[two one] argc=[2 0]\nargv=[three y x] argc=[1 2 0]".into()
+        )
+    );
+}
+
+#[test]
+fn a_subscript_may_hold_spaces_where_an_assignment_may_stand() {
+    // `m[k one]=v` and `([k one]=v)` are one assignment word each, as in Bash (composure's
+    // metadata); the space ended the word, and `one]=v` was a command.
+    assert_eq!(
+        output(
+            "declare -A m; m[k one]=v1; m[two words here]=v2; declare -A n=([k one]=a [k two]=b)\n\
+             echo \"${m[k one]} ${m[two words here]} ${n[k one]} ${n[k two]} ${#n[@]}\"\n\
+             i=3; a[i + 1]=four; echo \"${a[4]}\"; echo [a b]"
+        ),
+        (0, "v1 v2 a b 2\nfour\n[a b]".into())
+    );
+}
+
+#[test]
+fn a_process_substitution_is_an_operand_of_double_brackets() {
+    // `[[ -p <(cmd) ]]` was a syntax error; its path is a pipe while it is open, which
+    // `-p`, `-e` and `-r` see, and no regular file or directory (bash_unit tests so).
+    assert_eq!(
+        output(
+            "[[ -p <(true) ]] && echo p; [[ -e <( echo x ) ]] && echo e; \
+             [[ -r <(true) ]] && echo r; [[ -f <(true) ]] || echo not-f; \
+             [[ -d <(true) ]] || echo not-d; [[ $(cat <(echo hi)) == hi ]] && echo read; \
+             [ -p <(true) ] && echo single"
+        ),
+        (0, "p\ne\nr\nnot-f\nnot-d\nread\nsingle".into())
+    );
+}
+
+#[test]
+fn declare_f_prints_here_documents_that_read_back() {
+    // A here-document's body follows the line its command ends, after a `;` or `|` that
+    // goes on, as Bash prints it; it was printed where the redirection stood, and the
+    // function read back ran its body as commands (composure's `write`).
+    let function = "g() {\n  echo a\n  cat <<END\nbody\nEND\n  cat <<A; echo c\nx\nA\n  \
+                    cat <<B | tr a b\naaa\nB\n}\n";
+    assert_eq!(
+        output(&format!("{function}eval \"$(declare -f g)\" && g")),
+        (0, "a\nbody\nx\nc\nbbb".into())
+    );
+}
+
+#[test]
+fn declaration_options_end_at_the_first_name_or_a_double_dash() {
+    // As Bash's getopt takes them: `typeset -f -- f` names `f`, and a `-i` after a name is
+    // a name, refused, not an option for what came before.
+    assert_eq!(
+        output("h() { echo h; }; typeset -f -- h"),
+        (0, "h () \n{ \n    echo h\n}".into())
+    );
+    assert_eq!(
+        output("declare x -i 2>/dev/null; echo \"status $?\"; x=1+1; echo \"$x\""),
+        (0, "status 1\n1+1".into())
+    );
+}

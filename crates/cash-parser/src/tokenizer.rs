@@ -269,6 +269,19 @@ struct CrossTokenParseState {
     /// How many `${...}` expansions are being read, inside one another: their words are
     /// not held for after a here-document's body, even one begun inside them.
     braced_expansions: u32,
+    /// Whether a word read now may be an assignment, as Bash's `assignment_acceptable` has
+    /// it: at a command's start, after a keyword that begins one, and after another
+    /// assignment. There `name[` reads its subscript to its `]`, blanks and all:
+    /// `map[set auto]=on` is one word, which was two (bashdb).
+    assignment_position: bool,
+    /// Whether the next word is a redirection's target, which leaves the position as it is.
+    redirection_target: bool,
+    /// Whether the last word was an assignment with nothing after its `=`, which a `(`
+    /// makes a compound one.
+    bare_assignment: bool,
+    /// How many compound assignments' `(`s are open, `a=(...)`: there a word that begins
+    /// with `[` reads its subscript to its `]`, `([k one]=1)`.
+    compound_assignments: u32,
 }
 
 /// Options controlling how the tokenizer operates.
@@ -630,6 +643,10 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                 arithmetic_expansion: false,
                 in_double_brackets: false,
                 braced_expansions: 0,
+                assignment_position: true,
+                redirection_target: false,
+                bare_assignment: false,
+                compound_assignments: 0,
             },
             pending: vec![],
             blank_end: false,
@@ -757,7 +774,73 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
             }
             _ => {}
         }
+        self.note_assignment_position(result.token.as_ref());
         Ok(result)
+    }
+
+    /// Follows where an assignment may be read ([`CrossTokenParseState::assignment_position`])
+    /// past `token`, as Bash's `assignment_acceptable` does.
+    fn note_assignment_position(&mut self, token: Option<&Token>) {
+        let state = &mut self.cross_state;
+        match token {
+            Some(Token::Operator(op, _)) => {
+                let bare_assignment = std::mem::take(&mut state.bare_assignment);
+                match op.as_str() {
+                    "(" if bare_assignment => state.compound_assignments += 1,
+                    ")" if state.compound_assignments > 0 => {
+                        state.compound_assignments -= 1;
+                        state.assignment_position = true;
+                    }
+                    ";" | "&" | "&&" | "||" | "|" | "|&" | ";;" | ";&" | ";;&" | "\n" | "("
+                    | ")" => {
+                        state.assignment_position = true;
+                        state.redirection_target = false;
+                    }
+                    // The word after a redirection is its target.
+                    _ => state.redirection_target = true,
+                }
+            }
+            Some(Token::Word(word, _)) => {
+                state.bare_assignment = false;
+                if std::mem::take(&mut state.redirection_target) || state.compound_assignments > 0 {
+                    return;
+                }
+                // `name=(` is a compound assignment wherever it comes: `declare -A m=(` too.
+                let assignment = is_assignment_word(word);
+                state.bare_assignment = assignment && word.ends_with('=');
+                // A `{` opens commands wherever it comes, `function f {` too.
+                if word == "{" {
+                    state.assignment_position = true;
+                } else if state.assignment_position {
+                    state.assignment_position = assignment
+                        || matches!(
+                            word.as_str(),
+                            "then"
+                                | "do"
+                                | "else"
+                                | "elif"
+                                | "if"
+                                | "while"
+                                | "until"
+                                | "!"
+                                | "time"
+                                | "coproc"
+                        );
+                }
+            }
+            None => {}
+        }
+    }
+
+    /// Whether a `[` that comes now begins a subscript, read to its `]` with its blanks:
+    /// after a name where an assignment may be (`map[set auto]=on`), or at the start of a
+    /// word in a compound assignment (`([k one]=1)`), as Bash reads them.
+    fn subscript_follows(&self, word_so_far: &str) -> bool {
+        let state = &self.cross_state;
+        if state.compound_assignments > 0 {
+            return word_so_far.is_empty();
+        }
+        state.assignment_position && !state.redirection_target && is_name(word_so_far)
     }
 
     /// Consumes a nested construct (e.g., `$((...))` or `$[...]`), handling nested delimiters
@@ -1404,6 +1487,18 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                     }
                 }
             //
+            // [bash] A subscript where an assignment may be is read to its `]`, its blanks
+            // too, as Bash reads it: `map[set auto]=on`, `([k one]=1)`.
+            } else if c == '['
+                && state.unquoted()
+                && !state.in_operator()
+                && !include_space
+                && self.subscript_follows(state.current_token())
+            {
+                self.consume_char()?;
+                state.append_char(c);
+                self.consume_nested_construct(&mut state, ']', "[", 1)?;
+            //
             // [bash] A process substitution inside a word is part of the word:
             // `--file=<(cmd)`, `f=<(cmd)`. It ended the word there, and `--file=` and the
             // substitution's path were two arguments. One that begins a word is still
@@ -1605,6 +1700,42 @@ impl<R: ?Sized + std::io::BufRead> Iterator for Tokenizer<'_, R> {
 
 const fn is_blank(c: char) -> bool {
     c == ' ' || c == '\t'
+}
+
+/// Whether `word` is a name, a variable's: a letter or `_`, then letters, digits and `_`.
+fn is_name(word: &str) -> bool {
+    let mut chars = word.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Whether `word` is an assignment: `name=`, `name+=`, or either after a subscript,
+/// `name[…]=`, whose `]` is the one that closes its `[`.
+fn is_assignment_word(word: &str) -> bool {
+    let name_end = word
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .unwrap_or(word.len());
+    let (name, mut rest) = word.split_at(name_end);
+    if !is_name(name) {
+        return false;
+    }
+    if rest.starts_with('[') {
+        let mut depth = 0usize;
+        let Some(close) = rest.char_indices().find_map(|(at, c)| {
+            match c {
+                '[' => depth += 1,
+                ']' => depth -= 1,
+                _ => {}
+            }
+            (depth == 0).then_some(at)
+        }) else {
+            return false;
+        };
+        rest = rest.get(close + 1..).unwrap_or_default();
+    }
+    rest.starts_with('=') || rest.starts_with("+=")
 }
 
 const fn does_char_newly_affect_quoting(state: &TokenParseState, c: char) -> bool {

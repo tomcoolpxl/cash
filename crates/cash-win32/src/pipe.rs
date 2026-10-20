@@ -44,12 +44,16 @@ static COUNTER: AtomicU64 = AtomicU64::new(1);
 /// Buffer size for the named pipe kernel buffer (64 KiB).
 const PIPE_BUFFER_SIZE: u32 = 65536;
 
-/// Generates a unique Win32 Named Pipe path for process substitution.
+/// Generates a unique Win32 Named Pipe path for process substitution: the name the pipe is
+/// made under, and the path a script is given, `//./pipe/cash-procsub-…`, in cash's
+/// forward slashes (D3), which every program opens as it opens `\\.\pipe\…`. With
+/// backslashes, `eval "cmd <(…)"` read them as escapes (`bash_unit`), where Bash's
+/// `/dev/fd/63` comes through.
 fn generate_pipe_path() -> (String, Vec<u16>) {
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let path = format!(r"\\.\pipe\cash-procsub-{}-{}", std::process::id(), id);
-    let wide = crate::wide::to_wide_nul(&path);
-    (path, wide)
+    let name = format!(r"\\.\pipe\cash-procsub-{}-{}", std::process::id(), id);
+    let wide = crate::wide::to_wide_nul(&name);
+    (name.replace('\\', "/"), wide)
 }
 
 /// Waits for a client to connect to the named pipe server `server`.
@@ -401,6 +405,40 @@ pub fn is_substitution(path: &std::path::Path) -> bool {
 
 /// Where every process substitution's named pipe is.
 const PIPE_PREFIX: &str = r"\\.\pipe\cash-procsub-";
+
+/// Whether `path` names a Windows named pipe, `\\.\pipe\name` in either slash.
+///
+/// A process substitution's is one ([`is_substitution`]). Asking such a file's kind by
+/// opening it takes one of the pipe's instances: [`exists`] asks without.
+#[must_use]
+pub fn is_named_pipe(path: &std::path::Path) -> bool {
+    let name = path.as_os_str().to_string_lossy();
+    let prefix = name.get(..9).unwrap_or_default();
+    prefix.eq_ignore_ascii_case(r"\\.\pipe\") || prefix.eq_ignore_ascii_case("//./pipe/")
+}
+
+/// Whether the named pipe `path` is there, asked without connecting to it
+/// (`WaitNamedPipeW`).
+///
+/// Opening it to look took one of its instances, and a process substitution's has two, so
+/// `test -e` and `test -r` in a script it was handed left none for the reading
+/// (`bash_unit`). A pipe whose instances are all busy is there too.
+#[must_use]
+pub fn exists(path: &std::path::Path) -> bool {
+    use std::os::windows::ffi::OsStrExt as _;
+    use windows_sys::Win32::Foundation::ERROR_SEM_TIMEOUT;
+    use windows_sys::Win32::System::Pipes::WaitNamedPipeW;
+
+    let name = path.as_os_str().to_string_lossy().replace('/', "\\");
+    let wide: Vec<u16> = std::ffi::OsStr::new(&name)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    // SAFETY: `wide` is a NUL-terminated UTF-16 string that outlives the call.
+    let available = unsafe { WaitNamedPipeW(wide.as_ptr(), 1) } != 0;
+    // SAFETY: reads the calling thread's last error, which the call above set.
+    available || unsafe { GetLastError() } == ERROR_SEM_TIMEOUT
+}
 
 /// Opens `path` for writing as `options` say; a process substitution's pipe, as a pipe
 /// can be opened (D17).

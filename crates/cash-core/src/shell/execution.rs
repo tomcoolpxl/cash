@@ -7,7 +7,7 @@ use super::parsing::Prefix;
 use crate::{
     ExecutionControlFlow, ExecutionParameters, ExecutionResult, ProcessGroupPolicy, SourceInfo,
     arithmetic::Evaluatable as _, callstack, error, interp::Execute as _, openfiles,
-    trace_categories,
+    trace_categories, traps::TrapSignal,
 };
 
 impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
@@ -206,9 +206,30 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         let source_was_given_args = matches!(call_type, callstack::ScriptCallType::Source)
             && !script_positional_args.is_empty();
 
+        // `source` outside a function puts the positional parameters on `BASH_ARGV`'s stack
+        // the first time, as Bash's reaching for the variable to push the file's name does
+        // (`get_bashargcv`): bashdb's backtrace takes the script's arguments from there.
+        if matches!(call_type, callstack::ScriptCallType::Source) && !self.call_stack.in_function()
+        {
+            self.call_stack.init_bash_args(self.positional_args());
+        }
         let extdebug = self.options.enable_debugger;
         self.call_stack
             .push_script(call_type, source_info, script_positional_args, extdebug);
+
+        // Without `set -T` a sourced file runs without the DEBUG trap, as in Bash
+        // (`source.def`): one it sets itself fires in it and stays after it; otherwise the
+        // caller's comes back when it ends. It was hidden whoever set it, so bashdb, which
+        // sets its trap again from inside it, stopped stepping in the file it debugs.
+        let set_aside_debug = if matches!(call_type, callstack::ScriptCallType::Source)
+            && !self.options.shell_functions_inherit_debug_and_return_traps
+            && let Some(handler) = self.traps.get_handler(TrapSignal::Debug).cloned()
+        {
+            self.traps.remove_handlers(TrapSignal::Debug);
+            Some(handler)
+        } else {
+            None
+        };
 
         // A sourced file that does not parse fails `source` with 2, as in Bash, and the
         // script goes on, in POSIX mode too; a script that is run ends.
@@ -217,6 +238,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             .run_text(&text, whole, TextOrigin::Whole, source_info, params, fatal)
             .await
             .map_err(|e| e.located_at(self.error_prefix()));
+
+        if let Some(handler) = set_aside_debug
+            && !self.traps.handles(TrapSignal::Debug)
+        {
+            self.traps.restore_handler(TrapSignal::Debug, handler);
+        }
 
         if matches!(call_type, callstack::ScriptCallType::Source) && result.is_ok() {
             crate::commands::run_return_trap(self, params).await;
