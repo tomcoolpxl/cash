@@ -48,6 +48,8 @@ itself. At the prompt, Ctrl-Z is the line editor's undo.
 - `kill -9` terminates at once. A killed program's status is 128 plus the signal number:
   143 for `TERM`, 137 for `KILL`.
 - `kill -STOP` and `kill -CONT` suspend and resume, as Ctrl-Z and `fg` do.
+- `kill -USR1`, `-PIPE`, `-ALRM` and the other signals Windows has no way to send are
+  refused for a program; sent to the shell itself (`kill -USR1 $$`), they run its trap.
 - A pid from `$!` keeps naming that job after it ended, so `kill "$pid"` in a cleanup
   trap cannot hit a program Windows gave the number to since.
 

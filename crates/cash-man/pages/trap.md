@@ -83,3 +83,6 @@ Windows delivers no Unix signals, so cash raises the events itself:
   with 128 plus its number, its traps, `EXIT`'s too, not run.
 - `CHLD`: once for each child process cash starts and reaps, and for each background
   job. Builtins and bundled tools run inside cash and raise none.
+- `USR1`, `PIPE`, `ALRM`, `ILL` and the others Windows never sends: a trap on one is
+  kept and shown by `trap -p`, and runs when the shell sends the signal to itself
+  (`kill -USR1 $$`); nothing else raises it.

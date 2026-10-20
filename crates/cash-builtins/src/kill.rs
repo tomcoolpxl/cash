@@ -183,10 +183,12 @@ async fn signal_target<SE: cash_core::ShellExtensions>(
 /// handles it, rather than delivered through the OS. Delivered, `INT` and `TERM` ended
 /// cash at once, trap or no trap.
 ///
-/// `KILL` ends the shell. A trapped signal runs its trap and the shell goes on. Otherwise
-/// the signal's default: a script ends with 128 + the signal's number; an interactive
-/// shell ignores `TERM`, abandons the line on `INT` as Ctrl-C does, and exits on `HUP`.
-/// `QUIT` (which Bash ignores in all cases), `STOP`, `TSTP`, `CONT` and `CHLD` are ignored.
+/// `KILL` ends the shell. A trapped signal runs its trap and the shell goes on: so does
+/// one Windows cannot send a program, `USR1` and the rest. Otherwise the signal's
+/// default: a script ends with 128 + the signal's number; an interactive shell ignores
+/// `TERM`, abandons the line on `INT` as Ctrl-C does, and exits on the others. `QUIT`
+/// (which Bash ignores in all cases), those that stop a process and those POSIX ignores
+/// (`CHLD`, `CONT`, `URG`, `WINCH`) are ignored.
 async fn signal_self<SE: cash_core::ShellExtensions>(
     context: &mut cash_core::ExecutionContext<'_, SE>,
     signal: TrapSignal,
@@ -213,16 +215,18 @@ async fn signal_self<SE: cash_core::ShellExtensions>(
         result?;
         return Ok(ExecutionResult::success());
     }
+    // Bash ignores QUIT in all cases, scripts included.
+    if raw.leaves_the_shell_running() || name == "QUIT" {
+        return Ok(ExecutionResult::success());
+    }
     match name {
-        // Bash ignores QUIT in all cases, scripts included.
-        "STOP" | "TSTP" | "CONT" | "CHLD" | "QUIT" => Ok(ExecutionResult::success()),
         _ if !context.shell.options().interactive => Ok(exit(status)),
         "INT" => {
             writeln!(context.error_stream())?;
             Err(cash_core::ErrorKind::Interrupted.into())
         }
-        "HUP" => Ok(exit(status)),
-        _ => Ok(ExecutionResult::success()),
+        "TERM" => Ok(ExecutionResult::success()),
+        _ => Ok(exit(status)),
     }
 }
 
@@ -245,10 +249,30 @@ fn signal_job_spec<SE: cash_core::ShellExtensions>(
     };
     if signal_zero {
         job.check_signalable()?;
-    } else {
-        job.kill(trap_signal)?;
+    } else if let Err(e) = job.kill(trap_signal) {
+        return said_unsendable(context, e);
     }
     Ok(ExecutionResult::success())
+}
+
+/// A signal Windows cannot send a program, said as `signal_pid` says it: `kill: USR1:
+/// Windows cannot send this signal to a program`. Another error goes on as it was.
+fn said_unsendable<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    e: cash_core::Error,
+) -> Result<ExecutionResult, cash_core::Error> {
+    if e.as_io_error()
+        .is_none_or(|io| io.kind() != std::io::ErrorKind::Unsupported)
+    {
+        return Err(e);
+    }
+    writeln!(
+        context.error_stream(),
+        "{}: {}",
+        context.command_name,
+        e.worded()
+    )?;
+    Ok(ExecutionResult::general_error())
 }
 
 /// Signals the job `pid` is the number of, when it is the number of a job that started
@@ -268,7 +292,9 @@ fn signal_job_known_as<SE: cash_core::ShellExtensions>(
         return Ok(None);
     };
     if !signal_zero {
-        job.kill(trap_signal)?;
+        if let Err(e) = job.kill(trap_signal) {
+            return said_unsendable(context, e).map(Some);
+        }
     } else if !job.runs_inside_the_shell() {
         writeln!(
             context.error_stream(),

@@ -22,10 +22,12 @@
 //! (after a command, in `wait`, when a job starts, at the prompt), once per child reaped
 //! since. Sent to another process, it does what POSIX's default does: nothing.
 //!
-//! Deliberately absent: `SIGPIPE`, `SIGUSR1/2`, `SIGALRM` and the rest. There
-//! is no Win32 mechanism behind them, and accepting a trap that can never fire would be
-//! the silent-failure pattern D20 and D26 both reject. `trap USR1` therefore reports an
-//! invalid signal rather than pretending.
+//! The rest of Linux's standard signals, `ILL` to `SYS`, are names and numbers only, with
+//! nothing behind them that a program could be sent. `trap`, `trap -l` and `kill -l` know
+//! them, because scripts name them: bashdb traps `ILL` and `TRAP`, and an unknown name
+//! made it file both under `EXIT`. A trap on one is kept and shown by `trap -p`, and runs
+//! when the shell sends the signal to itself (`kill -USR1 $$`); sending one to a program
+//! is refused (`Signal::reaches_programs`).
 //!
 //! §4 divergence #9 records the consequence: `kill -STOP` suspends threads rather than
 //! being a real `SIGSTOP`.
@@ -45,10 +47,10 @@ use crate::{error, sys, traps};
 /// Ctrl-C arrives through tokio's console-control handler.
 pub(crate) use tokio::signal::ctrl_c as await_ctrl_c;
 
-/// The signals cash can implement on Windows.
+/// Linux's standard signals: those cash implements on Windows, and the rest by name.
 ///
-/// Numbering follows the conventional POSIX values so that `kill -9` and `$?`'s `128 + n`
-/// convention (D15) line up with what a script written on Linux expects.
+/// Numbering follows Linux's, so that `kill -9` and `$?`'s `128 + n` convention (D15)
+/// line up with what a script written on Linux expects.
 // Re-exported through `sys::signal`, so it is reachable without being nameable by that
 // path — the same shape as the stub this replaces.
 #[allow(unnameable_types)]
@@ -61,10 +63,32 @@ pub enum Signal {
     Int = 2,
     /// Quit. Delivered as a termination request.
     Quit = 3,
+    /// Illegal instruction. A name only.
+    Ill = 4,
+    /// Trace or breakpoint trap. A name only.
+    Trap = 5,
+    /// Abort. A name only.
+    Abrt = 6,
+    /// Bus error. A name only.
+    Bus = 7,
+    /// Floating-point exception. A name only.
+    Fpe = 8,
     /// Kill. Immediate and uncatchable, as on POSIX.
     Kill = 9,
+    /// User-defined signal 1. A name only.
+    Usr1 = 10,
+    /// Segmentation fault. A name only.
+    Segv = 11,
+    /// User-defined signal 2. A name only.
+    Usr2 = 12,
+    /// Broken pipe. A name only: cash's own end of a pipe is D71's.
+    Pipe = 13,
+    /// Alarm clock. A name only.
+    Alrm = 14,
     /// Terminate, with the graceful-first escalation of D21.
     Term = 15,
+    /// Stack fault. A name only.
+    Stkflt = 16,
     /// A child exited. cash's own event, from the children it reaps.
     Chld = 17,
     /// Continue a stopped process (D19).
@@ -73,6 +97,28 @@ pub enum Signal {
     Stop = 19,
     /// Terminal stop — what Ctrl-Z raises (D19).
     Tstp = 20,
+    /// Background read from the terminal. A name only.
+    Ttin = 21,
+    /// Background write to the terminal. A name only.
+    Ttou = 22,
+    /// Urgent data on a socket. A name only.
+    Urg = 23,
+    /// CPU time limit exceeded. A name only.
+    Xcpu = 24,
+    /// File size limit exceeded. A name only.
+    Xfsz = 25,
+    /// Virtual timer expired. A name only.
+    Vtalrm = 26,
+    /// Profiling timer expired. A name only.
+    Prof = 27,
+    /// The window changed size. A name only.
+    Winch = 28,
+    /// I/O possible. A name only.
+    Io = 29,
+    /// Power failure. A name only.
+    Pwr = 30,
+    /// Bad system call. A name only.
+    Sys = 31,
 }
 
 /// cash's own `CHLD`, which a trap names to run once per child reaped. Unix names nix's
@@ -80,20 +126,76 @@ pub enum Signal {
 pub(crate) const CHLD: Option<Signal> = Some(Signal::Chld);
 
 impl Signal {
-    /// Every signal cash supports on Windows.
+    /// Every signal cash knows, in number order.
     pub fn iterator() -> impl Iterator<Item = Self> {
         [
             Self::Hup,
             Self::Int,
             Self::Quit,
-            Self::Term,
+            Self::Ill,
+            Self::Trap,
+            Self::Abrt,
+            Self::Bus,
+            Self::Fpe,
             Self::Kill,
+            Self::Usr1,
+            Self::Segv,
+            Self::Usr2,
+            Self::Pipe,
+            Self::Alrm,
+            Self::Term,
+            Self::Stkflt,
+            Self::Chld,
+            Self::Cont,
             Self::Stop,
             Self::Tstp,
-            Self::Cont,
-            Self::Chld,
+            Self::Ttin,
+            Self::Ttou,
+            Self::Urg,
+            Self::Xcpu,
+            Self::Xfsz,
+            Self::Vtalrm,
+            Self::Prof,
+            Self::Winch,
+            Self::Io,
+            Self::Pwr,
+            Self::Sys,
         ]
         .into_iter()
+    }
+
+    /// Whether cash can send the signal to a program, through the mechanism of the table
+    /// above. The others are names only: sending one is refused, not faked.
+    pub const fn reaches_programs(self) -> bool {
+        matches!(
+            self,
+            Self::Hup
+                | Self::Int
+                | Self::Quit
+                | Self::Kill
+                | Self::Term
+                | Self::Chld
+                | Self::Cont
+                | Self::Stop
+                | Self::Tstp
+        )
+    }
+
+    /// Whether the signal's default action leaves a process running, as Bash leaves the
+    /// shell when it sends itself one with no trap on it: those that stop a process,
+    /// which a shell does not do to itself, and those POSIX ignores by default.
+    pub const fn leaves_the_shell_running(self) -> bool {
+        matches!(
+            self,
+            Self::Chld
+                | Self::Cont
+                | Self::Stop
+                | Self::Tstp
+                | Self::Ttin
+                | Self::Ttou
+                | Self::Urg
+                | Self::Winch
+        )
     }
 
     /// What a job this signal ended is shown as, as Bash's `jobs` shows it (`strsignal`):
@@ -103,12 +205,34 @@ impl Signal {
             Self::Hup => "Hangup",
             Self::Int => "Interrupt",
             Self::Quit => "Quit",
+            Self::Ill => "Illegal instruction",
+            Self::Trap => "Trace/breakpoint trap",
+            Self::Abrt => "Aborted",
+            Self::Bus => "Bus error",
+            Self::Fpe => "Floating point exception",
             Self::Kill => "Killed",
+            Self::Usr1 => "User defined signal 1",
+            Self::Segv => "Segmentation fault",
+            Self::Usr2 => "User defined signal 2",
+            Self::Pipe => "Broken pipe",
+            Self::Alrm => "Alarm clock",
             Self::Term => "Terminated",
+            Self::Stkflt => "Stack fault",
+            Self::Chld => "Child exited",
+            Self::Cont => "Continued",
             Self::Stop => "Stopped (signal)",
             Self::Tstp => "Stopped",
-            Self::Cont => "Continued",
-            Self::Chld => "Child exited",
+            Self::Ttin => "Stopped (tty input)",
+            Self::Ttou => "Stopped (tty output)",
+            Self::Urg => "Urgent I/O condition",
+            Self::Xcpu => "CPU time limit exceeded",
+            Self::Xfsz => "File size limit exceeded",
+            Self::Vtalrm => "Virtual timer expired",
+            Self::Prof => "Profiling timer expired",
+            Self::Winch => "Window changed",
+            Self::Io => "I/O possible",
+            Self::Pwr => "Power failure",
+            Self::Sys => "Bad system call",
         }
     }
 
@@ -118,12 +242,34 @@ impl Signal {
             Self::Hup => "HUP",
             Self::Int => "INT",
             Self::Quit => "QUIT",
-            Self::Term => "TERM",
+            Self::Ill => "ILL",
+            Self::Trap => "TRAP",
+            Self::Abrt => "ABRT",
+            Self::Bus => "BUS",
+            Self::Fpe => "FPE",
             Self::Kill => "KILL",
+            Self::Usr1 => "USR1",
+            Self::Segv => "SEGV",
+            Self::Usr2 => "USR2",
+            Self::Pipe => "PIPE",
+            Self::Alrm => "ALRM",
+            Self::Term => "TERM",
+            Self::Stkflt => "STKFLT",
+            Self::Chld => "CHLD",
+            Self::Cont => "CONT",
             Self::Stop => "STOP",
             Self::Tstp => "TSTP",
-            Self::Cont => "CONT",
-            Self::Chld => "CHLD",
+            Self::Ttin => "TTIN",
+            Self::Ttou => "TTOU",
+            Self::Urg => "URG",
+            Self::Xcpu => "XCPU",
+            Self::Xfsz => "XFSZ",
+            Self::Vtalrm => "VTALRM",
+            Self::Prof => "PROF",
+            Self::Winch => "WINCH",
+            Self::Io => "IO",
+            Self::Pwr => "PWR",
+            Self::Sys => "SYS",
         }
     }
 
@@ -323,8 +469,23 @@ const fn exit_status(signal: Signal) -> u32 {
     (128 + signal.number()) as u32
 }
 
+/// The error of sending a program a signal it cannot be sent: `kill -USR1 PID`.
+pub fn unsendable(signal: Signal) -> error::Error {
+    error::ErrorKind::from(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        std::format!(
+            "{}: Windows cannot send this signal to a program",
+            signal.as_str()
+        ),
+    ))
+    .into()
+}
+
 /// Deliver one signal to one process, or with `tree` a KILL to the tree it roots.
 fn deliver(raw: u32, signal: Signal, tree: bool) -> Result<(), error::Error> {
+    if !signal.reaches_programs() {
+        return Err(unsendable(signal));
+    }
     // Check first, so that a target that does not exist reports as such. Windows answers
     // a signal aimed at nothing with `ERROR_INVALID_PARAMETER`, and "The parameter is
     // incorrect. (os error 87)" tells the user nothing about what went wrong.
@@ -366,6 +527,8 @@ fn deliver(raw: u32, signal: Signal, tree: bool) -> Result<(), error::Error> {
             }
         }
         Signal::Kill => cash_win32::process::terminate(raw, exit_status(signal)),
+        // Refused above: there is nothing to send them with.
+        _ => return Err(unsendable(signal)),
     };
 
     result.map_err(|e| error::ErrorKind::from(e).into())

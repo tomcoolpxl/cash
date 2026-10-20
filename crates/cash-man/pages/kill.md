@@ -80,6 +80,10 @@ Windows has no signals; cash delivers each one as the nearest thing Windows has.
   job gets a Ctrl-Break; any other console program is terminated at once.
 - `KILL` (`-9`) terminates at once.
 - `STOP` and `CONT` suspend and resume the program's threads.
+- `kill -l` lists Linux's 31 signals by Linux's numbers (`USR1` is 10; Git Bash says
+  30). Windows has no way to send a program the others, `USR1`, `PIPE`, `ALRM` and the
+  rest: `kill -USR1 1234` says so and fails, sending nothing. Sent to the shell itself,
+  they run its trap (see `trap`).
 - A pid from `$!` keeps naming its job after it ended, so `kill "$pid"` answers "No such
   process" rather than hit another program that got the number since.
 - `kill 0` reaches the jobs cash started; `kill -1` is refused.

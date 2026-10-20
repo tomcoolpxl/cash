@@ -863,19 +863,41 @@ fn the_exit_trap_actually_fires() {
 }
 
 #[test]
-fn a_signal_with_no_win32_mechanism_is_refused_not_faked() {
-    // Accepting a trap that could never fire is the silent-failure pattern D20 and D26
-    // both reject. There is no Win32 mechanism behind SIGUSR1, so say so. (CHLD is not
-    // here: cash sees its children exit, and emulates it, D64.)
-    for signal in ["USR1", "USR2", "PIPE", "ALRM"] {
-        let out = cash(&format!(r#"trap "echo x" {signal}"#));
-        assert!(
-            out.stderr.contains("invalid signal"),
-            "trap {signal} should have been refused, got: {}{}",
-            out.stdout,
-            out.stderr
-        );
-    }
+fn a_signal_with_no_win32_mechanism_is_a_name_its_sending_refused() {
+    // bashdb traps ILL and TRAP; refused, it filed both under EXIT. A trap on one is
+    // kept, shown, and runs when the shell sends the signal itself; sending one to a
+    // program is refused, not faked.
+    let out = cash(
+        "trap 'echo got ILL' ILL; trap 'echo got USR1' USR1; trap -p ILL USR1; \
+         kill -USR1 $$; echo \"after: $?\"",
+    );
+    assert_eq!(
+        out.stdout,
+        "trap -- 'echo got ILL' SIGILL\ntrap -- 'echo got USR1' SIGUSR1\ngot USR1\nafter: 0",
+        "{}",
+        out.stderr
+    );
+    // Untrapped, the default ends the subshell that sent it, as 128 + the number.
+    let out = cash(
+        "(kill -USR2 $BASHPID; echo not reached); echo $?; (kill -WINCH $BASHPID; echo ignored)",
+    );
+    assert_eq!(out.stdout, "140\nignored", "{}", out.stderr);
+
+    let out =
+        cash("sleep 5 & kill -USR1 $!; echo \"pid: $?\"; kill -PIPE %1; echo \"job: $?\"; kill %1");
+    assert_eq!(out.stdout, "pid: 1\njob: 1", "{}", out.stderr);
+    assert!(
+        out.stderr
+            .contains("kill: USR1: Windows cannot send this signal to a program"),
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr
+            .contains("kill: PIPE: Windows cannot send this signal to a program"),
+        "{}",
+        out.stderr
+    );
 }
 
 #[test]
@@ -884,18 +906,26 @@ fn kill_is_a_builtin_and_lists_real_signal_numbers() {
     // builtin at all and fell through to whatever kill.exe was on PATH.
     assert!(cash("type kill").stdout.contains("builtin"));
 
+    // Linux's standard signals, by Linux's numbers, five to a line as Bash prints them.
     let listed = cash("kill -l").stdout;
-    for expected in ["1) SIGHUP", "2) SIGINT", "9) SIGKILL", "15) SIGTERM"] {
+    assert_eq!(listed.lines().count(), 7, "{listed}");
+    for expected in [
+        "1) SIGHUP",
+        "2) SIGINT",
+        "4) SIGILL",
+        "9) SIGKILL",
+        "10) SIGUSR1",
+        "15) SIGTERM",
+        "17) SIGCHLD",
+        "28) SIGWINCH",
+        "31) SIGSYS",
+    ] {
         assert!(
             listed.contains(expected),
             "kill -l missing {expected}:\n{listed}"
         );
     }
-    // Only what cash can actually deliver: no ILL, PIPE, USR1 that would never fire.
-    assert!(
-        !listed.contains("USR1"),
-        "kill -l lists a signal cash cannot deliver"
-    );
+    assert_eq!(cash("trap -l").stdout, listed);
 }
 
 #[test]
@@ -907,6 +937,12 @@ fn signal_names_and_numbers_round_trip() {
     assert_eq!(cash("kill -l 15").stdout, "TERM");
     assert_eq!(cash("kill -l TERM").stdout, "15");
     assert_eq!(cash("kill -l 2").stdout, "INT");
+    assert_eq!(
+        cash("kill -l ILL TRAP USR1 PIPE SYS").stdout,
+        "4\n5\n10\n13\n31"
+    );
+    // An exit status names the signal it is 128 more than.
+    assert_eq!(cash("kill -l 138").stdout, "USR1");
 }
 
 #[test]

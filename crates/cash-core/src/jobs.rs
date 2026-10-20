@@ -1083,6 +1083,7 @@ impl Job {
     pub const fn record_signal(&mut self, signal: traps::TrapSignal) {
         use sys::signal::Signal;
         if let traps::TrapSignal::Signal(sent) = signal
+            && sent.reaches_programs()
             && !matches!(
                 sent,
                 Signal::Stop | Signal::Tstp | Signal::Cont | Signal::Chld
@@ -1410,6 +1411,9 @@ impl Job {
                 Ok(())
             }
             traps::TrapSignal::Signal(Signal::Cont) => self.resume(),
+            traps::TrapSignal::Signal(sent) if !sent.reaches_programs() => {
+                Err(sys::signal::unsendable(sent))
+            }
             _ => {
                 if let traps::TrapSignal::Signal(sent) = signal {
                     self.killed_by = Some(sent);

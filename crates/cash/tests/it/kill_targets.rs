@@ -265,8 +265,14 @@ fn kill_signals_and_their_names_are_bashs() {
 #[test]
 fn the_signal_list_is_laid_out_as_bashs() {
     let out = cash("kill -l; trap -l");
-    let list = " 1) SIGHUP\t 2) SIGINT\t 3) SIGQUIT\t 9) SIGKILL\t15) SIGTERM\n\
-                17) SIGCHLD\t18) SIGCONT\t19) SIGSTOP\t20) SIGTSTP\t";
+    // Linux's standard signals, by its numbers.
+    let list = " 1) SIGHUP\t 2) SIGINT\t 3) SIGQUIT\t 4) SIGILL\t 5) SIGTRAP\n\
+                \x206) SIGABRT\t 7) SIGBUS\t 8) SIGFPE\t 9) SIGKILL\t10) SIGUSR1\n\
+                11) SIGSEGV\t12) SIGUSR2\t13) SIGPIPE\t14) SIGALRM\t15) SIGTERM\n\
+                16) SIGSTKFLT\t17) SIGCHLD\t18) SIGCONT\t19) SIGSTOP\t20) SIGTSTP\n\
+                21) SIGTTIN\t22) SIGTTOU\t23) SIGURG\t24) SIGXCPU\t25) SIGXFSZ\n\
+                26) SIGVTALRM\t27) SIGPROF\t28) SIGWINCH\t29) SIGIO\t30) SIGPWR\n\
+                31) SIGSYS\t";
     // `run` trims what ends the output.
     assert_eq!(
         out.stdout,
