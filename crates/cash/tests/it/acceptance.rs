@@ -416,8 +416,9 @@ fn winpath_reads_stdin_so_it_composes() {
 #[test]
 fn a_unix_drive_argument_to_a_command_is_explained() {
     // D3 accepts /c/... for paths cash resolves; D4 forbids rewriting arguments, so a
-    // command gets it verbatim and fails with an error that explains nothing.
-    let out = cash(r#"enable -n cat 2>/dev/null; cat /c/Windows/win.ini >/dev/null"#);
+    // Windows program gets it verbatim and fails with an error that explains nothing.
+    // (An MSYS program and cash's own tools read it themselves, and are told nothing.)
+    let out = cash(r"cmd /c type /c/Windows/win.ini >/dev/null");
     assert!(
         out.stderr.contains("winpath") && !out.stderr.contains("(D4)"),
         "no hint given; stderr was: {}",

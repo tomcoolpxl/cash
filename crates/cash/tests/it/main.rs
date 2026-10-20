@@ -257,6 +257,8 @@ mod xxd_builtin;
 mod xz_builtin;
 // rm, sort, tee, uniq and shuf, taken from uutils: their messages are English, not ids.
 mod uutils_messages;
+// D82: `shopt -s unixpaths`: paths shown `/c/...`, a Windows program handed `C:/...`.
+mod unix_paths_mode;
 // D80: `z`, the directory jump, on a record of directories made for the test; its Tab completion.
 mod z_jump;
 // `zip`, `unzip` and `zipinfo`: Info-ZIP's golden output, Windows' own readers and writers.

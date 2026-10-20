@@ -2,7 +2,7 @@
 
 use std::{
     borrow::Cow,
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     fmt::Display,
     path::{Path, PathBuf},
     process::Stdio,
@@ -535,8 +535,41 @@ fn build_powershell_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 /// Adds `args` for the native program at `target`, in the command-line encoding that
 /// program decodes: Cygwin's for an MSYS2 or Cygwin program, which Git's `usr/bin` tools
 /// are, and the Microsoft C runtime's, which `Command::args` writes, for the rest.
-fn push_native_args<S: AsRef<OsStr>>(c: &mut std::process::Command, target: &Path, args: &[S]) {
-    cash_win32::msys::add_args(c, Some(target), args);
+fn push_native_args<S: AsRef<OsStr>>(
+    c: &mut std::process::Command,
+    target: &Path,
+    args: &[S],
+    unix_paths: bool,
+) {
+    let args = windows_program_args(unix_paths, Some(target), args);
+    cash_win32::msys::add_args(c, Some(target), &args);
+}
+
+/// `args` as the Windows program at `target` is to get them: under `unixpaths` (D82), the
+/// `/c/...` paths among them in Windows' spelling, as MSYS hands them to a Windows program
+/// (`cash_win32::path::windows_argument`); as written to a program that reads `/c/` itself,
+/// an MSYS one or cash. Every Windows program cash starts gets its arguments from here.
+fn windows_program_args<S: AsRef<OsStr>>(
+    unix_paths: bool,
+    target: Option<&Path>,
+    args: &[S],
+) -> Vec<OsString> {
+    let converts = unix_paths && !target.is_some_and(reads_unix_paths);
+    args.iter()
+        .map(|arg| {
+            let arg = arg.as_ref();
+            converts
+                .then(|| arg.to_str().and_then(cash_win32::path::windows_argument))
+                .flatten()
+                .map_or_else(|| arg.to_owned(), OsString::from)
+        })
+        .collect()
+}
+
+/// Whether the program at `target` reads a `/c/x` argument itself: an MSYS program, which
+/// its runtime translates, or cash, whose shell and bundled tools take it (D3).
+fn reads_unix_paths(target: &Path) -> bool {
+    cash_win32::msys::is_msys_program(target) || is_own_executable(target.as_os_str())
 }
 
 /// The command processor a batch file runs in: the shell's `COMSPEC`, as the batch file's
@@ -579,6 +612,27 @@ fn build_batch_command<S: AsRef<OsStr>>(
     c
 }
 
+/// The script's name as its interpreter is handed it: as it was typed, as the kernel hands
+/// it, so `./s` stays `./s` for `$0` and `sys.argv[0]`, and the interpreter starts in the
+/// shell's directory. The shell has made it absolute by now (D10), and a path spelled
+/// whole or found on `PATH` is given in cash's spelling (D3), `/c/...` under `unixpaths`
+/// (D82); `PATH`'s join left a `\` in it.
+fn script_as_named<SE: extensions::ShellExtensions>(
+    context: &ExecutionContext<'_, SE>,
+    script: &Path,
+) -> String {
+    let typed = context.command_name.as_str();
+    if typed.contains(['/', '\\'])
+        && !typed.starts_with(['/', '\\'])
+        && !cash_win32::path::is_absolute(Path::new(typed))
+        && context.shell.absolute_path(Path::new(typed)) == script
+    {
+        typed.to_string()
+    } else {
+        context.shell.shown_path(script)
+    }
+}
+
 fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
     interpreter: &str,
@@ -588,22 +642,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     argv0: &str,
     args: &[S],
 ) -> Result<(std::process::Command, Extras), error::Error> {
-    // The interpreter is handed the script as it was typed, as the kernel hands
-    // it: `./s` stays `./s` for `$0` and `sys.argv[0]`, and the interpreter starts
-    // in the shell's directory. The shell has made it absolute by now (D10), and a
-    // path spelled whole or found on `PATH` is given in cash's spelling (D3);
-    // `PATH`'s join left a `\` in it.
-    let typed = context.command_name.as_str();
-    let named = if typed.contains(['/', '\\'])
-        && !typed.starts_with(['/', '\\'])
-        && !cash_win32::path::is_absolute(Path::new(typed))
-        && context.shell.absolute_path(Path::new(typed)) == script
-    {
-        typed.to_string()
-    } else {
-        cash_win32::path::render(script)
-    };
-
+    let named = script_as_named(context, script);
     let crate::shebang_env::Interpreter {
         command: interpreter,
         args: shebang_args,
@@ -650,7 +689,8 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             Ok((c, Extras::default()))
         }
         cash_win32::resolve::Dispatch::PowerShell(_) => {
-            build_powershell_command(context, script, &extra_args, args)
+            let args = windows_program_args(context.shell.options().unix_paths, None, args);
+            build_powershell_command(context, script, &extra_args, &args)
         }
         cash_win32::resolve::Dispatch::Batch(ref batch_target) => {
             use std::os::windows::process::CommandExt as _;
@@ -663,9 +703,11 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             let mut words = vec![batch_target.to_string_lossy().into_owned()];
             words.extend(extra_args.iter().cloned());
             words.push(named);
+            let unix_paths = context.shell.options().unix_paths;
             words.extend(
-                args.iter()
-                    .map(|arg| arg.as_ref().to_string_lossy().into_owned()),
+                windows_program_args(unix_paths, Some(batch_target), args)
+                    .iter()
+                    .map(|arg| arg.to_string_lossy().into_owned()),
             );
             let inner = cash_win32::cmd::escape_words_for_cmd(words.iter().map(String::as_str));
             c.raw_arg(format!("\"{inner}\""));
@@ -683,9 +725,10 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             {
                 c.arg("--posix");
             }
-            push_native_args(&mut c, target, &extra_args);
-            push_native_args(&mut c, target, &[named]);
-            push_native_args(&mut c, target, args);
+            let unix_paths = context.shell.options().unix_paths;
+            push_native_args(&mut c, target, &extra_args, unix_paths);
+            push_native_args(&mut c, target, &[named], unix_paths);
+            push_native_args(&mut c, target, args, unix_paths);
             Ok((c, Extras::default()))
         }
         cash_win32::resolve::Dispatch::Shebang { .. } => {
@@ -733,7 +776,7 @@ fn cash_tool_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         // process state: the shell's spawn layer sets the directory and environment.
         let mut c = std::process::Command::new(&own);
         c.args(["--invoke-bundled", tool.as_str()]);
-        push_native_args(&mut c, &own, args);
+        push_native_args(&mut c, &own, args, false);
         return Some(c);
     }
     by_path.then(|| {
@@ -749,7 +792,10 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     argv0: &str,
     args: &[S],
 ) -> Result<(std::process::Command, Extras), error::Error> {
-    let path = Path::new(command_name);
+    // A program named by a path cash reads (D3), `/c/x` too, which `exec` hands on as
+    // typed, and `command -v` gives under `unixpaths` (D82).
+    let accepted = cash_win32::path::accept_path(command_name);
+    let path = accepted.as_path();
     let candidate = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -810,7 +856,9 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         // process state: the shell's spawn layer, which sets the directory and environment.
         let mut c = std::process::Command::new(command_name);
         c.arg0(argv0);
-        cash_win32::msys::add_args(&mut c, target.as_deref(), args);
+        let args =
+            windows_program_args(context.shell.options().unix_paths, target.as_deref(), args);
+        cash_win32::msys::add_args(&mut c, target.as_deref(), &args);
         return Ok((c, Extras::default()));
     }
 
@@ -822,15 +870,20 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             // process state: the shell's spawn layer, which sets the directory and environment.
             let mut c = std::process::Command::new(cash_win32::path::to_backslash(&candidate));
             c.arg0(argv0);
-            push_native_args(&mut c, &candidate, args);
+            push_native_args(&mut c, &candidate, args, context.shell.options().unix_paths);
             Ok((c, Extras::default()))
         }
-        cash_win32::resolve::Dispatch::Batch(_) => Ok((
-            build_batch_command(comspec(context.shell), command_name, argv0, args),
-            Extras::default(),
-        )),
+        cash_win32::resolve::Dispatch::Batch(_) => {
+            let args =
+                windows_program_args(context.shell.options().unix_paths, Some(&candidate), args);
+            Ok((
+                build_batch_command(comspec(context.shell), command_name, argv0, &args),
+                Extras::default(),
+            ))
+        }
         cash_win32::resolve::Dispatch::PowerShell(_) => {
-            build_powershell_command(context, &candidate, &[], args)
+            let args = windows_program_args(context.shell.options().unix_paths, None, args);
+            build_powershell_command(context, &candidate, &[], &args)
         }
         cash_win32::resolve::Dispatch::Shebang {
             interpreter,
@@ -987,11 +1040,27 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 
     // Add in exported variables.
     if !empty_env {
+        // D82: under `unixpaths`, the variables the mode spells `/c/...` go to a child in
+        // Windows' spelling, as `PATH` does (D5); a drive's root, `/c`, too. An MSYS program
+        // spells them back itself, and a cash started so takes the mode and spells them.
+        let unix_paths = context.shell.options().unix_paths;
         for (name, value) in exported_environment(context.shell) {
+            let value = if unix_paths && matches!(name.as_str(), "HOME" | "PWD" | "OLDPWD") {
+                cash_win32::path::render(&cash_win32::path::accept_path(&value))
+            } else {
+                value
+            };
             cmd.env(name, value);
         }
         // Set _ to the resolved command path for external commands.
         cmd.env("_", command_name);
+    }
+
+    // D82: a cash this shell starts gets `unixpaths` from it.
+    if context.shell.options().unix_paths {
+        cmd.env(crate::spelling::UNIX_PATHS_VARIABLE, "1");
+    } else {
+        cmd.env_remove(crate::spelling::UNIX_PATHS_VARIABLE);
     }
 
     if let Some(ps_script) = target_ps_script {
@@ -1706,17 +1775,25 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
 /// D3 accepts Unix drive spellings for paths cash resolves itself — `cd /c/src`,
 /// `[ -f /d/data/x ]`, `> /e/out` all work. But D4 forbids rewriting arguments, so a
 /// command receives `/c/src/main.tf` verbatim, and any tool without its own MSYS-style
-/// translation cannot open it. That includes MS Coreutils and the bundled builtins.
+/// translation cannot open it, MS Coreutils among them.
 ///
 /// The tool's own error — "The system cannot find the path specified" — explains
 /// nothing, and this is the single easiest mistake to make in cash. So: warn only when
 /// the literal spelling does not exist *and* the translated one does. That makes false
 /// positives essentially impossible, and says the useful thing.
+///
+/// Not for a program that reads `/c/x` itself, an MSYS one or cash's own tools, nor under
+/// `unixpaths` (D82), where a Windows program is handed `C:/x`.
 fn warn_about_unix_drive_spellings(
     context: &ExecutionContext<'_, impl extensions::ShellExtensions>,
+    executable_path: &str,
     cmd_args: &[&String],
 ) {
     use std::io::Write as _;
+
+    if context.shell.options().unix_paths {
+        return;
+    }
 
     for arg in cmd_args {
         let Some(translated) = cash_win32::path::unix_drive_spelling(arg) else {
@@ -1724,6 +1801,9 @@ fn warn_about_unix_drive_spellings(
         };
         if std::path::Path::new(arg.as_str()).exists() || !translated.exists() {
             continue;
+        }
+        if reads_unix_paths(Path::new(executable_path)) {
+            return;
         }
 
         let mut stderr = context.stderr();
@@ -1831,7 +1911,7 @@ pub(crate) fn execute_external_command(
         })
         .collect::<Vec<_>>();
 
-    warn_about_unix_drive_spellings(&context, cmd_args.as_slice());
+    warn_about_unix_drive_spellings(&context, executable_path, cmd_args.as_slice());
 
     // Before we lose ownership of the open files, figure out if stdin will be a terminal.
     let child_stdin_is_terminal = context

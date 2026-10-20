@@ -367,6 +367,17 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
             wellknownvars::init_well_known_vars(&mut shell)?;
         }
 
+        // An inherited HOME, as Windows spells it, shown as `/c/...` (D82), and a `$0` that
+        // is this cash's own path, as Windows hands it over.
+        if shell.options.unix_paths {
+            shell.respell_shown_paths()?;
+            if let Some(name) = &shell.name
+                && cash_win32::path::is_absolute(Path::new(name))
+            {
+                shell.name = Some(shell.shown_path(Path::new(name)));
+            }
+        }
+
         // What a read finds in another case (D31), before any variable of the caller's.
         shell.env.mark_started();
 
@@ -930,6 +941,12 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     /// Returns the shell's current working directory.
     pub fn working_dir(&self) -> &Path {
         &self.working_dir
+    }
+
+    /// `path` as the shell shows it to a script: `C:/dir`, or under `unixpaths` `/c/dir`
+    /// (D82). Every path shown goes through here, to `crate::spelling`.
+    pub fn shown_path(&self, path: &Path) -> String {
+        crate::spelling::shown(self.options.unix_paths, path)
     }
 
     /// Returns a mutable reference to the shell's current working directory.

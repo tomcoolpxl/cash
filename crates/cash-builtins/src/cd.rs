@@ -114,11 +114,8 @@ impl builtins::Command for CdCommand {
         // the directory change is successful, the absolute pathname of the new working
         // directory is written to the standard output.
         if should_print {
-            writeln!(
-                context.stdout(),
-                "{}",
-                cash_win32::path::render(&target_dir)
-            )?;
+            let shown = context.shell.shown_path(context.shell.working_dir());
+            writeln!(context.stdout(), "{shown}")?;
         }
 
         Ok(ExecutionResult::success())

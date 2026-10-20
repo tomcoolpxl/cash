@@ -1,0 +1,52 @@
+VERSION
+status: 0
+       v18.20.4 *
+       v20.17.0 *
+        v22.9.0 *
+->       system *
+iojs -> N/A (default)
+node -> stable (-> v22.9.0 *) (default)
+stable -> 22.9 (-> v22.9.0 *) (default)
+unstable -> N/A (default)
+status: 0
+default -> 20 (-> v20.17.0 *)
+status: 0
+lts-ish -> 18.20 (-> v18.20.4 *)
+status: 0
+default -> 20 (-> v20.17.0 *)
+lts-ish -> 18.20 (-> v18.20.4 *)
+iojs -> N/A (default)
+node -> stable (-> v22.9.0 *) (default)
+stable -> 22.9 (-> v22.9.0 *) (default)
+unstable -> N/A (default)
+status: 0
+        v22.9.0 *
+status: 0
+NVM/versions/node/v18.20.4/bin/node
+status: 0
+v20.17.0
+status: 0
+N/A
+status: 3
+status: 0
+system
+status: 0
+status: 0
+system
+status: 0
+Deleted alias lts-ish - restore it with `nvm alias "lts-ish" "18.20"`
+status: 0
+default -> 20 (-> v20.17.0 *)
+iojs -> N/A (default)
+node -> stable (-> v22.9.0 *) (default)
+stable -> 22.9 (-> v22.9.0 *) (default)
+unstable -> N/A (default)
+status: 0
+N/A: version "v99" is not yet installed.
+
+You need to run `nvm install 99` to install and use it.
+status: 1
+N/A: version "v99" is not yet installed.
+
+You need to run `nvm install 99` to install and use it.
+status: 3

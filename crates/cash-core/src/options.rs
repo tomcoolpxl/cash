@@ -179,6 +179,9 @@ pub struct RuntimeOptions {
     pub shift_verbose: bool,
     /// `sourcepath`
     pub source_builtin_searches_path: bool,
+    /// `unixpaths` (cash, D82): the paths a script sees are spelled as Git Bash spells them,
+    /// `/c/...`, and such arguments reach a Windows program as `C:/...`.
+    pub unix_paths: bool,
     /// `varredir_close`
     pub var_redir_close: bool,
     /// `winpaths` (cash, D53): an unquoted word starting `C:\` or `\\server` keeps its
@@ -273,6 +276,9 @@ impl RuntimeOptions {
             // programs glob for themselves. Scripts keep bash's globbing.
             options.system_programs_glob = true;
         }
+
+        // D82: `unixpaths` comes from the cash that started this one.
+        options.unix_paths = crate::spelling::inherited();
 
         if create_options.posix {
             options.expand_aliases_before_posix = Some(options.expand_aliases);

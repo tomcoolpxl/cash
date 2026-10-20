@@ -1,0 +1,12 @@
+2          docs/alpha
+3          proj/alpha
+proj/alpha
+docs/alpha
+no match: 1
+jumped to proj/beta
+docs/alpha
+2          docs/alpha
+3          proj/alpha
+docs/alpha|2
+docs/gone|1
+proj/alpha|3

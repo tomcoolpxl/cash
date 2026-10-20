@@ -131,10 +131,17 @@ impl builtins::Command for TypeCommand {
                 } else {
                     match &resolved_type {
                         Resolved::File { path, .. } if self.show_path_only => {
-                            let rendered = cash_win32::path::render(path);
+                            let rendered = context.shell.shown_path(path);
                             writeln!(context.stdout(), "{rendered}")?;
                         }
-                        _ => lookup::describe(context.stdout(), name, &resolved_type)?,
+                        _ => {
+                            lookup::describe(
+                                context.stdout(),
+                                context.shell,
+                                name,
+                                &resolved_type,
+                            )?;
+                        }
                     }
                 }
 

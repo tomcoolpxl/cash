@@ -72,3 +72,6 @@ Exit status: 0 when every OPTNAME is on (or was set); 1 otherwise.
 - `nocaseglob` is on unless turned off: Windows' file names ignore case, so `*.txt`
   matches `NOTES.TXT`, as the file system does. `shopt -u nocaseglob` makes patterns
   match case.
+- `unixpaths`, cash's own, off unless turned on: paths spelled as Git Bash spells them,
+  `/c/Users/me`, and handed to a Windows program as `C:/Users/me`; a cash started from
+  the shell takes it too (`help paths`).

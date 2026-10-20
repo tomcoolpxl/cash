@@ -383,27 +383,29 @@ fn capture_file_path() -> std::path::PathBuf {
 /// NUL-delimited stream stays NUL-delimited.
 ///
 /// A field that is not valid UTF-8 is passed through untouched rather than guessed at.
+/// Under a shell's `unixpaths` (D82), which a bundled tool inherits, a path is `/c/...`.
 #[must_use]
 pub fn render_paths(output: &[u8]) -> Vec<u8> {
+    let unix_paths = path::unix_paths_inherited();
     let mut out = Vec::with_capacity(output.len());
     let mut field_start = 0usize;
 
     for (index, &byte) in output.iter().enumerate() {
         if byte == b'\n' || byte == b'\0' {
-            push_rendered(&mut out, &output[field_start..index]);
+            push_rendered(&mut out, &output[field_start..index], unix_paths);
             out.push(byte);
             field_start = index + 1;
         }
     }
-    push_rendered(&mut out, &output[field_start..]);
+    push_rendered(&mut out, &output[field_start..], unix_paths);
 
     out
 }
 
-fn push_rendered(out: &mut Vec<u8>, field: &[u8]) {
+fn push_rendered(out: &mut Vec<u8>, field: &[u8], unix_paths: bool) {
     match std::str::from_utf8(field) {
         Ok(text) if !text.is_empty() => {
-            out.extend_from_slice(path::render(Path::new(text)).as_bytes());
+            out.extend_from_slice(path::shown(unix_paths, Path::new(text)).as_bytes());
         }
         _ => out.extend_from_slice(field),
     }

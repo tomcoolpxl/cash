@@ -49,6 +49,7 @@ pub mod runtime;
 mod shebang_env;
 mod shell;
 pub mod sourceinfo;
+pub mod spelling;
 pub mod sys;
 pub mod terminal;
 pub mod test_expr;

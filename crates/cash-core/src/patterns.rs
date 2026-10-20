@@ -414,6 +414,9 @@ fn expand_globstar_paths(
 pub(crate) struct FilenameExpansionOptions {
     pub require_dot_in_pattern_to_match_dot_files: bool,
     pub include_dot_and_dotdot: bool,
+    /// The matches of a pattern from an absolute start spelled `/c/...`, as the shell
+    /// shows paths under `unixpaths` (D82).
+    pub unix_paths: bool,
 }
 
 /// Result of a pattern expansion, distinguishing "no glob metacharacters" from
@@ -823,7 +826,13 @@ impl Pattern {
 
                 // The working directory itself, which `**/` reaches, has no name to give:
                 // Bash leaves it out.
-                (!path_ref.is_empty()).then(|| path_ref.to_string())
+                if path_ref.is_empty() {
+                    None
+                } else if prefix_to_remove.is_none() && options.unix_paths {
+                    Some(cash_win32::path::to_unix(Path::new(path_ref)))
+                } else {
+                    Some(path_ref.to_string())
+                }
             })
             .collect();
 
@@ -1587,6 +1596,7 @@ mod tests {
         let options = FilenameExpansionOptions {
             require_dot_in_pattern_to_match_dot_files: true,
             include_dot_and_dotdot: false,
+            unix_paths: false,
         };
         let enabled = Pattern::from("**/needle.txt")
             .set_globstar(true)

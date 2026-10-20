@@ -8,7 +8,9 @@ see: winpath cd pwd ln vars
 cash prints every path as `C:/Users/me`: drive letter, forward slashes. Write paths that
 way too, or as a quoted `"C:\Users\me"`: every program understands both. `pwd`, `$PWD`,
 `~` and the paths cash builds all come out as `C:/...`. The Unix spelling `/c/Users/me`
-works where cash itself opens the path, but not as an argument to other commands.
+works where cash and its own tools open the path, but not as an argument to a Windows
+program. `shopt -s unixpaths` spells paths as Git Bash does, `/c/Users/me`, and hands a
+Windows program `C:/...` for them (below).
 
 ## Why forward slashes and a drive letter
 
@@ -23,11 +25,13 @@ everywhere `C:\src` does. The cost: `case $PWD in /c/*)` no longer matches.
 other `/dev` names work wherever cash itself opens the path: in redirections
 (`> /tmp/out`, `2> /dev/null`), `cd`, `source`, `test` and `[`, globs, and cash's own
 builtins such as `ls`. A glob gives its matches in cash's spelling, so
-`cat /c/logs/*.txt` hands `cat` `C:/logs/a.txt`. An argument to any other command
-reaches it as written, and a Windows
-program, or a bundled tool such as `cat` or `rm`, has no `/c` or `/tmp`; cash
-warns when it sees one and names the `C:/` spelling. `/dev/null` is the null device; a
-bare `nul` is the device too, as every Windows program sees it.
+`cat /c/logs/*.txt` hands `cat` `C:/logs/a.txt`. cash's own tools read them too, as an
+MSYS tool does: `cat /c/logs/a.txt`, `cp /c/a /c/b` and `sed -n p /c/x` open the files,
+while a `sed` or `awk` script is never touched, and `dirname /c/x/y` gives back `/c/x`.
+An argument to a Windows program reaches it as written, and it has no `/c` or `/tmp`;
+cash warns when it sees one and names the `C:/` spelling (an MSYS program, such as Git's
+`usr/bin` tools, reads it itself). `/dev/null` is the null device; a bare `nul` is the
+device too, as every Windows program sees it.
 
 `/dev/tcp/HOST/PORT` and `/dev/udp/HOST/PORT` open a socket, as in Bash, in a
 redirection only: `exec 3<>/dev/tcp/example.com/80` makes descriptor 3 a connection to
@@ -41,6 +45,30 @@ command of that name when no such file is there, as a script written for Unix ex
 `/bin/mv a b`, `/usr/bin/env python3`, `[ -x /bin/rm ]`, and the same after `exec`,
 `xargs`, `timeout` and `env`. `/bin/sh` and `/bin/bash` are cash. A name cash has no
 command for is not found.
+
+## Git Bash's spelling: `shopt -s unixpaths`
+
+Some scripts need paths spelled as Git Bash spells them. rbenv, pyenv, nvm and asdf look
+for a file from `$PWD` up, cutting `dir=${dir%/*}` until it is empty or `dirname` until it
+is `/`, which `C:/...` never reaches; bats' `load` takes a path for absolute only when it
+starts with `/`. With `shopt -s unixpaths`, off unless turned on:
+
+- `pwd`, `$PWD`, `$OLDPWD`, `$HOME`, `~`, `dirs`, `$DIRSTACK`, the prompt's `\w`, `which`,
+  `type -P`, `command -v`, `hash`, a glob from an absolute path, `realpath`, `readlink -f`
+  and `mktemp` give `/c/...`; `pwd -W` still gives `C:/...`. A path the script wrote
+  stays as written: `$BASH_SOURCE`, the `$0` of a script run by its path, `find`'s
+  output.
+- A Windows program that is not an MSYS one is handed `C:/...` for a whole-word `/c/...`
+  argument and for the value of `--opt=/c/...` or `NAME=/c/...`, as Git Bash hands it;
+  `HOME`, `PWD` and `OLDPWD` reach it as `C:/...` too. Nothing else is rewritten: a list
+  (`/c/a:/c/b`), a bare `/c` (`cmd /c`) and a root alone (`/a/`) go as written, and
+  `//c/x` gives the program a literal `/c/x`. An MSYS program and cash get `/c/...` as
+  written.
+- A cash started from it, `bash script.sh` too, starts with the option on
+  (`CASH_UNIXPATHS=1` in its environment); `shopt -u unixpaths` turns it off for this
+  shell and the ones it starts.
+
+Turning the option on or off spells `$PWD`, `$OLDPWD` and `$HOME` again at once.
 
 ## Backslashes
 

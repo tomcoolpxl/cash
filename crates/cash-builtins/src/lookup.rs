@@ -144,8 +144,9 @@ fn resolve_in_filesystem<SE: ShellExtensions>(
 }
 
 /// Writes the description shown by `type NAME` and `command -V NAME`, newline included.
-pub(crate) fn describe(
+pub(crate) fn describe<SE: cash_core::ShellExtensions>(
     mut writer: impl Write,
+    shell: &cash_core::Shell<SE>,
     name: &str,
     resolved: &Resolved<'_>,
 ) -> std::io::Result<()> {
@@ -161,8 +162,9 @@ pub(crate) fn describe(
             //
             //     ls is C:/Program Files/Git/usr/bin\ls.exe
             //
-            // `which` renders here too, and the two must not disagree about the same file.
-            let path = cash_win32::path::render(path);
+            // `which` renders here too, and the two must not disagree about the same file;
+            // `/c/...` under `unixpaths` (D82).
+            let path = shell.shown_path(path);
             if *hashed {
                 writeln!(writer, "{name} is hashed ({path})")
             } else {

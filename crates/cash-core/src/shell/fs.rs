@@ -55,6 +55,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // to remember to convert. Rendered once: the spelling is the same.
         let cleaned_path = std::path::PathBuf::from(&pwd);
 
+        // `$PWD` as the shell shows paths: `/c/...` under `unixpaths` (D82).
+        let pwd = self.shown_path(&cleaned_path);
         self.env.update_or_add(
             "PWD",
             variables::ShellValueLiteral::Scalar(pwd),
@@ -70,7 +72,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         }
 
         // cash (D3): `cd -` echoes $OLDPWD, so it must carry the same spelling as $PWD.
-        let oldpwd = cash_win32::path::render(&oldpwd);
+        let oldpwd = self.shown_path(&oldpwd);
 
         self.env.update_or_add(
             "OLDPWD",
@@ -142,12 +144,49 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     ///
     /// * `s` - The string to shorten.
     pub fn tilde_shorten(&self, s: String) -> String {
-        if let Some(home_dir) = self.home_dir()
-            && let Some(stripped) = s.strip_prefix(home_dir.to_string_lossy().as_ref())
-        {
-            return format!("~{stripped}");
+        // The home directory in either spelling a path may be shown in, `C:/...` or
+        // `/c/...` (D82), and only as whole directories: `C:/Users/me2` is not under
+        // `C:/Users/me`, as Bash's polite_directory_format has it.
+        if let Some(home_dir) = self.home_dir() {
+            let spellings = [
+                cash_win32::path::render(&home_dir),
+                cash_win32::path::to_unix(&home_dir),
+            ];
+            for home in spellings {
+                if let Some(stripped) = s.strip_prefix(home.as_str())
+                    && (stripped.is_empty() || stripped.starts_with('/'))
+                {
+                    return format!("~{stripped}");
+                }
+            }
         }
         s
+    }
+
+    /// Spells `$PWD`, `$OLDPWD` and `$HOME` as the shell shows paths now: run when
+    /// `unixpaths` (D82) is turned on or off, and at startup under it. A variable not set,
+    /// or not an absolute path, is left as it is.
+    pub fn respell_shown_paths(&mut self) -> Result<(), error::Error> {
+        for name in ["PWD", "OLDPWD", "HOME"] {
+            let Some(value) = self.env.get_str(name, self).map(|value| value.to_string()) else {
+                continue;
+            };
+            let path = cash_win32::path::accept_path(&value);
+            if !cash_win32::path::is_absolute(&path) {
+                continue;
+            }
+            let shown = self.shown_path(&path);
+            if shown != value {
+                self.env.update_or_add(
+                    name,
+                    variables::ShellValueLiteral::Scalar(shown),
+                    |_| Ok(()),
+                    EnvironmentLookup::Anywhere,
+                    EnvironmentScope::Global,
+                )?;
+            }
+        }
+        Ok(())
     }
 
     /// Returns the shell's current home directory, if available.
@@ -163,7 +202,11 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // — `~` expansion, `$HISTFILE`, the default `.cashrc` path — inherits whatever
         // this returns, so rendering here keeps them all consistent rather than leaving
         // `$PWD` as `C:/Users/thraa` while `$HISTFILE` is `C:\Users\thraa\.cash_history`.
-        home.map(|h| PathBuf::from(cash_win32::path::render(&h)))
+        // A `/c/...` HOME, as `unixpaths` (D82) shows it, is the same directory.
+        home.map(|h| {
+            let accepted = cash_win32::path::accept_path(&h.to_string_lossy());
+            PathBuf::from(cash_win32::path::render(&accepted))
+        })
     }
 
     /// Returns the directories named by `$PATH`, in search order, and whether any of

@@ -187,7 +187,8 @@ fn format_current_working_directory(
     tilde_replaced: bool,
     basename: bool,
 ) -> String {
-    let mut working_dir_str = shell.working_dir().to_string_lossy().to_string();
+    // D10's rendering, by its chokepoint (XC-14), or `/c/...` under `unixpaths` (D82).
+    let mut working_dir_str = shell.shown_path(shell.working_dir());
 
     if tilde_replaced {
         working_dir_str = shell.tilde_shorten(working_dir_str);
@@ -197,8 +198,7 @@ fn format_current_working_directory(
         working_dir_str = filename.to_string_lossy().to_string();
     }
 
-    // D10's rendering, by its chokepoint (XC-14).
-    cash_win32::path::render(Path::new(&working_dir_str))
+    working_dir_str
 }
 
 /// `\t`, `\T`, `\@` and `\A` as strftime's specifiers.

@@ -1,0 +1,35 @@
+sourced: function
+1.2.3 > 1.2.4: no, >= : no
+10.0.0 > 9.9.9: yes, >= : yes
+v0.10.1 > v0.9.20: yes, >= : yes
+1.0.0 > 1.0.0: no, >= : yes
+v20.1.0 > v20.0.99: yes, >= : yes
+1 -> [1000000000000] [v1.0.0] [v1] [1]
+1.2 -> [1000002000000] [v1.2.0] [v1.2] [1.2]
+1.2.3 -> [1000002000003] [v1.2.3] [v1.2.3] [1.2.3]
+v4.5.6 -> [4000005000006] [v4.5.6] [v4.5.6] [v4.5.6]
+v10 -> [10000000000000] [v10.0.0] [v10] [v10]
+0.10.48 -> [0000010000048] [v0.10.48] [v0.10.48] [0.10.48]
+iojs-v1.0.0 -> [0000000000000] [iojs-v1.0.0] [iojs-v1.0.0] [v1.0.0]
+groups(1.2.3)=3
+groups(v4)=1
+groups()=0
+groups(1.2)=2
+valid 1.2.3
+valid v1.2.3
+invalid foo
+valid iojs
+valid node
+valid stable
+invalid lts/*
+invalid 1.x
+version dir (): /versions/node
+version dir (new): /versions/node
+version dir (old): 
+version dir (iojs): /versions/io.js
+stripped: /a/bin:/b/bin
+changed: /a/bin:NVM/versions/node/v2.0.0/bin:/b/bin
+tree contains
+tree does not contain
+echo works
+iojs-v3.0.0

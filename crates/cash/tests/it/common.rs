@@ -31,7 +31,14 @@ use std::sync::atomic::{AtomicU32, Ordering};
 pub const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
 /// Variables a test must not inherit from the developer's environment.
-pub const ISOLATED_VARIABLES: [&str; 5] = ["BASH_ENV", "ENV", "FUNCNEST", "CDPATH", "GLOBIGNORE"];
+pub const ISOLATED_VARIABLES: [&str; 6] = [
+    "BASH_ENV",
+    "ENV",
+    "FUNCNEST",
+    "CDPATH",
+    "GLOBIGNORE",
+    "CASH_UNIXPATHS",
+];
 
 /// What a run of cash printed and how it ended.
 pub struct Output {

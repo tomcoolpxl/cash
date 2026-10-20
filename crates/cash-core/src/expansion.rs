@@ -1270,6 +1270,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         let options = patterns::FilenameExpansionOptions {
             require_dot_in_pattern_to_match_dot_files: !self.shell.options().glob_matches_dotfiles,
             include_dot_and_dotdot: !self.shell.options().glob_skip_dots && !globignore,
+            unix_paths: self.shell.options().unix_paths,
         };
 
         // On error (e.g. malformed pattern), default to NoGlob so the field
@@ -1532,9 +1533,11 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         tilde_expr: &cash_parser::word::TildeExpr,
     ) -> Result<Cow<'_, str>, error::Error> {
         match tilde_expr {
+            // The directories a tilde names are spelled as the shell shows paths, `/c/...`
+            // under `unixpaths` (D82).
             cash_parser::word::TildeExpr::Home => {
                 if let Some(home_dir) = self.shell.home_dir() {
-                    Ok(Cow::Owned(home_dir.to_string_lossy().to_string()))
+                    Ok(Cow::Owned(self.shell.shown_path(&home_dir)))
                 } else {
                     Err(error::ErrorKind::TildeWithoutValidHome.into())
                 }
@@ -1542,11 +1545,11 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             cash_parser::word::TildeExpr::UserHome(username) => {
                 Ok(sys::users::get_user_home_dir(username).map_or_else(
                     || Cow::Owned(std::format!("~{username}")),
-                    |p| Cow::Owned(p.to_string_lossy().to_string()),
+                    |p| Cow::Owned(self.shell.shown_path(&p)),
                 ))
             }
             cash_parser::word::TildeExpr::WorkingDir => {
-                Ok(self.shell.working_dir().to_string_lossy())
+                Ok(Cow::Owned(self.shell.shown_path(self.shell.working_dir())))
             }
             cash_parser::word::TildeExpr::OldWorkingDir => {
                 if let Some(old_pwd) = self.shell.env_str("OLDPWD") {
@@ -1559,23 +1562,23 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 let dir_stack_count = self.shell.directory_stack().len();
 
                 if let Some(dir) = self.shell.directory_stack().get(*n) {
-                    Ok(dir.to_string_lossy())
+                    Ok(Cow::Owned(self.shell.shown_path(dir)))
                 } else if *n == dir_stack_count {
-                    Ok(self.shell.working_dir().to_string_lossy())
+                    Ok(Cow::Owned(self.shell.shown_path(self.shell.working_dir())))
                 } else {
                     Ok(Cow::Owned(std::format!("~-{n}")))
                 }
             }
             cash_parser::word::TildeExpr::NthDirFromTopOfDirStack { n, plus_used } => {
                 if *n == 0 {
-                    return Ok(self.shell.working_dir().to_string_lossy());
+                    return Ok(Cow::Owned(self.shell.shown_path(self.shell.working_dir())));
                 }
 
                 let dir_stack_count = self.shell.directory_stack().len();
                 if dir_stack_count >= *n
                     && let Some(dir) = self.shell.directory_stack().get(dir_stack_count - *n)
                 {
-                    return Ok(dir.to_string_lossy());
+                    return Ok(Cow::Owned(self.shell.shown_path(dir)));
                 }
 
                 let plus_or_nothing = if *plus_used { "+" } else { "" };

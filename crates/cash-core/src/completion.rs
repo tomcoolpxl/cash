@@ -1757,6 +1757,7 @@ async fn get_file_completions(
     let expansion_options = patterns::FilenameExpansionOptions {
         require_dot_in_pattern_to_match_dot_files: !shell.options().glob_matches_dotfiles,
         include_dot_and_dotdot: false,
+        unix_paths: shell.options().unix_paths,
     };
 
     let mut completions: Vec<String> = pattern

@@ -48,7 +48,10 @@ converts at the boundary to Windows programs:
 ## 3. What cash has already
 
 - `C:/`, `/c/`, `/tmp` and `/dev` names open wherever cash opens a path itself (D3), so
-  cash's builtins and bundled tools need no conversion in either spelling.
+  cash's builtins and bundled tools need no conversion in either spelling. (Wrong, as the
+  build found: the bundled tools open what they are handed, and `cat /c/x` failed in
+  either mode. The user's pick, 2026-10-20, in D82: they read `/c/` as an MSYS tool does,
+  in either mode.)
 - `cash_win32::path::unix_drive_spelling` turns `/c/x` into `C:/x`; the warning cash gives
   for a `/c/` argument to a program uses it.
 - `cash_win32::msys::is_msys_program` tells an MSYS2 or Cygwin program by its import table;

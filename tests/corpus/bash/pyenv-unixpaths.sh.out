@@ -1,0 +1,50 @@
+pyenv VERSION
+status: 0
+* system (set by PWD/pyroot/version)
+  3.12.7
+  3.13.0
+status: 0
+3.12.7
+3.13.0
+status: 0
+status: 0
+3.13.0
+3.13.0 (set by PWD/pyroot/version)
+status: 0
+3.13.0 (set by PWD/pyroot/version)
+status: 0
+status: 0
+3.13.0
+3.13.0 (set by PWD/proj/.python-version)
+status: 0
+3.13.0
+status: 0
+PWD/proj/.python-version
+status: 0
+PWD/pyroot/versions/3.13.0
+status: 0
+PWD/pyroot/versions/3.13.0/bin/python
+status: 0
+status: 0
+python
+Python 3.13.0 --flag
+status: 0
+3.12.7
+status: 0
+3.13.0
+status: 0
+Available versions:
+  2.7.18
+  3.12.7
+  3.13.0
+status: 0
+pyenv: version `9.9' not installed
+status: 1
+3.13.0
+status: 0
+pyenv: 3.13.0 uninstalled
+status: 0
+3.12.7
+status: 0
+pyenv: no such command `frobnicate'
+status: 1

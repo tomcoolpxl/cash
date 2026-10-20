@@ -2688,3 +2688,42 @@ fn the_exit_trap_runs_where_exit_or_errexit_ends_the_shell() {
         (1, "sub\nsub 3\nouter".into())
     );
 }
+
+#[test]
+fn err_trap_names_a_pipelines_last_line_once() {
+    // A pipeline over several lines fails on the line of its last stage, where Bash has
+    // `$LINENO`; the `if` around it, whose status is the pipeline's, runs no trap of its
+    // own: the trap ran twice. Then the function's call fails, where it was made.
+    let script = "set -E\ntrap 'echo \"ERR $LINENO\"' ERR\nf() {\n  if true; then\n    echo a \\\n      | cat \\\n      | false\n  fi\n}\nf";
+    assert_eq!(output(script), (1, "ERR 7\nERR 10".into()));
+}
+
+#[test]
+fn bash_lineno_has_the_scripts_entry_outside_functions() {
+    // A script run, outside any function, has `BASH_LINENO=(0)`, as in Bash, whose bats
+    // reads it for its traces; a file it sources adds the line it was sourced from.
+    let root = Scratch::new("bash-lineno");
+    std::fs::write(
+        root.join("sourced.sh"),
+        "echo \"sourced [${BASH_LINENO[*]}]\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("main.sh"),
+        "echo \"main [${BASH_LINENO[*]}] ${#BASH_LINENO[@]}\"\n. ./sourced.sh\n",
+    )
+    .unwrap();
+    let result = cash_command()
+        .current_dir(root.path())
+        .args(["--noprofile", "--norc", "main.sh"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&result.stdout).replace("\r\n", "\n"),
+        "main [0] 1\nsourced [2 0]\n"
+    );
+    assert_eq!(
+        output("echo \"[${BASH_LINENO[*]}] ${#BASH_LINENO[@]}\""),
+        (0, "[] 0".into())
+    );
+}

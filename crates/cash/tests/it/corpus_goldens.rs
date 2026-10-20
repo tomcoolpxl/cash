@@ -29,7 +29,13 @@ const KNOWN_DIFFERENT: &[(&str, &str)] = &[
     (
         "bash/bats-assert.sh",
         "D3: bats' `load` takes a path for absolute only when it starts with `/`, which \
-         `C:/…` does not; the `/c/` mode to be designed (TODO.md)",
+         `C:/…` does not; bats-assert-unixpaths.sh runs it under `unixpaths` (D82)",
+    ),
+    (
+        "bash/bats-assert-unixpaths.sh",
+        "bats takes a failure's lines from its DEBUG trap, which cash does not run before \
+         `[[ ]]`, `(( ))`, `for`, `case`, a function's start, or each stage of a pipeline \
+         in the shell itself, as Bash does (TODO.md); the tests pass and fail as in Bash",
     ),
     (
         "bash/nvm-helpers.sh",

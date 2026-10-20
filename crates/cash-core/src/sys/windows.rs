@@ -22,8 +22,9 @@ pub use crate::sys::tokio_process as process;
 pub(crate) mod users;
 
 /// Render a path string in cash's canonical spelling: drive letter, forward slashes (D3).
+/// A `/c/...` spelling, as a cash under `unixpaths` (D82) passes HOME, is read as `C:/...`.
 pub(crate) fn render_canonical_path(path: &str) -> String {
-    cash_win32::path::render(std::path::Path::new(path))
+    cash_win32::path::render(&cash_win32::path::accept_path(path))
 }
 
 /// Platform-specific errors.

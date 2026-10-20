@@ -869,6 +869,13 @@ static SHOPT_OPTIONS: LazyLock<HashMap<&'static str, ShellOptionDef>> = LazyLock
             ),
         ),
         (
+            "unixpaths",
+            ShellOptionDef::new(
+                |options| options.unix_paths,
+                |options, value| options.unix_paths = value,
+            ),
+        ),
+        (
             "varredir_close",
             ShellOptionDef::new(
                 |options| options.var_redir_close,

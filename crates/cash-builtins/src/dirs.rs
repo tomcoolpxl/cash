@@ -94,7 +94,7 @@ impl builtins::Command for DirsCommand {
                 write!(context.stdout(), "{index:2}  ")?;
             }
 
-            let mut dir_str = dir.to_string_lossy().to_string();
+            let mut dir_str = context.shell.shown_path(dir);
 
             if !self.tilde_long {
                 dir_str = context.shell.tilde_shorten(dir_str);

@@ -177,13 +177,22 @@ climb from `$PWD` until it is empty or `/`, which `C:/...` never reaches, and ba
 wants a path that starts with `/`. Turned down: spelling alone, which hands Windows
 programs `/c/` paths; MSYS's full conversion of variables and lists, with its misfires;
 an environment variable alone, which a script cannot set for itself; `/c/` as the default.
-To be built in the phase after 1.38.0.
+Built in the phase after 1.38.0 as `shopt -s unixpaths`, passed on as `CASH_UNIXPATHS=1`.
+The user's pick then, 2026-10-20: cash's bundled tools read `/c/...` in either mode, as an
+MSYS tool does, which the design took them to do already: `sed`, `awk`, `diff` and `cmp`
+where they open a file, their scripts and patterns untouched; the other tools that take
+files by their operands, turned into `C:/...` as they start; a tool that only handles text
+(`echo`, `expr`, `basename`, `dirname`) keeps its words. Turned down there: the rule for
+Windows programs on every bundled tool, which rewrites `sed '/c/d'`; the operands only
+under the mode, which leaves `cat /c/x` failing without it.
 
 ### D4 — Arguments are never rewritten
 
 A child gets exactly the string a variable holds; cash never guesses which arguments are
 paths. `winpath` converts on request; quoting for `cmd.exe` (D32) is escaping, not
-rewriting. Turned down: MSYS2's argument conversion and its `MSYS2_ARG_CONV_EXCL`.
+rewriting. Turned down: MSYS2's argument conversion and its `MSYS2_ARG_CONV_EXCL`. D82
+makes two exceptions: a Windows program's `/c/` arguments under `unixpaths`, and a
+bundled tool's `/c/` file operands, which it reads as an MSYS tool reads them.
 
 ### D10 — The shell's directory is the shell's; paths render at two chokepoints
 
@@ -922,6 +931,8 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   designed (research/, then a pick list): rbenv, asdf, pyenv and nvm climb from `$PWD` until
   it is empty or `/`, which `C:/...` never reaches, and bats' `load` wants a path that
   starts with `/`. Turned down: `/c/` as the default, which reverses D3.
+- **The phase after 1.38.0** (the user, 2026-10-20, the last pick of the phase before):
+  build the `/c/` mode of D82.
 
 ## 8. Archives and compression
 

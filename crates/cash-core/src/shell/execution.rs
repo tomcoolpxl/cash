@@ -37,8 +37,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             // that bash does not bear out, and `coolfetch` in `~/.bashrc` then called the
             // shell `.bashrc`. The file is named as cash spells paths (D3): joined onto
             // the home directory it was `C:/Users/me\.bashrc` in `BASH_SOURCE` and in error
-            // messages.
-            let path = std::path::PathBuf::from(cash_win32::path::render(path));
+            // messages; `/c/Users/me/.bashrc` under `unixpaths` (D82), as in Git Bash.
+            let path = std::path::PathBuf::from(self.shown_path(path));
             self.source_script(&path, std::iter::empty::<String>(), params)
                 .await?;
             Ok(true)

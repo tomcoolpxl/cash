@@ -27,7 +27,7 @@
 //! A script wanting only a filesystem path should ask for one: `which -p` restricts the
 //! search to `PATH`, and prints nothing for a builtin.
 
-use std::io::Write;
+use std::{io::Write, path::Path};
 
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
@@ -137,16 +137,19 @@ impl builtins::Command for WhichCommand {
                     // A path alone, because that is what a script captures.
                     Resolved::File { path, .. } => {
                         if printed_link.as_ref() != Some(path) {
-                            writeln!(stdout, "{}", cash_win32::path::render(path))?;
+                            writeln!(stdout, "{}", context.shell.shown_path(path))?;
                         }
                     }
                     Resolved::Builtin => {
                         if let Some(link) = linked_path(context.shell, name) {
-                            writeln!(stdout, "{}", cash_win32::path::render(&link))?;
+                            writeln!(stdout, "{}", context.shell.shown_path(&link))?;
                             printed_link = Some(link);
                         } else {
                             match executable_path(name) {
-                                Some(path) => writeln!(stdout, "{path}")?,
+                                Some(path) => {
+                                    let shown = context.shell.shown_path(Path::new(&path));
+                                    writeln!(stdout, "{shown}")?;
+                                }
                                 None => writeln!(stdout, "{name}: shell builtin")?,
                             }
                         }

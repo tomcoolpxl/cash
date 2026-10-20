@@ -133,6 +133,9 @@ pub trait ShellState {
     /// Returns the shell's current working directory.
     fn working_dir(&self) -> &Path;
 
+    /// `path` as the shell shows it to a script: `C:/dir`, or under `unixpaths` `/c/dir`.
+    fn shown_path(&self, path: &Path) -> String;
+
     /// Returns a mutable reference to the shell's current working directory.
     /// This is only accessible within the crate.
     fn working_dir_mut(&mut self) -> &mut PathBuf;

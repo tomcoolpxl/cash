@@ -2626,3 +2626,24 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   decided in one place, `cash_builtins::carried`, for `which`, `type -P` and
   `cash --link-tools`. The corpus runner `run.ps1` copies only the fixtures a case names,
   as the golden test does, so that both see the same directory.
+- **The `/c/` mode, `shopt -s unixpaths`** (2026-10-20, the phase after 1.38.0, item 1,
+  D82): `pwd`, `$PWD`, `$OLDPWD`, `$HOME`, the tildes, `dirs`, `$DIRSTACK`, `\w`, `which`,
+  `type -P`, `command -v`, `hash`, absolute globs, `realpath`, `readlink -f` and `mktemp`
+  give `/c/...`, all through `Shell::shown_path` and `cash_win32::path::shown`; turning the
+  option on or off spells `$PWD`, `$OLDPWD` and `$HOME` again. A Windows program that is not
+  an MSYS one gets `C:/...` for a whole-word `/c/...` argument and the value of
+  `--opt=/c/...` or `NAME=/c/...` (`cash_win32::path::windows_argument`), and for `HOME`,
+  `PWD` and `OLDPWD`; a cash started from it takes the option through `CASH_UNIXPATHS=1`.
+  rbenv, pyenv, asdf, nvm (both cases) and z run under it without their workarounds, as
+  `-unixpaths` twins of their corpus cases, and bats-assert's `load` works. Found in it:
+  the bundled tools failed on `/c/` in either mode, which the design took for granted;
+  they read it now in either mode, as an MSYS tool does (the user's pick): `sed`, `awk`,
+  `diff` and `cmp` where they open a file, the other tools that take files by their
+  operands, and the text tools keep their words. The warning for a `/c/` argument no
+  longer speaks for an MSYS program or cash's tools, which read it, nor under the mode.
+  `exec /c/x/script` and `env /c/x/script` failed, in either mode: a program is named by
+  any spelling cash reads (`cash_win32::resolve::resolve` too). An ERR trap after a
+  pipeline over several lines named its first line, not its last stage's as Bash does; a
+  failure inside an `if`, a loop or `{ }` ran the trap a second time for the compound
+  command; and `BASH_LINENO` was unset in a script outside functions, where Bash has
+  `(0)`. bats' traces still name other lines than Bash's, from its DEBUG trap (TODO.md).

@@ -13,7 +13,8 @@ pub(crate) struct PwdCommand {
     #[arg(short = 'L', overrides_with = "physical")]
     allow_symlinks: bool,
 
-    /// Print the directory in Windows form, which cash always does (MSYS2 Bash's -W).
+    /// Print the directory in Windows form, as cash does unless `unixpaths` is on (MSYS2
+    /// Bash's -W).
     #[arg(short = 'W')]
     windows: bool,
 
@@ -43,7 +44,13 @@ impl builtins::Command for PwdCommand {
         }
 
         // The resolved directory comes back as `\\?\C:\…`; cash prints `C:/…` (D3).
-        writeln!(context.stdout(), "{}", cash_win32::path::render(&cwd))?;
+        // `/c/…` under `unixpaths` (D82), but for `-W`.
+        let shown = if self.windows {
+            cash_win32::path::render(&cwd)
+        } else {
+            context.shell.shown_path(&cwd)
+        };
+        writeln!(context.stdout(), "{shown}")?;
 
         Ok(ExecutionResult::success())
     }

@@ -145,6 +145,10 @@ impl builtins::Command for ShoptCommand {
                             }
                         }
                     }
+                    // `$PWD`, `$OLDPWD` and `$HOME` take the spelling just chosen (D82).
+                    if (self.set || self.unset) && option_name == "unixpaths" {
+                        context.shell.respell_shown_paths()?;
+                    }
                 } else {
                     writeln!(
                         context.error_stream(),

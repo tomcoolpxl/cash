@@ -276,7 +276,7 @@ pub(crate) fn init_well_known_vars(
             getter: |shell| {
                 std::iter::once(shell.working_dir())
                     .chain(shell.directory_stack().iter().rev().map(PathBuf::as_path))
-                    .map(|p| p.to_string_lossy().to_string())
+                    .map(|p| shell.shown_path(p))
                     .collect::<Vec<_>>()
                     .into()
             },
@@ -579,7 +579,7 @@ pub(crate) fn init_well_known_vars(
     // we inherited an out-of-sync version of the variable. Future updates
     // will be handled by set_working_dir().
     //
-    let pwd = shell.working_dir().to_string_lossy().to_string();
+    let pwd = shell.shown_path(shell.working_dir());
     let mut pwd_var = ShellVariable::new(pwd);
     pwd_var.export();
     shell.env_mut().set_global("PWD", pwd_var)?;
@@ -657,8 +657,16 @@ fn get_bash_lineno_value(shell: &dyn ShellState) -> variables::ShellValue {
     let stack = shell.call_stack();
 
     // BASH_LINENO[$i] contains the line number where FUNCNAME[$i] was called
-    // This is extracted from the call_site of each frame
-    if stack.iter_function_calls().next().is_none() {
+    // This is extracted from the call_site of each frame. A script outside any function
+    // has its own entry, the `0` it was run from, as in Bash, whose bats traces read it;
+    // it was unset there.
+    let in_frame = stack.iter().any(|frame| {
+        matches!(
+            frame.frame_type,
+            crate::callstack::FrameType::Function(..) | crate::callstack::FrameType::Script(..)
+        )
+    });
+    if !in_frame {
         ShellValue::Unset(variables::ShellValueUnsetType::IndexedArray)
     } else {
         stack

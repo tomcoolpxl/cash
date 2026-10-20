@@ -95,8 +95,8 @@ impl CommandCommand {
                     Resolved::File { path, .. } => {
                         // cash (D3): rendered like `type` does, or a `PATH` directory is
                         // joined to the file name with a backslash
-                        // (`C:/WINDOWS/system32\netstat.exe`).
-                        let path = cash_win32::path::render(path);
+                        // (`C:/WINDOWS/system32\netstat.exe`); `/c/...` under `unixpaths`.
+                        let path = context.shell.shown_path(path);
                         writeln!(context.stdout(), "{path}")?;
                     }
                 }
@@ -116,7 +116,7 @@ impl CommandCommand {
                     *path = context.shell.absolute_path(relative);
                 }
 
-                lookup::describe(context.stdout(), name, &found)?;
+                lookup::describe(context.stdout(), context.shell, name, &found)?;
             }
 
             // Bash finds a hashed command through the same lookup that counts a hit when

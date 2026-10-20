@@ -1,8 +1,5 @@
 use clap::Parser;
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::{io::Write, path::PathBuf};
 
 use cash_core::{ExecutionResult, builtins, escape};
 
@@ -52,8 +49,7 @@ impl builtins::Command for HashCommand {
         }
 
         if self.names.is_empty() && !self.remove_all {
-            let entries: Vec<_> = context.shell.program_location_cache().entries().collect();
-
+            let entries = shown_entries(context.shell);
             if entries.is_empty() {
                 // Bash 5.1 dropped the notice for `-l`, whose output is meant to be read back
                 // in, and POSIX mode never printed it.
@@ -67,14 +63,14 @@ impl builtins::Command for HashCommand {
                     writeln!(
                         context.stdout(),
                         "builtin hash -p {} {}",
-                        escape::quote_if_needed(&render(path), escape::QuoteMode::SingleQuote),
-                        escape::quote_if_needed(name, escape::QuoteMode::SingleQuote)
+                        escape::quote_if_needed(&path, escape::QuoteMode::SingleQuote),
+                        escape::quote_if_needed(&name, escape::QuoteMode::SingleQuote)
                     )?;
                 }
             } else {
                 writeln!(context.stdout(), "hits\tcommand")?;
                 for (_, path, hits) in entries {
-                    writeln!(context.stdout(), "{hits:4}\t{}", render(path))?;
+                    writeln!(context.stdout(), "{hits:4}\t{path}")?;
                 }
             }
 
@@ -95,7 +91,7 @@ impl builtins::Command for HashCommand {
                 if let Some(path) = context.shell.program_location_cache().get(name) {
                     // Bash's lookup here counts as a hit, just as running the command does.
                     context.shell.program_location_cache_mut().record_hit(name);
-                    let path = render(&path);
+                    let path = context.shell.shown_path(&path);
 
                     if self.display_as_usable_input {
                         // Bash prints this form unquoted, unlike the whole-table listing.
@@ -162,8 +158,15 @@ impl builtins::Command for HashCommand {
     }
 }
 
-/// Renders a path with one canonical spelling (D3). A cached path is a `PATH` directory
-/// joined to the file name, which otherwise shows up as `C:/Program Files/Git/usr/bin\ls.exe`.
-fn render(path: &Path) -> String {
-    cash_win32::path::render(path)
+/// The remembered commands, each path as the shell shows it: a `PATH` directory joined to
+/// the name kept a `\` (`C:/Program Files/Git/usr/bin\ls.exe`), and `/c/...` under
+/// `unixpaths`.
+fn shown_entries<SE: cash_core::ShellExtensions>(
+    shell: &cash_core::Shell<SE>,
+) -> Vec<(String, String, u32)> {
+    shell
+        .program_location_cache()
+        .entries()
+        .map(|(name, path, hits)| (name.to_owned(), shell.shown_path(path), hits))
+        .collect()
 }
