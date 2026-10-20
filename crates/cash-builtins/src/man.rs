@@ -23,6 +23,10 @@ pub(crate) struct ManCommand {
     #[arg(short = 'k', value_name = "WORD")]
     apropos: Option<String>,
 
+    /// Print where the pages are: nothing, since cash's are built in.
+    #[arg(short = 'w', long = "path", visible_alias = "where")]
+    path: bool,
+
     /// The command or topic to show; Getting started without one.
     name: Option<String>,
 }
@@ -59,6 +63,12 @@ impl builtins::Command for ManCommand {
             }
             writeln!(context.stderr(), "`man -k {name}' searches the summaries.")?;
             return Ok(ExecutionResult::general_error());
+        }
+        // man(1) prints its search path, or a page's file, which scripts put before a
+        // MANPATH of their own. cash's pages are no files, and nothing printed leaves
+        // that MANPATH ending in `:`, which keeps a real man's own directories.
+        if self.path {
+            return Ok(ExecutionResult::success());
         }
         let helps: HashMap<String, builtins::CommandContentFunc> = context
             .shell

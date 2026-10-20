@@ -9,6 +9,7 @@ see: help getting-started keys differences
 
     man [NAME]
     man -k WORD
+    man -w [NAME]
 
     man               open the manual on Getting started
     man NAME          open the page of a command or a topic
@@ -66,11 +67,16 @@ its syntax and examples, into the terminal.
 
     -k WORD    Print each command and topic whose name or summary holds
                WORD, case aside, with its summary.
+    -w, --path, --where
+               Print where the pages are: nothing, as cash's are built in.
+               Scripts such as direnv's put `man -w` before a MANPATH of
+               their own; what they get ends in `:`, which keeps the
+               directories of a man(1) run by its path.
     NAME       A command, or a topic by its name or title. Without one, the
                topic Getting started.
 
-Exit status: 0 when the page was shown; 1 when there is no page for NAME, or `-k`
-found nothing; 2 for a bad option.
+Exit status: 0 when the page was shown, or for `-w` when there is one; 1 when there
+is no page for NAME, or `-k` found nothing; 2 for a bad option.
 
 ## Different in cash
 

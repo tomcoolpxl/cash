@@ -71,6 +71,10 @@ fn man_k_lists_what_a_word_finds_and_an_unknown_name_is_said() {
     assert_eq!(out.code, 1);
     assert_eq!(out.stderr, "man: nothing appropriate for zzqqxx");
 
+    // direnv's MANPATH_add: `${MANPATH:-$(man -w)}` before its own directory.
+    let out = run("echo \"[$(man -w)]\"; man --path tar; echo $?; man --where sedd; echo $?");
+    assert_eq!(out.stdout, "[]\n0\n1", "{}", out.stderr);
+
     let out = run("man sedd");
     assert_eq!(out.code, 1);
     assert!(
