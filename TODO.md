@@ -25,7 +25,28 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the current phase, 2026-10-20)
+## Picked by the user (the next phase, after 1.42.0, 2026-10-20)
+
+The user's pick from the themes below (decisions.md, "The phase after 1.42.0"), in this
+order:
+
+1. Loop control: `break`/`continue` outside a loop or past the loops, bad counts, inside a
+   function called from a loop; `return -1`, `return abc`.
+2. `read` with a mixed IFS, a backslash-escaped trailing space, `IFS=$'\t\r\f\v'`,
+   `mapfile -d ''`.
+3. `exec` and the redirection state: a redirection made permanent, `exec {v}<<EOF`,
+   failed `exec`, a background command's here-document or pipe input, a failed
+   redirection on a compound command, `exec 0<file` in a script read from standard input,
+   fd 8 after `{ exec 8<x; } 8<&-`, `( ! exit 42 )`.
+4. `fc -0` and `fc -s -0`; `set -o history` writing `$HISTFILE` in a script.
+5. The parser's cheapest subset: `! time`, `time --`, reserved words in `$(case ...)`, a
+   here-document in `$(...)` ended by `EOF)`, `<<-'<TAB>END'`.
+6. Readonly and prefix assignments, `declare -g`.
+7. `printf`.
+8. Expansion edge cases.
+9. Arrays and namerefs.
+
+## The current phase (2026-10-20)
 
 The user's pick after 1.41.0 (decisions.md, "The phase after 1.41.0"):
 

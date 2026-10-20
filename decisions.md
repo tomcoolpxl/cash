@@ -972,6 +972,17 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   user picked: GNU Bash's own test suite, modernish's self-test, bash-it with its bats
   tests, and acme.sh's offline helpers. Turned down for now: the archive leftovers and
   `sudo -E` through a handle.
+- **Release 1.42.0 before the round's findings** (the user, 2026-10-20): the round's
+  fixes, the subscript expanded twice and `**/**` among them, go out at once; what Bash's
+  test suite found more becomes the next phase.
+- **The phase after 1.42.0** (the user, 2026-10-20, from TODO.md's themes): loop control
+  (`break`, `continue`, `return`); `read` with a mixed IFS and its edges; `exec` and the
+  redirection state; `fc`'s and history's side effects; the parser's cheapest subset
+  (`! time`, `time --`, reserved words in `$(case ...)`, a here-document ended by `EOF)`,
+  `<<-'<TAB>END'`); readonly and prefix assignments; `printf`; expansion edge cases; arrays
+  and namerefs. Turned down for now: traps and job control, POSIX mode for modernish, and
+  bytes that are not UTF-8 (very large: cash's strings are UTF-8 throughout). The user
+  asked for independence while away: questions take the recommended answer.
 
 ## 8. Archives and compression
 
