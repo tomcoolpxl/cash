@@ -2732,3 +2732,25 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   listing read back changed. **`**/**` gave the whole path of the directory it started in,
   and every entry twice, so `rm -r **/**` removed the directory itself**; it gives what `**`
   gives, once each, and `**/a/**` matches `a`, not `a/`.
+- **Loop control** (2026-10-21, the phase after 1.42.0, item 1, found by Bash's test
+  suite): `break` and `continue` outside a loop, or `break 2` in one, ended the script with
+  status 0 and no word; a count of 0 or below looped on; in a function called from a loop
+  they were "not yet implemented", status 99, and the rest of the function was skipped. The
+  shell now counts the loops it is in, as Bash's `loop_level`: a function and a `( )`
+  subshell start from none, so `break` there says it is only meaningful in a loop and the
+  function goes on; a count is held to the loops there are; one below 1 is out of range,
+  leaves every loop and is status 1; a word that is no number ends the script with status
+  2. `return` and `exit` read their status as Bash does: `return -1` is 255, a word that
+  is no number is said and 2, a second word ends the script with status 1; clap had
+  refused `-1` as an option, and `return abc` went on with the function. A `break`, `exit`
+  or `return` in the trap for a signal the shell sends itself (`kill -USR1 $$`) acts where
+  it was sent; `kill` dropped it.
+- **`read` splits a line as Bash does** (2026-10-21, the phase after 1.42.0, item 2):
+  `IFS=": " read x y` of `a :b` gave `:b`, the blank and the colon taken for two
+  delimiters (832 of Bash's 6856 generated IFS cases); a backslash-escaped delimiter split
+  the line all the same (`read x y <<< 'a\ b c'` gave `a`), as the escape was taken out
+  before the splitting, and an escaped trailing blank was dropped. The splitter is Bash's:
+  a delimiter is IFS whitespace, at most one other IFS character and IFS whitespace again,
+  every `isspace` character in IFS is IFS whitespace as in Bash 5.3, and an escaped
+  character is marked as Bash marks it, never a delimiter. `mapfile -d ''` kept the NUL in
+  each element.

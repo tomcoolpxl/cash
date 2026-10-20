@@ -25,15 +25,12 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the next phase, after 1.42.0, 2026-10-20)
+## Picked by the user (the current phase, after 1.42.0, 2026-10-21)
 
 The user's pick from the themes below (decisions.md, "The phase after 1.42.0"), in this
-order:
+order. Done, in DONE.md: 1, loop control (`break`, `continue`, `return`, `exit`), and 2,
+`read` with a mixed IFS and escapes, and `mapfile -d ''`.
 
-1. Loop control: `break`/`continue` outside a loop or past the loops, bad counts, inside a
-   function called from a loop; `return -1`, `return abc`.
-2. `read` with a mixed IFS, a backslash-escaped trailing space, `IFS=$'\t\r\f\v'`,
-   `mapfile -d ''`.
 3. `exec` and the redirection state: a redirection made permanent, `exec {v}<<EOF`,
    failed `exec`, a background command's here-document or pipe input, a failed
    redirection on a compound command, `exec 0<file` in a script read from standard input,
@@ -46,7 +43,7 @@ order:
 8. Expansion edge cases.
 9. Arrays and namerefs.
 
-## The current phase (2026-10-20)
+## The phase before (2026-10-20, done, released as 1.42.0)
 
 The user's pick after 1.41.0 (decisions.md, "The phase after 1.41.0"):
 
@@ -68,10 +65,6 @@ unquoted by `set`, `printf %q` and `declare -p`, and `**/**` giving the director
 path. The rest, by theme:
 
 **Scripts that end or go on in silence**
-- `break`/`continue` outside a loop, or `break N` past the loops, ends the script with
-  status 0; a count of 0, below 0 or no number loops on; inside a function called from a
-  loop: "not yet implemented", status 99; `return -1` refused (Bash: 255), `return abc`
-  does not return.
 - `exec` with a redirection inside a redirected `{ }` or function makes the outer
   redirection permanent: what follows lands in the file.
 - `exec {v}<<EOF` and `exec {v}<<<word` run `{v}` as a command, status 127.
@@ -88,11 +81,8 @@ path. The rest, by theme:
 - `set -o history` in a script writes every command to `$HISTFILE` at once; Bash writes
   nothing.
 
-**`read` and `mapfile`**
-- `IFS=": " read x y` keeps the delimiters in the last variable (`a :b` gives `:b`);
-  832 of Bash's 6856 generated IFS cases.
-- A backslash-escaped trailing space is dropped; with `IFS=$'\t\r\f\v'` trailing IFS
-  white space is kept; `mapfile -d ''` keeps the NUL in each element.
+**`read`**
+- `read -n -1` is refused as an option, status 2 (Bash: "invalid number", status 1).
 
 **Scripts refused that Bash runs (parser)**
 - `! time cmd`, `time` after `!` or `time`, `time --`.

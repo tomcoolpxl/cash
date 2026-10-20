@@ -202,6 +202,8 @@ mod sudo_in_terminal;
 mod pwd_forms;
 // `read -t`, `-d`, `-n` and `-s` at a console, which collects a line unless told not to.
 mod read_console;
+// How `read` splits a line at IFS and escapes, and `mapfile -d ''`, as Bash 5.3.
+mod read_splitting;
 mod real_world_tests;
 // `suspend`, `mkfifo` and `stdbuf`: builtins that refuse in Bash's and coreutils' words.
 mod refusals;

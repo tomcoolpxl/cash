@@ -19,6 +19,11 @@ const BACKSLASH: char = '\\';
 const DEFAULT_DELIMITER: char = '\n';
 /// NUL character used as delimiter when `-d ''` is specified.
 const NUL_DELIMITER: char = '\0';
+/// Put before a character a backslash escaped, as Bash puts its `CTLESC`, so that splitting
+/// by IFS keeps it in its field; and before itself where the input holds it, with or without
+/// `-r`. It is taken out of every value ([`unmarked`]). The escape was taken out as the line was read, and `read x
+/// y <<< 'a\ b c'` split at the escaped space.
+const ESCAPED: char = '\u{1}';
 
 /// Parse standard input.
 #[derive(Parser, Clone)]
@@ -315,7 +320,7 @@ async fn assign_input_to_variables(
         shell.assign_variable(
             "REPLY",
             None,
-            variables::ShellValueLiteral::Scalar(input_line.unwrap_or_default().to_owned()),
+            variables::ShellValueLiteral::Scalar(unmarked(input_line.unwrap_or_default())),
         )?;
     }
     Ok(())
@@ -425,7 +430,7 @@ fn build_array_fields(
     match input_line {
         Some(line) if skip_ifs_splitting => {
             // With -N, don't split - put entire input as single element.
-            vec![(None, line.to_string())]
+            vec![(None, unmarked(line))]
         }
         Some(line) => {
             let fields: VecDeque<_> = split_line_by_ifs(ifs, line, None /* max_fields */);
@@ -445,7 +450,7 @@ fn build_variable_fields(
     match input_line {
         Some(line) if skip_ifs_splitting => {
             // With -N, don't split - put entire input in first variable.
-            VecDeque::from([line.to_string()])
+            VecDeque::from([unmarked(line)])
         }
         Some(line) => split_line_by_ifs(ifs, line, Some(num_variables)),
         None => VecDeque::new(),
@@ -845,7 +850,9 @@ fn read_line_with_reader(
                             continue;
                         }
 
-                        // For other chars, add char literally (backslash consumed).
+                        // For other chars, add char literally (backslash consumed), marked
+                        // as escaped for the splitting by IFS.
+                        line.push(ESCAPED);
                         line.push(ch);
                         *output_chars += 1;
 
@@ -889,6 +896,9 @@ fn read_line_with_reader(
                     continue;
                 }
 
+                if ch == ESCAPED {
+                    line.push(ESCAPED);
+                }
                 line.push(ch);
                 *output_chars += 1;
 
@@ -1219,7 +1229,8 @@ fn accept_editor_segment(
 
 fn editor_limit_reached(committed: &str, line: &[char], config: &LineReaderConfig) -> bool {
     config.char_limit.is_some_and(|limit| {
-        committed.chars().count() + edited_line(line, config).chars().count() >= limit
+        unmarked(committed).chars().count() + unmarked(&edited_line(line, config)).chars().count()
+            >= limit
     })
 }
 
@@ -1243,7 +1254,13 @@ impl Drop for EditorModeGuard {
 // a terminal. Backslashes quote the following character unless `read -r` was used.
 fn edited_line(chars: &[char], config: &LineReaderConfig) -> String {
     if !config.process_escapes {
-        return chars.iter().collect();
+        return chars
+            .iter()
+            .flat_map(|&ch| {
+                let doubled = (ch == ESCAPED).then_some(ESCAPED);
+                doubled.into_iter().chain(std::iter::once(ch))
+            })
+            .collect();
     }
 
     let mut result = String::new();
@@ -1251,11 +1268,30 @@ fn edited_line(chars: &[char], config: &LineReaderConfig) -> String {
     for &ch in chars {
         if quoted {
             if ch != DEFAULT_DELIMITER && ch != NUL_DELIMITER {
+                result.push(ESCAPED);
                 result.push(ch);
             }
             quoted = false;
         } else if ch == BACKSLASH {
             quoted = true;
+        } else {
+            if ch == ESCAPED {
+                result.push(ESCAPED);
+            }
+            result.push(ch);
+        }
+    }
+    result
+}
+
+/// `text` without the marks [`ESCAPED`] put in it: each mark goes, and the character after
+/// it stays.
+fn unmarked(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(ch) = chars.next() {
+        if ch == ESCAPED {
+            result.extend(chars.next());
         } else {
             result.push(ch);
         }
@@ -1478,97 +1514,85 @@ fn last_indexed_value(matches: &clap::ArgMatches, id: &str) -> Option<(usize, us
 /// * `line` - The input line to split
 /// * `max_fields` - Optional limit on number of fields (for `read var1 var2`)
 fn split_line_by_ifs(ifs: &str, line: &str, max_fields: Option<usize>) -> VecDeque<String> {
-    let ifs_chars: Vec<char> = ifs.chars().collect();
-
-    // Helper to check if a char is IFS whitespace (space, tab, or newline AND in IFS).
-    let is_ifs_whitespace =
-        |c: char| -> bool { (c == ' ' || c == '\t' || c == '\n') && ifs_chars.contains(&c) };
-
-    // Trim leading/trailing IFS whitespace from the input.
-    let trimmed_line = line.trim_matches(&is_ifs_whitespace);
-    if trimmed_line.is_empty() {
-        return VecDeque::new();
-    }
-
-    let max_fields = max_fields.unwrap_or(usize::MAX);
-
-    // State machine for splitting:
-    // - `consuming_whitespace_run`: Currently skipping consecutive IFS whitespace
-    // - `prev_was_non_ws_delim`: Previous char was a non-whitespace delimiter
-    // - `collecting_remainder`: We've hit max_fields, collect everything into last field
-    let mut fields = VecDeque::new();
-    let mut current_field = String::new();
-    let mut consuming_whitespace_run = false;
-    let mut prev_was_non_ws_delim = false;
-    let mut collecting_remainder = false;
-
-    for c in trimmed_line.chars() {
-        // Skip consecutive IFS whitespace (they act as single delimiter).
-        if consuming_whitespace_run && is_ifs_whitespace(c) {
-            continue;
-        }
-        consuming_whitespace_run = false;
-
-        let is_delimiter = ifs_chars.contains(&c);
-        let at_field_limit = fields.len() + 1 >= max_fields;
-
-        if !at_field_limit && is_delimiter {
-            // Normal case: delimiter ends current field, start new one.
-            fields.push_back(std::mem::take(&mut current_field));
-            consuming_whitespace_run = is_ifs_whitespace(c);
-            prev_was_non_ws_delim = !consuming_whitespace_run;
-        } else if at_field_limit && !collecting_remainder && is_delimiter {
-            // At field limit but haven't started last field content yet.
-            // Skip leading IFS whitespace for the final field.
-            if is_ifs_whitespace(c) {
-                consuming_whitespace_run = true;
-            } else {
-                // Non-whitespace delimiters at boundary: include in remainder.
-                // e.g., "x::y" with IFS=":" and 2 vars gives ["x", ":y"]
-                collecting_remainder = true;
-                current_field.push(c);
-            }
+    // Each character, and whether a backslash escaped it ([`ESCAPED`]): an escaped one is
+    // never a delimiter.
+    let mut marked = Vec::with_capacity(line.len());
+    let mut chars = line.chars();
+    while let Some(ch) = chars.next() {
+        if ch == ESCAPED {
+            marked.extend(chars.next().map(|escaped| (escaped, true)));
         } else {
-            // Regular character: add to current field.
-            collecting_remainder = at_field_limit;
-            current_field.push(c);
-            prev_was_non_ws_delim = false;
+            marked.push((ch, false));
         }
     }
-
-    // Finalize: push last field unless it's empty AND we ended with non-ws delimiter.
-    // e.g., "a,b,c," with IFS="," gives ["a", "b", "c"], not ["a", "b", "c", ""].
-    if !current_field.is_empty() || !prev_was_non_ws_delim {
-        fields.push_back(current_field);
+    let splitter = IfsSplitter { ifs };
+    let max_fields = max_fields.unwrap_or(usize::MAX);
+    let mut rest = splitter.skip_white(&marked);
+    let mut fields = VecDeque::new();
+    while !rest.is_empty() {
+        let (word, after) = splitter.word(rest);
+        // The last variable takes the rest of the line, as Bash's `read` gives it: the
+        // word alone when it is the only one left, the delimiter after it dropped (IFS=:
+        // `foo:bar:` gives `bar`), else the rest less its trailing IFS whitespace (`x:y:z:`
+        // keeps `y:z:`).
+        if fields.len() + 1 == max_fields && !after.is_empty() {
+            let end = rest
+                .iter()
+                .rposition(|&item| !splitter.is_white(item))
+                .map_or(0, |last| last + 1);
+            fields.push_back(rest.iter().take(end).map(|&(ch, _)| ch).collect());
+            break;
+        }
+        fields.push_back(word);
+        rest = after;
     }
-
-    // The last variable takes the rest of the line. As in Bash's `read`, when that rest is
-    // a single word, it gets the word alone, without the delimiter that ended it: with
-    // IFS=: `foo:bar:` gives `bar`, while `x:y:z:` keeps `y:z:`.
-    if fields.len() == max_fields
-        && let Some(last) = fields.back_mut()
-        && let Some(word) = sole_word(last, &ifs_chars, &is_ifs_whitespace)
-    {
-        *last = word;
-    }
-
     fields
 }
 
-/// Returns the word `rest` consists of, if it is one word followed by at most one
-/// delimiter (and IFS whitespace).
-fn sole_word(
-    rest: &str,
-    ifs_chars: &[char],
-    is_ifs_whitespace: &impl Fn(char) -> bool,
-) -> Option<String> {
-    let word_end = rest.find(|c| ifs_chars.contains(&c)).unwrap_or(rest.len());
-    let (word, tail) = rest.split_at(word_end);
-    let mut after = tail.chars().peekable();
-    while after.next_if(|&c| is_ifs_whitespace(c)).is_some() {}
-    after.next_if(|&c| ifs_chars.contains(&c) && !is_ifs_whitespace(c));
-    while after.next_if(|&c| is_ifs_whitespace(c)).is_some() {}
-    after.peek().is_none().then(|| word.to_owned())
+/// Splitting by IFS as Bash's `read` does it: a delimiter is IFS whitespace, at most one
+/// other IFS character, and IFS whitespace again. `IFS=": "` read `a :b` as `a`, `:b`:
+/// the blank and the colon were two delimiters.
+struct IfsSplitter<'a> {
+    ifs: &'a str,
+}
+
+impl IfsSplitter<'_> {
+    /// Whether the character ends a field: in IFS, and not escaped.
+    fn is_delimiter(&self, (ch, escaped): (char, bool)) -> bool {
+        !escaped && self.ifs.contains(ch)
+    }
+
+    /// Whether the character is IFS whitespace: a delimiter that is white space, which
+    /// Bash 5.3 takes as any `isspace` character, `\r`, `\f` and `\v` too.
+    fn is_white(&self, item: (char, bool)) -> bool {
+        self.is_delimiter(item) && matches!(item.0, ' ' | '\t' | '\n' | '\r' | '\x0b' | '\x0c')
+    }
+
+    /// `text` from its first character that is no IFS whitespace.
+    fn skip_white<'t>(&self, text: &'t [(char, bool)]) -> &'t [(char, bool)] {
+        let start = text
+            .iter()
+            .position(|&item| !self.is_white(item))
+            .unwrap_or(text.len());
+        text.get(start..).unwrap_or_default()
+    }
+
+    /// The word `text` starts with, and what follows the delimiter that ends it.
+    fn word<'t>(&self, text: &'t [(char, bool)]) -> (String, &'t [(char, bool)]) {
+        let end = text
+            .iter()
+            .position(|&item| self.is_delimiter(item))
+            .unwrap_or(text.len());
+        let word = text.iter().take(end).map(|&(ch, _)| ch).collect();
+        let mut after = self.skip_white(text.get(end..).unwrap_or_default());
+        if let Some((&first, behind)) = after.split_first()
+            && self.is_delimiter(first)
+            && !self.is_white(first)
+        {
+            after = self.skip_white(behind);
+        }
+        (word, after)
+    }
 }
 
 #[cfg(test)]
@@ -1593,7 +1617,8 @@ mod tests {
             process_escapes: false,
         };
 
-        assert_eq!(edited_line(&escaped, &cooked), r"one two\three");
+        assert_eq!(unmarked(&edited_line(&escaped, &cooked)), r"one two\three");
+        assert_eq!(edited_line(&escaped, &cooked), "one\u{1} two\u{1}\\three");
         assert_eq!(edited_line(&escaped, &raw), r"one\ two\\three");
     }
 
@@ -1690,6 +1715,36 @@ mod tests {
         }
         let result = split_line_by_ifs(": ", "x:y: ", Some(2));
         assert_equal(result, VecDeque::from(vec!["x", "y"]));
+    }
+
+    #[test]
+    fn test_split_line_by_ifs_whitespace_around_a_delimiter_is_part_of_it() {
+        // As Bash's read: `IFS=": " read x y` of `a :b` is `a` and `b`; it was `:b`, 832
+        // of Bash's 6856 generated IFS cases.
+        for (line, expected) in [
+            ("a :b", vec!["a", "b"]),
+            ("a ::", vec!["a", ""]),
+            ("a : b : ", vec!["a", "b"]),
+        ] {
+            assert_equal(
+                split_line_by_ifs(": ", line, Some(2)),
+                VecDeque::from(expected),
+            );
+        }
+        // A character a backslash escaped is no delimiter, nor trailing whitespace.
+        assert_equal(
+            split_line_by_ifs(" ", "a\u{1} b c", Some(2)),
+            VecDeque::from(vec!["a b", "c"]),
+        );
+        assert_equal(
+            split_line_by_ifs(" ", " a  b\u{1} ", Some(2)),
+            VecDeque::from(vec!["a", "b "]),
+        );
+        // Bash 5.3's IFS whitespace is every `isspace` character in IFS (its read9.sub).
+        assert_equal(
+            split_line_by_ifs("\t\r\x0c\x0b", "  line\tb \t\r\x0c\x0b", Some(2)),
+            VecDeque::from(vec!["  line", "b "]),
+        );
     }
 
     #[test]

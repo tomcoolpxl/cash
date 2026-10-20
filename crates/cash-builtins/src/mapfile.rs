@@ -189,7 +189,9 @@ impl MapFileCommand {
                 continue;
             }
 
-            if self.remove_delimiter && line.ends_with(&[delimiter]) {
+            // A NUL is the end of a Bash value: `mapfile -d ''` keeps no NUL even without
+            // `-t`. It was kept, and the element held it.
+            if (self.remove_delimiter || delimiter == 0) && line.ends_with(&[delimiter]) {
                 line.pop();
                 // D20: `\r\n` ends a line as `\n` does, so `-t` takes all of it; it left the
                 // `\r` (XC-4). A `\r` inside the line is the line's.
