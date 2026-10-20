@@ -142,8 +142,13 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
 
         // Preserve $? across trap handler execution so the handler doesn't
-        // clobber the status that triggered it.
+        // clobber the status that triggered it; `PIPESTATUS` too, and whether `set -e` let the
+        // last failure pass, as Bash keeps them (`_run_trap_internal`): a DEBUG trap now runs
+        // between a loop's body and its condition, and bats' trap, running pipelines of its
+        // own, made the loop's ignored failure (`[[ … ]] && return 0`) end the test.
         let orig_last_exit_status = self.last_exit_status;
+        let orig_pipeline_statuses = self.last_pipeline_statuses.clone();
+        let orig_failure_ignored = self.failure_ignored_by_errexit;
 
         // N.B. We use manual enter/leave rather than an RAII guard because a guard
         // would need to hold `&mut Shell`, preventing the mutable borrow required by
@@ -180,6 +185,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         self.leave_trap_handler();
         self.status_before_exit_trap = previous_before_exit_trap;
         self.last_exit_status = orig_last_exit_status;
+        self.last_pipeline_statuses = orig_pipeline_statuses;
+        self.failure_ignored_by_errexit = orig_failure_ignored;
 
         result
     }
