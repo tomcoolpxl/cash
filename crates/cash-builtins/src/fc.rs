@@ -44,6 +44,28 @@ impl builtins::Command for FcCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // `-0` names no command but in a listing, as Bash's `fc_gethnum` has it: it was
+        // taken for `0`, the last command, which `fc -s -0` ran again and `fc -0` edited
+        // and ran.
+        let negative_zero = |spec: &Option<String>| {
+            spec.as_deref()
+                .and_then(|spec| spec.strip_prefix('-'))
+                .is_some_and(|number| number.parse::<i64>() == Ok(0))
+        };
+        if !self.list && (negative_zero(&self.first) || negative_zero(&self.last)) {
+            let complaint = if self.substitute {
+                "no command found"
+            } else {
+                "history specification out of range"
+            };
+            writeln!(
+                context.error_stream(),
+                "{}: {complaint}",
+                context.command_name
+            )?;
+            return Ok(ExecutionResult::general_error());
+        }
+
         if self.substitute {
             return self.do_execute(context).await;
         }

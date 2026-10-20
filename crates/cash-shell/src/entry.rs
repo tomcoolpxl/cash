@@ -494,6 +494,9 @@ async fn run_in_shell(
             };
             return Ok(status.into());
         }
+        // What a script kept with `set -o history` goes to `HISTFILE` as it ends, as
+        // Bash's `exit_shell` saves it: after the `EXIT` trap, to the file named then.
+        let _ = shell.save_history();
         drop(shell);
     }
 

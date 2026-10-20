@@ -2902,6 +2902,45 @@ fn set_a_exports_what_every_kind_of_assignment_sets_but_no_array() {
 }
 
 #[test]
+fn a_script_s_history_is_written_as_it_ends_to_the_last_histfile() {
+    // It was appended line by line to every HISTFILE the script set; Bash writes it once,
+    // at the end, to the HISTFILE of then. And `fc -0` and `fc -s -0` ran the last
+    // command again, where Bash names none.
+    let scratch = Scratch::new("script-history");
+    std::fs::write(scratch.path().join("a.list"), "old entry\n").unwrap();
+    std::fs::write(
+        scratch.path().join("h.sh"),
+        "HISTFILE=$PWD/a.list\nset -o history\necho first >/dev/null\n\
+         HISTFILE=$PWD/b.list\necho second >/dev/null\n[ -e b.list ] || echo none yet\n\
+         fc -0 2>/dev/null; echo \"fc $?\"; fc -s -0 2>/dev/null; echo \"fcs $?\"\n",
+    )
+    .unwrap();
+    let result = cash_command()
+        .current_dir(scratch.path())
+        .env("FCEDIT", "true")
+        .args(["--noprofile", "--norc", "h.sh"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(result.stdout)
+            .unwrap()
+            .replace("\r\n", "\n"),
+        "none yet\nfc 1\nfcs 1\n"
+    );
+    let read = |name: &str| {
+        std::fs::read_to_string(scratch.path().join(name))
+            .unwrap()
+            .replace("\r\n", "\n")
+    };
+    assert_eq!(read("a.list"), "old entry\n");
+    let written = read("b.list");
+    assert!(
+        written.starts_with("echo first >/dev/null\nHISTFILE=$PWD/b.list\n"),
+        "{written}"
+    );
+}
+
+#[test]
 fn getopts_reads_h_and_help_after_its_name_as_the_script_s_options() {
     // A script given `-h` got cash's help for getopts and no option: clap's help flag
     // took the word anywhere. Only a first `--help` is getopts' own, as in Bash.

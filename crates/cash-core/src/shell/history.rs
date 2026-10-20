@@ -174,9 +174,10 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     }
 
     /// Keeps `text`, the lines a script's command took, as one entry, joined as Bash joins
-    /// them ([`script_entry`]), and appends it to `HISTFILE` when one is set, as the prompt's
-    /// lines are (D44). The first time, the history is read from `HISTFILE`, as Bash reads
-    /// it when a script turns history on.
+    /// them ([`script_entry`]). The first time, the history is read from `HISTFILE`, as Bash
+    /// reads it when a script turns history on. It is written when the script ends, to the
+    /// `HISTFILE` of then, as Bash writes it: it was appended at once, line by line, to
+    /// each `HISTFILE` the script set on the way.
     pub(crate) fn keep_script_lines(&mut self, text: &[u8]) {
         let text = String::from_utf8_lossy(text);
         let entries = if self.options.save_multiline_cmds_in_history {
@@ -193,7 +194,6 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         for entry in entries.iter().filter(|entry| !entry.trim().is_empty()) {
             let _ = self.add_to_history(entry);
         }
-        let _ = self.save_history();
     }
 
     /// Counts a visit to the current directory, once a prompt, when it is not the one counted

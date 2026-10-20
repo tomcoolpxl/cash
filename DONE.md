@@ -2770,3 +2770,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   here-document or a pipe. A compound command whose own redirection failed ended the
   script, or the `( )` around it, and ran no ERR trap; it fails with 1 as a simple command
   does. `( ! exit 42 )` was 0: an `exit` leaves before the `!`.
+- **`fc -0`, and a script's history** (2026-10-21, the phase after 1.42.0, item 4): `fc
+  -0` and `fc -s -0` took `-0` for `0`, the last command, and ran it again (in Bash's
+  history test, Vim opened); Bash names no command by `-0` but in a listing: "history
+  specification out of range" and "no command found", status 1. A script with `set -o
+  history` appended each line to `HISTFILE` as it went, to every `HISTFILE` it set on the
+  way; Bash writes the script's history once, as it ends, after its `EXIT` trap, to the
+  `HISTFILE` of then, and a `-c` string keeps none.

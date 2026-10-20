@@ -30,9 +30,9 @@ for working through it. What is done, phases and findings, is in DONE.md.
 The user's pick from the themes below (decisions.md, "The phase after 1.42.0"), in this
 order. Done, in DONE.md: 1, loop control (`break`, `continue`, `return`, `exit`); 2,
 `read` with a mixed IFS and escapes, and `mapfile -d ''`; 3, `exec` and the redirection
-state, but for `exec 0<file` in a script read from standard input (below).
+state, but for `exec 0<file` in a script read from standard input (below); 4, `fc -0`, and
+a script's history written as it ends.
 
-4. `fc -0` and `fc -s -0`; `set -o history` writing `$HISTFILE` in a script.
 5. The parser's cheapest subset: `! time`, `time --`, reserved words in `$(case ...)`, a
    here-document in `$(...)` ended by `EOF)`, `<<-'<TAB>END'`.
 6. Readonly and prefix assignments, `declare -g`.
@@ -69,9 +69,6 @@ path. The rest, by theme:
   changes the same descriptor is not seen by the commands after it there (`eval 'exec
   >log; echo a' >out` writes `a` to `out`; Bash, to `log`). Compound commands and
   function calls hold theirs in the shell, as Bash does.
-- `fc -0` and `fc -s -0` run the last command again (Bash: out of range).
-- `set -o history` in a script writes every command to `$HISTFILE` at once; Bash writes
-  nothing.
 
 **`read`**
 - `read -n -1` is refused as an option, status 2 (Bash: "invalid number", status 1).
