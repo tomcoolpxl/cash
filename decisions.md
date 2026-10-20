@@ -87,7 +87,7 @@ the user's answers, with their dates. A new decision goes here, under its topic.
 | D80 | `z`: the directory jump | The prompt, editing and completion |
 | D81 | `winglob`: at the prompt, a Windows program globs for itself | Paths, files and text |
 | D82 | An opt-in `/c/` mode: Git Bash's spelling, with arguments for Windows programs | Paths, files and text |
-| D83 | Under `unixpaths`, `/` is the directory above the drives | Paths, files and text |
+| D83 | Under `unixpaths`, a climb past a drive's top spells `$PWD` `/` | Paths, files and text |
 
 ## 1. Scope and foundation
 
@@ -187,20 +187,22 @@ files by their operands, turned into `C:/...` as they start; a tool that only ha
 Windows programs on every bundled tool, which rewrites `sed '/c/d'`; the operands only
 under the mode, which leaves `cat /c/x` failing without it.
 
-### D83 — Under `unixpaths`, `/` is the directory above the drives
+### D83 — Under `unixpaths`, a climb past a drive's top spells `$PWD` `/`
 
-The user's picks, 2026-10-20 (research/root-directory-design.md). Under `unixpaths`,
-`cd ..` from a drive's top (`/c`) and `cd /` give `/`, so a loop climbing with `cd ..`
-until `$PWD` is `/` ends, as in Git Bash (direnv's `find_up`). `/` holds the drives, `tmp`,
-`dev`, and `usr` and `bin` for the tools: `/usr/bin` and `/bin` are one directory, of the
-commands cash carries, which `/usr/bin/NAME` already runs. Another name under `/`
-(`/Windows`) keeps its meaning, the drive cash came from, and a program started in one of
-these directories runs in that drive's root. One module defines them, what each holds
-and what a name in it means; the shell's directory, `cd`, globs, `ls` and `test` ask it,
-and none decides on its own (the user, 2026-10-20). The default mode is unchanged:
-`C:/..` is `C:/`. Turned down: the same in the default mode, which puts `/`, a path no
-Windows program takes, in `$PWD`, and still leaves the `dirname` and `%/*` climbs at `C:`;
-Git's install directory as `/`; `cd ..` failing at a drive's top.
+The user's pick, 2026-10-20 (research/root-directory-design.md). Under `unixpaths`, `cd /`
+and a `cd ..` past a drive's top go to the root of the shell's drive, as they always did,
+and `$PWD` spells it `/`, so a loop climbing with `cd ..` until `$PWD` is `/` ends, as in
+Git Bash (direnv's `find_up`); `cd ..` at `/` stays. Only the spelling: the directory on
+disk is that root, a name at `/` is read there, `pwd -W` names it, and a program started
+there runs in it and gets it as `PWD`, but a cash, which keeps `/`. What is kept to go back
+to, `$OLDPWD`, `pushd`'s stack and the directory history, is the root itself, as `/` is
+the root of whichever drive the shell is on. The default mode is unchanged: `C:/..` is
+`C:/`. Turned down: directories that exist only in cash, `/` above the drives with a
+listable `/usr/bin` and `/dev`, built and reverted unreleased, as they needed an answer
+for every operation and every kind of program, left `/usr/bin/NAME` listed but unreadable,
+and made a one-letter name at `/` a whole drive (`rm -rf c`), for a gain this spelling
+gives; the same in the default mode; Git's install directory as `/`; `cd ..` failing at
+a drive's top, which a loop that does not check goes round.
 
 ### D4 — Arguments are never rewritten
 
@@ -964,8 +966,8 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   user picks: bashdb, bash_unit and bats-file, composure, direnv's stdlib. In it (the
   user's picks, 2026-10-20): `trap` and `kill -l` know all of Linux's signals (D11); a
   process substitution's directory stays one that cannot be entered, written down (D17);
-  and under `unixpaths`, `/` is the directory above the drives, with `usr` and `bin` for
-  the tools, built in one place (D83).
+  and under `unixpaths`, a climb past a drive's top spells `$PWD` `/` (D83), after
+  directories that exist only in cash were built, weighed and reverted.
 
 ## 8. Archives and compression
 

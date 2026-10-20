@@ -2692,3 +2692,17 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   substitution's directory stays one that cannot be entered, as bash_unit's CLI suite
   would need, written down (D17); and a `cd ..` climb that never ends went to a design
   (item 2).
+- **A climb past a drive's top spells `$PWD` `/` under `unixpaths`** (2026-10-20, the
+  phase after 1.40.0, item 2, D83, research/root-directory-design.md): `cd /` and a
+  `cd ..` past a drive's top go to the root of the shell's drive, as before, and `$PWD`,
+  `pwd`, the prompt and `dirs` spell it `/`, so direnv's `find_up` and every loop climbing
+  with `cd ..` until `$PWD` is `/` end; `cd ..` at `/` stays. Only the spelling: a name at
+  `/` is read at that root, `pwd -W` names it, a program started there runs in it and gets
+  it as `PWD`, and a cash started there keeps `/`. `$OLDPWD`, `pushd`'s stack and the
+  history keep the root itself, so a `/` left on `D:` is found again on `D:`. First built
+  as directories that exist only in cash, `/` above the drives with `/usr/bin` and `/dev`
+  listable: reverted before release, as the user found `rm -rf c` at `/` handing `rm` the
+  `C:` drive, `/usr/bin/NAME` listed but unreadable, and the same path meaning three things
+  to three kinds of program, for a gain the spelling gives. Found in it: `/*` read the root
+  of the drive cash was started on, not the shell's, in either mode; it reads the shell's.
+  direnv's `unixpaths` twin has its missing-file search back.

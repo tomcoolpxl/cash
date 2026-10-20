@@ -70,6 +70,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// The current working directory.
     working_dir: PathBuf,
 
+    /// Whether `$PWD` spells the working directory, a drive's root, as `/`: under
+    /// `unixpaths`, after `cd /` or a `cd ..` past the drive's top (D83).
+    at_slash: bool,
+
     /// The shell environment, containing shell variables.
     env: ShellEnvironment,
 
@@ -239,6 +243,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             traps: self.traps.clone(),
             open_files: self.open_files.clone(),
             working_dir: self.working_dir.clone(),
+            at_slash: self.at_slash,
             env: self.env.clone(),
             funcs: self.funcs.clone(),
             options: self.options.clone(),
@@ -370,6 +375,7 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         // An inherited HOME, as Windows spells it, shown as `/c/...` (D82), and a `$0` that
         // is this cash's own path, as Windows hands it over.
         if shell.options.unix_paths {
+            shell.take_inherited_slash()?;
             shell.respell_shown_paths()?;
             if let Some(name) = &shell.name
                 && cash_win32::path::is_absolute(Path::new(name))
@@ -941,6 +947,22 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     /// Returns the shell's current working directory.
     pub fn working_dir(&self) -> &Path {
         &self.working_dir
+    }
+
+    /// Whether `$PWD` spells the working directory, a drive's root, as `/` (D83).
+    pub fn at_slash(&self) -> bool {
+        self.at_slash
+    }
+
+    /// Where the shell is, as it shows it: `$PWD`, `pwd`, the prompt's `\w`. Only the
+    /// spelling: `$OLDPWD`, `dirs` and the directory history keep the directory itself,
+    /// as `/` (D83) is the root of whichever drive the shell is on.
+    pub fn shown_working_dir(&self) -> String {
+        if self.at_slash {
+            String::from("/")
+        } else {
+            self.shown_path(&self.working_dir)
+        }
     }
 
     /// `path` as the shell shows it to a script: `C:/dir`, or under `unixpaths` `/c/dir`

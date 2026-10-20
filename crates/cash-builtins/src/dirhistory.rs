@@ -114,7 +114,11 @@ fn history_listing(shell: &cash_core::Shell<impl cash_core::ShellExtensions>) ->
     for (i, dir) in back.iter().enumerate() {
         let _ = writeln!(out, "{:>3}) {}", back.len() - i, show(dir));
     }
-    let _ = writeln!(out, "     {}", show(shell.working_dir()));
+    let _ = writeln!(
+        out,
+        "     {}",
+        shell.tilde_shorten(shell.shown_working_dir())
+    );
     for (i, dir) in history.forward().enumerate() {
         let _ = writeln!(out, "{:>3}) {}", i + 1, show(dir));
     }

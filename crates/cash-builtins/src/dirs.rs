@@ -94,7 +94,12 @@ impl builtins::Command for DirsCommand {
                 write!(context.stdout(), "{index:2}  ")?;
             }
 
-            let mut dir_str = context.shell.shown_path(dir);
+            // The first is where the shell is, as `$PWD` shows it (`/`, D83).
+            let mut dir_str = if *index == 0 {
+                context.shell.shown_working_dir()
+            } else {
+                context.shell.shown_path(dir)
+            };
 
             if !self.tilde_long {
                 dir_str = context.shell.tilde_shorten(dir_str);

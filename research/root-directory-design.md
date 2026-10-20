@@ -4,11 +4,14 @@ Found in the phase after 1.40.0, in direnv's stdlib: a loop that climbs with `cd
 `$PWD` is `/` never ends in cash. The user's pick (2026-10-20, TODO.md): a design first,
 then a pick list. This page is the design; its open questions went to the user.
 
-**Decided** (the user, 2026-10-20, decisions.md D83): 4.1, under `unixpaths` only, built
-in this phase, before 1.41.0. `/` lists the drives, `tmp` and `dev`, and also `usr` and
-`bin` for the tools (the user's addition): `/usr/bin` and `/bin`, one directory as in
-Git Bash, list the commands cash carries, which `/usr/bin/NAME` and `/bin/NAME` already
-run.
+**Decided, then reversed** (the user, 2026-10-20, decisions.md D83). 4.1 was picked,
+with `usr` and `bin` for the tools added, and built: directories that exist only in cash,
+one module saying what each holds. Before it was released the user found what this page
+never weighed (section 8): `rm -rf c` at `/` handed `rm` the whole `C:` drive, refused
+only by luck; `/usr/bin/sed` was listed as a file and could not be read; the same path
+meant different things to cash, MSYS programs and Windows programs. Asked what it was
+worth, the answer was: almost nothing beyond the `cd ..` climb, which a spelling ends.
+The commit was reverted, unreleased, and the spelling of 8.2 built instead.
 
 ## 1. Why
 
@@ -112,3 +115,36 @@ direnv's `find_up` miss back in its unixpaths case.
 2. What `ls /` lists under `unixpaths`: the drives and `tmp` and `dev` (recommended), or
    the drives beside the current drive's root's files, as one merged listing.
 3. When: this phase, before 1.41.0 (recommended, as it ends a hang), or the next.
+
+## 8. Reconsidered: what it buys, what it costs
+
+### 8.1 The weighing this page left out
+
+cash already had names that translate where they are used, each to something real: `/dev/null`,
+`/dev/stdin`, `/dev/fd/N` and `/dev/tcp` are opened as devices and descriptors (D7); `/tmp` and
+`/c/x` are directories on disk; `/usr/bin/NAME` and `/bin/NAME` run as cash's command when
+run. None needs a directory to be listed or entered; each lives at one point, an open, a
+path, an exec, and they carry nearly all the value.
+
+Directories that exist only in cash add little: the `cd ..` climb ends, and `ls /usr/bin`
+answers something, which a script looking for a tool asks `command -v` for. They cost a
+defined answer for every operation (list, test, read, write, create, delete, rename, enter,
+run, link, walk, pass along) and every kind of program: cash, its tools run as processes of
+their own, MSYS programs, whose `/` is Git's, and Windows programs, which have none. Built,
+they gave destructive commands every drive (`rm -rf c` at `/` handed `rm` `C:/`, which its
+root guard refused only because the operand ended in `/`; `rm -rf *` emptied TEMP; `find /
+-delete` walked every drive), listed `/usr/bin/NAME` as a file nothing could read, could hang
+on a disconnected network drive, and printed paths no other program understands, against
+D3. High cost and risk for a gain the next section gives.
+
+### 8.2 The spelling (built)
+
+Under `unixpaths`, `cd /` and a `cd ..` past a drive's top go to the root of the shell's
+drive, as before, and `$PWD` spells it `/`; `cd ..` at `/` stays. Nothing else: `/` stays
+what it was when cash opens a path, the root of the drive the shell is on, so `rm -rf c` at
+`/` is the directory `C:\c`, and no name stands for a drive. `pwd -W` names the root, a
+program started there runs in it and gets it as `PWD`, and a cash keeps `/`. `$OLDPWD`,
+`pushd`'s stack and the history keep the root itself, as `/` is the root of whichever drive
+the shell is on. The oddity: a drive's root has two spellings, `/c` and `/`, after which
+way it was reached. The cost: a flag on the shell's directory, the function that spells
+`$PWD`, and the `PWD` a program is handed.

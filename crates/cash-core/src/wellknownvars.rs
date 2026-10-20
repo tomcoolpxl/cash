@@ -274,9 +274,14 @@ pub(crate) fn init_well_known_vars(
             // The working directory first, then the stack from the last one pushed, as `dirs`
             // lists them; it was the stack alone, first one pushed first.
             getter: |shell| {
-                std::iter::once(shell.working_dir())
-                    .chain(shell.directory_stack().iter().rev().map(PathBuf::as_path))
-                    .map(|p| shell.shown_path(p))
+                std::iter::once(shell.shown_working_dir())
+                    .chain(
+                        shell
+                            .directory_stack()
+                            .iter()
+                            .rev()
+                            .map(|p| shell.shown_path(p)),
+                    )
                     .collect::<Vec<_>>()
                     .into()
             },
@@ -579,7 +584,7 @@ pub(crate) fn init_well_known_vars(
     // we inherited an out-of-sync version of the variable. Future updates
     // will be handled by set_working_dir().
     //
-    let pwd = shell.shown_path(shell.working_dir());
+    let pwd = shell.shown_working_dir();
     let mut pwd_var = ShellVariable::new(pwd);
     pwd_var.export();
     shell.env_mut().set_global("PWD", pwd_var)?;

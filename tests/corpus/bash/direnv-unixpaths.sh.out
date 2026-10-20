@@ -10,6 +10,7 @@ MYPATH=TOP/proj/sub
 MANPATH=TOP/home/.local/share/man:
 MANPATH=TOP/home/.local/share/man:/usr/share/man
 find_up: TOP/proj/marker
+find_up none: 1
 direnv called: called: watch bash TOP/proj/.envrc
 direnv: -status loading TOP/proj/.envrc
 FROM_ENVRC=yes

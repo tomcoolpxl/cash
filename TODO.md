@@ -33,10 +33,10 @@ The user's pick after 1.40.0 (decisions.md, "The phase after 1.40.0"):
    composure, direnv's stdlib: done 2026-10-20 (DONE.md), with `trap` and `kill -l`
    knowing all of Linux's signals (bashdb, D11), `man -w` (direnv), and a process
    substitution's directory written down as one that cannot be entered (bash_unit, D17).
-2. under `unixpaths`, `/` is the directory above the drives, with `usr` and `bin` for the
-   tools, in one module that the shell's directory, `cd`, globs, `ls` and `test` ask
-   (D83, research/root-directory-design.md): found in item 1, a `cd ..` climb that never
-   ends (direnv's `find_up`); then direnv's missing-file search back in its case.
+2. a `cd ..` climb that never ends (found in item 1, direnv's `find_up`): under
+   `unixpaths`, a climb past a drive's top spells `$PWD` `/` (D83,
+   research/root-directory-design.md), after directories that exist only in cash were
+   built, weighed and reverted unreleased: done 2026-10-20 (DONE.md).
 
 ## The phase before (2026-10-20, done)
 

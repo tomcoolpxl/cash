@@ -566,6 +566,29 @@ fn windows_program_args<S: AsRef<OsStr>>(
         .collect()
 }
 
+/// A variable's value as a child gets it (D82): under `unixpaths`, `HOME`, `PWD` and
+/// `OLDPWD` in Windows' spelling, as `PATH` is (D5). `/`, the root of the shell's drive as
+/// the mode spells it (D83), is that root, `C:/`; a cash (`own`) keeps `/`, to spell its
+/// start so.
+fn child_value(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    own: bool,
+    name: &str,
+    value: String,
+) -> String {
+    if !shell.options().unix_paths || !matches!(name, "HOME" | "PWD" | "OLDPWD") {
+        return value;
+    }
+    if value == "/" {
+        return if own {
+            value
+        } else {
+            cash_win32::path::render(&cash_win32::path::drive_root(shell.working_dir()))
+        };
+    }
+    cash_win32::path::render(&cash_win32::path::accept_path(&value))
+}
+
 /// Whether the program at `target` reads a `/c/x` argument itself: an MSYS program, which
 /// its runtime translates, or cash, whose shell and bundled tools take it (D3).
 fn reads_unix_paths(target: &Path) -> bool {
@@ -1043,13 +1066,9 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         // D82: under `unixpaths`, the variables the mode spells `/c/...` go to a child in
         // Windows' spelling, as `PATH` does (D5); a drive's root, `/c`, too. An MSYS program
         // spells them back itself, and a cash started so takes the mode and spells them.
-        let unix_paths = context.shell.options().unix_paths;
+        let own = is_own_executable(cmd.get_program());
         for (name, value) in exported_environment(context.shell) {
-            let value = if unix_paths && matches!(name.as_str(), "HOME" | "PWD" | "OLDPWD") {
-                cash_win32::path::render(&cash_win32::path::accept_path(&value))
-            } else {
-                value
-            };
+            let value = child_value(context.shell, own, &name, value);
             cmd.env(name, value);
         }
         // Set _ to the resolved command path for external commands.

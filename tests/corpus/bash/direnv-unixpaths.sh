@@ -1,5 +1,5 @@
 # source: https://github.com/direnv/direnv/tree/v2.38.2 (`stdlib.sh`, unchanged, with its LICENSE, as the fixture directory `direnv`)
-# desc: direnv's stdlib, the functions an .envrc calls, with a function standing in for the direnv program it calls back: has, join_args, expand_path, user_rel_path, PATH_add, path_add and PATH_rm on colon-separated lists, MANPATH_add with and without a MANPATH, find_up finding a file above, source_env, semver_search, log_status and log_error, strict_env and unstrict_env, and the layout directory; under cash's unixpaths, where the paths start with `/` and hold no drive colon
+# desc: direnv's stdlib, the functions an .envrc calls, with a function standing in for the direnv program it calls back: has, join_args, expand_path, user_rel_path, PATH_add, path_add and PATH_rm on colon-separated lists, MANPATH_add with and without a MANPATH, find_up finding a file above and climbing to `/` for one that is not, source_env, semver_search, log_status and log_error, strict_env and unstrict_env, and the layout directory; under cash's unixpaths, where the paths start with `/` and hold no drive colon, and `cd ..` past a drive's top spells `$PWD` `/`
 # timeout: 30
 # unixpaths: $PWD is /c/..., as in Git Bash, so this runs without the C:/ trouble of
 # the case it twins; Bash has no such option, and says so on standard error.
@@ -42,6 +42,7 @@ printf 'export FROM_ENVRC=yes\n' > proj/.envrc
 touch proj/marker
 cd proj/sub/deep || exit 1
 v=$(find_up marker); echo "find_up: ${v//$top/TOP}"
+find_up no-such-file || echo "find_up none: $?"
 source_env "$top/proj/.envrc" 2>&1
 echo "FROM_ENVRC=$FROM_ENVRC"
 cd "$top" || exit 1

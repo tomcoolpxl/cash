@@ -133,6 +133,12 @@ pub trait ShellState {
     /// Returns the shell's current working directory.
     fn working_dir(&self) -> &Path;
 
+    /// Where the shell is, as it shows it: `$PWD`, `pwd`, the prompt's `\w`.
+    fn shown_working_dir(&self) -> String;
+
+    /// Whether `$PWD` spells the working directory, a drive's root, as `/` (D83).
+    fn at_slash(&self) -> bool;
+
     /// `path` as the shell shows it to a script: `C:/dir`, or under `unixpaths` `/c/dir`.
     fn shown_path(&self, path: &Path) -> String;
 

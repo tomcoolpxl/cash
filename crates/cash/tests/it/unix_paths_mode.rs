@@ -266,3 +266,135 @@ fn a_program_named_by_a_unix_path_runs() {
         );
     }
 }
+
+/// The root of the drive `path` is on, as cash spells it: `C:/`, `D:/`.
+fn drive_root(path: &Path) -> String {
+    format!("{}/", windows(path).get(..2).expect("a drive"))
+}
+
+/// A fixed drive other than the one `path` is on, as `D:/`, when the machine has one:
+/// GitHub's runners and the user's machine do.
+fn other_drive(path: &Path) -> Option<String> {
+    let own = drive_root(path).to_ascii_uppercase();
+    cash_win32::sysinfo::fixed_drives()
+        .into_iter()
+        .map(|drive| format!("{}/", drive.to_ascii_uppercase()))
+        .find(|drive| *drive != own)
+}
+
+#[test]
+fn a_climb_with_cd_reaches_slash_and_ends() {
+    // D83: direnv's find_up climbs with `cd ..` until `$PWD` is `/`, which `/c` never was.
+    // `/` is only a spelling of the drive's root: `pwd -W` names it, and `cd ..` stays.
+    let scratch = Scratch::new("unixpaths-cd-climb");
+    let (out, err) = run_in(
+        scratch.path(),
+        scratch.path(),
+        "shopt -s unixpaths; n=0; while [[ $PWD != / && $n -lt 99 ]]; do cd ..; n=$((n+1)); \
+         done; echo \"$n $PWD $(pwd) $(pwd -P) $OLDPWD\"; pwd -W; cd ..; echo \"$PWD\"; \
+         cd \"$OLDPWD\"; cd /; echo \"$PWD\"; shopt -u unixpaths; echo \"$PWD\"",
+    );
+    let top = unix(scratch.path());
+    let depth = top.matches('/').count();
+    let drive = top.get(..2).expect("a drive").to_owned();
+    let root = drive_root(scratch.path());
+    assert_eq!(
+        out.trim_end(),
+        format!("{depth} / / / {drive}\n{root}\n/\n/\n{root}"),
+        "standard error: {err}"
+    );
+}
+
+#[test]
+fn slash_is_the_drive_s_root_for_files_and_programs() {
+    // Nothing reads a different place: a name at `/` is read at the drive's root, a
+    // program runs there and gets it as `PWD`, and a cash started there keeps `/`.
+    let scratch = Scratch::new("unixpaths-slash-files");
+    let first = windows(scratch.path())
+        .split('/')
+        .nth(1)
+        .expect("a directory under the root")
+        .to_owned();
+    let (out, err) = run_in(
+        scratch.path(),
+        scratch.path(),
+        &format!(
+            "shopt -s unixpaths; cd /; [ -d '{first}' ] && echo found; \
+             for e in *; do [ \"$e\" = '{first}' ] && echo listed; done; cmd //c cd; \
+             cmd //c 'echo %PWD%'; bash -c 'echo \"$PWD $(pwd)\"'"
+        ),
+    );
+    let root = drive_root(scratch.path());
+    let backslashed = root.replace('/', "\\");
+    assert_eq!(
+        out.replace('\r', "").trim_end(),
+        format!("found\nlisted\n{backslashed}\n{root}\n/ /"),
+        "standard error: {err}"
+    );
+}
+
+#[test]
+fn a_directory_left_at_slash_is_found_again_on_its_drive() {
+    // `/` is the root of whichever drive the shell is on, so what is kept to go back to,
+    // `$OLDPWD`, `pushd`'s stack, the history, is the drive's root itself.
+    let scratch = Scratch::new("unixpaths-slash-back");
+    let Some(other) = other_drive(scratch.path()) else {
+        eprintln!("only one fixed drive: nothing to tell apart");
+        return;
+    };
+    let (out, err) = run_in(
+        scratch.path(),
+        scratch.path(),
+        &format!(
+            "shopt -s unixpaths; cd {other}; cd ..; echo \"$PWD\"; pushd . >/dev/null; \
+             cd {}; popd >/dev/null; pwd -W; cd {other}; cd ..; cd {}; cd - >/dev/null; pwd -W",
+            drive_root(scratch.path()),
+            drive_root(scratch.path()),
+        ),
+    );
+    assert_eq!(
+        out.trim_end(),
+        format!("/\n{other}\n{other}"),
+        "standard error: {err}"
+    );
+}
+
+#[test]
+fn a_slash_glob_reads_the_drive_the_shell_is_on() {
+    // `/*` read the root of the drive cash was started on, whatever `cd` said.
+    let scratch = Scratch::new("slash-glob-drive");
+    let Some(other) = other_drive(scratch.path()) else {
+        eprintln!("only one fixed drive: nothing to tell apart");
+        return;
+    };
+    let mut expected: Vec<String> = std::fs::read_dir(&other)
+        .expect("list the other drive")
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| !name.starts_with('.'))
+        .map(|name| format!("/{name}"))
+        .collect();
+    expected.sort_by_key(|name| name.to_lowercase());
+    for mode in ["", "shopt -s unixpaths; "] {
+        let (out, err) = run_in(
+            scratch.path(),
+            scratch.path(),
+            &format!("{mode}cd {other}; for e in /*; do echo \"$e\"; done"),
+        );
+        let mut found: Vec<String> = out.lines().map(str::to_owned).collect();
+        found.sort_by_key(|name| name.to_lowercase());
+        assert_eq!(found, expected, "{mode}standard error: {err}");
+    }
+}
+
+#[test]
+fn slash_and_a_drive_s_root_are_as_ever_without_the_mode() {
+    let scratch = Scratch::new("unixpaths-slash-off");
+    let (out, err) = run_in(scratch.path(), scratch.path(), "cd /; pwd; cd ..; pwd");
+    let root = drive_root(scratch.path());
+    assert_eq!(
+        out.trim_end(),
+        format!("{root}\n{root}"),
+        "standard error: {err}"
+    );
+}

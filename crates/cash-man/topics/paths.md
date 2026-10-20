@@ -74,6 +74,14 @@ starts with `/`. With `shopt -s unixpaths`, off unless turned on:
 
 Turning the option on or off spells `$PWD`, `$OLDPWD` and `$HOME` again at once.
 
+Under the option, `cd /` and a `cd ..` past a drive's top (`/c`) go to the root of the
+drive the shell is on, and `$PWD` spells it `/`, so a loop that climbs with `cd ..` until
+`$PWD` is `/` ends, as in Git Bash; `cd ..` at `/` stays. It is only a spelling: `/` is
+that drive's root, where a name at `/` is read and a program started there runs, and
+`pwd -W` names it. `$OLDPWD`, `dirs` and `cd -` keep the root as `/c`, since `/` is the
+root of whichever drive the shell is on. Without the option, a drive's root is `C:/`, and
+`C:/..` is `C:/`, as in `cmd`.
+
 ## Backslashes
 
 Backslash is Bash's escape character, so an unquoted `cd C:\Users\me` reaches `cd` as

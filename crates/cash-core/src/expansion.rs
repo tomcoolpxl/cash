@@ -1271,6 +1271,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             require_dot_in_pattern_to_match_dot_files: !self.shell.options().glob_matches_dotfiles,
             include_dot_and_dotdot: !self.shell.options().glob_skip_dots && !globignore,
             unix_paths: self.shell.options().unix_paths,
+            anchor: cash_win32::path::drive_root(self.shell.working_dir()),
         };
 
         // On error (e.g. malformed pattern), default to NoGlob so the field
@@ -1549,7 +1550,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 ))
             }
             cash_parser::word::TildeExpr::WorkingDir => {
-                Ok(Cow::Owned(self.shell.shown_path(self.shell.working_dir())))
+                Ok(Cow::Owned(self.shell.shown_working_dir()))
             }
             cash_parser::word::TildeExpr::OldWorkingDir => {
                 if let Some(old_pwd) = self.shell.env_str("OLDPWD") {
@@ -1564,14 +1565,14 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 if let Some(dir) = self.shell.directory_stack().get(*n) {
                     Ok(Cow::Owned(self.shell.shown_path(dir)))
                 } else if *n == dir_stack_count {
-                    Ok(Cow::Owned(self.shell.shown_path(self.shell.working_dir())))
+                    Ok(Cow::Owned(self.shell.shown_working_dir()))
                 } else {
                     Ok(Cow::Owned(std::format!("~-{n}")))
                 }
             }
             cash_parser::word::TildeExpr::NthDirFromTopOfDirStack { n, plus_used } => {
                 if *n == 0 {
-                    return Ok(Cow::Owned(self.shell.shown_path(self.shell.working_dir())));
+                    return Ok(Cow::Owned(self.shell.shown_working_dir()));
                 }
 
                 let dir_stack_count = self.shell.directory_stack().len();

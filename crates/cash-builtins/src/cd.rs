@@ -92,11 +92,13 @@ impl builtins::Command for CdCommand {
             should_print = true;
         }
 
-        if self.use_physical_dir
-            || context
-                .shell
-                .options()
-                .do_not_resolve_symlinks_when_changing_dir
+        // `/` under `unixpaths` (D83), a drive's root, has no link to resolve.
+        if !context.shell.names_slash(&target_dir)
+            && (self.use_physical_dir
+                || context
+                    .shell
+                    .options()
+                    .do_not_resolve_symlinks_when_changing_dir)
         {
             match context.shell.absolute_path(&target_dir).canonicalize() {
                 Ok(resolved) => target_dir = resolved,
@@ -114,7 +116,7 @@ impl builtins::Command for CdCommand {
         // the directory change is successful, the absolute pathname of the new working
         // directory is written to the standard output.
         if should_print {
-            let shown = context.shell.shown_path(context.shell.working_dir());
+            let shown = context.shell.shown_working_dir();
             writeln!(context.stdout(), "{shown}")?;
         }
 

@@ -365,15 +365,17 @@ fn expand_globstar_paths(
     roots: Vec<PathBuf>,
     include_files: bool,
     skip_hidden: bool,
+    options: &FilenameExpansionOptions,
 ) -> Vec<PathBuf> {
     let mut matches = Vec::new();
     let mut pending: VecDeque<PathBuf> = roots.into_iter().collect();
     let mut visited = HashSet::new();
 
     while let Some(directory) = pending.pop_front() {
-        let identity = directory
+        let on_disk = options.on_disk(&directory);
+        let identity = on_disk
             .canonicalize()
-            .unwrap_or_else(|_| directory.clone());
+            .unwrap_or_else(|_| on_disk.to_path_buf());
         if !visited.insert(identity) {
             continue;
         }
@@ -383,16 +385,11 @@ fn expand_globstar_paths(
             matches.push(directory.clone());
         }
 
-        let Ok(entries) = directory.read_dir() else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            if skip_hidden && name.to_string_lossy().starts_with('.') {
+        for (name, path, entry) in options.entries(&directory) {
+            if skip_hidden && name.starts_with('.') {
                 continue;
             }
 
-            let path = entry.path();
             let Ok(file_type) = entry.file_type() else {
                 continue;
             };
@@ -417,6 +414,49 @@ pub(crate) struct FilenameExpansionOptions {
     /// The matches of a pattern from an absolute start spelled `/c/...`, as the shell
     /// shows paths under `unixpaths` (D82).
     pub unix_paths: bool,
+    /// The root of the drive the shell is on, where a path from one slash (`/*`,
+    /// `/Windows/*`) is read, as the shell reads it; empty to read it as written.
+    pub anchor: PathBuf,
+}
+
+impl FilenameExpansionOptions {
+    /// Where the pattern's path `path` is on disk: a path from one slash on the
+    /// [`Self::anchor`]'s drive, as `/` is the root of the drive the shell is on; it read the
+    /// root of the drive cash was started on. Any other path as it is.
+    fn on_disk<'p>(&self, path: &'p Path) -> std::borrow::Cow<'p, Path> {
+        let text = path.to_string_lossy();
+        let rooted = text.starts_with(['/', '\\']) && !text.starts_with("//");
+        if !rooted || self.anchor.as_os_str().is_empty() {
+            return std::borrow::Cow::Borrowed(path);
+        }
+        let accepted = cash_win32::path::accept_path(&text);
+        if cash_win32::path::is_absolute(&accepted) {
+            return std::borrow::Cow::Owned(accepted);
+        }
+        std::borrow::Cow::Owned(self.anchor.join(text.trim_start_matches(['/', '\\'])))
+    }
+
+    /// The names in the directory `directory`, each with its path as the pattern spells it.
+    fn entries(&self, directory: &Path) -> Vec<(String, PathBuf, std::fs::DirEntry)> {
+        let real = self.on_disk(directory);
+        let same = real.as_ref() == directory;
+        let Ok(read) = real.read_dir() else {
+            return Vec::new();
+        };
+        read.flatten()
+            .map(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let path = if same {
+                    entry.path()
+                } else {
+                    let mut path = directory.to_path_buf();
+                    sys::fs::push_path_for_pattern(&mut path, &name);
+                    path
+                };
+                (name, path, entry)
+            })
+            .collect()
+    }
 }
 
 /// Result of a pattern expansion, distinguishing "no glob metacharacters" from
@@ -713,7 +753,7 @@ impl Pattern {
                     if include_files && (component_index > 0 || starts_at_a_root) {
                         paths_so_far
                             .iter()
-                            .filter(|path| path.is_dir())
+                            .filter(|path| options.on_disk(path).is_dir())
                             .cloned()
                             .collect()
                     } else {
@@ -723,6 +763,7 @@ impl Pattern {
                     paths_so_far,
                     include_files,
                     options.require_dot_in_pattern_to_match_dot_files,
+                    options,
                 );
                 paths_so_far.extend(directories_too.into_iter().map(|directory| {
                     if written_out {
@@ -753,7 +794,7 @@ impl Pattern {
                     // bash. In particular this keeps dangling symlinks (which bash
                     // includes) while still rejecting a literal like `file/` whose
                     // trailing slash makes lstat fail with ENOTDIR for a regular file.
-                    p.symlink_metadata().is_ok()
+                    options.on_disk(p).symlink_metadata().is_ok()
                 });
                 written_out = true;
                 continue;
@@ -778,15 +819,11 @@ impl Pattern {
 
             let current_paths = std::mem::take(&mut paths_so_far);
             for current_path in current_paths {
-                if let Ok(entries) = current_path.read_dir() {
-                    for entry in entries.flatten() {
-                        let name = entry.file_name();
-                        let name = name.to_string_lossy();
-                        if (allow_dot_files || !name.starts_with('.'))
-                            && regex.is_match(&name).unwrap_or(false)
-                        {
-                            paths_so_far.push(entry.path());
-                        }
+                for (name, path, _) in options.entries(&current_path) {
+                    if (allow_dot_files || !name.starts_with('.'))
+                        && regex.is_match(&name).unwrap_or(false)
+                    {
+                        paths_so_far.push(path);
                     }
                 }
 
@@ -1597,6 +1634,7 @@ mod tests {
             require_dot_in_pattern_to_match_dot_files: true,
             include_dot_and_dotdot: false,
             unix_paths: false,
+            anchor: PathBuf::new(),
         };
         let enabled = Pattern::from("**/needle.txt")
             .set_globstar(true)

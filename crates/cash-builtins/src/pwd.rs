@@ -31,6 +31,13 @@ impl builtins::Command for PwdCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
+        // A drive's root that `$PWD` spells `/` under `unixpaths` (D83): `/`, with no link
+        // to resolve; `-W` gives the root, as Windows spells it.
+        if context.shell.at_slash() && !self.windows {
+            writeln!(context.stdout(), "/")?;
+            return Ok(ExecutionResult::success());
+        }
+
         let mut cwd: Cow<'_, Path> = context.shell.working_dir().into();
 
         let should_canonicalize = self.physical

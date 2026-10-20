@@ -250,6 +250,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             traps: traps::TrapHandlerConfig::default(),
             open_files: openfiles::OpenFiles::default(),
             working_dir: PathBuf::default(),
+            at_slash: false,
             env: env::ShellEnvironment::default(),
             funcs: functions::FunctionEnv::default(),
             options: options::RuntimeOptions::default(),

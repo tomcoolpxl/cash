@@ -1758,6 +1758,7 @@ async fn get_file_completions(
         require_dot_in_pattern_to_match_dot_files: !shell.options().glob_matches_dotfiles,
         include_dot_and_dotdot: false,
         unix_paths: shell.options().unix_paths,
+        anchor: cash_win32::path::drive_root(shell.working_dir()),
     };
 
     let mut completions: Vec<String> = pattern

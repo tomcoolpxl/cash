@@ -23,7 +23,14 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // script or a Windows tool might produce — `C:/src`, `C:\src`, `/c/src`, `/tmp`
         // — and store the canonical form, so `$PWD` renders correctly for free because
         // the rest of the shell simply echoes what was stored here.
-        let abs_path = {
+        // cash (D83): under `unixpaths`, `cd /` and a `cd ..` past a drive's top go to the
+        // root of the shell's drive, which `$PWD` then spells `/`, so a loop climbing until
+        // `$PWD` is `/` ends, as in Git Bash. Only the spelling: the directory on disk is
+        // that root, and every path is read there as before.
+        let to_slash = self.names_slash(target_dir.as_ref());
+        let abs_path = if to_slash {
+            cash_win32::path::drive_root(self.working_dir())
+        } else {
             let spelled = target_dir.as_ref().to_string_lossy().into_owned();
             let accepted = cash_win32::path::accept_path(&spelled);
             self.absolute_path(accepted.as_path())
@@ -55,16 +62,11 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // to remember to convert. Rendered once: the spelling is the same.
         let cleaned_path = std::path::PathBuf::from(&pwd);
 
-        // `$PWD` as the shell shows paths: `/c/...` under `unixpaths` (D82).
-        let pwd = self.shown_path(&cleaned_path);
-        self.env.update_or_add(
-            "PWD",
-            variables::ShellValueLiteral::Scalar(pwd),
-            |_| Ok(()),
-            EnvironmentLookup::Anywhere,
-            EnvironmentScope::Global,
-        )?;
         let oldpwd = std::mem::replace(self.working_dir_mut(), cleaned_path);
+        self.at_slash = to_slash;
+
+        // `$PWD` as the shell shows paths: `/c/...` under `unixpaths` (D82), `/` (D83).
+        self.update_pwd()?;
 
         // cash (D62): fish's directory history, for `prevd`, `nextd`, `cdh` and Alt-←/→.
         if oldpwd != *self.working_dir() {
@@ -83,6 +85,50 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         )?;
 
         Ok(())
+    }
+
+    /// Whether `target`, which `cd` is given, is `/` as `unixpaths` spells the root of the
+    /// shell's drive (D83): `/`, or a climb past the drive's top, `..` at `/c` or
+    /// `/d/src/../..`. Never without the mode, nor for Windows' spelling (`C:/..`).
+    pub fn names_slash(&self, target: &Path) -> bool {
+        if !self.options.unix_paths {
+            return false;
+        }
+        let spelled = target.to_string_lossy();
+        let rooted = spelled.starts_with(['/', '\\']);
+        if !rooted && cash_win32::path::is_absolute(&cash_win32::path::accept_path(&spelled)) {
+            return false;
+        }
+        cash_win32::path::unix_join(&self.shown_working_dir(), &spelled).as_deref() == Some("/")
+    }
+
+    /// `$PWD` as the shell shows where it is.
+    fn update_pwd(&mut self) -> Result<(), error::Error> {
+        let pwd = self.shown_working_dir();
+        self.env.update_or_add(
+            "PWD",
+            variables::ShellValueLiteral::Scalar(pwd),
+            |_| Ok(()),
+            EnvironmentLookup::Anywhere,
+            EnvironmentScope::Global,
+        )?;
+        Ok(())
+    }
+
+    /// The drive's root a cash was started at spelled `/`, as the shell that started it had
+    /// it (D83): under `unixpaths`, when `PWD` is `/` and the process runs at a drive's root.
+    pub(crate) fn take_inherited_slash(&mut self) -> Result<(), error::Error> {
+        // The shell's own `$PWD` was already set to the directory it started in.
+        // process state: the `PWD` the starting shell handed this process.
+        let inherited = std::env::var("PWD").is_ok_and(|pwd| pwd == "/");
+        if !self.options.unix_paths
+            || !inherited
+            || cash_win32::path::drive_root(self.working_dir()) != self.working_dir()
+        {
+            return Ok(());
+        }
+        self.at_slash = true;
+        self.update_pwd()
     }
 
     /// Moves `steps` places through the directory history (D62): back when negative, forward
@@ -167,6 +213,11 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// `unixpaths` (D82) is turned on or off, and at startup under it. A variable not set,
     /// or not an absolute path, is left as it is.
     pub fn respell_shown_paths(&mut self) -> Result<(), error::Error> {
+        // Without `unixpaths` a drive's root is `C:/`, not `/` (D83).
+        if !self.options.unix_paths && self.at_slash {
+            self.at_slash = false;
+            self.update_pwd()?;
+        }
         for name in ["PWD", "OLDPWD", "HOME"] {
             let Some(value) = self.env.get_str(name, self).map(|value| value.to_string()) else {
                 continue;

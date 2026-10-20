@@ -460,6 +460,64 @@ pub fn unix_paths_inherited() -> bool {
     std::env::var_os(UNIX_PATHS_VARIABLE).is_some_and(|value| value == "1")
 }
 
+/// `name` joined under `directory` in the `/c` spelling, with `.`, `..` and doubled
+/// slashes taken out as `cd` takes them; `None` when the result does not start with a
+/// slash (`C:/x`, a name under a relative directory).
+///
+/// `..` at a drive's top (`/c/..`) or at `/` gives `/`; at a share's top
+/// (`//server/share/..`) it stays there, as a share has nothing above it. `//` alone is
+/// `/`. A `name` that starts with a slash stands alone.
+#[must_use]
+pub fn unix_join(directory: &str, name: &str) -> Option<String> {
+    let path = if name.starts_with(['/', '\\']) {
+        name.replace('\\', "/")
+    } else {
+        format!("{}/{name}", directory.trim_end_matches('/')).replace('\\', "/")
+    };
+    if !path.starts_with('/') {
+        return None;
+    }
+    let mut parts = path.split('/').filter(|part| !part.is_empty());
+    let mut root = String::from("/");
+    if path.starts_with("//") && !path.starts_with("///") {
+        let Some(server) = parts.next() else {
+            return Some(root);
+        };
+        root = match parts.next() {
+            Some(share) => format!("//{server}/{share}"),
+            None => return Some(format!("//{server}")),
+        };
+    }
+    let mut kept: Vec<&str> = Vec::new();
+    for part in parts {
+        match part {
+            "." => {}
+            ".." => {
+                kept.pop();
+            }
+            name => kept.push(name),
+        }
+    }
+    if kept.is_empty() {
+        return Some(root);
+    }
+    let separator = if root.ends_with('/') { "" } else { "/" };
+    Some(format!("{root}{separator}{}", kept.join("/")))
+}
+
+/// The root of the drive `directory` is on, `D:/` for `D:/src`, or a share's root, in
+/// cash's spelling; the drive Windows is on for a path with neither.
+#[must_use]
+pub fn drive_root(directory: &Path) -> PathBuf {
+    match directory.components().next() {
+        Some(std::path::Component::Prefix(prefix)) => {
+            let prefix = render(Path::new(prefix.as_os_str()));
+            PathBuf::from(format!("{}/", prefix.trim_end_matches('/')))
+        }
+        _ => PathBuf::from(render(&crate::fs::system_drive_root())),
+    }
+}
+
 /// Convert a path to the Unix compat spelling, `/c/foo`, as Git Bash spells it; a
 /// drive's root is `/c`, as Git Bash's `pwd` prints it.
 ///
@@ -606,4 +664,36 @@ pub fn windows_argument(arg: &str) -> Option<String> {
             && head.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
     let path = path_in(value).filter(|_| named)?;
     Some(format!("{head}={}", render(&path)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_climb_past_a_drive_s_top_or_slash_reaches_slash() {
+        let joined = |directory, name| unix_join(directory, name);
+        assert_eq!(joined("/c", "..").as_deref(), Some("/"));
+        assert_eq!(joined("/d/x", "../..").as_deref(), Some("/"));
+        assert_eq!(joined("/", "..").as_deref(), Some("/"));
+        assert_eq!(joined("/e/src", "/").as_deref(), Some("/"));
+        assert_eq!(joined("/e/src", "//").as_deref(), Some("/"));
+        assert_eq!(joined("/e", "./x//y/").as_deref(), Some("/e/x/y"));
+        assert_eq!(joined("/c", "/d/x").as_deref(), Some("/d/x"));
+        assert_eq!(
+            joined("//server/share/x", "../..").as_deref(),
+            Some("//server/share")
+        );
+        assert_eq!(joined("C:/x", ".."), None);
+    }
+
+    #[test]
+    fn a_directory_s_drive_root_is_its_own() {
+        assert_eq!(drive_root(Path::new("D:/src/x")), PathBuf::from("D:/"));
+        assert_eq!(drive_root(Path::new("E:/")), PathBuf::from("E:/"));
+        assert_eq!(
+            drive_root(Path::new("//server/share/x")),
+            PathBuf::from("//server/share/")
+        );
+    }
 }
