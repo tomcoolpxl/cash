@@ -23,10 +23,21 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // script or a Windows tool might produce — `C:/src`, `C:\src`, `/c/src`, `/tmp`
         // — and store the canonical form, so `$PWD` renders correctly for free because
         // the rest of the shell simply echoes what was stored here.
-        let abs_path = {
-            let spelled = target_dir.as_ref().to_string_lossy().into_owned();
-            let accepted = cash_win32::path::accept_path(&spelled);
-            self.absolute_path(accepted.as_path())
+        let abs_path = match self.unix_place(target_dir.as_ref()) {
+            // cash (D83): one of cash's own directories, `/` above the drives and the
+            // rest, under `unixpaths`: `cd /`, and `cd ..` from a drive's top.
+            Some(cash_win32::root::Place::Virtual(directory)) => {
+                return self.enter_virtual_dir(directory);
+            }
+            Some(cash_win32::root::Place::Real(path)) => path,
+            Some(other) => {
+                return Err(error::ErrorKind::NotADirectory(other.into_path()).into());
+            }
+            None => {
+                let spelled = target_dir.as_ref().to_string_lossy().into_owned();
+                let accepted = cash_win32::path::accept_path(&spelled);
+                self.absolute_path(accepted.as_path())
+            }
         };
 
         // A directory told without opening it; a link or a junction, or a name the cheap
@@ -55,24 +66,38 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // to remember to convert. Rendered once: the spelling is the same.
         let cleaned_path = std::path::PathBuf::from(&pwd);
 
+        let left = self.location();
+        *self.working_dir_mut() = cleaned_path;
+        self.virtual_dir = None;
+        self.moved_from(&left)
+    }
+
+    /// The shell in `directory`, one of cash's own under `unixpaths` (D83): the programs it
+    /// starts run at the root of the drive it came from, which stays its `working_dir`.
+    fn enter_virtual_dir(
+        &mut self,
+        directory: cash_win32::root::Virtual,
+    ) -> Result<(), error::Error> {
+        let left = self.location();
+        let anchor = cash_win32::root::drive_root(self.working_dir());
+        *self.working_dir_mut() = anchor;
+        self.virtual_dir = Some(directory);
+        self.moved_from(&left)
+    }
+
+    /// `$PWD`, `$OLDPWD` and the directory history after a move from `left`, a location
+    /// ([`Self::location`]).
+    fn moved_from(&mut self, left: &Path) -> Result<(), error::Error> {
         // `$PWD` as the shell shows paths: `/c/...` under `unixpaths` (D82).
-        let pwd = self.shown_path(&cleaned_path);
-        self.env.update_or_add(
-            "PWD",
-            variables::ShellValueLiteral::Scalar(pwd),
-            |_| Ok(()),
-            EnvironmentLookup::Anywhere,
-            EnvironmentScope::Global,
-        )?;
-        let oldpwd = std::mem::replace(self.working_dir_mut(), cleaned_path);
+        self.update_pwd()?;
 
         // cash (D62): fish's directory history, for `prevd`, `nextd`, `cdh` and Alt-←/→.
-        if oldpwd != *self.working_dir() {
-            self.directory_history.left(oldpwd.clone());
+        if left != self.location() {
+            self.directory_history.left(left.to_path_buf());
         }
 
         // cash (D3): `cd -` echoes $OLDPWD, so it must carry the same spelling as $PWD.
-        let oldpwd = self.shown_path(&oldpwd);
+        let oldpwd = self.shown_path(left);
 
         self.env.update_or_add(
             "OLDPWD",
@@ -82,6 +107,156 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             EnvironmentScope::Global,
         )?;
 
+        Ok(())
+    }
+
+    /// The directory of cash's own the shell is in, under `unixpaths` (D83): `/`,
+    /// `/usr`, `/usr/bin` or `/dev`. Its `working_dir` is then the root of the drive it
+    /// came from.
+    pub const fn virtual_dir(&self) -> Option<cash_win32::root::Virtual> {
+        self.virtual_dir
+    }
+
+    /// Where the shell is, as it shows it: `$PWD`, `pwd`, the prompt's `\w`.
+    pub fn shown_working_dir(&self) -> String {
+        self.shown_path(&self.location())
+    }
+
+    /// The paths under `/` as `unixpaths` has them (D83), seen from the shell's directory:
+    /// a name of none of cash's own is read on its drive, and `/usr/bin` holds the
+    /// commands it carries.
+    pub fn root_view(&self) -> cash_win32::root::View {
+        cash_win32::root::View::new(
+            cash_win32::root::drive_root(self.working_dir()),
+            crate::carried::carried_programs(self),
+        )
+    }
+
+    /// [`Self::root_view`] under `unixpaths`, for a tool that lists or walks directories;
+    /// `None` without the mode, where there are no directories of cash's own.
+    pub fn unix_root_view(&self) -> Option<cash_win32::root::View> {
+        self.options.unix_paths.then(|| self.root_view())
+    }
+
+    /// What `path` names, resolved as the shell resolves every path: under `unixpaths`,
+    /// with cash's own directories, its commands under `/usr/bin` and its devices under
+    /// `/dev` (D83); otherwise a file on disk, as [`Self::absolute_path`] has it.
+    pub fn place(&self, path: impl AsRef<Path>) -> cash_win32::root::Place {
+        let path = path.as_ref();
+        if self.options.unix_paths {
+            if let Some(place) = self.unix_place(path) {
+                return place;
+            }
+            let spelled = path.to_string_lossy();
+            if spelled.starts_with('/') && !spelled.starts_with("//") {
+                let place = self.root_view().place(&spelled);
+                if matches!(
+                    place,
+                    cash_win32::root::Place::Command(_) | cash_win32::root::Place::Device(_)
+                ) {
+                    return place;
+                }
+            }
+        }
+        cash_win32::root::Place::Real(self.absolute_path(path))
+    }
+
+    /// The directory a relative pattern is read from: under `unixpaths` the shell's as it
+    /// shows it (`/c/src`, `/`), so that `..` from a drive's top is `/` there too (D83).
+    pub(crate) fn pattern_base(&self) -> PathBuf {
+        if self.options.unix_paths {
+            PathBuf::from(self.shown_working_dir())
+        } else {
+            self.working_dir().to_path_buf()
+        }
+    }
+
+    /// How the shell's options have a pattern expanded: dot files, the spelling of its
+    /// matches, and where its directories are read; no `.` and `..`, which a glob adds
+    /// unless `globskipdots` says not to.
+    pub(crate) fn pattern_options(&self) -> crate::patterns::FilenameExpansionOptions {
+        crate::patterns::FilenameExpansionOptions {
+            require_dot_in_pattern_to_match_dot_files: !self.options.glob_matches_dotfiles,
+            include_dot_and_dotdot: false,
+            unix_paths: self.options.unix_paths,
+            directories: self.pattern_directories(),
+        }
+    }
+
+    /// Where a pattern's directories are read from here: a path from one slash on the
+    /// shell's drive, and under `unixpaths` through cash's own directories (D83).
+    pub(crate) fn pattern_directories(&self) -> crate::patterns::Directories {
+        crate::patterns::Directories {
+            anchor: cash_win32::root::drive_root(self.working_dir()),
+            root: self.options.unix_paths.then(|| self.root_view()),
+        }
+    }
+
+    /// Whether `path` names a directory, one of cash's own under `unixpaths` (D83) too.
+    pub fn is_directory(&self, path: impl AsRef<Path>) -> bool {
+        match self.place(path) {
+            cash_win32::root::Place::Virtual(_) => true,
+            cash_win32::root::Place::Real(path) => path.is_dir(),
+            cash_win32::root::Place::Device(_) | cash_win32::root::Place::Command(_) => false,
+        }
+    }
+
+    /// What `path` names where cash's own directories decide it (D83), under `unixpaths`:
+    /// a path from one of them, and a path that ends in one, `/`, `/c/..` or `..` at a
+    /// drive's top. `None` where the disk decides, as without the mode.
+    fn unix_place(&self, path: &Path) -> Option<cash_win32::root::Place> {
+        if !self.options.unix_paths {
+            return None;
+        }
+        let spelled = path.to_string_lossy();
+        if cash_win32::path::is_absolute(&cash_win32::path::accept_path(&spelled))
+            && !spelled.starts_with('/')
+        {
+            // `C:/x`, `\\server\share`: Windows' spelling, which the disk answers.
+            return None;
+        }
+        let joined = cash_win32::root::join(&self.shown_working_dir(), &spelled);
+        if self.virtual_dir.is_some() {
+            return Some(self.root_view().place(&joined));
+        }
+        let ends_in_own = cash_win32::root::normalize(&joined)
+            .as_deref()
+            .and_then(cash_win32::root::Virtual::of_normal);
+        ends_in_own.map(cash_win32::root::Place::Virtual)
+    }
+
+    /// The shell in the directory of cash's own it was started in (D83,
+    /// `cash_win32::root::inherited`), as Bash starts in the `$PWD` it inherits.
+    pub(crate) fn enter_inherited_dir(&mut self) -> Result<(), error::Error> {
+        if !self.options.unix_paths {
+            return Ok(());
+        }
+        let Some(directory) = cash_win32::root::inherited(self.working_dir()) else {
+            return Ok(());
+        };
+        self.virtual_dir = Some(directory);
+        self.update_pwd()
+    }
+
+    /// Leaves the directory of cash's own the shell is in for its drive's root, when
+    /// `unixpaths` is turned off: without the mode there is none (D83).
+    fn leave_virtual_dir(&mut self) -> Result<(), error::Error> {
+        if self.options.unix_paths || self.virtual_dir.take().is_none() {
+            return Ok(());
+        }
+        self.update_pwd()
+    }
+
+    /// `$PWD` as the shell shows where it is.
+    fn update_pwd(&mut self) -> Result<(), error::Error> {
+        let pwd = self.shown_working_dir();
+        self.env.update_or_add(
+            "PWD",
+            variables::ShellValueLiteral::Scalar(pwd),
+            |_| Ok(()),
+            EnvironmentLookup::Anywhere,
+            EnvironmentScope::Global,
+        )?;
         Ok(())
     }
 
@@ -167,6 +342,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// `unixpaths` (D82) is turned on or off, and at startup under it. A variable not set,
     /// or not an absolute path, is left as it is.
     pub fn respell_shown_paths(&mut self) -> Result<(), error::Error> {
+        self.leave_virtual_dir()?;
         for name in ["PWD", "OLDPWD", "HOME"] {
             let Some(value) = self.env.get_str(name, self).map(|value| value.to_string()) else {
                 continue;
@@ -481,6 +657,13 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// * `path` - The path to get the absolute form of.
     pub fn absolute_path(&self, path: impl AsRef<Path>) -> PathBuf {
         let path = path.as_ref();
+
+        // cash (D83): under `unixpaths`, a path from one of cash's own directories, or one
+        // that ends in one (`/`, `/c/..`), is what they make of it: `/` as spelled, which
+        // the callers that list or test tell (`Self::place`), and the drive under `/c`.
+        if let Some(place) = self.unix_place(path) {
+            return place.into_path();
+        }
 
         // cash (D3/D10): the second chokepoint. Every path the shell resolves funnels
         // through here, so accepting the Unix spellings once means `ls /c/Users/x`,

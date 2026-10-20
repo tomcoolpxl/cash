@@ -188,7 +188,7 @@ fn format_current_working_directory(
     basename: bool,
 ) -> String {
     // D10's rendering, by its chokepoint (XC-14), or `/c/...` under `unixpaths` (D82).
-    let mut working_dir_str = shell.shown_path(shell.working_dir());
+    let mut working_dir_str = shell.shown_working_dir();
 
     if tilde_replaced {
         working_dir_str = shell.tilde_shorten(working_dir_str);

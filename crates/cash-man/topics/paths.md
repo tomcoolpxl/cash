@@ -54,8 +54,9 @@ command for is not found.
 
 Some scripts need paths spelled as Git Bash spells them. rbenv, pyenv, nvm and asdf look
 for a file from `$PWD` up, cutting `dir=${dir%/*}` until it is empty or `dirname` until it
-is `/`, which `C:/...` never reaches; bats' `load` takes a path for absolute only when it
-starts with `/`. With `shopt -s unixpaths`, off unless turned on:
+is `/`, which `C:/...` never reaches; direnv's `find_up` climbs with `cd ..` until `$PWD`
+is `/`; bats' `load` takes a path for absolute only when it starts with `/`. With
+`shopt -s unixpaths`, off unless turned on:
 
 - `pwd`, `$PWD`, `$OLDPWD`, `$HOME`, `~`, `dirs`, `$DIRSTACK`, the prompt's `\w`, `which`,
   `type -P`, `command -v`, `hash`, a glob from an absolute path, `realpath`, `readlink -f`
@@ -73,6 +74,31 @@ starts with `/`. With `shopt -s unixpaths`, off unless turned on:
   shell and the ones it starts.
 
 Turning the option on or off spells `$PWD`, `$OLDPWD` and `$HOME` again at once.
+
+### `/`, above the drives
+
+Under `unixpaths`, `/` is the directory above the drives, as the `/c` spelling has it:
+`cd ..` from `/c` or `/d` gives `/`, and so does `cd /`, so a loop that climbs with `cd ..`
+until `$PWD` is `/` ends, as in Git Bash. Windows has no such directory, nor the others
+below; they are cash's own:
+
+    /           the drives (c, d, e, ...), bin, dev, tmp and usr
+    /usr        bin
+    /usr/bin    the commands cash carries; /bin is the same
+    /dev        fd, null, random, stderr, stdin, stdout, tty,
+                urandom and zero
+
+`ls`, globs (`/*`, `../*`), `test` and `[[ ]]`, `find`, `grep -r` and the other tools
+that walk directories see them; `/c` and `/tmp` lead to the drive and the temporary
+directory. `/usr/bin/sed` is a file that runs, as Git Bash's is; `ls -l` shows a command
+with cash's own size and times, which it is. Another name under `/`, `/Windows`, is that
+name at the root of the drive the shell came from.
+
+A program started in one of them runs at the root of that drive, as Windows needs a real
+directory to start one in, and gets that root as `PWD`; `pwd -W` prints it. A cash started
+there, and a tool of cash's, start in `/` itself, so `cat c/x` at `/` reads `/c/x`; another
+program reads a relative name at the drive's root. Without `unixpaths` there is none of
+this: `/` is the root of the current drive, and `C:/..` is `C:/`, as in `cmd`.
 
 ## Backslashes
 

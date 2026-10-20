@@ -161,7 +161,9 @@ impl ChmodCommand {
                 max_depth: if self.recursive { usize::MAX } else { 0 },
                 ..WalkOptions::default()
             };
-            for next in Walk::new(file, &path, &options, context.stop_token()) {
+            for next in Walk::new(file, &path, &options, context.stop_token())
+                .own(context.shell.unix_root_view())
+            {
                 let entry = match next {
                     Ok(entry) => entry,
                     Err(WalkError::Stopped) => break,

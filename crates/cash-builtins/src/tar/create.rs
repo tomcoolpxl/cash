@@ -447,7 +447,8 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             },
             ..walker::WalkOptions::default()
         };
-        let mut tree = walker::Walk::new(name, path, &options, self.context.stop_token());
+        let mut tree = walker::Walk::new(name, path, &options, self.context.stop_token())
+            .own(self.context.shell.unix_root_view());
         // The directories to remove, deepest last, each once the walk is out of it.
         let mut leaving: Vec<(usize, String, PathBuf)> = Vec::new();
         while let Some(next) = tree.next() {

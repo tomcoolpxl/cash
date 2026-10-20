@@ -1162,6 +1162,8 @@ struct Walker<'a, W: Write, E: Write> {
     stdin: Option<Box<dyn Read>>,
     /// Whether to stop: a Ctrl-C, or `kill` of a background job.
     stop: cash_core::StopToken,
+    /// Under `unixpaths`, what the paths under `/` name (D83).
+    own: Option<cash_win32::root::View>,
     /// Opens a device named on the command line as the shell would (`/dev/stdin`,
     /// `/dev/null`, `/dev/fd/3`): `ExecutionContext::open_input`.
     open: &'a dyn Fn(&str) -> Result<Input, InputError>,
@@ -1257,7 +1259,7 @@ impl<W: Write, E: Write> Walker<'_, W, E> {
             min_depth: 1,
             ..WalkOptions::default()
         };
-        let mut walk = Walk::new(shown, actual, &options, self.stop.clone());
+        let mut walk = Walk::new(shown, actual, &options, self.stop.clone()).own(self.own.clone());
         while let Some(next) = walk.next() {
             if self.printer.stop_all {
                 return Ok(());
@@ -1328,14 +1330,22 @@ impl<W: Write, E: Write> Walker<'_, W, E> {
                 Err(error) => self.complain(&shown, &error.reason()),
             };
         }
-        let metadata = match std::fs::metadata(actual) {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                let reason = cash_core::error::os_error_text(&error);
-                return self.complain(&shown, &reason);
-            }
-        };
-        if !metadata.is_dir() {
+        // cash (D83): a directory of cash's own under `unixpaths`, `/` and the rest.
+        let own_directory = self.own.as_ref().is_some_and(|view| {
+            matches!(
+                view.place(&actual.to_string_lossy()),
+                cash_win32::root::Place::Virtual(_)
+            )
+        });
+        let is_dir = own_directory
+            || match std::fs::metadata(actual) {
+                Ok(metadata) => metadata.is_dir(),
+                Err(error) => {
+                    let reason = cash_core::error::os_error_text(&error);
+                    return self.complain(&shown, &reason);
+                }
+            };
+        if !is_dir {
             if self.filters.excludes(&shown, true) {
                 return Ok(());
             }
@@ -1672,13 +1682,14 @@ fn search_inputs<SE: cash_core::ShellExtensions>(
         operands: opts.files.len(),
         stdin: Some(Box::new(context.stdin())),
         stop: context.stop_token(),
+        own: context.shell.unix_root_view(),
         open: &|name| context.open_input(name, Dash::Stdin),
         trouble: false,
         success: false,
     };
     if opts.files.is_empty() {
         if opts.directories == Directories::Recurse {
-            let here = context.shell.working_dir().to_path_buf();
+            let here = context.shell.location();
             walker.walk("", &here)?;
         } else {
             walker.operand("-", &PathBuf::new())?;

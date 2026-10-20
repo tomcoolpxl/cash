@@ -163,6 +163,9 @@ changed:
 - A backslash is Bash's escape, so `cd C:\Users\me` unquoted reaches `cd` as
   `C:Usersme` in a script. Quote it, or use `/`. At the prompt `shopt winpaths` (on by
   default) keeps the backslashes, and a failed `cd` to such a mangled path says so.
+- `cd ..` at a drive's root stays there, as in `cmd`: `C:/..` is `C:/`. Under
+  `shopt -s unixpaths` it gives `/`, the directory above the drives, as `cd /` does
+  (`help paths`).
 - Junctions, the links Windows uses for directories such as
   `C:/Documents and Settings`, are resolved by `-P` as symbolic links are.
 - `CDPATH` entries may be separated by `:` or `;`, and spelled `C:/src` or `/c/src`,

@@ -1078,7 +1078,9 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
             ..walker::WalkOptions::default()
         };
         let mut root = Some(view);
-        for next in walker::Walk::new(given, path, &options, self.context.stop_token()) {
+        for next in walker::Walk::new(given, path, &options, self.context.stop_token())
+            .own(self.context.shell.unix_root_view())
+        {
             let entry = match next {
                 Ok(entry) => entry,
                 Err(walker::WalkError::Stopped) => return Err(cash_core::Stopped::error()),

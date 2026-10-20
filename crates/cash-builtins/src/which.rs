@@ -32,8 +32,8 @@ use std::{io::Write, path::Path};
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
 
-use crate::carried::is_bash_builtin;
 use crate::lookup::{self, Resolved};
+use cash_core::carried::is_bash_builtin;
 
 /// The path `which` prints for a command cash carries that is not one of bash's own
 /// builtins: `C:/…/cash.exe/NAME`, which cash runs as that command (ROADMAP item 12), so

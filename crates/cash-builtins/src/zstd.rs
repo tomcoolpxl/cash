@@ -2128,7 +2128,9 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             min_depth: 1,
             ..WalkOptions::default()
         };
-        for next in Walk::new(root, &path, &options, self.context.stop_token()) {
+        for next in Walk::new(root, &path, &options, self.context.stop_token())
+            .own(self.context.shell.unix_root_view())
+        {
             match next {
                 Ok(entry) => match entry.kind {
                     walker::Kind::Directory => {}

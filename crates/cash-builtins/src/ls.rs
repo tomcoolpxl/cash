@@ -335,6 +335,11 @@ pub(crate) struct LsCommand {
     #[arg(skip)]
     looped: std::sync::atomic::AtomicBool,
 
+    /// Under `unixpaths`, what the paths under `/` name (D83), for the directories of
+    /// cash's own: set as the listing starts.
+    #[arg(skip)]
+    own: std::sync::OnceLock<Option<cash_win32::root::View>>,
+
     /// Whether the command's output is a terminal, for `--classify=auto`.
     #[arg(skip)]
     tty: bool,
@@ -588,6 +593,7 @@ impl LsCommand {
             author: false,
             dired: false,
             looped: std::sync::atomic::AtomicBool::new(false),
+            own: std::sync::OnceLock::new(),
             tty: false,
             time_kind: TimeKind::Modification,
             show_blocks: false,
@@ -1556,57 +1562,11 @@ impl LsCommand {
         if paths.is_empty() {
             paths.push(String::from("."));
         }
+        let _ = self.own.set(context.shell.unix_root_view());
 
-        let mut had_error = false;
         let mut had_minor_error = false;
         let multiple_paths = paths.len() > 1;
-
-        // Separate inputs into existing files, existing dirs, and non-existing paths.
-        let mut file_items = Vec::new();
-        let mut dir_paths = Vec::new();
-
-        for path_str in &paths {
-            // Builtins do not change the host process cwd when `cd` changes the shell's
-            // cwd. Resolve every operand through the shell state; otherwise the default
-            // `.` (and every relative name) silently lists the directory cash was
-            // launched from.
-            let path = context.shell.absolute_path(Path::new(path_str));
-            // cash (D7): a `/dev` name is no file Windows has; it is listed as Git Bash
-            // lists it, or, for a descriptor that is not open, not at all.
-            if let Some(name) = cash_win32::devices::dev_name(&path) {
-                if let Some(item) = dev_entry(&context, name, &path, path_str) {
-                    file_items.push(item);
-                } else {
-                    writeln!(
-                        context.stderr(),
-                        "{}: cannot access '{}': No such file or directory",
-                        context.command_name,
-                        path_str
-                    )?;
-                    had_error = true;
-                }
-                continue;
-            }
-            if !path.exists() && !path.is_symlink() {
-                writeln!(
-                    context.stderr(),
-                    "{}: cannot access '{}': No such file or directory",
-                    context.command_name,
-                    path_str
-                )?;
-                had_error = true;
-                continue;
-            }
-
-            if self.shown_as_entry(&path) {
-                let followed = self.followed_operand(&path);
-                if let Some(item) = inspect_path(&path, path_str, self.want(), followed, None) {
-                    file_items.push(item);
-                }
-            } else {
-                dir_paths.push((path, path_str.clone()));
-            }
-        }
+        let (mut file_items, dir_paths, mut had_error) = self.sort_operands(&context, &paths)?;
 
         let mut out = Counted {
             inner: context.stdout(),
@@ -2054,6 +2014,32 @@ impl LsCommand {
     /// A directory's entries, with `.` and `..` under `-a` when `dots` is set, sorted.
     fn read_entries(&self, dir_path: &Path, dots: bool) -> Result<Vec<ItemInfo>, std::io::Error> {
         let mut items = Vec::new();
+
+        // cash (D83): a directory of cash's own, which holds names and no files.
+        if let Some(Some(view)) = self.own.get()
+            && let cash_win32::root::Place::Virtual(directory) =
+                view.place(&dir_path.to_string_lossy())
+        {
+            let mut entries = Vec::new();
+            if self.all && dots {
+                for name in [".", ".."] {
+                    if !self.ignored(name) {
+                        entries.push(cash_win32::root::Entry {
+                            name: name.to_owned(),
+                            place: cash_win32::root::Place::Virtual(directory),
+                        });
+                    }
+                }
+            }
+            entries.extend(
+                view.entries(directory)
+                    .into_iter()
+                    .filter(|entry| !self.ignored(&entry.name)),
+            );
+            items.extend(entries.into_iter().filter_map(|entry| self.own_item(entry)));
+            self.sort_items(&mut items);
+            return Ok(items);
+        }
 
         // Include . and .. if -a is set, unless a pattern of -I leaves them out.
         if self.all && dots {
@@ -3339,6 +3325,20 @@ fn dev_entry<SE: cash_core::ShellExtensions>(
     path: &Path,
     display_name: &str,
 ) -> Option<ItemInfo> {
+    let mut item = device_item(name, path, display_name);
+    if let cash_win32::devices::DevName::Descriptor(number) = name {
+        let fd = cash_core::ShellFd::try_from(number).ok()?;
+        let open = context.try_fd(fd)?;
+        if matches!(open.kind(), cash_core::openfiles::FileKind::Pipe { .. }) {
+            item.target_mark = Some('|');
+        }
+    }
+    Some(item)
+}
+
+/// A `/dev` name as Git Bash lists it, whatever is open: a character device, and a
+/// descriptor's name a link to `/proc/self/fd/N`.
+fn device_item(name: cash_win32::devices::DevName, path: &Path, display_name: &str) -> ItemInfo {
     let mut item = ItemInfo {
         name: display_name.to_string(),
         path: path.to_path_buf(),
@@ -3361,17 +3361,154 @@ fn dev_entry<SE: cash_core::ShellExtensions>(
         target_mark: None,
     };
     if let cash_win32::devices::DevName::Descriptor(number) = name {
-        let fd = cash_core::ShellFd::try_from(number).ok()?;
-        let open = context.try_fd(fd)?;
         item.kind = EntryKind::Symlink;
         item.permissions = String::from("lrwxrwxrwx");
         item.symlink_target = Some(std::format!("/proc/self/fd/{number}"));
         item.target = Some((true, false));
-        if matches!(open.kind(), cash_core::openfiles::FileKind::Pipe { .. }) {
-            item.target_mark = Some('|');
+    }
+    item
+}
+
+impl LsCommand {
+    /// The operands, sorted as `ls` shows them: the entries to show, files and what `-d`
+    /// shows, and the directories to list, each with its name as given; and whether one
+    /// could not be reached, which is said.
+    #[expect(
+        clippy::type_complexity,
+        reason = "the two lists and the flag `list` goes on with, named where it takes them"
+    )]
+    fn sort_operands<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        paths: &[String],
+    ) -> Result<(Vec<ItemInfo>, Vec<(PathBuf, String)>, bool), std::io::Error> {
+        let mut had_error = false;
+        // Separate inputs into existing files, existing dirs, and non-existing paths.
+        let mut file_items = Vec::new();
+        let mut dir_paths = Vec::new();
+
+        for path_str in paths {
+            // Builtins do not change the host process cwd when `cd` changes the shell's
+            // cwd. Resolve every operand through the shell state; otherwise the default
+            // `.` (and every relative name) silently lists the directory cash was
+            // launched from.
+            let path = context.shell.absolute_path(Path::new(path_str));
+            // cash (D83): one of cash's own directories, `/` and the rest, or a command
+            // `/usr/bin` holds, under `unixpaths`: listed as Git Bash lists its own.
+            match self.own_operand(context, path_str) {
+                Some(Err(directory)) => {
+                    dir_paths.push((directory, path_str.clone()));
+                    continue;
+                }
+                Some(Ok(item)) => {
+                    file_items.extend(item);
+                    continue;
+                }
+                None => {}
+            }
+            // cash (D7): a `/dev` name is no file Windows has; it is listed as Git Bash
+            // lists it, or, for a descriptor that is not open, not at all.
+            if let Some(name) = cash_win32::devices::dev_name(&path) {
+                if let Some(item) = dev_entry(context, name, &path, path_str) {
+                    file_items.push(item);
+                } else {
+                    writeln!(
+                        context.stderr(),
+                        "{}: cannot access '{}': No such file or directory",
+                        context.command_name,
+                        path_str
+                    )?;
+                    had_error = true;
+                }
+                continue;
+            }
+            if !path.exists() && !path.is_symlink() {
+                writeln!(
+                    context.stderr(),
+                    "{}: cannot access '{}': No such file or directory",
+                    context.command_name,
+                    path_str
+                )?;
+                had_error = true;
+                continue;
+            }
+
+            if self.shown_as_entry(&path) {
+                let followed = self.followed_operand(&path);
+                if let Some(item) = inspect_path(&path, path_str, self.want(), followed, None) {
+                    file_items.push(item);
+                }
+            } else {
+                dir_paths.push((path, path_str.clone()));
+            }
+        }
+        Ok((file_items, dir_paths, had_error))
+    }
+
+    /// The operand `name`, when it is one of cash's own directories or a command
+    /// `/usr/bin` holds, under `unixpaths` (D83): a directory to list (`Err`, by the path
+    /// it is listed from), or an entry to show (`Ok`), as `-d` shows a directory too.
+    fn own_operand<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        name: &str,
+    ) -> Option<Result<Option<ItemInfo>, PathBuf>> {
+        if !self.own.get().is_some_and(Option::is_some) {
+            return None;
+        }
+        let place = context.shell.place(Path::new(name));
+        match place {
+            cash_win32::root::Place::Virtual(directory) if !self.directory => {
+                Some(Err(PathBuf::from(directory.spelled())))
+            }
+            cash_win32::root::Place::Virtual(_) | cash_win32::root::Place::Command(_) => {
+                let entry = cash_win32::root::Entry {
+                    name: name.to_owned(),
+                    place,
+                };
+                Some(Ok(self.own_item(entry)))
+            }
+            _ => None,
         }
     }
-    Some(item)
+
+    /// An entry of a directory of cash's own (D83) as `ls` shows it: a drive, or the
+    /// temporary directory, as the directory it is; `/usr`, `/usr/bin` and `/dev` as
+    /// directories with the times of cash's own directory; a command as the program it is,
+    /// cash; a device as `/dev` lists it, `fd` a link to `/proc/self/fd` as in Git Bash.
+    fn own_item(&self, entry: cash_win32::root::Entry) -> Option<ItemInfo> {
+        let exe = std::env::current_exe().ok();
+        match entry.place {
+            cash_win32::root::Place::Real(path) => {
+                inspect_path(&path, &entry.name, self.want(), None, None)
+            }
+            cash_win32::root::Place::Virtual(directory) => {
+                let stand_in = exe.as_deref()?.parent()?;
+                let mut item = inspect_path(stand_in, &entry.name, self.want(), None, None)?;
+                item.path = PathBuf::from(directory.spelled());
+                Some(item)
+            }
+            cash_win32::root::Place::Command(name) => {
+                let mut item = inspect_path(exe.as_deref()?, &entry.name, self.want(), None, None)?;
+                item.path = PathBuf::from(cash_win32::path::system_tool_path(&name));
+                item.executable = OnceCell::from(true);
+                Some(item)
+            }
+            cash_win32::root::Place::Device(spelled) => {
+                let path = Path::new(&spelled);
+                if let Some(name) = cash_win32::devices::dev_name(path) {
+                    return Some(device_item(name, path, &entry.name));
+                }
+                let mut item = device_item(cash_win32::devices::DevName::Null, path, &entry.name);
+                item.kind = EntryKind::Symlink;
+                item.permissions = String::from("lrwxrwxrwx");
+                item.symlink_target = Some(String::from("/proc/self/fd"));
+                item.target = Some((true, true));
+                item.device = None;
+                Some(item)
+            }
+        }
+    }
 }
 
 /// An entry, from `known` metadata when the directory listing supplied it (no file is

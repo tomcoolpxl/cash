@@ -2147,6 +2147,7 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
             ..tree::WalkOptions::default()
         };
         tree::Walk::new(shown, path, &options, self.rar.context.stop_token())
+            .own(self.rar.context.shell.unix_root_view())
     }
 
     /// One step of a walk: the entry and its own metadata, or nothing for what is passed

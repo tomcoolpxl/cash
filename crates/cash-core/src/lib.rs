@@ -7,6 +7,7 @@ mod bash_synopses;
 mod braceexpansion;
 pub mod builtins;
 pub mod callstack;
+pub mod carried;
 pub mod commands;
 pub mod completion;
 pub mod dirhistory;

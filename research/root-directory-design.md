@@ -8,7 +8,11 @@ then a pick list. This page is the design; its open questions went to the user.
 in this phase, before 1.41.0. `/` lists the drives, `tmp` and `dev`, and also `usr` and
 `bin` for the tools (the user's addition): `/usr/bin` and `/bin`, one directory as in
 Git Bash, list the commands cash carries, which `/usr/bin/NAME` and `/bin/NAME` already
-run.
+run. Built in one place, as the user asked: `cash_win32::root` says what each directory
+holds and what any path under `/` names; the shell's `place`, `absolute_path` and
+`set_working_dir` resolve through it, and globs, `ls`, `test`, the shared directory walk
+(`find`, `grep -r`, `chmod -R`, the archivers) and a cash or a tool started at `/`
+(`root::inherited`) ask the shell or the module, none on its own.
 
 ## 1. Why
 

@@ -197,6 +197,12 @@ impl DevName {
     }
 }
 
+/// The names under `/dev` that [`dev_name`] reads, `fd` being the directory of the
+/// numbered ones: what `/dev` lists under `unixpaths` (D83, `crate::root`).
+pub const NAMES: &[&str] = &[
+    "fd", "null", "random", "stderr", "stdin", "stdout", "tty", "urandom", "zero",
+];
+
 /// The `/dev` name `path` is, if it is one.
 ///
 /// `\dev` at the root, after any prefix (a drive, `\\?\C:`, a share), either separator,
@@ -779,6 +785,18 @@ unsafe extern "system" fn copy_file(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_listed_name_is_one_dev_name_reads() {
+        for name in NAMES {
+            let path = if *name == "fd" {
+                "/dev/fd/1".to_owned()
+            } else {
+                format!("/dev/{name}")
+            };
+            assert!(dev_name(std::path::Path::new(&path)).is_some(), "{path}");
+        }
+    }
 
     #[test]
     fn the_names_are_known_in_the_forms_a_tool_passes_them() {

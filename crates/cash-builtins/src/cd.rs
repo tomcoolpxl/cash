@@ -81,22 +81,28 @@ impl builtins::Command for CdCommand {
         // `shopt -s cdable_vars`: a name that is no directory is a variable's, holding the
         // directory to go to, which is printed, as Bash does. It had no effect.
         if context.shell.options().cdable_vars
-            && !context.shell.absolute_path(&target_dir).is_dir()
+            && !context.shell.is_directory(&target_dir)
             && let Some(dir) = self.target_dir.as_ref().and_then(|name| {
                 let value = context.shell.env_str(&name.to_string_lossy())?;
                 (!value.is_empty()).then(|| cash_win32::path::accept_path(&value))
             })
-            && context.shell.absolute_path(&dir).is_dir()
+            && context.shell.is_directory(&dir)
         {
             target_dir = dir;
             should_print = true;
         }
 
-        if self.use_physical_dir
-            || context
-                .shell
-                .options()
-                .do_not_resolve_symlinks_when_changing_dir
+        // A directory of cash's own (D83) has no links to resolve, nor a place on disk.
+        let own = matches!(
+            context.shell.place(&target_dir),
+            cash_win32::root::Place::Virtual(_)
+        );
+        if !own
+            && (self.use_physical_dir
+                || context
+                    .shell
+                    .options()
+                    .do_not_resolve_symlinks_when_changing_dir)
         {
             match context.shell.absolute_path(&target_dir).canonicalize() {
                 Ok(resolved) => target_dir = resolved,
@@ -114,7 +120,7 @@ impl builtins::Command for CdCommand {
         // the directory change is successful, the absolute pathname of the new working
         // directory is written to the standard output.
         if should_print {
-            let shown = context.shell.shown_path(context.shell.working_dir());
+            let shown = context.shell.shown_working_dir();
             writeln!(context.stdout(), "{shown}")?;
         }
 
@@ -159,14 +165,17 @@ fn search_cdpath(
     }
     cash_win32::env::split_path_preserving_empty(&cdpath).find_map(|entry| {
         let base = if entry.is_empty() {
-            context.shell.working_dir().to_path_buf()
+            context.shell.location()
         } else {
             context
                 .shell
                 .absolute_path(cash_win32::path::accept_path(entry))
         };
         let candidate = base.join(target);
-        candidate.is_dir().then_some((candidate, !entry.is_empty()))
+        context
+            .shell
+            .is_directory(&candidate)
+            .then_some((candidate, !entry.is_empty()))
     })
 }
 

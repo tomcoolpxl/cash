@@ -76,6 +76,7 @@ pub mod reparse;
 pub mod resolve;
 /// Which processes hold a file open, through the Restart Manager.
 pub mod restart;
+pub mod root;
 pub mod scoop;
 pub mod session;
 pub mod sessions;

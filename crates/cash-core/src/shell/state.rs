@@ -133,6 +133,10 @@ pub trait ShellState {
     /// Returns the shell's current working directory.
     fn working_dir(&self) -> &Path;
 
+    /// Where the shell is, as a path names it: one of cash's own directories under
+    /// `unixpaths` by its spelling (`/`, D83), or the working directory.
+    fn location(&self) -> PathBuf;
+
     /// `path` as the shell shows it to a script: `C:/dir`, or under `unixpaths` `/c/dir`.
     fn shown_path(&self, path: &Path) -> String;
 
