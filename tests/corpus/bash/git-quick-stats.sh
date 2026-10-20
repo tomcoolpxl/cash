@@ -6,6 +6,8 @@ mkdir home
 git config --global init.defaultBranch main
 git config --global core.autocrlf false
 git init -q repo && cd repo || exit 1
+# Each commit at a time of day whose date is the same in UTC, where CI runs, and in
+# Europe: the changelogs group commits by the date where they are run.
 c() {
   local who=$1 when=$2 file=$3
   shift 3
@@ -18,7 +20,7 @@ c() {
 c Ann '2025-01-06T09:15:00+0100' a.txt one two three
 c Bob '2025-01-07T14:30:00-0500' b.txt four
 c Ann '2025-02-12T22:05:00+0100' a.txt five six
-c Cy '2025-03-01T08:00:00+0900' c.txt seven eight nine ten
+c Cy '2025-03-01T18:00:00+0900' c.txt seven eight nine ten
 git checkout -q -b feature
 c Bob '2025-03-15T11:45:00-0500' b.txt eleven
 c Cy '2025-04-20T17:20:00+0900' a.txt twelve
