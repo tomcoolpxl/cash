@@ -1688,9 +1688,18 @@ mod tests {
         assert_eq!(expand("**")?, all);
         assert_eq!(expand("**/**")?, all);
         assert_eq!(expand("**/**/**")?, all);
-        assert_eq!(expand("a/**/**")?, ["a", "a/a", "a/a/f"].map(String::from).to_vec());
-        assert_eq!(expand("**/a/**")?, ["a", "a/a", "a/a/f"].map(String::from).to_vec());
-        assert_eq!(expand("a/**")?, ["a/", "a/a", "a/a/f"].map(String::from).to_vec());
+        assert_eq!(
+            expand("a/**/**")?,
+            ["a", "a/a", "a/a/f"].map(String::from).to_vec()
+        );
+        assert_eq!(
+            expand("**/a/**")?,
+            ["a", "a/a", "a/a/f"].map(String::from).to_vec()
+        );
+        assert_eq!(
+            expand("a/**")?,
+            ["a/", "a/a", "a/a/f"].map(String::from).to_vec()
+        );
         Ok(())
     }
 

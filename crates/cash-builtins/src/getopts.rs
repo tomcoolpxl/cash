@@ -97,13 +97,11 @@ impl builtins::Command for GetOptsCommand {
             own.next();
         }
         match (own.peek().map(|word| word.as_str()), own.clone().nth(1)) {
-            (Some(options_string), Some(variable_name)) if options_string != "--help" => {
-                Ok(Self {
-                    options_string: options_string.to_owned(),
-                    variable_name: variable_name.clone(),
-                    args: own.skip(2).cloned().collect(),
-                })
-            }
+            (Some(options_string), Some(variable_name)) if options_string != "--help" => Ok(Self {
+                options_string: options_string.to_owned(),
+                variable_name: variable_name.clone(),
+                args: own.skip(2).cloned().collect(),
+            }),
             // Help, or the usage error for words missing, as clap words them.
             _ => Self::try_parse_from(words),
         }

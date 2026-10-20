@@ -377,7 +377,11 @@ fn backslash_escape(s: &str) -> Cow<'_, str> {
 /// back as the home directory.
 fn expands_at(s: &str, at: usize, c: char) -> bool {
     match c {
-        '~' => at == 0 || s[..at].ends_with(['=', ':']),
+        '~' => {
+            at == 0
+                || s.get(..at)
+                    .is_some_and(|before| before.ends_with(['=', ':']))
+        }
         '#' => at == 0,
         _ => false,
     }
