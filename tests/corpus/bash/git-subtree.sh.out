@@ -1,0 +1,25 @@
+Added dir 'vendor/lib'
+status: 0
+lib.txt
+Add 'vendor/lib/' from commit '616327cb1e73ae791ed9c8afcc78452f0c181497'
+app start
+lib v1
+status: 0
+v1
+v2
+status: 0
+change inside the library
+lib v2
+lib v1
+v1
+v2
+app change
+Added dir 'squashed'
+status: 0
+Merge commit 'aaaa777370480af7dacfb7df77ed24503661994f' as 'squashed'
+fatal: you must provide the --prefix option.
+status: 1
+fatal: unknown command 'frobnicate'
+status: 1
+fatal: the '--rejoin' flag does not make sense with 'git subtree add'.
+status: 1

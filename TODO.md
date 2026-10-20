@@ -30,7 +30,8 @@ for working through it. What is done, phases and findings, is in DONE.md.
 The user's picks after 1.36.0 (decisions.md, "The phase after 1.36.0"), in this order:
 
 1. an `EXIT` trap run by `exit` inside a function: done (DONE.md);
-2. another corpus round, its sources put to the user before any download.
+2. another corpus round: todo.txt-cli, git-quick-stats, git-subtree and bash-preexec, the
+   downloads approved by the user's pick of the sources: done 2026-10-20 (DONE.md).
 
 ## The phase before (2026-10-20, done)
 

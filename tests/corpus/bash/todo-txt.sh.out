@@ -1,0 +1,111 @@
+1 Buy milk +shopping @town
+TODO: 1 added.
+2 Write report +work @office
+TODO: 2 added.
+3 Call mother @phone
+TODO: 3 added.
+4 Fix bike +home
+TODO: 4 added.
+5 Read book +home @couch
+TODO: 5 added.
+1 Buy milk +shopping @town
+3 Call mother @phone
+4 Fix bike +home
+5 Read book +home @couch
+2 Write report +work @office
+--
+TODO: 5 of 5 tasks shown
+4 Fix bike +home
+5 Read book +home @couch
+--
+TODO: 2 of 5 tasks shown
+1 Buy milk +shopping @town
+4 Fix bike +home
+5 Read book +home @couch
+2 Write report +work @office
+--
+TODO: 4 of 5 tasks shown
+2 (A) Write report +work @office
+TODO: 2 prioritized (A).
+3 (B) Call mother @phone
+TODO: 3 prioritized (B).
+2 (A) Write report +work @office
+3 (B) Call mother @phone
+--
+TODO: 2 of 5 tasks shown
++home
++shopping
++work
+@couch
+@office
+@phone
+@town
+1 Buy milk +shopping @town and bread
+4 Today: Fix bike +home
+5 Read book +home @couch
+TODO: Replaced task with:
+5 Read two books +home
+3 Call mother @phone
+TODO: 3 deprioritized.
+2 (A) Write report +work @office
+1 Buy milk +shopping @town and bread
+3 Call mother @phone
+5 Read two books +home
+4 Today: Fix bike +home
+--
+TODO: 5 of 5 tasks shown
+1 x DATE Buy milk +shopping @town and bread
+TODO: 1 marked as done.
+2 x DATE Write report +work @office
+TODO: 2 marked as done.
+x DATE Buy milk +shopping @town and bread
+x DATE Write report +work @office
+TODO: PWD/todo-data/todo.txt archived.
+1 Call mother @phone
+3 Read two books +home
+2 Today: Fix bike +home
+0 x DATE Buy milk +shopping @town and bread
+0 x DATE Write report +work @office
+--
+TODO: 3 of 3 tasks shown
+DONE: 2 of 2 tasks shown
+total 5 of 5 tasks shown
+TODO: PWD/todo-data/todo.txt does not contain any done tasks.
+1 Call mother @phone
+3 Read two books +home
+2 Today: Fix bike +home
+--
+TODO: 3 of 3 tasks shown
+x DATE Buy milk +shopping @town and bread
+x DATE Write report +work @office
+3 Read two books +home
+TODO: 'Today:' not found; no removal done.
+TODO: No task 4.
+4 Call mother @phone
+TODO: 4 added.
+5 Call mother @phone
+TODO: 5 added.
+TODO: 2 duplicate task(s) removed
+TODO: Destination file PWD/todo-data/someday.txt does not exist.
+TODO: File someday.txt does not exist.
+TODO: Destination file PWD/todo-data/someday.txt does not exist.
+TODO: File someday.txt does not exist.
+1 Call mother @phone
+3 Read two books +home
+2 Today: Fix bike +home
+--
+TODO: 3 of 3 tasks shown
+TODO: No task 99.
+usage: todo.sh pri NR PRIORITY [NR PRIORITY ...]
+note: PRIORITY must be anywhere from A to Z.
+TODO: 'PWD/home/.todo/actions' does not exist.
+  Usage: todo.sh [-fhpantvV] [-d todo_config] action [task_number] [task_description]
+
+  Actions:
+    add|a "THING I NEED TO DO +project @context"
+    addm "THINGS I NEED TO DO
+TODO.TXT Command Line Interface v@DEV_VERSION@
+files:
+done.txt
+report.txt
+todo.txt

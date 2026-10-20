@@ -893,8 +893,9 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   user's OK in the same pick. Left out: bash-preexec, `sudo -E` through a handle, and
   lzma-rust2 taken in for 7z's speed and xz's Ctrl-C.
 - **The phase after 1.36.0** (the user, 2026-10-20): the `EXIT` trap run by `exit` inside a
-  function, where Bash runs it; and another corpus round, its sources put to the user
-  before any download. Left out: `sudo -E` through a handle, lzma-rust2 taken in.
+  function, where Bash runs it; and another corpus round, of todo.txt-cli, git-quick-stats,
+  git-subtree and bash-preexec, the user's pick of the sources. Left out: `sudo -E` through
+  a handle, lzma-rust2 taken in.
 
 ## 8. Archives and compression
 

@@ -1,0 +1,27 @@
+imported: defined defined
+[a  b]
+[lead and tail]
+[echo one
+echo two;]
+HISTCONTROL=:erasedups
+HISTCONTROL=ignoredups:
+hook: __bp_hook_preexec_into_ps0
+PS0=${ __bp_invoke_preexec_from_ps0 "$_" >&2; }
+-ft __bp_install
+-ft __bp_hook_preexec_into_debug
+second precmd
+precmd: status 0
+trap -- '__bp_preexec_invoke_exec "$_"' DEBUG
+declare -a PROMPT_COMMAND=([0]=$'__bp_precmd_invoke_cmd "$_"\necho old-prompt-command' [1]="__bp_interactive_mode")
+__bp_original_debug_trap
+preexec
+--
+second_precmd
+precmd
+old-prompt-command
+first command
+old-prompt-command
+second
+same line
+old-prompt-command
+done

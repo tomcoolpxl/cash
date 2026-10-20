@@ -2602,3 +2602,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   trap at once, which is then spent; a subshell's stays its own. An `exit` with no status
   in the trap exits with the status the shell was exiting with, as in Bash, which running
   the trap inside `exit` would otherwise have lost.
+- **A corpus round: todo.txt-cli, git-quick-stats, git-subtree and bash-preexec**
+  (2026-10-20, the phase after 1.36.0, item 2, the user's pick of the sources): todo.sh
+  2.14.0 through every action, git-quick-stats 2.11.0's reports on a repository of three
+  authors and fixed dates, Git 2.56.0's git-subtree adding, pulling and splitting, and
+  bash-preexec 0.7.0's install, traps and helpers, unchanged, all as in Bash; no bug this
+  time. git-subtree needs Git's `git-sh-setup` first on PATH: the case copies it from the
+  Git installed and names it by a relative path, since a `C:/` entry is cut at its colon,
+  and keeps only git-subtree's own words, as Git's change between versions. bash-preexec
+  hooks preexec into `PS0` under Bash 5.3, which no script expands; the case takes its
+  DEBUG-trap hook for older Bash.

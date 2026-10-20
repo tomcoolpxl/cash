@@ -1,0 +1,223 @@
+== -T
+Contribution stats (by author) on the current branch:
+
+Sorting by: name (asc)
+
+	 Ann <Ann@example.com>:
+	  commits:       3 (60.0%)
+	  insertions:    6 (54.5%)
+	  deletions:     0
+	  lines changed: 6 (54.5%)
+	  files:         3
+	  first commit:  Mon Jan 6 09:15:00 2025 +0100
+	  last commit:   Fri Jan 2 10:00:00 2026 +0100
+
+	 Bob <Bob@example.com>:
+	  commits:       1 (20.0%)
+	  insertions:    1 (9.1%)
+	  deletions:     0
+	  lines changed: 1 (9.1%)
+	  files:         1
+	  first commit:  Tue Jan 7 14:30:00 2025 -0500
+	  last commit:   Tue Jan 7 14:30:00 2025 -0500
+
+	 Cy <Cy@example.com>:
+	  commits:       1 (20.0%)
+	  insertions:    4 (36.4%)
+	  deletions:     0
+	  lines changed: 4 (36.4%)
+	  files:         1
+	  first commit:  Sat Mar 1 08:00:00 2025 +0900
+	  last commit:   Sat Mar 1 08:00:00 2025 +0900
+
+	 total:
+	  commits:       5
+	  insertions:    11
+	  deletions:     0
+	  lines changed: 11
+	  files:         5
+
+status: 0
+== -R
+status: 1
+== -c
+Git changelogs:
+
+
+[2026-01-02]
+ * Ann edits d.txt (Ann)
+
+[2025-03-01]
+ * Cy edits c.txt (Cy)
+
+[2025-02-12]
+ * Ann edits a.txt (Ann)
+
+[2025-01-07]
+ * Bob edits b.txt (Bob)
+
+[2025-01-06]
+ * Ann edits a.txt (Ann)
+status: 0
+== -L
+status: 1
+== -C
+All contributors (sorted by name):
+
+     1	Ann
+     2	Bob
+     3	Cy
+status: 0
+== -a
+Git commits per author:
+
+	3  Ann   60.0%
+	1  Cy    20.0%
+	1  Bob   20.0%
+status: 0
+== -d
+Git commits per date:
+
+      1 2025-01-06
+      1 2025-01-07
+      1 2025-02-12
+      1 2025-03-01
+      1 2026-01-02
+status: 0
+== -m
+Git commits by month:
+
+	month	sum
+status: 0
+== -Y
+Git commits by year:
+
+	year	sum
+	2025	4	|████████████████████████████████████████████████████████████████
+	2026	1	|████████████████
+status: 0
+== -w
+Git commits by weekday:
+
+	day	sum
+status: 0
+== -W
+status: 1
+== -o
+Git commits by hour:
+
+	hour	sum
+status: 0
+== -A
+status: 1
+== -z
+Git commits by timezone:
+
+Commits	TimeZone
+      1 -0500
+      3 +0100
+      1 +0900
+status: 0
+== -Z
+status: 1
+== -b
+Branching tree view:
+
+* --+ Commit:  6532594 
+|   | Date:    Fri, 2 Jan 2026 10:00:00 +0100 (10 months ago) 
+|   | Message: Ann edits d.txt  (HEAD -> main) 
+|   + Author:  Ann 
+|   
+| * --+ Commit:  4b46b1c 
+| |   | Date:    Sun, 20 Apr 2025 17:20:00 +0900 (1 year, 6 months ago) 
+| |   | Message: Cy edits a.txt  (feature) 
+| |   + Author:  Cy 
+| | 
+| * --+ Commit:  e655222 
+|/    | Date:    Sat, 15 Mar 2025 11:45:00 -0500 (1 year, 7 months ago) 
+|     | Message: Bob edits b.txt  
+|     + Author:  Bob 
+| 
+* --+ Commit:  1362056 
+|   | Date:    Sat, 1 Mar 2025 08:00:00 +0900 (1 year, 8 months ago) 
+|   | Message: Cy edits c.txt  
+|   + Author:  Cy 
+| 
+* --+ Commit:  63df6fc 
+|   | Date:    Wed, 12 Feb 2025 22:05:00 +0100 (1 year, 8 months ago) 
+|   | Message: Ann edits a.txt  
+|   + Author:  Ann 
+| 
+* --+ Commit:  47a7809 
+|   | Date:    Tue, 7 Jan 2025 14:30:00 -0500 (1 year, 9 months ago) 
+|   | Message: Bob edits b.txt  
+|   + Author:  Bob 
+| 
+* --+ Commit:  ce270aa 
+    | Date:    Mon, 6 Jan 2025 09:15:00 +0100 (1 year, 9 months ago) 
+    | Message: Ann edits a.txt  
+    + Author:  Ann 
+status: 0
+== -D
+All branches (sorted by most recent commit):
+
+     1	[1 year, 6 months ago] Cy feature
+     2	[10 months ago] Ann main
+status: 0
+== -r
+Suggested code reviewers (based on git history):
+
+      3 Ann
+      1 Cy
+      1 Bob
+status: 0
+== limited and sorted
+Contribution stats (by author) on the current branch:
+
+Sorting by: commits (desc)
+
+	 Ann <Ann@example.com>:
+	  commits:       3 (60.0%)
+	  insertions:    6 (54.5%)
+	  deletions:     0
+	  lines changed: 6 (54.5%)
+	  files:         3
+	  first commit:  Mon Jan 6 09:15:00 2025 +0100
+	  last commit:   Fri Jan 2 10:00:00 2026 +0100
+
+	 Bob <Bob@example.com>:
+	  commits:       1 (20.0%)
+	  insertions:    1 (9.1%)
+	  deletions:     0
+	  lines changed: 1 (9.1%)
+	  files:         1
+	  first commit:  Tue Jan 7 14:30:00 2025 -0500
+	  last commit:   Tue Jan 7 14:30:00 2025 -0500
+
+	 Cy <Cy@example.com>:
+	  commits:       1 (20.0%)
+	  insertions:    4 (36.4%)
+	  deletions:     0
+	  lines changed: 4 (36.4%)
+	  files:         1
+	  first commit:  Sat Mar 1 08:00:00 2025 +0900
+	  last commit:   Sat Mar 1 08:00:00 2025 +0900
+
+	 total:
+	  commits:       5
+	  insertions:    11
+	  deletions:     0
+	  lines changed: 11
+	  files:         5
+
+status: 0
+Git commits per author:
+
+	1  Cy    50.0%
+	1  Ann   50.0%
+status: 0
+All contributors (sorted by name):
+
+     1	Bob
+     2	Cy
+status: 0
