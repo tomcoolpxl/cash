@@ -607,6 +607,21 @@ fn command_v_renders_a_path_found_on_path_with_forward_slashes() {
 }
 
 #[test]
+fn type_cap_p_gives_a_command_cash_carries_as_git_bash_prints_it() {
+    // `type -P grep` gave Git's grep.exe under `C:/Program Files`, not cash's, and its space
+    // broke pyenv's `$(type -P grep)`. A command cash carries is `/usr/bin/NAME` now, a
+    // path that runs cash's own, as Git Bash prints; Bash's own builtins have none, as
+    // `which` has it.
+    let out = cash(r#"type -P grep ls; "$(type -P grep)" -c x <<< x; type -P cd; echo "cd: $?""#);
+    assert_eq!(
+        out.stdout.lines().collect::<Vec<_>>(),
+        ["/usr/bin/grep", "/usr/bin/ls", "1", "cd: 1"],
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn hash_t_renders_a_path_the_same_way_command_v_does() {
     // `hash -t` printed the cached path as the resolver had joined it:
     //

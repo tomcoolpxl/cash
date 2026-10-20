@@ -32,74 +32,8 @@ use std::io::Write;
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
 
+use crate::carried::is_bash_builtin;
 use crate::lookup::{self, Resolved};
-
-/// Bash 5.3's own builtins (`enable -a`). They change the shell running them, or only
-/// make sense inside one, so there is no program to run by path; everything else cash
-/// carries — `ls`, `sed`, `ps`, `rev` — is a program elsewhere, and `which` gives a path.
-const BASH_BUILTINS: &[&str] = &[
-    ".",
-    ":",
-    "[",
-    "alias",
-    "bg",
-    "bind",
-    "break",
-    "builtin",
-    "caller",
-    "cd",
-    "command",
-    "compgen",
-    "complete",
-    "compopt",
-    "continue",
-    "declare",
-    "dirs",
-    "disown",
-    "echo",
-    "enable",
-    "eval",
-    "exec",
-    "exit",
-    "export",
-    "false",
-    "fc",
-    "fg",
-    "getopts",
-    "hash",
-    "help",
-    "history",
-    "jobs",
-    "kill",
-    "let",
-    "local",
-    "logout",
-    "mapfile",
-    "popd",
-    "printf",
-    "pushd",
-    "pwd",
-    "read",
-    "readarray",
-    "readonly",
-    "return",
-    "set",
-    "shift",
-    "shopt",
-    "source",
-    "suspend",
-    "test",
-    "times",
-    "trap",
-    "true",
-    "type",
-    "typeset",
-    "ulimit",
-    "umask",
-    "unalias",
-    "unset",
-    "wait",
-];
 
 /// The path `which` prints for a command cash carries that is not one of bash's own
 /// builtins: `C:/…/cash.exe/NAME`, which cash runs as that command (ROADMAP item 12), so
@@ -109,13 +43,6 @@ fn executable_path(name: &str) -> Option<String> {
         return None;
     }
     cash_win32::path::virtual_path(name)
-}
-
-/// Whether `name` is one of Bash's own builtins, which have no file and no path, as
-/// opposed to a command cash carries, which `which` gives a path and
-/// `cash --link-tools` a link.
-pub fn is_bash_builtin(name: &str) -> bool {
-    BASH_BUILTINS.contains(&name)
 }
 
 /// A hard link to this cash on `PATH` for `name`, made by `cash --link-tools`: a real

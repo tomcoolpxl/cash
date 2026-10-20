@@ -190,6 +190,14 @@ pub fn virtual_tool(spelled: &str) -> Option<String> {
     (!name.is_empty() && !name.contains('/')).then(|| name.to_owned())
 }
 
+/// The Unix system tool's path for the command `name`, `/usr/bin/rm` for `rm`: the path
+/// [`system_tool`] reads back as the command, and the one Git Bash prints for its own
+/// program, as `type -P` gives a command cash carries.
+#[must_use]
+pub fn system_tool_path(name: &str) -> String {
+    format!("/usr/bin/{name}")
+}
+
 /// The command a Unix system tool's path names, `rm` for `/bin/rm` or `/usr/bin/rm`, when
 /// no file answers to it there, with or without an extension of `extensions` (`PATHEXT`).
 ///

@@ -71,6 +71,17 @@ pub(crate) fn resolve<'a, SE: ShellExtensions>(
         }
     }
 
+    // cash: a command cash carries that is a program elsewhere (`crate::carried`) is no
+    // file, but cash runs it by the path Git Bash prints for its program, `/usr/bin/NAME`
+    // (the user's pick, 2026-10-20). `type -P grep` gave Git's grep.exe under
+    // `C:/Program Files`, not cash's, and its space broke `$(type -P grep)`.
+    if options.force_path_search && crate::carried::carries_program(shell, name) {
+        resolved.push(Resolved::File {
+            path: PathBuf::from(cash_win32::path::system_tool_path(name)),
+            hashed: false,
+        });
+    }
+
     // Searching the filesystem *does* cost something, so only do it if the results so far
     // don't already answer the question.
     if options.all_locations || resolved.is_empty() {

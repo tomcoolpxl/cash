@@ -896,6 +896,16 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   function, where Bash runs it; and another corpus round, of todo.txt-cli, git-quick-stats,
   git-subtree and bash-preexec, the user's pick of the sources. Left out: `sudo -E` through
   a handle, lzma-rust2 taken in.
+- **The phase after 1.37.0** (the user, 2026-10-20): another corpus round and a stress
+  round of bigger programs: nvm as a whole (its fixture already there), the
+  bash-completion library, pyenv with python-build, and bats-assert with bats-support,
+  the user's pick of the sources. Left out: `sudo -E` through a handle, lzma-rust2.
+  In it (the user's picks, 2026-10-20): `type -P` gives a bundled tool as `/usr/bin/NAME`,
+  the path cash runs it by, as Git Bash prints it; it gave Git's own program under
+  `C:/Program Files`, whose space broke `$(type -P grep)`. And an opt-in `/c/` mode is to be
+  designed (research/, then a pick list): rbenv, asdf, pyenv and nvm climb from `$PWD` until
+  it is empty or `/`, which `C:/...` never reaches, and bats' `load` wants a path that
+  starts with `/`. Turned down: `/c/` as the default, which reverses D3.
 
 ## 8. Archives and compression
 
