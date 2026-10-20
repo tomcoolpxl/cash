@@ -968,6 +968,10 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   process substitution's directory stays one that cannot be entered, written down (D17);
   and under `unixpaths`, a climb past a drive's top spells `$PWD` `/` (D83), after
   directories that exist only in cash were built, weighed and reverted.
+- **The phase after 1.41.0** (the user, 2026-10-20): another corpus round, of sources the
+  user picked: GNU Bash's own test suite, modernish's self-test, bash-it with its bats
+  tests, and acme.sh's offline helpers. Turned down for now: the archive leftovers and
+  `sudo -E` through a handle.
 
 ## 8. Archives and compression
 

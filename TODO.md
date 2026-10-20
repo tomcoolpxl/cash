@@ -27,6 +27,164 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ## Picked by the user (the current phase, 2026-10-20)
 
+The user's pick after 1.41.0 (decisions.md, "The phase after 1.41.0"):
+
+1. another corpus round, of sources the user picked: GNU Bash's own test suite, modernish's
+   self-test, bash-it with its bats tests, and acme.sh's offline helpers (the downloads
+   approved with the pick).
+
+## Found by the corpus round after 1.41.0 (2026-10-20), not yet picked
+
+Bash 5.3's own test suite (`tests/*.tests` against Git Bash 5.3, triaged by hand into
+cash's bugs, Windows-caused differences and wording), modernish's self-test under cash, and
+bash-it's bats files under `unixpaths`. Fixed in the round itself: the export listing of
+Windows names that are no identifiers, `set -a` for every kind of assignment and for
+functions, a function defined again keeping its attributes, `$BASH`, an inherited
+`OLDPWD`, `alias` in POSIX mode, a subscript expanded twice (a command substitution in a
+value ran), `history N` panicking, `#!/c/...` interpreters, `find -mmin` and its kin,
+`getopts` taking `-h` for its own, `cash -ce`, `kill -sHUP`, a leading `~` or `#` left
+unquoted by `set`, `printf %q` and `declare -p`, and `**/**` giving the directory's own
+path. The rest, by theme:
+
+**Scripts that end or go on in silence**
+- `break`/`continue` outside a loop, or `break N` past the loops, ends the script with
+  status 0; a count of 0, below 0 or no number loops on; inside a function called from a
+  loop: "not yet implemented", status 99; `return -1` refused (Bash: 255), `return abc`
+  does not return.
+- `exec` with a redirection inside a redirected `{ }` or function makes the outer
+  redirection permanent: what follows lands in the file.
+- `exec {v}<<EOF` and `exec {v}<<<word` run `{v}` as a command, status 127.
+- A failed `exec`: `shopt -s execfail` ignored; `exec .` and `exec notthere` go on;
+  `exec -1`/`exec -i` taken for commands, the script ended (Bash: invalid option, status 2).
+- A background command whose input is a here-document or a pipe, inside a block or
+  subshell, reads `/dev/null` (`echo x | ( cat & wait )` prints nothing).
+- A failed redirection on a compound command ends an enclosing `( )`, and the ERR trap
+  never runs for it.
+- A shell reading its script from standard input ignores `exec 0<file`.
+- `{ exec 8</dev/null; } 8<&-` leaves fd 8 open after the block (modernish).
+- `( ! exit 42 )` is 0 (Bash: 42).
+- `fc -0` and `fc -s -0` run the last command again (Bash: out of range).
+- `set -o history` in a script writes every command to `$HISTFILE` at once; Bash writes
+  nothing.
+
+**`read` and `mapfile`**
+- `IFS=": " read x y` keeps the delimiters in the last variable (`a :b` gives `:b`);
+  832 of Bash's 6856 generated IFS cases.
+- A backslash-escaped trailing space is dropped; with `IFS=$'\t\r\f\v'` trailing IFS
+  white space is kept; `mapfile -d ''` keeps the NUL in each element.
+
+**Scripts refused that Bash runs (parser)**
+- `! time cmd`, `time` after `!` or `time`, `time --`.
+- `$(case x in in|esac) ...;; esac)`: the end of `$(` is found wrong around reserved words
+  in patterns; a syntax error inside `$(...)` is found only when it runs.
+- A here-document in `$(...)` ended by `EOF)`; `<<-'<TAB>END'`; the delimiter checked
+  before backslash-newline is joined (`EO\`+`F`); an unterminated `$(` in a here-document.
+- A trailing backslash at the end of input is dropped; backslash-newline inside
+  backquotes is kept.
+- A syntax error in a compound array assignment ends the script; text after its `)`
+  (`let a=(4*3)/2`, `c=(x y)z`); a brace range across the backtick (`{Z..a}`).
+- `case x in esac)` accepted; `for 1 in a b` and `select` run with names that are none.
+- `${ cmd; }`: `return`, `local`, `exit`, a function inside it, `}` after a newline or `)`.
+- Aliases: one followed by a redirection merges tokens (`foo>&2`); `eval` of a multi-line
+  alias that unaliases itself; in POSIX mode, aliases inside `$(...)` at parse time and a
+  reserved word after a blank-ending alias.
+- Functions printed that do not read back: a here-document in an `if` condition, `export
+  -f` of one with a here-document and a later redirection, names that are no identifiers.
+
+**Assignments, declarations, readonly**
+- A prefix assignment before a declaration builtin is ignored (`var=60 export var`, `x=4
+  declare -r x`, `z=y typeset z`); in POSIX mode one before a special builtin does not
+  last (`y=5 eval :`); `local` does not take a prefix assignment's value (`a=4 f`).
+- Readonly not enforced: an element of a readonly array assigned or unset; `local var`
+  over a readonly global; `coproc RO`; a prefix assignment to a readonly variable runs the
+  command in silence.
+- `declare -g` in a function writes the caller's local; `declare name[sub]=v` writes
+  element 0; `a+=5 cmd` assigns; `[i]+=v` in a compound assignment.
+- Associative lists: unquoted words split and globbed, `( [k]=v one )`, an empty key;
+  keys holding `]` or quote characters break `(( ))`, `[[ -v ]]`, `unset`, `read`,
+  `printf -v`; `(( A['$key']++ ))` expands `$key`.
+- `(( a[i++]++ ))` evaluates the subscript twice; bad or negative subscripts (`b[]=x`,
+  `[-65]=v`, `x+=([-1]=v)`) land on element 0; `declare +a scalar` makes an array.
+- A failed indexed assignment leaves the variable unset; `x+=7` on a bad old value.
+- `declare -a` with no names prints `name=(...)`, not `declare -a name=(...)`.
+- `set -a` does not export a variable reassigned by `declare`; `set -k`; `shopt -s
+  localvar_inherit`/`localvar_unset` do nothing; `export -a` refused; `set -u` misses an
+  unset element in `$(( a[0] ))`.
+- Namerefs: `declare +n`; attributes go to the reference, not its target; `for` over a
+  reference; targets unchecked (`declare -n r=/`, a reference to `X[0]` used by `read`);
+  a reference named as its target in a function; `${ref=X}`.
+
+**Expansion and quoting**
+- Quotes inside a double-quoted `${v-word}`: `"${v-"'x'"}"`, `"${v-'"'x}"` (fails),
+  `\}`, a tilde inside nested quotes, `${A:=PATH=~/bin}`; POSIX mode's literal single
+  quotes; `$'...'` inside `${...}` in double quotes, and in a here-document.
+- `"${foo:-$@}"` with no parameters is no word (Bash: one); `"$x$@"` is one (Bash: none);
+  `$*` in a pattern joins with a space, not IFS's first character; `${v-$@}` with `IFS=:`.
+- Pattern substitution: an empty pattern matches, `${e/#/x}`, `${a///a/}`; the offset
+  `${P:1 ? 4 : 2:1}`; `${!9:-d}`, `${!n[@]@Q}`, `${@@A}`; `${#/}` accepted.
+- Arithmetic: assignment binds tighter than `?:`, `&&`, `||`; `++7` and `--7` refused;
+  `$(( 'foo' ))` accepted; a variable holding `b[$d]` not expanded.
+- `${x@P}`: `\v` is cash's version, `\s` the script's name.
+- Bytes that are not UTF-8 become U+FFFD (`$'\xff'`, `read`, `%q`), and `$'\U'` above
+  U+10FFFF.
+
+**Globbing and conditionals**
+- Quotes and backslashes inside a glob pattern are not honoured (`a[\;]b`, `a["b"]c`,
+  `pat='ab\cd*'; echo $pat`).
+- `**/` leaves out a link to a directory, which `*/` lists.
+- Extglob with dot files (`@(.foo)`); `*` gives `.` and `..` with `globskipdots` off; a
+  malformed bracket inside a group.
+- Collating symbols and equivalence classes (`[[.a.]]`, `[[=a=]]`); invalid class names
+  match; GLOBIGNORE splits on `:` inside brackets; nullglob with `/` in brackets.
+- `[[ $s =~ "lit" ]]` leaves BASH_REMATCH empty; `[[ a =~ ['a]'] ]]` matches; `[[ -t X
+  ]]` is silent; POSIX mode globs a redirection's word.
+
+**Traps, signals and jobs**
+- `kill -SIG $$` from a background job runs the trap in the job, not the shell.
+- `return` in a trap does not return from the function it interrupted.
+- `$!` is not set by a process substitution.
+- RETURN and DEBUG traps see the wrong LINENO and a `source` frame; `caller` at the top
+  prints nothing; BASH_COMMAND after a function ending in `[[ ]]`.
+- `fg` with monitor off, `%1` as a command, `fg %name`, `bg`; `[N]+ Done` printed by a
+  script with `set -m`.
+
+**printf**
+- `\c` ends the output (Bash prints it); `\'` and `\?`; width or precision on `%b` and
+  `*` on `%q`/`%b`; `%(...)T` with nested parentheses or a TZ with DST rules; `%ls`/`%lc`
+  count bytes; `%S`/`%C`; `\u` with fewer than four digits; text before a bad conversion
+  is lost; widths above INT_MAX.
+
+**POSIX mode**
+- `POSIXLY_CORRECT` does not turn POSIX mode on or off, nor does the mode set it
+  (modernish reads `export -p` so).
+- A special builtin's error does not end the shell (a redirection on `:`, `unset` of a
+  readonly, `return` outside a function, `readonly` of a bad name); `trap ... SIGNOSIG`
+  and `command eval "( "` end it, where Bash goes on.
+- cash started as `sh` is not in POSIX mode; a command substitution does not inherit
+  `set -e`; a special builtin does not win over a function of its name.
+
+**Starting cash**
+- `+B`, `+o braceexpand`, `-O badopt`; exported SHELLOPTS and BASHOPTS not read, and not
+  read-only; `exec -a name "$BASH"` and an imported BASH_ARGV0 do not set `$0`; the
+  script operand is not looked for on PATH; `--pretty-print`.
+- A cash renamed (`bash.exe`) sends `#!/bin/sh` scripts to the `cash` on PATH, not to
+  itself (`resolve_named_interpreter` asks for the stem `cash`).
+
+**Builtins, small**
+- `complete -p` drops the `!` of `-X '!pat'`; `complete -r` and `compgen -V` of a bad
+  name are silent; `help case` and `help -s rea`; `hash -p` ignored; `declare -f +r` and
+  `-f -a`; `set -r` restricts nothing; `history` does nothing while history is off,
+  numbers restart after HISTSIZE, `history -d 2-3`, `history -p '!!:z'`, script lines not
+  history-expanded under `set -H`; `find /dev/null` (modernish's find check); about
+  thirty missing usage errors.
+- An assignment to a read-only variable is reported at line 1 of a script, whatever its
+  line (bash-it's case, line 10 in Bash).
+- Printing: `declare -f`/`type` (`|cat`, `2>& 1`, `$( )`, `elif`), xtrace of a compound
+  assignment and inside traps, `shopt -o` column width, `complete -p` and `compgen -b`
+  order changing between runs, associative arrays in sorted order (Bash: hash order).
+
+## The phase before (2026-10-20, done)
+
 The user's pick after 1.40.0 (decisions.md, "The phase after 1.40.0"):
 
 1. another corpus round, of sources the user picks: bashdb, bash_unit and bats-file,

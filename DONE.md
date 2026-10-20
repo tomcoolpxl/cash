@@ -2706,3 +2706,29 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   to three kinds of program, for a gain the spelling gives. Found in it: `/*` read the root
   of the drive cash was started on, not the shell's, in either mode; it reads the shell's.
   direnv's `unixpaths` twin has its missing-file search back.
+- **A corpus round: Bash's own test suite, modernish, bash-it and acme.sh** (2026-10-20,
+  the phase after 1.41.0, item 1): acme.sh 3.1.7's offline helpers, and bash-it's log and
+  utility libraries loaded under `set -a` with a child shell that uses them, as cases;
+  Bash 5.3's `tests/*.tests` run under cash and Git Bash and every difference sorted by
+  hand; modernish's self-test, which cannot run under Git Bash, read by its own verdicts;
+  bash-it's bats files under `unixpaths`, where its symlinks are copies in both shells.
+  What is left is in TODO.md. Found and fixed in it: `export -p`, `set` and `declare -p`
+  listed Windows names that are no identifiers (`CommonProgramFiles(x86)`), which
+  modernish evals, dying of a syntax error; they are passed to programs and are no
+  variables, as in Bash. `set -a` exported only `NAME=value` and `declare`: the
+  environment's switch for it was never set, so `${x:=v}`, `read`, `printf -v`, `for`,
+  `(( ))`, `let`, `getopts` and `cd`'s `OLDPWD` exported nothing, and no function at all,
+  and bash-it's libraries, loaded under `set -a`, were missing in every bats test; a
+  function defined again kept no attribute. `$BASH` was `$0`, so bats ran a script's name
+  as the shell; it is cash's executable. An `OLDPWD` handed down was always dropped; it is
+  kept when it names a directory. `alias` in POSIX mode lists bare `name='value'`. **`a[$x]=v`
+  expanded the subscript twice, so a command substitution held in `x`'s value ran**: it is
+  expanded once, after the value, as in Bash. `history 10` with fewer entries panicked.
+  `#!/c/tools/x.exe` was not found. `find` knew no `-mmin`, `-amin`, `-cmin`, `-atime` or
+  `-ctime`, which bash-it's search uses, and its unknown-predicate message had an em dash.
+  `getopts hv opt "$@"` printed getopts' help for a script given `-h`. `cash -ce cmd` took
+  `e` for the command. `kill -sHUP` and `kill -n9` were invalid signals. `set`, `printf %q`
+  and `declare -p` left a leading `~` or `#` unquoted, and `declare -p` the key `@`, so a
+  listing read back changed. **`**/**` gave the whole path of the directory it started in,
+  and every entry twice, so `rm -r **/**` removed the directory itself**; it gives what `**`
+  gives, once each, and `**/a/**` matches `a`, not `a/`.
