@@ -17,7 +17,7 @@ fn cash(script: &str, env: &[(&str, &str)]) -> Output {
     let mut command = cash_command();
     command
         .args(["-c", script])
-        .env("PATH", r"C:\Windows\System32")
+        .env("PATH", crate::common::system32())
         .stdin(Stdio::null());
     for (name, value) in env {
         command.env(name, value);

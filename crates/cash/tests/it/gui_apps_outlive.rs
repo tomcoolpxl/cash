@@ -21,11 +21,11 @@
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
-use crate::common::cash_command;
+use crate::common::{cash_command, system32, unix_spelling};
 use crate::process_identity::still_running;
 
 fn wscript() -> Option<std::path::PathBuf> {
-    let path = std::path::PathBuf::from(r"C:\Windows\System32\wscript.exe");
+    let path = std::path::Path::new(&system32()).join("wscript.exe");
     path.is_file().then_some(path)
 }
 
@@ -49,9 +49,13 @@ fn wait_until<F: FnMut() -> bool>(timeout: Duration, mut predicate: F) -> bool {
 fn run_and_exit(setting: &str) -> (u32, u32, u64) {
     let dir = tempfile::tempdir().expect("scratch dir");
     std::fs::write(dir.path().join("wait.vbs"), "WScript.Sleep 30000\r\n").expect("vbs");
+    let wscript = format!(
+        "{}/wscript.exe",
+        unix_spelling(std::path::Path::new(&system32()))
+    );
     let script = format!(
         "{setting}\n\
-         /c/Windows/System32/wscript.exe //B //Nologo wait.vbs </dev/null >/dev/null 2>&1 &\n\
+         {wscript} //B //Nologo wait.vbs </dev/null >/dev/null 2>&1 &\n\
          echo gui=$!\n\
          ping -n 30 127.0.0.1 </dev/null >/dev/null 2>&1 &\n\
          echo con=$!\n\
@@ -129,7 +133,11 @@ fn a_program_started_while_the_console_closes_does_not_outlive_cash() {
     // one that runs its course writes `survivors`.
     let dir = tempfile::tempdir().expect("scratch dir");
     let name = format!("outlives{}.exe", std::process::id());
-    std::fs::copy(r"C:\Windows\System32\cmd.exe", dir.path().join(&name)).expect("copy cmd");
+    std::fs::copy(
+        std::path::Path::new(&system32()).join("cmd.exe"),
+        dir.path().join(&name),
+    )
+    .expect("copy cmd");
     std::fs::write(
         dir.path().join("script.sh"),
         format!(

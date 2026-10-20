@@ -17,11 +17,11 @@
 use std::path::Path;
 use std::process::Command;
 
-use crate::common::{Scratch, run_in};
+use crate::common::{Scratch, run_in, system32};
 
 /// What `program` from System32 prints, run directly.
 fn output_of_system_program(program: &str) -> String {
-    let path = Path::new(r"C:\Windows\System32").join(program);
+    let path = Path::new(&system32()).join(program);
     let out = Command::new(path).output().unwrap();
     String::from_utf8_lossy(&out.stdout).trim_end().to_owned()
 }
@@ -32,18 +32,19 @@ fn a_relative_program_runs_from_the_shells_directory() {
     // They print different things, so the output says which one ran.
     let scratch = Scratch::new("relative-program");
     std::fs::create_dir(scratch.path().join("sub")).unwrap();
+    let system32_dir = Path::new(&system32()).to_path_buf();
     std::fs::copy(
-        r"C:\Windows\System32\whoami.exe",
+        system32_dir.join("whoami.exe"),
         scratch.path().join("tool.exe"),
     )
     .unwrap();
     std::fs::copy(
-        r"C:\Windows\System32\hostname.exe",
+        system32_dir.join("hostname.exe"),
         scratch.path().join("sub").join("tool.exe"),
     )
     .unwrap();
     std::fs::copy(
-        r"C:\Windows\System32\hostname.exe",
+        system32_dir.join("hostname.exe"),
         scratch.path().join("sub").join("only-here.exe"),
     )
     .unwrap();
@@ -62,7 +63,7 @@ fn a_relative_program_runs_from_the_shells_directory() {
     // read the `/` in its own command line as a switch.
     let out = run_in(
         scratch.path(),
-        "C:/Windows/System32/cmd.exe /d /c exit 4; echo $?",
+        &format!("{}/cmd.exe /d /c exit 4; echo $?", system32()),
     );
     assert_eq!(out.stdout, "4", "{}", out.stderr);
 
@@ -115,7 +116,10 @@ fn xargs_gives_the_command_an_empty_input() {
     std::fs::write(&input, "SECRET\n").unwrap();
     let out = crate::common::output_of(
         crate::common::cash_command()
-            .args(["-c", "printf \"\" | xargs C:/Windows/System32/sort.exe"])
+            .args([
+                "-c",
+                &format!("printf \"\" | xargs {}/sort.exe", system32()),
+            ])
             .stdin(std::fs::File::open(&input).unwrap()),
     );
     assert_eq!(out.stdout, "", "{}", out.stderr);

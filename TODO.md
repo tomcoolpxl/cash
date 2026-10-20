@@ -184,11 +184,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   (`assert_equal`); the tests themselves pass and fail as in Bash.
   `bash/bats-assert-unixpaths.sh` is known to differ until then.
 
-- **`bash_53_timeformat_controls_the_time_report` failed once** (2026-10-20, a full `it`
-  run): cash ended with status 1 and printed nothing, not even the `echo done` after the
-  three `time :`; alone, it passed fifteen times out of fifteen. Under the full run's
-  load only, like the oracle tests below. Watch for it.
-
 - **Three empty files, `1`, `f` and `file`, at the repository's root** (untracked, made
   2026-10-19 between 07:33 and 07:37): from no test that was found; perhaps a command
   typed with a stray `>`. Left in place, as another session may own them.

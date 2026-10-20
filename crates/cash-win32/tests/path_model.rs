@@ -199,3 +199,40 @@ fn unixpaths_gives_a_windows_program_its_paths_as_msys_does() {
     assert_eq!(arg("plain"), None);
     assert!(arg("/tmp/x").is_some_and(|x| x.ends_with("/x") && !x.starts_with("/tmp")));
 }
+
+#[test]
+fn a_tool_opens_a_unix_spelling_on_any_drive_and_leaves_the_rest_as_written() {
+    // What sed, awk, diff and cmp open: `/d/x` is drive D, as in Git Bash, whether or not
+    // the drive is there; a Windows spelling keeps its backslashes, so that the tool says of
+    // it what it was given; `/c` alone and a relative name are no drive.
+    let open = cash_win32::path::tool_path;
+    assert_eq!(open("/c/a/f.txt"), PathBuf::from("C:/a/f.txt"));
+    assert_eq!(open("/d/data/x"), PathBuf::from("D:/data/x"));
+    assert_eq!(open("/e/x"), PathBuf::from("E:/x"));
+    assert_eq!(open("/z/net/share.txt"), PathBuf::from("Z:/net/share.txt"));
+    assert_eq!(open(r"D:\sdk\x"), PathBuf::from(r"D:\sdk\x"));
+    assert_eq!(open("/c"), PathBuf::from("/c"));
+    assert_eq!(open("rel/x"), PathBuf::from("rel/x"));
+    assert!(!open("/tmp/x").starts_with("/tmp"));
+}
+
+#[test]
+fn the_windows_directory_is_asked_of_windows_on_whichever_drive_it_is() {
+    // Never assumed to be `C:\Windows`: System32 is in it, and the system drive's root is
+    // its drive's.
+    let windows = cash_win32::fs::windows_directory();
+    assert!(is_absolute(windows), "{}", windows.display());
+    assert!(windows.join("System32").is_dir(), "{}", windows.display());
+    let root = cash_win32::fs::system_drive_root();
+    assert!(
+        windows.starts_with(&root),
+        "{} {}",
+        windows.display(),
+        root.display()
+    );
+    assert!(root.to_string_lossy().ends_with('\\'), "{}", root.display());
+    assert_eq!(
+        cash_win32::fs::system_program("cmd.exe"),
+        windows.join("System32").join("cmd.exe")
+    );
+}

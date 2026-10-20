@@ -14,7 +14,10 @@
     reason = "Integration tests test the compiled binary and assert loudly on failure."
 )]
 
-use crate::common::{CASH, Output, Scratch, cash_command, output_of};
+use crate::common::{
+    CASH, Output, Scratch, cash_command, output_of, system_drive, system32, unix_spelling,
+    windows_directory,
+};
 
 fn cash(script: &str) -> Output {
     run(&["-c", script])
@@ -1178,12 +1181,18 @@ fn shift_past_the_end_fails_with_one_and_shifts_nothing() {
 fn cd_goes_to_a_drive_root_and_a_variables_directory_and_takes_e() {
     // `cd C:` set `$PWD` to `C:`; `cdable_vars` had no effect; `cd -P -e` and `cd -@` said
     // "not yet implemented", where Git Bash goes there and refuses `-@` as invalid.
-    let out = cash(
-        "cd C: && echo \"$PWD\"; shopt -s cdable_vars; win=C:/Windows; cd win; \
-         echo \"$PWD\"; cd -P -e /c/Users && echo \"$PWD\"; cd -@ 2>/dev/null; echo $?",
-    );
+    // The drive and the directories Windows is on, whichever drive that is.
+    let (drive, win, sys32) = (system_drive(), windows_directory(), system32());
+    let unix_sys32 = unix_spelling(std::path::Path::new(&sys32));
+    // `cd -P` gives the case on disk, `C:/Windows`, where Windows says `C:\WINDOWS`.
+    let sys32 = cash_win32::path::render(&std::fs::canonicalize(&sys32).unwrap());
+    let out = cash(&format!(
+        "cd {drive} && echo \"$PWD\"; shopt -s cdable_vars; win={win}; cd win; \
+         echo \"$PWD\"; cd -P -e {unix_sys32} && echo \"$PWD\"; cd -@ 2>/dev/null; echo $?"
+    ));
     assert_eq!(
-        out.stdout, "C:/\nC:/Windows\nC:/Windows\nC:/Users\n2",
+        out.stdout,
+        format!("{drive}/\n{win}\n{win}\n{sys32}\n2"),
         "{}",
         out.stderr
     );

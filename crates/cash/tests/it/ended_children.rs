@@ -111,8 +111,7 @@ fn waits_then_exits(program: &Path, status: u32) -> Child {
 }
 
 fn system32(program: &str) -> PathBuf {
-    let system_root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
-    PathBuf::from(system_root).join("System32").join(program)
+    PathBuf::from(crate::common::system32()).join(program)
 }
 
 // ---------------------------------------------------------------------------

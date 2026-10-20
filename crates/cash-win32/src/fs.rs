@@ -996,6 +996,52 @@ pub fn names_beginning(
     }
 }
 
+/// The Windows directory, on whichever drive Windows is installed (`D:\Windows` as well as
+/// `C:\Windows`).
+///
+/// As Windows itself says (`GetSystemWindowsDirectoryW`); `SystemRoot` and `windir` only
+/// when it will not say: a program started with an empty environment (`env -i`) has
+/// neither. Every lookup of a directory of Windows' own starts here, so that none assumes
+/// `C:`.
+#[must_use]
+pub fn windows_directory() -> &'static Path {
+    static DIRECTORY: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    DIRECTORY.get_or_init(|| {
+        use windows_sys::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
+
+        let mut buffer = [0u16; 260];
+        // SAFETY: `buffer` holds `len` units; the call writes at most that and returns the
+        // count, or the size it needs when that is more.
+        let written = unsafe {
+            GetSystemWindowsDirectoryW(
+                buffer.as_mut_ptr(),
+                u32::try_from(buffer.len()).unwrap_or(0),
+            )
+        };
+        let len = written as usize;
+        if written != 0
+            && let Some(units) = buffer.get(..len)
+        {
+            return std::path::PathBuf::from(String::from_utf16_lossy(units));
+        }
+        // process state: the machine's Windows directory, the same in every process.
+        std::env::var_os("SystemRoot")
+            .or_else(|| std::env::var_os("windir"))
+            .filter(|value| !value.is_empty())
+            .map_or_else(|| std::path::PathBuf::from(r"\Windows"), Into::into)
+    })
+}
+
+/// The root of the drive Windows is installed on (`C:\`, `D:\`), which every account can
+/// enter: [`windows_directory`]'s drive.
+#[must_use]
+pub fn system_drive_root() -> std::path::PathBuf {
+    windows_directory()
+        .ancestors()
+        .last()
+        .map_or_else(|| std::path::PathBuf::from(r"\"), Path::to_path_buf)
+}
+
 /// A Windows program by its full path in System32 (`quser.exe`), for cash to start.
 ///
 /// By a bare name, Windows looks first in the directory of the exe that asks, and in a
@@ -1003,13 +1049,7 @@ pub fn names_beginning(
 /// would start itself again as it came up, without end (D65).
 #[must_use]
 pub fn system_program(name: &str) -> std::path::PathBuf {
-    std::env::var_os("SystemRoot")
-        .map_or_else(
-            || std::path::PathBuf::from(r"C:\Windows"),
-            std::path::PathBuf::from,
-        )
-        .join("System32")
-        .join(name)
+    windows_directory().join("System32").join(name)
 }
 
 /// Whether `path` is a program of Windows' own: one under `System32` or `SysWOW64` in
@@ -1020,11 +1060,7 @@ pub fn system_program(name: &str) -> std::path::PathBuf {
 /// the Windows directory itself, are not counted.
 #[must_use]
 pub fn is_system_program(path: &Path) -> bool {
-    let root = std::env::var_os("SystemRoot").map_or_else(
-        || std::path::PathBuf::from(r"C:\Windows"),
-        std::path::PathBuf::from,
-    );
-    is_under_system_directories(&root, path)
+    is_under_system_directories(windows_directory(), path)
 }
 
 /// [`is_system_program`] with the Windows directory given.

@@ -115,9 +115,10 @@ pub fn accept_path(input: &str) -> PathBuf {
 
     // /tmp -> the user's temp directory. A compat mapping, not a real mount.
     if unified == "/tmp" || unified.starts_with("/tmp/") {
+        // Without either variable, the Windows directory's, on whichever drive it is.
         let base = std::env::var("TEMP")
             .or_else(|_| std::env::var("TMP"))
-            .unwrap_or_else(|_| "C:/Windows/Temp".to_string());
+            .unwrap_or_else(|_| render(&crate::fs::windows_directory().join("Temp")));
         let base = base.replace('\\', "/");
         let rest = unified.strip_prefix("/tmp").unwrap_or("");
         return PathBuf::from(format!("{}{rest}", base.trim_end_matches('/')));
@@ -560,6 +561,16 @@ pub fn unix_drive_spelling(arg: &str) -> Option<PathBuf> {
     }
 
     Some(accept_path(arg))
+}
+
+/// The file a tool of cash's own opens for the name `name`, `/d/x` as `D:/x`.
+///
+/// `/c/x` (any drive) and `/tmp/x` as cash reads them (D3), as an MSYS tool opens them
+/// (D82); any other name as written, so that what the tool says of it is what it was given.
+/// `sed`, `awk`, `diff` and `cmp` open their files so.
+#[must_use]
+pub fn tool_path(name: &str) -> PathBuf {
+    unix_drive_spelling(name).unwrap_or_else(|| PathBuf::from(name))
 }
 
 /// What a Windows program is given for the argument `arg` under `unixpaths` (D82), as

@@ -37,7 +37,7 @@
 
 use super::read_console::Script;
 
-use crate::common::CASH;
+use crate::common::{CASH, system32};
 
 /// A program that runs until something ends it, and writes `127.0.0.1` to the console
 /// once it is running, whatever the display language.
@@ -197,10 +197,13 @@ tail -n 2 t.txt >> out.txt"#
 fn ctrl_c_stops_a_long_grep_and_ends_the_script() {
     let (status, left) = script(
         "ctrl-c-grep",
-        r#"trap 'echo "exit trap" >> out.txt' EXIT
+        &format!(
+            r#"trap 'echo "exit trap" >> out.txt' EXIT
 echo searching
-grep -r zzzz-never-there C:/Windows/System32 > /dev/null 2>&1
+grep -r zzzz-never-there {} > /dev/null 2>&1
 echo "went on" >> out.txt"#,
+            system32()
+        ),
     )
     .when_shown("searching")
     .type_keys("\x03")
@@ -215,10 +218,13 @@ echo "went on" >> out.txt"#,
 fn a_trap_on_int_runs_when_a_long_grep_stops() {
     let left = script(
         "trap-grep",
-        r#"trap 'echo trapped >> out.txt' INT
+        &format!(
+            r#"trap 'echo trapped >> out.txt' INT
 echo searching
-grep -r zzzz-never-there C:/Windows/System32 > /dev/null 2>&1
+grep -r zzzz-never-there {} > /dev/null 2>&1
 echo "went on: $?" >> out.txt"#,
+            system32()
+        ),
     )
     .when_shown("searching")
     .type_keys("\x03")

@@ -28,6 +28,10 @@ builtins such as `ls`. A glob gives its matches in cash's spelling, so
 `cat /c/logs/*.txt` hands `cat` `C:/logs/a.txt`. cash's own tools read them too, as an
 MSYS tool does: `cat /c/logs/a.txt`, `cp /c/a /c/b` and `sed -n p /c/x` open the files,
 while a `sed` or `awk` script is never touched, and `dirname /c/x/y` gives back `/c/x`.
+Every drive letter works so, `/d/data` for `D:/data` and `/z/` for a network drive: a
+one-letter name after the first `/` is always a drive, as in Git Bash, so a directory
+`C:\d` is reached as `/c/d`, never `/d`; and `/tmp` is always your `TEMP` directory, not a
+`C:\tmp` that may also be there.
 An argument to a Windows program reaches it as written, and it has no `/c` or `/tmp`;
 cash warns when it sees one and names the `C:/` spelling (an MSYS program, such as Git's
 `usr/bin` tools, reads it itself). `/dev/null` is the null device; a bare `nul` is the

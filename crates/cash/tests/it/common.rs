@@ -205,6 +205,30 @@ mod tests {
 /// The directory Git for Windows is installed in, found through the `git` on `PATH`
 /// (`git --exec-path` is `<root>/mingw64/libexec/git-core`), with forward slashes.
 ///
+/// `path` as Git Bash spells it, `/d/x` for `D:/x` (`unixpaths`, D82), on any drive.
+pub fn unix_spelling(path: &Path) -> String {
+    let fwd = path.to_string_lossy().replace('\\', "/");
+    let fwd = fwd.trim_start_matches("//?/");
+    let (drive, rest) = fwd.split_at(2);
+    format!("/{}{rest}", drive.get(..1).expect("a drive").to_lowercase())
+}
+
+/// The Windows directory, on whichever drive Windows is installed, in cash's spelling
+/// (`C:/WINDOWS`, `D:/Windows`): a test never takes it to be `C:/Windows`.
+pub fn windows_directory() -> String {
+    cash_win32::path::render(cash_win32::fs::windows_directory())
+}
+
+/// `System32` in the Windows directory, in cash's spelling: [`windows_directory`].
+pub fn system32() -> String {
+    format!("{}/System32", windows_directory())
+}
+
+/// The drive Windows is on, `C:` or `D:`: [`windows_directory`].
+pub fn system_drive() -> String {
+    windows_directory().chars().take(2).collect()
+}
+
 /// Git for Windows is a prerequisite of cash's workload (spec D35), and CI has it: a test
 /// that needs it fails without it, saying so, rather than passing without a word
 /// (BIN-20; the user, 2026-10-04).

@@ -219,8 +219,11 @@ impl ConsoleStateSession {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("console-state.ps1"), CONSOLE_STATE_PS1).unwrap();
 
-        // PowerShell 7 when installed, as on GitHub's runners; Windows PowerShell otherwise.
-        let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        // PowerShell 7 when installed, as on GitHub's runners; Windows PowerShell otherwise,
+        // on the drive Windows is on.
+        let system_root = cash_win32::fs::windows_directory()
+            .to_string_lossy()
+            .into_owned();
         let pwsh = std::env::var("ProgramFiles")
             .map(|files| PathBuf::from(files).join(r"PowerShell\7\pwsh.exe"))
             .ok()
@@ -1580,7 +1583,9 @@ const REPLY: &str = "127.0.0.1: ";
 
 /// A reedline cash on a ConPTY whose commands can find `ping.exe`, `cmd` and `sort`.
 fn start_job_cash() -> ConPtySession {
-    let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    let system_root = cash_win32::fs::windows_directory()
+        .to_string_lossy()
+        .into_owned();
     let temp = std::env::temp_dir();
     let temp = temp.to_string_lossy();
     let path = std::env::var("PATH").unwrap_or_default();

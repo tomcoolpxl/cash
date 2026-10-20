@@ -76,8 +76,7 @@ impl OwnPing {
             COPIES.fetch_add(1, Ordering::Relaxed)
         );
         let dir = tempfile::tempdir().expect("a scratch directory");
-        let system_root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
-        let ping = PathBuf::from(system_root).join("System32").join("PING.EXE");
+        let ping = PathBuf::from(crate::common::system32()).join("PING.EXE");
         std::fs::copy(&ping, dir.path().join(format!("{name}.exe")))
             .unwrap_or_else(|error| panic!("copying {}: {error}", ping.display()));
         Self { dir, name }

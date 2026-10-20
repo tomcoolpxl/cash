@@ -616,7 +616,10 @@ fn ls_long_colours_every_column_when_colour_is_on() {
 /// (BI-14).
 #[test]
 fn ls_ends_with_141_when_its_reader_goes() {
-    let out = cash(r#"ls -1 C:/Windows/System32 | head -1 >/dev/null; echo "${PIPESTATUS[*]}""#);
+    let out = cash(&format!(
+        r#"ls -1 {} | head -1 >/dev/null; echo "${{PIPESTATUS[*]}}""#,
+        crate::common::system32()
+    ));
     assert_eq!(out.stdout, "141 0", "{}", out.stderr);
     assert!(out.stderr.is_empty(), "{}", out.stderr);
 }

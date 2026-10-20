@@ -26,7 +26,9 @@ use std::io::Write as _;
 use std::path::Path;
 use std::process::Stdio;
 
-use crate::common::{CASH, Output, Scratch, cash_command, output_of, run as cash};
+use crate::common::{
+    CASH, Output, Scratch, cash_command, output_of, run as cash, unix_spelling, windows_directory,
+};
 use crate::process_identity::OwnPing;
 
 /// Run `cash` with arbitrary arguments.
@@ -99,43 +101,49 @@ fn cash_in_scratch(dir: &Path, script: &str) -> Output {
 #[test]
 fn pwd_renders_canonically() {
     // §9 measured brush printing `C:\Windows`. The whole point of D3 is that a rendered
-    // path usually becomes an argument to a native exe, where the spelling is fatal.
-    assert_eq!(cash("cd C:/Windows; pwd").stdout, "C:/Windows");
-    assert_eq!(cash("cd C:/Windows; echo $PWD").stdout, "C:/Windows");
+    // path usually becomes an argument to a native exe, where the spelling is fatal. The
+    // Windows directory, on whichever drive it is.
+    let win = windows_directory();
+    assert_eq!(cash(&format!("cd {win}; pwd")).stdout, win);
+    assert_eq!(cash(&format!("cd {win}; echo $PWD")).stdout, win);
 }
 
 #[test]
 fn every_spelling_of_a_directory_is_accepted() {
+    let win = windows_directory();
+    let unix = unix_spelling(Path::new(&win));
+    let back = win.replace('/', "\\");
     for script in [
-        "cd C:/Windows; pwd",
-        "cd /c/Windows; pwd",
-        r#"cd "C:\Windows"; pwd"#,
-        r#"cd 'C:\Windows'; pwd"#,
+        format!("cd {win}; pwd"),
+        format!("cd {unix}; pwd"),
+        format!(r#"cd "{back}"; pwd"#),
+        format!("cd '{back}'; pwd"),
     ] {
-        assert_eq!(cash(script).stdout, "C:/Windows", "failed for: {script}");
+        assert_eq!(cash(&script).stdout, win, "failed for: {script}");
     }
 }
 
 #[test]
 fn relative_and_parent_navigation_stay_canonical() {
+    let win = windows_directory();
     assert_eq!(
-        cash("cd C:/Windows; cd System32; pwd").stdout,
-        "C:/Windows/System32"
+        cash(&format!("cd {win}; cd System32; pwd")).stdout,
+        format!("{win}/System32")
     );
-    assert_eq!(
-        cash("cd C:/Windows/System32; cd ..; pwd").stdout,
-        "C:/Windows"
-    );
+    assert_eq!(cash(&format!("cd {win}/System32; cd ..; pwd")).stdout, win);
     // `cd -` echoes the directory it moved to, as bash does, so silence it to assert on
     // `pwd` alone. That echo is itself worth checking: it comes from $OLDPWD, which is a
     // separate rendering site from $PWD.
     assert_eq!(
-        cash("cd C:/Windows; cd C:/Users; cd - >/dev/null; pwd").stdout,
-        "C:/Windows"
+        cash(&format!(
+            "cd {win}; cd {win}/System32; cd - >/dev/null; pwd"
+        ))
+        .stdout,
+        win
     );
     assert_eq!(
-        cash("cd C:/Windows; cd C:/Users; cd -").stdout,
-        "C:/Windows"
+        cash(&format!("cd {win}; cd {win}/System32; cd -")).stdout,
+        win
     );
 }
 
@@ -188,9 +196,10 @@ fn paths_derived_from_home_are_canonical_too() {
 fn unix_spellings_work_for_file_operations() {
     // D10's second chokepoint: every path cash resolves itself funnels through
     // absolute_path, so these work without each call site knowing about it.
-    assert_eq!(cash("[ -f /c/Windows/win.ini ] && echo yes").stdout, "yes");
+    let ini = format!("{}/win.ini", unix_spelling(Path::new(&windows_directory())));
+    assert_eq!(cash(&format!("[ -f {ini} ] && echo yes")).stdout, "yes");
     assert_eq!(
-        cash("read -r l < /c/Windows/win.ini; [ -n \"$l\" ] && echo read").stdout,
+        cash(&format!("read -r l < {ini}; [ -n \"$l\" ] && echo read")).stdout,
         "read"
     );
 }
@@ -418,7 +427,8 @@ fn a_unix_drive_argument_to_a_command_is_explained() {
     // D3 accepts /c/... for paths cash resolves; D4 forbids rewriting arguments, so a
     // Windows program gets it verbatim and fails with an error that explains nothing.
     // (An MSYS program and cash's own tools read it themselves, and are told nothing.)
-    let out = cash(r"cmd /c type /c/Windows/win.ini >/dev/null");
+    let ini = format!("{}/win.ini", unix_spelling(Path::new(&windows_directory())));
+    let out = cash(&format!("cmd /c type {ini} >/dev/null"));
     assert!(
         out.stderr.contains("winpath") && !out.stderr.contains("(D4)"),
         "no hint given; stderr was: {}",
@@ -430,7 +440,10 @@ fn a_unix_drive_argument_to_a_command_is_explained() {
 fn the_diagnostic_stays_quiet_when_it_would_not_help() {
     // Only fires when the literal spelling fails AND translating fixes it, which makes
     // false positives essentially impossible.
-    let valid = cash(r#"enable -n cat 2>/dev/null; cat C:/Windows/win.ini >/dev/null"#);
+    let valid = cash(&format!(
+        "enable -n cat 2>/dev/null; cat {}/win.ini >/dev/null",
+        windows_directory()
+    ));
     assert!(
         !valid.stderr.contains("winpath"),
         "warned on a valid path: {}",
@@ -1400,8 +1413,12 @@ fn a_unix_spelled_command_path_resolves() {
     // are paths; a command name is unambiguous.
     //
     // This is what makes D37 possible — see below.
+    let ping = format!(
+        "{}/System32/ping.exe",
+        unix_spelling(Path::new(&windows_directory()))
+    );
     assert_eq!(
-        cash(r#""/c/Windows/System32/ping.exe" -n 1 127.0.0.1 >/dev/null && echo ok"#).stdout,
+        cash(&format!(r#""{ping}" -n 1 127.0.0.1 >/dev/null && echo ok"#)).stdout,
         "ok"
     );
 }

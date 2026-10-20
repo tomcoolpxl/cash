@@ -265,18 +265,18 @@ pub fn get_default_standard_utils_paths() -> Vec<PathBuf> {
 
 fn default_system_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
-    // process state: the system's directories, which no script moves.
-    if let Ok(sysroot) = std::env::var("SystemRoot") {
-        paths.push(PathBuf::from(&sysroot).join("system32"));
-        paths.push(PathBuf::from(&sysroot));
-        paths.push(PathBuf::from(&sysroot).join("System32").join("Wbem"));
-        paths.push(
-            PathBuf::from(&sysroot)
-                .join("System32")
-                .join("WindowsPowerShell")
-                .join("v1.0"),
-        );
-    }
+    // The system's directories, on the drive Windows is on, which no script moves; they were
+    // left out when `SystemRoot` was not set (`env -i`).
+    let sysroot = cash_win32::fs::windows_directory();
+    paths.push(sysroot.join("system32"));
+    paths.push(sysroot.to_path_buf());
+    paths.push(sysroot.join("System32").join("Wbem"));
+    paths.push(
+        sysroot
+            .join("System32")
+            .join("WindowsPowerShell")
+            .join("v1.0"),
+    );
     // process state: the account's own directory, for the default PATH.
     if let Ok(userprofile) = std::env::var("USERPROFILE") {
         paths.push(
@@ -306,13 +306,17 @@ pub fn get_system_rc_path() -> Option<PathBuf> {
     Some(program_data().join("cash").join("cashrc"))
 }
 
-/// The machine's `ProgramData` directory, which was taken to be `C:\ProgramData`.
+/// The machine's `ProgramData` directory, which was taken to be `C:\ProgramData`; without the
+/// variable, the one on the drive Windows is on.
 fn program_data() -> PathBuf {
     // ProgramData names one directory for the whole machine, read before any shell state exists.
     // process state: the machine's ProgramData directory, the same in every process.
     std::env::var_os("ProgramData")
         .filter(|value| !value.is_empty())
-        .map_or_else(|| PathBuf::from(r"C:\ProgramData"), PathBuf::from)
+        .map_or_else(
+            || cash_win32::fs::system_drive_root().join("ProgramData"),
+            PathBuf::from,
+        )
 }
 
 /// Returns the platform default for case-insensitive pathname expansion.

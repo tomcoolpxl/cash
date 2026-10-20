@@ -100,39 +100,12 @@ fn start_directory() -> PathBuf {
 /// system drive's root as a last resort. Tried in turn, as the temp's access may be
 /// tightened on some machines.
 fn fallback_dirs() -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-    if let Some(temp) = system_temp() {
-        dirs.push(temp);
-    }
-    dirs.push(drive_root());
-    dirs
-}
-
-/// `%SystemRoot%\Temp`, with the Windows directory read from the OS (`GetWindowsDirectoryW`),
-/// not an environment variable or a hard-coded path; `None` if the call will not say.
-fn system_temp() -> Option<PathBuf> {
-    use windows_sys::Win32::System::SystemInformation::GetWindowsDirectoryW;
-
-    let mut buffer = [0u16; 260];
-    // SAFETY: `buffer` holds `len` units; the call writes at most that and returns the count.
-    let written = unsafe {
-        GetWindowsDirectoryW(
-            buffer.as_mut_ptr(),
-            u32::try_from(buffer.len()).unwrap_or(0),
-        )
-    };
-    let len = written as usize;
-    if written == 0 || len > buffer.len() {
-        return None;
-    }
-    let windir = String::from_utf16_lossy(buffer.get(..len)?);
-    Some(PathBuf::from(windir).join("Temp"))
-}
-
-/// The system drive's root (`C:\`), which every account can enter.
-fn drive_root() -> PathBuf {
-    let drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_owned());
-    PathBuf::from(format!("{drive}\\"))
+    // `%SystemRoot%\Temp` and the system drive's root, read from the OS
+    // (`crate::fs::windows_directory`), not an environment variable or a hard-coded `C:`.
+    vec![
+        crate::fs::windows_directory().join("Temp"),
+        crate::fs::system_drive_root(),
+    ]
 }
 
 /// The started cash's arguments: `--invoke-bundled --sudo-attach PID ATTACH IN OUT ERR

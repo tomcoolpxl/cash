@@ -18,7 +18,7 @@ fn cash(script: &str) -> Output {
     crate::common::output_of(
         cash_command()
             .args(["-c", script])
-            .env("PATH", r"C:\Windows\System32")
+            .env("PATH", crate::common::system32())
             .stdin(Stdio::null()),
     )
 }

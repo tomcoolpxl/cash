@@ -2647,3 +2647,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   failure inside an `if`, a loop or `{ }` ran the trap a second time for the compound
   command; and `BASH_LINENO` was unset in a script outside functions, where Bash has
   `(0)`. bats' traces still name other lines than Bash's, from its DEBUG trap (TODO.md).
+  On the user's word that there are D: and E: drives too (2026-10-20), every place that
+  took Windows to be on `C:` asks Windows where it is (`cash_win32::fs::windows_directory`,
+  `system_drive_root`): the System32 programs, the default `PATH` without `SystemRoot`, the
+  elevated side's start directory, `ProgramData` and `/tmp` without their variables, and
+  `cash --link-tools`' name check. The tests take the Windows directory, its drive and the
+  scratch directory's drive from the machine, never `C:`, and `/d/`, `/e/` and `/q/` are
+  tested beside `/c/`.

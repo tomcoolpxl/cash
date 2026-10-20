@@ -19,7 +19,8 @@ shift
 mkdir -p "$out"
 case $(uname -s) in
     Linux) prog=/bin/true ;;
-    *) prog='C:/Windows/System32/HOSTNAME.EXE >/dev/null' ;;
+    # The Windows directory, on whichever drive it is.
+    *) prog="\"$SYSTEMROOT/System32/HOSTNAME.EXE\" >/dev/null" ;;
 esac
 shells=("$@")
 
@@ -63,7 +64,7 @@ bench function 'f() { :; }; for ((i=0;i<20000;i++)); do f; done' \
 bench substitution 'for ((i=0;i<1000;i++)); do x=$(echo hi); done' \
     'for ($i=0; $i -lt 1000; $i++) { $x = $(echo hi) }'
 bench program "for ((i=0;i<100;i++)); do $prog; done" \
-    'for ($i=0; $i -lt 100; $i++) { C:/Windows/System32/HOSTNAME.EXE > $null }'
+    'for ($i=0; $i -lt 100; $i++) { & "$env:SystemRoot\System32\HOSTNAME.EXE" > $null }'
 bench pipe 'for ((i=0;i<100;i++)); do echo hi | cat >/dev/null; done' \
     'for ($i=0; $i -lt 100; $i++) { echo hi | Out-Null }'
 bench ls "cd $listed_native && for ((i=0;i<50;i++)); do ls -la >/dev/null; done" \

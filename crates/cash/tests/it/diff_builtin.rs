@@ -189,7 +189,7 @@ fn help_diff_is_a_page_with_windows_notes_and_its_own_options() {
 #[test]
 fn doctor_counts_diff_and_cmp_as_carried() {
     let out =
-        output_of(isolate(Command::new(CASH).arg("doctor")).env("PATH", r"C:\Windows\System32"));
+        output_of(isolate(Command::new(CASH).arg("doctor")).env("PATH", crate::common::system32()));
     assert!(!out.stdout.contains("WARN  diff"), "{}", out.stdout);
     assert!(!out.stdout.contains("diffutils"), "{}", out.stdout);
     assert!(

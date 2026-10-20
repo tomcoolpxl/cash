@@ -398,9 +398,8 @@ fn render(path: &Path) -> String {
 
 /// The linked tools whose names a program in System32 also has.
 fn windows_names(names: &[&String]) -> Vec<String> {
-    let system32 = std::env::var_os("SystemRoot")
-        .map_or_else(|| PathBuf::from(r"C:\Windows"), PathBuf::from)
-        .join("System32");
+    // On the drive Windows is on, which is not always C:.
+    let system32 = cash_win32::fs::windows_directory().join("System32");
     names
         .iter()
         .filter(|name| system32.join(format!("{name}.exe")).exists())

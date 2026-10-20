@@ -518,7 +518,7 @@ fn update_fetches_verifies_unpacks_and_finishes_a_release() {
     std::fs::write(stage.join("README.md"), "# cash\n").unwrap();
     let name = "cash-v9.9.10-x86_64-pc-windows-msvc.zip";
     let zip = release.join(name);
-    let packed = Command::new(r"C:\Windows\System32\tar.exe")
+    let packed = Command::new(std::path::Path::new(&crate::common::system32()).join("tar.exe"))
         .arg("-a")
         .arg("-cf")
         .arg(&zip)

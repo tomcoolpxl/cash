@@ -14,8 +14,8 @@ with gsudo installed unless a step says otherwise. `sudo -l` says which tool ele
 - [ ] `sudo cmd /c "exit 7"; echo $?` prints 7. `sudo false; echo $?` prints 1.
 - [ ] `sudo printf '%s\n' 'a & b' 'c | d' '%PATH%'` prints the three words as typed:
       nothing is run by a command processor.
-- [ ] `echo x | sudo tee C:/Windows/Temp/try-sudo.txt` writes `x` there, and
-      `sudo cat C:/Windows/Temp/try-sudo.txt | wc -c` counts 2: pipes reach in and out.
+- [ ] `echo x | sudo tee "$SYSTEMROOT/Temp/try-sudo.txt"` writes `x` there, and
+      `sudo cat "$SYSTEMROOT/Temp/try-sudo.txt" | wc -c` counts 2: pipes reach in and out.
 - [ ] `sudo ping -t 127.0.0.1`, then Ctrl-C: the ping stops, cash stays, the prompt comes
       back.
 - [ ] `sudo -i` starts an elevated cash in your home directory as a login shell; `sudo -s` one
@@ -24,7 +24,7 @@ with gsudo installed unless a step says otherwise. `sudo -l` says which tool ele
 
 ## Who owns what an elevated command makes
 
-- [ ] `sudo touch C:/Windows/Temp/try-owner.txt; ls -l C:/Windows/Temp/try-owner.txt`
+- [ ] `sudo touch "$SYSTEMROOT/Temp/try-owner.txt"; ls -l "$SYSTEMROOT/Temp/try-owner.txt"`
       shows you as the owner, not Administrators. Remove it with `sudo rm`.
 - [ ] Signed in as a standard account, `sudo whoami` asks for an administrator's password at
       UAC, prints `sudo: running as PC\admin, not you; files and ~ are theirs` once, then the
@@ -33,7 +33,7 @@ with gsudo installed unless a step says otherwise. `sudo -l` says which tool ele
 ## Windows' sudo and UAC (uninstall or rename gsudo for these)
 
 - [ ] Windows' sudo in new-window mode: `sudo cmd /c cd` opens a window showing this directory,
-      not `C:\Windows\System32`, and cash says the status is not the command's.
+      not System32 in the Windows directory, and cash says the status is not the command's.
 - [ ] `sudo config --enable normal` in an elevated shell; then `sudo whoami` runs here.
 - [ ] Windows' sudo turned off: `sudo whoami` asks UAC, opens a new window, and cash says it
       is not waited for.
@@ -56,7 +56,7 @@ with gsudo installed unless a step says otherwise. `sudo -l` says which tool ele
 
 ## sudoedit
 
-- [ ] `sudoedit C:/Windows/System32/drivers/etc/hosts` opens a copy named `hosts.sudoedit-…`
+- [ ] `sudoedit "$SYSTEMROOT/System32/drivers/etc/hosts"` opens a copy named `hosts.sudoedit-…`
       in Notepad (unelevated: its title bar has no Administrator). Add a comment line, save,
       close: one UAC prompt, and `cat` shows the line in `hosts`. `icacls` on `hosts` shows
       the same access list as before.

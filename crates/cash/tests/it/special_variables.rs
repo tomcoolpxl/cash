@@ -5,7 +5,7 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use crate::common::run;
+use crate::common::{run, unix_spelling, windows_directory};
 
 /// Runs each script and checks its standard output, standard error and status.
 fn check(cases: &[(&str, &str)]) {
@@ -40,11 +40,11 @@ fn bash_argv0_renames_dollar_zero() {
 #[test]
 fn an_element_of_dirstack_and_bash_aliases_takes_effect() {
     // It was "not yet implemented", after a debug line with the getter's address.
+    let (win, sys32) = windows_and_system32();
+    let dirstack =
+        format!("cd {win}; pushd {sys32} >/dev/null; DIRSTACK[1]=/c/x; dirs -l -p | tail -1");
     check(&[
-        (
-            "cd /c/Windows; pushd /c/Users >/dev/null; DIRSTACK[1]=/c/x; dirs -l -p | tail -1",
-            "/c/x",
-        ),
+        (&dirstack, "/c/x"),
         (
             "BASH_ALIASES[ll]='echo aliased'; echo \"${BASH_ALIASES[ll]}\"; alias ll",
             "echo aliased\nalias ll='echo aliased'",
@@ -56,8 +56,17 @@ fn an_element_of_dirstack_and_bash_aliases_takes_effect() {
 #[test]
 fn dirstack_starts_with_the_working_directory() {
     // It was the stack alone, first one pushed first; `dirs` was right.
-    check(&[(
-        "cd /c/Windows; pushd /c/Users >/dev/null; echo ${#DIRSTACK[@]}; [[ ${DIRSTACK[0]} == \"$PWD\" ]] && echo first; [[ ${DIRSTACK[1]} == */Windows ]] && echo second",
-        "2\nfirst\nsecond",
-    )]);
+    let (win, sys32) = windows_and_system32();
+    let name = win.rsplit('/').next().unwrap_or_default();
+    let script = format!(
+        "cd {win}; pushd {sys32} >/dev/null; echo ${{#DIRSTACK[@]}}; [[ ${{DIRSTACK[0]}} == \"$PWD\" ]] && echo first; [[ ${{DIRSTACK[1]}} == */{name} ]] && echo second"
+    );
+    check(&[(&script, "2\nfirst\nsecond")]);
+}
+
+/// The Windows directory and its System32, on whichever drive, in the `/c/` spelling.
+fn windows_and_system32() -> (String, String) {
+    let win = unix_spelling(std::path::Path::new(&windows_directory()));
+    let sys32 = format!("{win}/System32");
+    (win, sys32)
 }

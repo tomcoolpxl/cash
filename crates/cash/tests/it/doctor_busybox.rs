@@ -109,6 +109,6 @@ fn a_shim_for_something_else_is_not_busybox() {
 /// `doctor` says what `sudo` elevates through.
 #[test]
 fn doctor_says_how_sudo_elevates() {
-    let report = doctor(r"C:\Windows\System32");
+    let report = doctor(&crate::common::system32());
     assert!(report.contains("sudo"), "{report}");
 }

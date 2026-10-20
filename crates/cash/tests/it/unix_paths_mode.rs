@@ -2,7 +2,8 @@
 //! Bash spells them, so that a loop climbing `${dir%/*}` to the root ends; a Windows
 //! program handed `C:/…` for them, as MSYS hands them; and the mode passed on to a cash
 //! started under it. Beside it, what holds in either mode: cash's own tools read `/c/…`,
-//! as an MSYS tool does, and a program named by a `/c/…` path runs.
+//! as an MSYS tool does, and a program named by a `/c/…` path runs. Every drive the same:
+//! no test takes the scratch directory or Windows to be on `C:`.
 
 #![allow(
     clippy::tests_outside_test_module,
@@ -13,14 +14,9 @@
 use std::path::Path;
 use std::process::Stdio;
 
-use crate::common::{Scratch, cash_command, git_for_windows};
-
-/// `C:/x` as Git Bash spells it, `/c/x`.
-fn unix(path: &Path) -> String {
-    let fwd = path.to_string_lossy().replace('\\', "/");
-    let (drive, rest) = fwd.split_at(2);
-    format!("/{}{rest}", drive.get(..1).expect("a drive").to_lowercase())
-}
+use crate::common::{
+    Scratch, cash_command, git_for_windows, unix_spelling as unix, windows_directory,
+};
 
 /// `C:/x`, cash's spelling.
 fn windows(path: &Path) -> String {
@@ -149,18 +145,19 @@ fn a_climb_to_the_root_ends() {
 #[test]
 fn a_windows_program_is_handed_windows_paths() {
     let scratch = Scratch::new("unixpaths-args");
-    // A whole word and an `=` value become `C:/…`; `/c` alone, a root alone and `cmd`'s
-    // own switches go as written, and `//c/w` is MSYS's escape for a literal `/c/w`.
+    // A whole word and an `=` value become `X:/…`, on any drive, there or not; `/c` alone, a
+    // root alone and `cmd`'s own switches go as written, and `//c/w` is MSYS's escape for a
+    // literal `/c/w`.
     let (out, err) = run_in(
         scratch.path(),
         scratch.path(),
-        "shopt -s unixpaths; cmd //c echo /c/x --opt=/c/y NAME=/c/z /c /a/ //c/w; \
+        "shopt -s unixpaths; cmd //c echo /c/x /d/y --opt=/e/z NAME=/q/v /c /d /a/ //c/w; \
          cmd //c 'echo %HOME%'",
     );
     assert_eq!(
         out.trim_end(),
         format!(
-            "C:/x --opt=C:/y NAME=C:/z /c /a/ /c/w\n{}",
+            "C:/x D:/y --opt=E:/z NAME=Q:/v /c /d /a/ /c/w\n{}",
             windows(scratch.path())
         ),
         "standard error: {err}"
@@ -199,12 +196,11 @@ fn globs_and_lookups_give_unix_paths() {
         "standard error: {err}"
     );
     assert_eq!(lines.get(1).copied(), Some("f.txt"));
+    // cmd.exe in System32, on the drive Windows is on.
+    let cmd =
+        format!("{}/system32/cmd.exe", unix(Path::new(&windows_directory()))).to_ascii_lowercase();
     for line in lines.iter().skip(2) {
-        assert!(
-            line.to_ascii_lowercase()
-                .ends_with("/c/windows/system32/cmd.exe"),
-            "{out}"
-        );
+        assert_eq!(line.to_ascii_lowercase(), cmd, "{out}");
     }
     assert_eq!(lines.len(), 5, "{out}");
 }
@@ -243,7 +239,10 @@ fn realpath_and_mktemp_give_unix_paths_in_the_mode() {
         "shopt -s unixpaths; realpath f.txt; readlink -f f.txt; t=$(mktemp); \
          case $t in /c/*) echo unix;; *) echo \"$t\";; esac; rm \"$t\"",
     );
-    let f = format!("{}/f.txt", unix(scratch.path()));
+    // `realpath` answers with the long name, where CI's temporary directory is the short
+    // `RUNNER~1`.
+    let long = std::fs::canonicalize(scratch.path()).expect("canonicalize the scratch");
+    let f = format!("{}/f.txt", unix(&long));
     assert_eq!(
         out.trim_end(),
         format!("{f}\n{f}\nunix"),

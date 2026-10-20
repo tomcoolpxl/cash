@@ -27,9 +27,13 @@
               alternating the two forms by accident of content reads worse."
 )]
 
+use std::path::Path;
 use std::process::Command;
 
-use crate::common::{CASH, Output, Scratch, cash_command, output_of as run, run as cash};
+use crate::common::{
+    CASH, Output, Scratch, cash_command, output_of as run, run as cash, unix_spelling,
+    windows_directory,
+};
 
 /// A `PATH` with nothing but Windows on it, which is what a machine without Git for
 /// Windows looks like.
@@ -67,16 +71,20 @@ fn which_reports_the_builtin_the_shell_would_run() {
 fn the_path_which_prints_can_be_run() {
     // `LS=$(which ls); "$LS" -la` is how scripts capture a tool; the path is no file, so
     // cash runs the command it names, by name and through any process-spawning route.
-    let out = cash(
+    // The Windows directory, on whichever drive, in the `/c/` spelling.
+    let win = unix_spelling(Path::new(&windows_directory()));
+    let name = win.rsplit('/').next().unwrap_or_default().to_owned();
+    let out = cash(&format!(
         r#"LS=$(which ls); [ -x "$LS" ] && echo executable
-           "$LS" -d /c/Windows
-           ls() { echo 'a function'; }; "$LS" -d /c/Windows
+           "$LS" -d {win}
+           ls() {{ echo 'a function'; }}; "$LS" -d {win}
            (exec "$(which rev)" <<< olleh)
            echo /c/abc | xargs "$(which basename)"
-           find /c/Windows -maxdepth 0 -exec "$(which basename)" {} \;"#,
-    );
+           find {win} -maxdepth 0 -exec "$(which basename)" {{}} \;"#
+    ));
     assert_eq!(
-        out.stdout, "executable\n/c/Windows\n/c/Windows\nhello\nabc\nWindows",
+        out.stdout,
+        format!("executable\n{win}\n{win}\nhello\nabc\n{name}"),
         "{}",
         out.stderr
     );

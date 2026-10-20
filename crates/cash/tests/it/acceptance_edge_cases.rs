@@ -340,11 +340,18 @@ fn the_diagnostic_never_fires_on_command_flags() {
 
 #[test]
 fn the_diagnostic_fires_at_most_once_per_command() {
-    let out = cash(
-        r#"enable -n cat 2>/dev/null; cat /c/Windows/win.ini /c/Windows/system.ini >/dev/null 2>&1"#,
-    );
+    // Two `/c/` names for a Windows program, on whichever drive Windows is.
+    let win =
+        crate::common::unix_spelling(std::path::Path::new(&crate::common::windows_directory()));
+    let out = cash(&format!(
+        "cmd /c type {win}/win.ini {win}/system.ini >/dev/null"
+    ));
     let hints = out.stderr.matches("winpath").count();
-    assert!(hints <= 1, "emitted {hints} hints for one command");
+    assert_eq!(
+        hints, 1,
+        "emitted {hints} hints for one command: {}",
+        out.stderr
+    );
 }
 
 // ---------------------------------------------------------------------------
