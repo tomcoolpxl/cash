@@ -76,7 +76,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // cash (D3): `cd -` echoes $OLDPWD, so it must carry the same spelling as $PWD.
         let oldpwd = self.shown_path(&oldpwd);
 
-        self.env.update_or_add(
+        self.env_mut().update_or_add(
             "OLDPWD",
             variables::ShellValueLiteral::Scalar(oldpwd),
             |_| Ok(()),
@@ -105,7 +105,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// `$PWD` as the shell shows where it is.
     fn update_pwd(&mut self) -> Result<(), error::Error> {
         let pwd = self.shown_working_dir();
-        self.env.update_or_add(
+        self.env_mut().update_or_add(
             "PWD",
             variables::ShellValueLiteral::Scalar(pwd),
             |_| Ok(()),
@@ -218,7 +218,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             self.at_slash = false;
             self.update_pwd()?;
         }
-        for name in ["PWD", "OLDPWD", "HOME"] {
+        for name in ["PWD", "OLDPWD", "HOME", "BASH"] {
             let Some(value) = self.env.get_str(name, self).map(|value| value.to_string()) else {
                 continue;
             };
@@ -228,6 +228,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             }
             let shown = self.shown_path(&path);
             if shown != value {
+                // A new spelling, no assignment of the script's: not exported by `set -a`.
+                self.env.set_export_on_assignment(false);
                 self.env.update_or_add(
                     name,
                     variables::ShellValueLiteral::Scalar(shown),

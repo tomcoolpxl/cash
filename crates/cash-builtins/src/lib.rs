@@ -299,19 +299,26 @@ pub use builder::ShellBuilderExt;
 pub use carried::{carries_program, is_bash_builtin};
 pub use factory::{BuiltinSet, default_builtins, is_default_builtin};
 
-/// Writes an alias definition in the reusable form printed by `alias` and `command -v`.
+/// Writes an alias definition as `alias` and `command -v` print it: `reusable`, the form
+/// that reads back as a definition, or bare `name='value'`, which `alias` lists in POSIX
+/// mode without `-p`, as Bash does.
 #[cfg(any(feature = "builtin.alias", feature = "builtin.command"))]
 fn write_alias_definition(
     mut writer: impl std::io::Write,
     name: &str,
     value: &str,
+    reusable: bool,
 ) -> std::io::Result<()> {
     // A name starting with `-` is listed after `--`, as Bash lists it, so the line reads
     // back as a definition and not as options.
-    let dashes = if name.starts_with('-') { "-- " } else { "" };
+    let prefix = match (reusable, name.starts_with('-')) {
+        (false, _) => "",
+        (true, false) => "alias ",
+        (true, true) => "alias -- ",
+    };
     writeln!(
         writer,
-        "alias {dashes}{name}={}",
+        "{prefix}{name}={}",
         cash_core::escape::single_quote(value)
     )
 }

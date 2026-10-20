@@ -40,8 +40,19 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
         definition: cash_parser::ast::FunctionDefinition,
         source_info: &crate::SourceInfo,
     ) {
-        let reg = functions::Registration::new(definition, source_info);
-        self.funcs.update(name.into(), reg);
+        let name = name.into();
+        let mut reg = functions::Registration::new(definition, source_info);
+        // As in Bash: a function defined again keeps its attributes, and one defined
+        // under `set -a` is exported, as a variable is ("each variable or function that is
+        // created or modified"); bats runs each test as a process of its own, and a
+        // library loaded under `set -a` (bash-it's) was missing in every one.
+        if let Some(previous) = self.funcs.get(&name) {
+            reg = reg.with_attributes_of(previous);
+        }
+        if self.options.export_variables_on_modification {
+            reg.export();
+        }
+        self.funcs.update(name, reg);
     }
 
     /// Tries to return a mutable reference to the registration for a named function.

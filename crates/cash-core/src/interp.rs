@@ -2675,7 +2675,9 @@ async fn apply_assignment(
     creation_scope: EnvironmentScope,
 ) -> Result<(), error::Error> {
     // Figure out if we are trying to assign to a variable or assign to an element of an existing
-    // array.
+    // array. The subscript as written: it is expanded once, after the value, as in Bash.
+    // It was expanded here and its text expanded again as arithmetic, so `a[$x]=v` ran a
+    // command substitution that `x`'s value held.
     let mut array_index;
     let variable_name = match &assignment.name {
         ast::AssignmentName::VariableName(name) => {
@@ -2683,8 +2685,7 @@ async fn apply_assignment(
             name
         }
         ast::AssignmentName::ArrayElementName(name, index) => {
-            let expanded = expansion::basic_expand_word(shell, params, index).await?;
-            array_index = Some(expanded);
+            array_index = Some(index.clone());
             name
         }
     };
@@ -2789,13 +2790,13 @@ async fn apply_assignment(
             .get(variable_name)
             .is_some_and(|(_, existing_value)| existing_value.is_associative(shell));
 
-        if will_be_indexed_array {
-            array_index = Some(
-                arithmetic::expand_and_eval(shell, params, idx.as_str(), false)
-                    .await?
-                    .to_string(),
-            );
-        }
+        array_index = Some(if will_be_indexed_array {
+            arithmetic::expand_and_eval(shell, params, idx.as_str(), false)
+                .await?
+                .to_string()
+        } else {
+            expansion::basic_expand_word(shell, params, idx).await?
+        });
     }
 
     // Read option before taking mutable borrow on env.

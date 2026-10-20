@@ -111,6 +111,15 @@ impl Registration {
         }
     }
 
+    /// This definition with the attributes `previous` had, as Bash keeps them when a
+    /// function is defined again: exported (`export -f`) and traced (`declare -ft`).
+    #[must_use]
+    pub const fn with_attributes_of(mut self, previous: &Self) -> Self {
+        self.exported = previous.exported;
+        self.traced = previous.traced;
+        self
+    }
+
     /// Returns a reference to the function definition.
     pub fn definition(&self) -> &cash_parser::ast::FunctionDefinition {
         &self.definition

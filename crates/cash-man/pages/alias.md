@@ -65,7 +65,8 @@ better: `mkcd() { mkdir -p "$1" && cd "$1"; }`.
     -p        List every alias, as alias NAME='VALUE' lines (the same with
               no NAME at all).
 
-With `NAME=VALUE`, the alias is set; with a NAME alone, it is shown. A NAME may not
+With `NAME=VALUE`, the alias is set; with a NAME alone, it is shown. In POSIX mode
+(`set -o posix`) a listing without `-p` leaves out `alias `, as POSIX asks. A NAME may not
 hold blanks, quotes, `/`, `$` or any of `()<>;&|`.
 
 Exit status: 0; 1 when a NAME has no alias or is not a valid name.

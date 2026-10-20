@@ -301,8 +301,11 @@ pub(crate) fn quote<'a>(s: &'a str, options: &QuoteOptions) -> Cow<'a, str> {
         return ansi_c_quote(s).into();
     }
 
-    let use_default_quotes =
-        !use_ansi_c_quotes && (options.always_quote || s.is_empty() || s.contains(needs_escaping));
+    let use_default_quotes = !use_ansi_c_quotes
+        && (options.always_quote
+            || s.is_empty()
+            || s.contains(needs_escaping)
+            || s.char_indices().any(|(at, c)| expands_at(s, at, c)));
 
     if !use_default_quotes {
         return s.into();
@@ -351,17 +354,32 @@ fn backslash_escape(s: &str) -> Cow<'_, str> {
     if s.is_empty() {
         // An empty string must be represented as '' to be a valid shell word.
         Cow::Owned("''".to_string())
-    } else if !s.chars().any(needs_escaping) {
+    } else if !s
+        .char_indices()
+        .any(|(at, c)| needs_escaping(c) || expands_at(s, at, c))
+    {
         Cow::Borrowed(s)
     } else {
         let mut output = String::with_capacity(s.len());
-        for c in s.chars() {
-            if needs_escaping(c) {
+        for (at, c) in s.char_indices() {
+            if needs_escaping(c) || expands_at(s, at, c) {
                 output.push('\\');
             }
             output.push(c);
         }
         Cow::Owned(output)
+    }
+}
+
+/// Whether `c`, at byte `at` of `s`, means something only where it stands, as Bash's
+/// quoting knows: a `~` that starts the word or follows `=` or `:` is expanded, and a `#`
+/// that starts it begins a comment. Unquoted, `set` listed `V='~'` as `V=~`, which reads
+/// back as the home directory.
+fn expands_at(s: &str, at: usize, c: char) -> bool {
+    match c {
+        '~' => at == 0 || s[..at].ends_with(['=', ':']),
+        '#' => at == 0,
+        _ => false,
     }
 }
 

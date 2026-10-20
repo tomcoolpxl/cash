@@ -48,10 +48,17 @@ pub(crate) fn inherit_env_vars(
             continue;
         }
 
-        // Special case OLDPWD for bash compatibility.
-        if k == "OLDPWD" {
-            continue;
-        }
+        // An `OLDPWD` handed down is kept when it names a directory, as Bash keeps it,
+        // in the shell's spelling (D3); any other is left out, and set below as unset.
+        let v = if k == "OLDPWD" {
+            let path = cash_win32::path::accept_path(&v);
+            if !shell.absolute_path(&path).is_dir() {
+                continue;
+            }
+            shell.shown_path(&shell.absolute_path(&path))
+        } else {
+            v
+        };
 
         let mut var = ShellVariable::new(ShellValue::String(v));
         var.export();
@@ -73,11 +80,15 @@ pub(crate) fn init_well_known_vars(
         ShellVariable::new(shell_version.unwrap_or_default()),
     )?;
 
-    // BASH
-    if let Some(shell_name) = shell.current_shell_name().map(|s| s.to_string()) {
+    // BASH: the shell's own executable, whole, as in Bash, whatever `$0` is; it was `$0`,
+    // and bats, which runs `"$BASH"`, got a script's name.
+    if let Ok(own) = std::env::current_exe() {
+        let own = shell.shown_path(&own);
         shell
             .env_mut()
-            .set_global("BASH", ShellVariable::new(shell_name.clone()))?;
+            .set_global("BASH", ShellVariable::new(own))?;
+    }
+    if let Some(shell_name) = shell.current_shell_name().map(|s| s.to_string()) {
         // Initialize $_ to the shell name ($0).
         shell.update_last_arg_variable(Some(shell_name));
     }

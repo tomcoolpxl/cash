@@ -703,7 +703,7 @@ fn associative_unset_at_and_star_are_literal_keys() {
     );
     assert_eq!(
         output("declare -A a=([@]=at [*]=star [x]=other); unset 'a[*]'; declare -p a"),
-        (0, "declare -A a=([@]=\"at\" [x]=\"other\" )".into())
+        (0, "declare -A a=([\"@\"]=\"at\" [x]=\"other\" )".into())
     );
     assert_eq!(
         output("a=(zero one); unset 'a[@]'; declare -p a"),
@@ -2423,6 +2423,20 @@ alias -- -x='echo dash'; alias -- -x; alias ok";
     );
 }
 
+/// In POSIX mode `alias` lists `name='value'` without `alias `, unless `-p` asks for the
+/// form that reads back; `command -v` keeps it. As Bash does; modernish reads the bare
+/// form, and took cash's for an alias named `alias`.
+#[test]
+fn alias_lists_bare_definitions_in_posix_mode() {
+    assert_eq!(
+        output("set -o posix; alias a=b; alias -- -x=y; alias; alias a; alias -p; command -v a"),
+        (
+            0,
+            "-x='y'\na='b'\na='b'\nalias -- -x='y'\nalias a='b'\nalias a='b'".into()
+        )
+    );
+}
+
 /// What `command` and `exec` say of a program that is not there, and `pwd` with an
 /// operand, as Bash: `command x` names `x` alone, not `command: x: ...`; `exec ./x`
 /// says the file is not there; `pwd extra` ignores the operand. Found writing alias's
@@ -2828,4 +2842,202 @@ fn declaration_options_end_at_the_first_name_or_a_double_dash() {
         output("declare x -i 2>/dev/null; echo \"status $?\"; x=1+1; echo \"$x\""),
         (0, "status 1\n1+1".into())
     );
+}
+
+#[test]
+fn a_windows_name_that_is_no_identifier_is_passed_on_but_no_variable() {
+    // `CommonProgramFiles(x86)` is no name a shell can read back: Bash keeps such names
+    // out of its variables and passes them to programs as they came. cash listed it in
+    // `export -p`, and modernish, which evals that listing, died of a syntax error.
+    let result = cash_command()
+        .env("ODD(x86)", "1")
+        .args([
+            "--noprofile",
+            "--norc",
+            "-c",
+            "export -p | grep -c 'ODD(x86)'; set | grep -c 'ODD(x86)'; \
+             declare -p | grep -c 'ODD(x86)'; cmd.exe /d /c set ODD",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(result.stdout)
+        .unwrap()
+        .replace("\r\n", "\n");
+    assert_eq!(stdout.trim_end(), "0\n0\n0\nODD(x86)=1");
+}
+
+#[test]
+fn set_a_exports_functions_and_a_function_defined_again_keeps_its_attributes() {
+    // Bash's `set -a` exports "each variable or function that is created or modified";
+    // bats runs every test as a process of its own, and the libraries bash-it loads under
+    // `set -a` were missing in each. A function defined again keeps `export -f` and
+    // `declare -ft`, as in Bash; it lost them.
+    assert_eq!(
+        output(
+            "set -a; f() { echo f; }; set +a; \"$BASH\" -c f; \
+             g() { echo 1; }; export -f g; declare -ft g; g() { echo 2; }; \
+             \"$BASH\" -c g; declare -F -p g"
+        ),
+        (0, "f\n2\ndeclare -ftx g".into())
+    );
+}
+
+#[test]
+fn set_a_exports_what_every_kind_of_assignment_sets_but_no_array() {
+    // Only `NAME=value` and `declare` exported under `set -a`: the environment's own
+    // switch for it was never set. bash-it's log library sets its levels with `${x:=n}`
+    // under `set -a`, and every bats test, a process of its own, found them unset.
+    assert_eq!(
+        output(
+            "unset OLDPWD; set -a; : \"${A:=6}\"; read -r B <<< 7; printf -v C 8; for D in 9; do :; done; \
+             (( E = 10 )); let F=11; getopts a J -a; cd ..; x=(1 2); set +a; K=12; \
+             \"$BASH\" -c 'echo A=$A B=$B C=$C D=$D E=$E F=$F J=$J K=$K; \
+             [[ $OLDPWD ]] && echo OLDPWD'; declare -p x"
+        ),
+        (
+            0,
+            "A=6 B=7 C=8 D=9 E=10 F=11 J=a K=\nOLDPWD\ndeclare -a x=([0]=\"1\" [1]=\"2\")".into()
+        )
+    );
+}
+
+#[test]
+fn getopts_reads_h_and_help_after_its_name_as_the_script_s_options() {
+    // A script given `-h` got cash's help for getopts and no option: clap's help flag
+    // took the word anywhere. Only a first `--help` is getopts' own, as in Bash.
+    assert_eq!(
+        output(
+            "set -- -h -v; while getopts hv opt \"$@\"; do echo \"opt=$opt\"; done; \
+             getopts --help | head -1"
+        ),
+        (0, "opt=h\nopt=v\nParse command options".into())
+    );
+}
+
+#[test]
+fn a_leading_tilde_or_hash_is_quoted_so_a_listing_reads_back() {
+    // `set` listed `V=~`, which reads back as the home directory, and `#x` as a comment;
+    // Bash quotes a `~` that leads or follows `=` or `:`, and a leading `#`, and `declare
+    // -p` quotes a key `@`, which unquoted means every element.
+    assert_eq!(
+        output(
+            "V='~'; W='#x'; X='a=~'; Y='b:~/c'; Z='x~'; set | grep -E '^[VWXYZ]='; \
+             printf '%q ' '~' '#x' 'a=~' 'x#'; echo; \
+             declare -A a; a[\"~\"]=x; a[\"@\"]=y; declare -p a"
+        ),
+        (
+            0,
+            "V='~'\nW='#x'\nX='a=~'\nY='b:~/c'\nZ=x~\n\\~ \\#x a=\\~ x# \n\
+             declare -A a=([\"@\"]=\"y\" [\"~\"]=\"x\" )"
+                .into()
+        )
+    );
+}
+
+#[test]
+fn kill_takes_a_signal_joined_to_its_option() {
+    // `kill -sHUP` and `kill -n9`, as Bash reads them, were invalid signals `sHUP` and
+    // `n9`, and nothing was sent; Bash's jobs tests send them so.
+    assert_eq!(
+        output(
+            "sleep 20 & kill -sHUP $!; echo \"s $?\"; wait $!; echo \"ended $?\"; \
+             kill -n0 $$; echo \"n $?\""
+        ),
+        (0, "s 0\nended 129\nn 0".into())
+    );
+}
+
+#[test]
+fn history_with_a_count_above_its_entries_lists_them_all() {
+    // `history 10` with fewer entries panicked (a subtraction below zero), and a second
+    // operand was ignored; Bash lists them all, and refuses the second with status 2.
+    let result = cash_command()
+        .env("HISTFILE", "/dev/null")
+        .args([
+            "--noprofile",
+            "--norc",
+            "-c",
+            "set -o history\necho a >/dev/null\nhistory 10 >/dev/null; echo \"listed $?\"\n\
+             history 10 42; echo \"status $?\"",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    assert_eq!(stdout.replace("\r\n", "\n"), "listed 0\nstatus 2\n");
+    assert!(
+        String::from_utf8(result.stderr)
+            .unwrap()
+            .contains("history: too many arguments")
+    );
+}
+
+#[test]
+fn an_assignment_s_subscript_is_expanded_once_after_its_value() {
+    // `a[$x]=v` expanded the subscript and then expanded its text again as arithmetic,
+    // so a command substitution held in `x`'s value ran: data became code. Bash expands
+    // it once and stops on the arithmetic error; and it expands the value first.
+    let (status, shown) =
+        output("x='$(echo RAN; echo 1)'; a=(zero one); a[$x]=hi; echo \"a: ${a[*]}\"");
+    assert_eq!((status, shown.as_str()), (1, ""));
+    assert_eq!(
+        output("declare -A A; k='$(echo RAN)'; A[$k]=v; echo \"${!A[@]}\""),
+        (0, "$(echo RAN)".into())
+    );
+    let result = cash_command()
+        .args([
+            "--noprofile",
+            "--norc",
+            "-c",
+            "b[$(echo S >&2; echo 1)]=$(echo V >&2; echo v); declare -p b",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(result.stdout).unwrap().trim_end(),
+        "declare -a b=([1]=\"v\")"
+    );
+    assert_eq!(
+        String::from_utf8(result.stderr)
+            .unwrap()
+            .replace("\r\n", "\n"),
+        "V\nS\n"
+    );
+}
+
+#[test]
+fn an_oldpwd_handed_down_is_kept_when_it_names_a_directory() {
+    // As in Bash: cash left out every `OLDPWD` it was handed, so one exported under
+    // `set -a`, or by a script, never reached a cash it started.
+    let scratch = Scratch::new("oldpwd-handed-down");
+    let gone = scratch.path().join("gone");
+    for (given, shown) in [(scratch.path(), "kept"), (gone.as_path(), "[]")] {
+        let result = cash_command()
+            .env("OLDPWD", given)
+            .args([
+                "--noprofile",
+                "--norc",
+                "-c",
+                "[[ -d $OLDPWD ]] && echo kept || echo \"[$OLDPWD]\"",
+            ])
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8(result.stdout).unwrap().trim_end(), shown);
+    }
+}
+
+#[test]
+fn bash_names_the_shell_s_executable_whatever_zero_is() {
+    // As in Bash, `$BASH` is the shell's own program, whole; it was `$0`, so a script
+    // that runs `"$BASH"`, as bats does, ran its own name.
+    let own = Path::new(CASH)
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .trim_start_matches(r"\\?\")
+        .replace('\\', "/");
+    let (status, shown) = output("bash -c 'echo \"$BASH\"' named; \"$BASH\" -c 'echo runs'");
+    assert_eq!(status, 0);
+    let (named, runs) = shown.split_once('\n').unwrap();
+    assert!(named.eq_ignore_ascii_case(&own), "{named} is not {own}");
+    assert_eq!(runs, "runs");
 }

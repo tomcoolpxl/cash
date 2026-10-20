@@ -87,7 +87,7 @@ impl CommandCommand {
                 // Display in a form that could be reused as shell input.
                 match &found {
                     Resolved::Alias(target) => {
-                        write_alias_definition(context.stdout(), name, target)?;
+                        write_alias_definition(context.stdout(), name, target, true)?;
                     }
                     Resolved::Keyword | Resolved::Function(_) | Resolved::Builtin => {
                         writeln!(context.stdout(), "{name}")?;

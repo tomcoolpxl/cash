@@ -83,18 +83,30 @@ fn parse_option_spec(spec: &str) -> OptionSpec {
 impl builtins::Command for GetOptsCommand {
     type Error = cash_core::Error;
 
-    /// Override the default [`builtins::Command::new`] function to handle clap's limitation related
-    /// to `--`. See [`builtins::parse_known`] for more information
-    /// TODO(command): we can safely remove this after the issue is resolved
+    /// The words as Bash's getopts takes them: only a first `--help` asks for help, and
+    /// everything after the option string and the name is the script's own, `-h` and
+    /// `--help` too. clap's help flag took them anywhere, so `getopts hv opt "$@"` printed
+    /// this help for a script given `-h`.
     fn new<I>(args: I) -> Result<Self, clap::Error>
     where
         I: IntoIterator<Item = String>,
     {
-        let (mut this, rest_args) = cash_core::builtins::try_parse_known::<Self>(args)?;
-        if let Some(args) = rest_args {
-            this.args.extend(args);
+        let words: Vec<String> = args.into_iter().collect();
+        let mut own = words.iter().skip(1).peekable();
+        if own.peek().is_some_and(|word| *word == "--") {
+            own.next();
         }
-        Ok(this)
+        match (own.peek().map(|word| word.as_str()), own.clone().nth(1)) {
+            (Some(options_string), Some(variable_name)) if options_string != "--help" => {
+                Ok(Self {
+                    options_string: options_string.to_owned(),
+                    variable_name: variable_name.clone(),
+                    args: own.skip(2).cloned().collect(),
+                })
+            }
+            // Help, or the usage error for words missing, as clap words them.
+            _ => Self::try_parse_from(words),
+        }
     }
 
     async fn execute<SE: cash_core::ShellExtensions>(

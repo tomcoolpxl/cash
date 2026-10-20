@@ -954,8 +954,13 @@ impl ShellValue {
                 result.push('(');
 
                 for (key, value) in values {
-                    let formatted_key =
-                        escape::quote_if_needed(key.as_str(), escape::QuoteMode::DoubleQuote);
+                    // `[@]` would read back as every element, so `@` is quoted, as Bash
+                    // quotes it; `~` and `#` are quoted where they lead.
+                    let formatted_key = if key == "@" {
+                        escape::force_quote(key, escape::QuoteMode::DoubleQuote).into()
+                    } else {
+                        escape::quote_if_needed(key.as_str(), escape::QuoteMode::DoubleQuote)
+                    };
                     let formatted_value =
                         escape::force_quote(value.as_str(), escape::QuoteMode::DoubleQuote);
 

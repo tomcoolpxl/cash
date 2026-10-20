@@ -197,7 +197,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         }
         match (index, value) {
             (Some(index), ShellValueLiteral::Scalar(value)) => {
-                self.env.update_or_add_array_element(
+                self.env_mut().update_or_add_array_element(
                     name,
                     index,
                     value,
@@ -206,7 +206,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                     EnvironmentScope::Global,
                 )
             }
-            (_, value) => self.env.update_or_add(
+            (_, value) => self.env_mut().update_or_add(
                 name,
                 value,
                 |_| Ok(()),

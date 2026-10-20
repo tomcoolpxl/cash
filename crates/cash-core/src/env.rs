@@ -108,7 +108,8 @@ impl<SE: extensions::ShellExtensions> Drop for ScopeGuard<'_, SE> {
 pub struct ShellEnvironment {
     /// Stack of scopes, with the top of the stack being the current scope.
     scopes: Vec<(EnvironmentScope, ShellVariableMap)>,
-    /// Whether or not to auto-export variables on creation or modification.
+    /// `set -a`: whether a variable assigned ([`ShellEnvironment::update_or_add`]) is
+    /// marked for export; the shell's option, which `Shell::env_mut` copies here.
     export_variables_on_modification: bool,
     /// Count of total entries (may include duplicates with shadowed variables).
     entry_count: usize,
@@ -136,6 +137,11 @@ impl ShellEnvironment {
             inherited: HashMap::new(),
             foldable: std::collections::HashSet::new(),
         }
+    }
+
+    /// Whether a variable assigned from now on is marked for export (`set -a`).
+    pub const fn set_export_on_assignment(&mut self, on: bool) {
+        self.export_variables_on_modification = on;
     }
 
     /// Records `name` as a variable inherited from Windows, so that a name differing
@@ -282,7 +288,11 @@ impl ShellEnvironment {
                 }
             }
 
-            for (name, var) in var_map.iter() {
+            // A name from Windows' environment that is no identifier,
+            // `CommonProgramFiles(x86)`, is passed on to programs (`iter_exported`) but is no
+            // variable of the shell's, as in Bash: `export -p`, `set` and `declare -p` show
+            // none, and a script that evals their output (modernish) met a syntax error.
+            for (name, var) in var_map.iter().filter(|(name, _)| valid_variable_name(name)) {
                 // Only insert the variable if it hasn't been seen yet.
                 if let hash_map::Entry::Vacant(entry) = visible_vars.entry(name) {
                     entry.insert(var);
@@ -698,17 +708,18 @@ impl ShellEnvironment {
             Some(Some(target)) => target,
         };
 
+        // `set -a` marks a variable assigned for export, an array never, as Bash does.
         let auto_export = self.export_variables_on_modification;
         if let Some(var) = self.get_mut_using_policy_raw(&name, lookup_policy) {
             var.assign(value, false).map_err(|e| e.of_variable(&name))?;
-            if auto_export {
+            if auto_export && !var.value().is_array() {
                 var.export();
             }
             updater(var)
         } else {
             let mut var = ShellVariable::new(ShellValue::Unset(ShellValueUnsetType::Untyped));
             var.assign(value, false)?;
-            if auto_export {
+            if auto_export && !var.value().is_array() {
                 var.export();
             }
             updater(&mut var)?;
@@ -773,13 +784,9 @@ impl ShellEnvironment {
     pub fn add<N: Into<String>>(
         &mut self,
         name: N,
-        mut var: ShellVariable,
+        var: ShellVariable,
         target_scope: EnvironmentScope,
     ) -> Result<(), error::Error> {
-        if self.export_variables_on_modification {
-            var.export();
-        }
-
         for (scope_type, map) in self.scopes.iter_mut().rev() {
             if *scope_type == target_scope {
                 let prev_var = map.set(name, var);

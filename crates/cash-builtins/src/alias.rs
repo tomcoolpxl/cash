@@ -26,11 +26,14 @@ impl builtins::Command for AliasCommand {
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         let mut exit_code = ExecutionResult::success();
+        // In POSIX mode a listing without `-p` leaves out `alias `, as Bash's does;
+        // modernish reads it so.
+        let reusable = self.print || !context.shell.options().posix_mode;
 
         if self.print || self.aliases.is_empty() {
             // Aliases are stored unordered; bash lists them sorted by name.
             for (name, value) in context.shell.aliases().iter().sorted() {
-                write_alias_definition(context.stdout(), name, value)?;
+                write_alias_definition(context.stdout(), name, value, reusable)?;
             }
         } else {
             for alias in &self.aliases {
@@ -54,7 +57,7 @@ impl builtins::Command for AliasCommand {
                         .aliases_mut()
                         .insert(name.to_owned(), unexpanded_value.to_owned());
                 } else if let Some(value) = context.shell.aliases().get(alias) {
-                    write_alias_definition(context.stdout(), alias, value)?;
+                    write_alias_definition(context.stdout(), alias, value, reusable)?;
                 } else {
                     writeln!(
                         context.error_stream(),

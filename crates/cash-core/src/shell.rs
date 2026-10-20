@@ -773,6 +773,11 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
 
     /// Returns a mutable reference to the shell environment.
     pub fn env_mut(&mut self) -> &mut ShellEnvironment {
+        // `set -a` as the option stands now: the environment marks what is assigned
+        // through it for export. It never heard of the option, and `read`, `printf -v`,
+        // `for`, `getopts` and `${x:=v}` exported nothing under `set -a`.
+        self.env
+            .set_export_on_assignment(self.options.export_variables_on_modification);
         &mut self.env
     }
 

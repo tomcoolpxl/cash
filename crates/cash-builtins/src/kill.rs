@@ -99,6 +99,18 @@ impl builtins::Command for KillCommand {
             // See if this is -sigspec syntax. The sigspec may be a signal name
             // (e.g., -TERM) or a signal number (e.g., -9, including -0).
             if let Some(possible_sigspec) = arg.strip_prefix("-").filter(|_| may_be_sigspec) {
+                // `-sHUP` and `-n9`, the signal joined to its option, as Bash reads them:
+                // `-s` before a letter, `-n` before a digit. They came here whole, as a
+                // signal named `sHUP`.
+                let possible_sigspec = possible_sigspec
+                    .strip_prefix('s')
+                    .filter(|rest| rest.starts_with(|c: char| c.is_ascii_alphabetic()))
+                    .or_else(|| {
+                        possible_sigspec
+                            .strip_prefix('n')
+                            .filter(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+                    })
+                    .unwrap_or(possible_sigspec);
                 if Ok(0) == possible_sigspec.parse::<i32>() {
                     signal_zero = true;
                 } else if let Ok(parsed_trap_signal) = possible_sigspec.parse::<TrapSignal>() {

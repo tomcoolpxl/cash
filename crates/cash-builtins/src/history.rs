@@ -195,6 +195,11 @@ impl HistoryCommand {
             return Ok(ExecutionResult::success());
         }
 
+        // One count at most, as Bash takes it.
+        if self.args.len() > 1 {
+            writeln!(stderr, "history: too many arguments")?;
+            return Ok(ExecutionExitCode::InvalidUsage.into());
+        }
         let max_entries: Option<usize> = if let Some(arg) = self.args.first() {
             Some(cash_core::int_utils::parse(arg.as_str(), 10)?)
         } else {
@@ -215,7 +220,8 @@ fn display_history(
     _stderr: impl Write,
 ) -> Result<(), cash_core::Error> {
     let item_count = history.count();
-    let skip_count = item_count - max_entries.unwrap_or(item_count);
+    // A count above the entries there are lists them all; it panicked (`history 10`).
+    let skip_count = item_count.saturating_sub(max_entries.unwrap_or(item_count));
 
     for (i, item) in history.iter().skip(skip_count).enumerate() {
         // A specifier chrono does not know panicked here.
