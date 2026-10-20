@@ -194,6 +194,27 @@ pub struct FileFacts {
     pub allocation: u64,
 }
 
+impl FileFacts {
+    /// [`Self::change_time`] as a time; none where the volume keeps none.
+    #[must_use]
+    pub fn changed(&self) -> Option<std::time::SystemTime> {
+        (self.change_time != 0).then(|| filetime_to_system(self.change_time))
+    }
+}
+
+/// A `FILETIME`, 100 ns since 1601, as a [`std::time::SystemTime`].
+#[must_use]
+pub fn filetime_to_system(filetime: u64) -> std::time::SystemTime {
+    // 100-ns intervals between 1601-01-01 and 1970-01-01.
+    const UNIX_EPOCH_FILETIME: u64 = 116_444_736_000_000_000;
+    std::time::SystemTime::UNIX_EPOCH
+        + std::time::Duration::from_nanos(
+            filetime
+                .saturating_sub(UNIX_EPOCH_FILETIME)
+                .saturating_mul(100),
+        )
+}
+
 /// The [`FileFacts`] of every entry of the directory `dir`, by name, from one query.
 ///
 /// `GetFileInformationByHandleEx` with `FileIdBothDirectoryInfo`, a buffer of entries at

@@ -81,10 +81,11 @@ matches the whole path as printed, `./src/lib.rs`, and its `*` crosses `/`.
 
 ### Numbers
 
-`-size` and `-mtime` take a number with an optional sign: `+N` more than N, `-N` less
-than N, `N` exactly N. `-size` counts in 512-byte blocks unless a unit follows (`c`
-bytes, `k` KiB, `M` MiB, `G` GiB); `-mtime` counts days since the last change, so
-`-mtime -1` is changed within a day, `-mtime +30` more than 30 days ago.
+`-size` and the time tests take a number with an optional sign: `+N` more than N, `-N`
+less than N, `N` exactly N. `-size` counts in 512-byte blocks unless a unit follows
+(`c` bytes, `k` KiB, `M` MiB, `G` GiB); `-mtime` counts whole days since the last
+change, so `-mtime -1` is changed within a day, `-mtime +30` more than 30 days ago, and
+`-mmin` whole minutes: `-mmin -5` is changed in the last five minutes.
 
 ## Options
 
@@ -114,6 +115,10 @@ bytes, `k` KiB, `M` MiB, `G` GiB); `-mtime` counts days since the last change, s
     -type T           Of kind T: f a file, d a directory, l a link.
     -size N[bckMG]    Its size, in 512-byte blocks or the unit given, is N.
     -mtime N          It last changed N days ago, counted in whole days.
+    -mmin N           It last changed N minutes ago, in whole minutes.
+    -atime N, -amin N It was last read N days, or minutes, ago.
+    -ctime N, -cmin N Its contents, name or attributes changed N days, or
+                      minutes, ago (the time ls -c shows).
     -newer FILE       It changed later than FILE did.
     -empty            An empty file, or a directory with nothing in it.
     -true, -false     Always true, or always false.

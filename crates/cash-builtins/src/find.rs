@@ -66,9 +66,9 @@ Normal options (always true, specified before other expressions):
       -depth -maxdepth LEVELS -mindepth LEVELS
 
 Tests (N can be +N or -N or N):
-      -empty -false -iname PATTERN -ipath PATTERN -mtime N -name PATTERN
-      -newer FILE -path PATTERN -size N[bckMG] -true -type [fdl]
-      -wholename PATTERN
+      -amin N -atime N -cmin N -ctime N -empty -false -iname PATTERN
+      -ipath PATTERN -mmin N -mtime N -name PATTERN -newer FILE -path PATTERN
+      -size N[bckMG] -true -type [fdl] -wholename PATTERN
 
 Actions:
       -delete -print -print0 -prune -quit
@@ -155,6 +155,18 @@ impl Compare {
     }
 }
 
+/// Which of an entry's times an age test reads.
+#[derive(Clone, Copy)]
+enum Stamp {
+    /// `m`: its contents last changed.
+    Modified,
+    /// `a`: it was last read.
+    Accessed,
+    /// `c`: its contents, name or attributes last changed (NTFS's `ChangeTime`, which `ls
+    /// -c` and `stat` show).
+    Changed,
+}
+
 /// A condition on one entry.
 enum Test {
     Name(Pattern, Subject),
@@ -162,8 +174,10 @@ enum Test {
     /// `-size`, in whatever unit was given, rounded the way `find` rounds: up.
     Size(Compare, u64, u64),
     Newer(SystemTime),
-    /// `-mtime`, in days.
-    MTime(Compare, u64),
+    /// `-mtime`, `-atime` and `-ctime` in days, `-mmin`, `-amin` and `-cmin` in minutes:
+    /// how long ago one of its times was, in whole units of the given seconds, as GNU
+    /// `find` counts it.
+    Age(Stamp, Compare, u64, u64),
     Empty,
     True,
     False,
@@ -683,13 +697,19 @@ impl ExprParser<'_> {
                     .map_err(|e| std::format!("{value}: {e}"))?;
                 Ok(Expr::Test(Test::Newer(when)))
             }
-            "-mtime" => {
+            name @ ("-mtime" | "-atime" | "-ctime" | "-mmin" | "-amin" | "-cmin") => {
                 let value = self.argument_to(&token)?;
                 let (compare, digits) = Compare::parse(value.as_str());
-                let days: u64 = digits
+                let count: u64 = digits
                     .parse()
-                    .map_err(|_| std::format!("invalid argument `{value}' to `-mtime'"))?;
-                Ok(Expr::Test(Test::MTime(compare, days)))
+                    .map_err(|_| std::format!("invalid argument `{value}' to `{name}'"))?;
+                let stamp = match name.as_bytes().get(1) {
+                    Some(b'm') => Stamp::Modified,
+                    Some(b'a') => Stamp::Accessed,
+                    _ => Stamp::Changed,
+                };
+                let unit = if name.ends_with("min") { 60 } else { 86_400 };
+                Ok(Expr::Test(Test::Age(stamp, compare, count, unit)))
             }
             "-empty" => Ok(Expr::Test(Test::Empty)),
             "-true" => Ok(Expr::Test(Test::True)),
@@ -753,12 +773,18 @@ impl ExprParser<'_> {
             }
             "-help" | "--help" => Err(HELP_ASKED.to_owned()),
             "-version" | "--version" => Err(VERSION_ASKED.to_owned()),
-            other => Err(std::format!(
-                "unknown predicate `{other}'. cash's find carries the predicates scripts \
-                 use — a listing filtered by a predicate it had ignored would be wrong \
-                 without saying so"
-            )),
+            other => Err(std::format!("unknown predicate `{other}'")),
         }
+    }
+}
+
+/// The time `stamp` names of the entry visited; a link's own unless the walk follows it.
+fn stamp_of(visit: &Visit<'_>, stamp: Stamp) -> Option<SystemTime> {
+    let metadata = visit.metadata.as_ref()?;
+    match stamp {
+        Stamp::Modified => metadata.modified().ok(),
+        Stamp::Accessed => metadata.accessed().ok(),
+        Stamp::Changed => cash_win32::fs::file_facts(visit.path, !metadata.is_symlink())?.changed(),
     }
 }
 
@@ -822,12 +848,9 @@ fn matches(test: &Test, visit: &Visit<'_>) -> bool {
             .as_ref()
             .and_then(|m| m.modified().ok())
             .is_some_and(|modified| modified > *when),
-        Test::MTime(compare, days) => visit
-            .metadata
-            .as_ref()
-            .and_then(|m| m.modified().ok())
-            .and_then(|modified| SystemTime::now().duration_since(modified).ok())
-            .is_some_and(|age| compare.holds(age.as_secs() / 86_400, *days)),
+        Test::Age(stamp, compare, count, unit) => stamp_of(visit, *stamp)
+            .and_then(|time| SystemTime::now().duration_since(time).ok())
+            .is_some_and(|age| compare.holds(age.as_secs() / unit, *count)),
         Test::Empty => visit.metadata.as_ref().is_some_and(|m| {
             if m.is_dir() {
                 std::fs::read_dir(visit.path).is_ok_and(|mut entries| entries.next().is_none())

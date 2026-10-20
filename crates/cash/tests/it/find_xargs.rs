@@ -464,6 +464,36 @@ fn depth_lists_a_directory_after_its_contents() {
     );
 }
 
+#[test]
+fn ages_count_whole_minutes_or_days_of_each_time() {
+    // `-mmin`, `-amin`, `-cmin`, `-atime` and `-ctime` were unknown predicates; bash-it's
+    // search keeps a cache it renews with `find -mmin`.
+    let sandbox = Sandbox::new("ages");
+    let two_hours_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(7_230);
+    let file = std::fs::File::options()
+        .write(true)
+        .open(sandbox.root.join("a.txt"))
+        .unwrap();
+    file.set_times(
+        std::fs::FileTimes::new()
+            .set_modified(two_hours_ago)
+            .set_accessed(two_hours_ago),
+    )
+    .unwrap();
+    drop(file);
+    let out = sandbox.run(
+        "find . -maxdepth 1 -name '*.txt' -mmin +60; find a.txt -mmin 120; \
+         find a.txt -amin +60 -atime 0; find a.txt -mmin -60 || echo no; \
+         find a.txt -cmin -60 -ctime 0; find . -maxdepth 1 -name 'zero*' -mmin -60",
+    );
+    assert_eq!(
+        out.stdout.lines().collect::<Vec<_>>(),
+        ["./a.txt", "a.txt", "a.txt", "a.txt", "./zero.txt"],
+        "{}",
+        out.stderr
+    );
+}
+
 // ---------------------------------------------------------------------------
 // xargs
 // ---------------------------------------------------------------------------

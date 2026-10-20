@@ -3144,7 +3144,7 @@ fn take_facts(item: &mut ItemInfo, facts: Option<cash_win32::fs::FileFacts>, wan
     item.allocation = Some(facts.allocation);
     item.index = Some(facts.index);
     if want.time == TimeKind::Change && facts.change_time != 0 {
-        item.time = filetime_to_system(facts.change_time);
+        item.time = cash_win32::fs::filetime_to_system(facts.change_time);
     }
 }
 
@@ -3306,18 +3306,6 @@ fn fields(item: &ItemInfo, look: &Look, widths: FieldWidths) -> String {
 fn index_text(item: &ItemInfo) -> String {
     item.index
         .map_or_else(|| String::from("?"), |index| index.to_string())
-}
-
-/// A `FILETIME`, 100 ns since 1601, as a [`SystemTime`].
-fn filetime_to_system(filetime: u64) -> SystemTime {
-    // 100-ns intervals between 1601-01-01 and 1970-01-01.
-    const UNIX_EPOCH_FILETIME: u64 = 116_444_736_000_000_000;
-    SystemTime::UNIX_EPOCH
-        + std::time::Duration::from_nanos(
-            filetime
-                .saturating_sub(UNIX_EPOCH_FILETIME)
-                .saturating_mul(100),
-        )
 }
 
 /// The bytes `-s` and the totals count for an entry: its allocation, else its size, in
