@@ -18,7 +18,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// `exit` in the shell itself: runs its `EXIT` trap there and then, as Bash does, so
     /// that the trap sees where `exit` was called (in a function, `FUNCNAME` is `f main`);
     /// the trap is then spent, and the shell's end runs it no more. A subshell's `exit`
-    /// leaves its own trap to [`Self::end_subshell`]. Returns the status to exit with,
+    /// leaves its own trap to `end_subshell`. Returns the status to exit with,
     /// which an `exit` in the trap changes.
     pub async fn run_exit_trap_for_exit(&mut self, status: u8, params: &ExecutionParameters) -> u8 {
         if self.is_subshell() || !self.traps.handles(TrapSignal::Exit) {

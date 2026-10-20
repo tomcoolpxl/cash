@@ -773,6 +773,23 @@ impl Execute for ast::AndOrList {
     }
 }
 
+/// Ends the shell for `set -e` if it applies to `result`. Its `EXIT` trap runs here, inside
+/// a function too, as `exit`'s does, as in Bash.
+async fn apply_errexit(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    result: &mut ExecutionResult,
+) {
+    let was_exiting = result.is_exit();
+    shell.apply_errexit_if_enabled(result);
+    if result.is_exit() && !was_exiting {
+        let status = shell
+            .run_exit_trap_for_exit(result.exit_code.into(), params)
+            .await;
+        result.exit_code = ExecutionExitCode::from(status);
+    }
+}
+
 /// Whether `pipeline`, which ended with `result`, is a loop, `if`, `case` or `{ }` whose
 /// status is that of a failure inside it that `set -e` did not act on (the left of `&&`, a
 /// `!` pipeline): it passes too, as in Bash. bashunit's `for ...; do [ -n "$v" ] && ...;
@@ -926,16 +943,7 @@ impl Execute for ast::Pipeline {
 
         // Apply errexit if not suppressed (and not negated)
         if !params.suppress_errexit && !self.bang && !status_from_ignored_failure {
-            let was_exiting = result.is_exit();
-            shell.apply_errexit_if_enabled(&mut result);
-            // `set -e` ends the shell here, and its `EXIT` trap runs here, inside a
-            // function too, as `exit`'s does.
-            if result.is_exit() && !was_exiting {
-                let status = shell
-                    .run_exit_trap_for_exit(result.exit_code.into(), &params)
-                    .await;
-                result.exit_code = ExecutionExitCode::from(status);
-            }
+            apply_errexit(shell, &params, &mut result).await;
         }
 
         // If requested, report timing.
