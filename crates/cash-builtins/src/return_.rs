@@ -7,7 +7,8 @@ use cash_core::{ExecutionControlFlow, ExecutionExitCode, ExecutionResult, builti
 #[derive(Parser)]
 pub(crate) struct ReturnCommand {
     /// The exit code to return.
-    code: Option<i32>,
+    #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+    code: Vec<String>,
 }
 
 impl builtins::Command for ReturnCommand {
@@ -17,25 +18,23 @@ impl builtins::Command for ReturnCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        #[expect(clippy::cast_sign_loss)]
-        let code_8bit = if let Some(code_32bit) = &self.code {
-            (code_32bit & 0xFF) as u8
-        } else {
-            context.shell.last_exit_status()
-        };
-
-        if context.shell.in_function() || context.shell.in_sourced_script() {
-            context.shell.note_status_before_return();
-            let mut result = ExecutionResult::new(code_8bit);
-            result.next_control_flow = ExecutionControlFlow::ReturnFromFunctionOrScript;
-
-            Ok(result)
-        } else {
+        if !(context.shell.in_function() || context.shell.in_sourced_script()) {
             let _ = writeln!(
                 context.error_stream(),
                 "return: can only `return' from a function or sourced script"
             );
-            Ok(ExecutionExitCode::InvalidUsage.into())
+            return Ok(ExecutionExitCode::InvalidUsage.into());
         }
+
+        let code_8bit = match crate::exit_status_word(&context, &self.code)? {
+            Ok(Some(code)) => code,
+            Ok(None) => context.shell.last_exit_status(),
+            Err(ended) => return Ok(ended),
+        };
+
+        context.shell.note_status_before_return();
+        let mut result = ExecutionResult::new(code_8bit);
+        result.next_control_flow = ExecutionControlFlow::ReturnFromFunctionOrScript;
+        Ok(result)
     }
 }

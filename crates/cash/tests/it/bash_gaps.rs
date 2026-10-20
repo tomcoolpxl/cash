@@ -3041,3 +3041,81 @@ fn bash_names_the_shell_s_executable_whatever_zero_is() {
     assert!(named.eq_ignore_ascii_case(&own), "{named} is not {own}");
     assert_eq!(runs, "runs");
 }
+
+/// Runs `script` and gives its status, standard output and standard error.
+fn run_all(script: &str) -> (i32, String, String) {
+    let result = cash_command()
+        .args(["--noprofile", "--norc", "-c", script])
+        .output()
+        .unwrap();
+    let text = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap().replace("\r\n", "\n");
+    (
+        result.status.code().unwrap_or(-1),
+        text(result.stdout).trim_end().to_string(),
+        text(result.stderr),
+    )
+}
+
+#[test]
+fn break_and_continue_leave_only_the_loops_there_are() {
+    // Outside a loop they ended the script without a word, and `break 2` in one loop did
+    // too; a count of 0 or below looped on; in a function called from a loop it was "not
+    // yet implemented", status 99. As in Bash: they say so and go on, a count is held to
+    // the loops there are, one below 1 leaves them all with status 1, and a function or a
+    // `( )` subshell is inside no loop.
+    let (status, stdout, stderr) = run_all(
+        "break; echo \"top $?\"; for i in 1 2; do break 2; done; echo \"two $?\"; \
+         for i in 1 2 3; do break 0; echo no; done; echo \"zero $?\"; \
+         for i in 1 2; do for j in a b; do continue 3; echo no; done; echo no; done; \
+         echo \"three $?\"; f() { break; echo \"f goes on $?\"; }; \
+         for i in 1 2; do f; echo \"loop $i\"; done; \
+         for i in 1; do (break; echo sub); done; \
+         trap break USR1; for i in 1 2; do kill -USR1 $$; echo no; done; echo trapped",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (
+            0,
+            "top 0\ntwo 0\nzero 1\nthree 0\nf goes on 0\nloop 1\nf goes on 0\nloop 2\nsub\n\
+             trapped"
+        )
+    );
+    assert_eq!(
+        stderr
+            .matches("only meaningful in a `for', `while', or `until' loop")
+            .count(),
+        4,
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("break: 0: loop count out of range"),
+        "{stderr}"
+    );
+    // A count that is no number ends the script with status 2.
+    let (status, stdout, stderr) = run_all("for i in 1 2; do break x; echo no; done; echo no");
+    assert_eq!((status, stdout.as_str()), (2, ""));
+    assert!(
+        stderr.contains("break: x: numeric argument required"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn return_and_exit_read_their_status_as_bash_does() {
+    // `return -1` was refused as an option and `return abc` went on with the function;
+    // Bash's statuses are taken modulo 256, a word that is no number is 2, and a second
+    // word ends the script with status 1.
+    let (status, stdout, stderr) = run_all(
+        "f() { return -1; }; f; echo \"$?\"; g() { return abc; echo no; }; g; echo \"$?\"; \
+         h() { return -- 300; }; h; echo \"$?\"; k() { return 2 3; }; k; echo no",
+    );
+    assert_eq!((status, stdout.as_str()), (1, "255\n2\n44"));
+    assert!(
+        stderr.contains("return: abc: numeric argument required")
+            && stderr.contains("return: too many arguments"),
+        "{stderr}"
+    );
+    assert_eq!(run_all("exit abc").0, 2);
+    assert_eq!(run_all("exit -- -2").0, 254);
+    assert_eq!(run_all("exit 2 3; echo no").0, 1);
+}

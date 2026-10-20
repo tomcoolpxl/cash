@@ -1489,6 +1489,8 @@ impl Execute for ast::CompoundCommand {
                 // Clone off a new subshell, and run the body of the subshell there.
                 // TODO(source-info): Do we need to reset the line number?
                 let mut subshell = shell.subshell_that_catches_errors();
+                // It is inside no loop, as in Bash: `(break)` in a loop says so and goes on.
+                subshell.set_loop_depth(0);
 
                 // Handle errors within the subshell context to prevent fatal errors
                 // from propagating to the parent shell.
@@ -1515,14 +1517,29 @@ impl Execute for ast::CompoundCommand {
                 // the shell, break out of loops, etc.
                 Ok(ExecutionResult::from(ExecutionExitCode::from(status)))
             }
-            Self::ForClause(f) => f.execute(shell, params).await,
-            Self::SelectClause(sel) => sel.execute(shell, params).await,
+            Self::ForClause(_)
+            | Self::SelectClause(_)
+            | Self::WhileClause(_)
+            | Self::UntilClause(_)
+            | Self::ArithmeticForClause(_) => {
+                // A loop is one more for `break` and `continue` to leave, its condition
+                // included, while it runs.
+                let depth = shell.loop_depth();
+                shell.set_loop_depth(depth + 1);
+                let result = match self {
+                    Self::ForClause(f) => f.execute(shell, params).await,
+                    Self::SelectClause(sel) => sel.execute(shell, params).await,
+                    Self::WhileClause(w) => (WhileOrUntil::While, w).execute(shell, params).await,
+                    Self::UntilClause(u) => (WhileOrUntil::Until, u).execute(shell, params).await,
+                    Self::ArithmeticForClause(a) => a.execute(shell, params).await,
+                    _ => Ok(ExecutionResult::success()),
+                };
+                shell.set_loop_depth(depth);
+                result
+            }
             Self::CaseClause(c) => c.execute(shell, params).await,
             Self::IfClause(i) => i.execute(shell, params).await,
-            Self::WhileClause(w) => (WhileOrUntil::While, w).execute(shell, params).await,
-            Self::UntilClause(u) => (WhileOrUntil::Until, u).execute(shell, params).await,
             Self::Arithmetic(a) => a.execute(shell, params).await,
-            Self::ArithmeticForClause(a) => a.execute(shell, params).await,
             Self::Coprocess(c) => c.execute(shell, params).await,
             Self::ExtendedTest(e) => {
                 // DEBUG runs before `[[ ]]` as before a simple command, as in Bash.

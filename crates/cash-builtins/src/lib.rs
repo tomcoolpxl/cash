@@ -299,6 +299,110 @@ pub use builder::ShellBuilderExt;
 pub use carried::{carries_program, is_bash_builtin};
 pub use factory::{BuiltinSet, default_builtins, is_default_builtin};
 
+/// What `break` or `continue` does with its count, `word`, as Bash's builtins take it:
+/// outside a loop nothing (it says so, but in POSIX mode); a count past the loops there
+/// are leaves them all; a count below 1 is out of range, leaves every loop, and is status
+/// 1; a word that is no number ends a script with status 2. `flow` makes the control flow
+/// that leaves that many loops but the last. Outside a loop they ended the script without a
+/// word, and `break 2` in one loop did too.
+#[cfg(any(feature = "builtin.break", feature = "builtin.continue"))]
+fn leave_loops<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    word: Option<&str>,
+    flow: fn(usize) -> cash_core::ExecutionControlFlow,
+) -> Result<cash_core::ExecutionResult, cash_core::Error> {
+    use cash_core::{ExecutionControlFlow, ExecutionResult};
+    use std::io::Write as _;
+
+    let depth = context.shell.loop_depth();
+    if depth == 0 {
+        if !context.shell.options().posix_mode {
+            writeln!(
+                context.error_stream(),
+                "{}: only meaningful in a `for', `while', or `until' loop",
+                context.command_name
+            )?;
+        }
+        return Ok(ExecutionResult::success());
+    }
+    let count = match word {
+        None => 1,
+        Some(word) => {
+            let Ok(count) = word.trim().parse::<i64>() else {
+                writeln!(
+                    context.error_stream(),
+                    "{}: {word}: numeric argument required",
+                    context.command_name
+                )?;
+                let mut result = ExecutionResult::new(2);
+                if !context.shell.options().interactive {
+                    result.next_control_flow = ExecutionControlFlow::ExitShell;
+                }
+                return Ok(result);
+            };
+            if count < 1 {
+                writeln!(
+                    context.error_stream(),
+                    "{}: {word}: loop count out of range",
+                    context.command_name
+                )?;
+                let mut result = ExecutionResult::general_error();
+                result.next_control_flow = ExecutionControlFlow::BreakLoop { levels: depth - 1 };
+                return Ok(result);
+            }
+            count
+        }
+    };
+    let levels = usize::try_from(count).unwrap_or(usize::MAX).min(depth) - 1;
+    let mut result = ExecutionResult::success();
+    result.next_control_flow = flow(levels);
+    Ok(result)
+}
+
+/// The status `return` or `exit` is given in `words`, as Bash's `get_exitstat` reads them:
+/// a first `--` passed over; none, `None`; a number, its low eight bits (`return -1` is
+/// 255); a word that is no number is said, and 2. A second word is too many: the result
+/// that ends a script with status 1 comes back as the error. Clap refused `-1` as an
+/// option and `abc`, and the function went on.
+#[cfg(any(feature = "builtin.return", feature = "builtin.exit"))]
+fn exit_status_word<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    words: &[String],
+) -> Result<Result<Option<u8>, cash_core::ExecutionResult>, cash_core::Error> {
+    use std::io::Write as _;
+
+    let words = match words.split_first() {
+        Some((first, rest)) if first == "--" => rest,
+        _ => words,
+    };
+    let Some((word, rest)) = words.split_first() else {
+        return Ok(Ok(None));
+    };
+    if !rest.is_empty() {
+        writeln!(
+            context.error_stream(),
+            "{}: too many arguments",
+            context.command_name
+        )?;
+        let mut result = cash_core::ExecutionResult::general_error();
+        if !context.shell.options().interactive {
+            result.next_control_flow = cash_core::ExecutionControlFlow::ExitShell;
+        }
+        return Ok(Err(result));
+    }
+    let Ok(number) = word.trim().parse::<i64>() else {
+        writeln!(
+            context.error_stream(),
+            "{}: {word}: numeric argument required",
+            context.command_name
+        )?;
+        return Ok(Ok(Some(2)));
+    };
+    Ok(Ok(Some(
+        u8::try_from(number.rem_euclid(256)).unwrap_or_default(),
+    )))
+}
+
 /// Writes an alias definition as `alias` and `command -v` print it: `reusable`, the form
 /// that reads back as a definition, or bare `name='value'`, which `alias` lists in POSIX
 /// mode without `-p`, as Bash does.

@@ -2149,6 +2149,10 @@ pub(crate) async fn invoke_shell_function(
         positional_args,
         &context.params,
     )?;
+    // Inside no loop, as in Bash: `break` in a function called from a loop says so, and
+    // the function goes on. The caller's loops are its own again after.
+    let caller_loops = context.shell.loop_depth();
+    context.shell.set_loop_depth(0);
 
     // A function executes within the current shell process and shares its caller's open files,
     // so the parameters are passed through by shared reference rather than cloned. This prevents
@@ -2177,18 +2181,18 @@ pub(crate) async fn invoke_shell_function(
     }
 
     // We've come back out, reflect it.
+    context.shell.set_loop_depth(caller_loops);
     context.shell.leave_function()?;
 
     // Get the actual execution result from the body of the function.
     let mut result = result?;
 
-    // Handle control-flow.
+    // Handle control-flow. A function is inside no loop, so no `break` or `continue` leaves
+    // it: one that did is spent here. It was "not yet implemented", status 99.
     match result.next_control_flow {
-        ExecutionControlFlow::BreakLoop { .. } | ExecutionControlFlow::ContinueLoop { .. } => {
-            return error::unimp("break or continue returned from function invocation");
-        }
-        ExecutionControlFlow::ReturnFromFunctionOrScript => {
-            // It's now been handled.
+        ExecutionControlFlow::BreakLoop { .. }
+        | ExecutionControlFlow::ContinueLoop { .. }
+        | ExecutionControlFlow::ReturnFromFunctionOrScript => {
             result.next_control_flow = ExecutionControlFlow::Normal;
         }
         _ => {}

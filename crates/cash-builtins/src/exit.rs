@@ -6,8 +6,8 @@ use cash_core::{ExecutionControlFlow, ExecutionResult, builtins};
 #[derive(Parser)]
 pub(crate) struct ExitCommand {
     /// The exit code to return.
-    #[arg(allow_hyphen_values = true)]
-    code: Option<i64>,
+    #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+    code: Vec<String>,
 }
 
 impl builtins::Command for ExitCommand {
@@ -17,15 +17,14 @@ impl builtins::Command for ExitCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        #[expect(clippy::cast_sign_loss)]
-        let code_8bit = if let Some(code_32bit) = &self.code {
-            (code_32bit & 0xFF) as u8
-        } else {
+        let code_8bit = match crate::exit_status_word(&context, &self.code)? {
+            Ok(Some(code)) => code,
             // In the `EXIT` trap, the status the shell was exiting with, as in Bash.
-            context
+            Ok(None) => context
                 .shell
                 .status_before_exit_trap()
-                .unwrap_or_else(|| context.shell.last_exit_status())
+                .unwrap_or_else(|| context.shell.last_exit_status()),
+            Err(ended) => return Ok(ended),
         };
 
         // The `EXIT` trap runs here, where `exit` was called, as in Bash.

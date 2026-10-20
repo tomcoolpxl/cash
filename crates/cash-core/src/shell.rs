@@ -74,6 +74,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// `unixpaths`, after `cd /` or a `cd ..` past the drive's top (D83).
     at_slash: bool,
 
+    /// How many loops the running command is inside, as Bash's `loop_level`: what `break`
+    /// and `continue` may leave. A function and a `( … )` subshell start from none.
+    loop_depth: usize,
+
     /// The shell environment, containing shell variables.
     env: ShellEnvironment,
 
@@ -244,6 +248,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             open_files: self.open_files.clone(),
             working_dir: self.working_dir.clone(),
             at_slash: self.at_slash,
+            loop_depth: self.loop_depth,
             env: self.env.clone(),
             funcs: self.funcs.clone(),
             options: self.options.clone(),
@@ -712,6 +717,18 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     /// Returns a mutable reference to the shell's abbreviations.
     pub const fn abbreviations_mut(&mut self) -> &mut crate::abbreviations::Abbreviations {
         &mut self.abbreviations
+    }
+
+    /// How many loops the running command is inside, which `break` and `continue` may
+    /// leave; none in a function, until it starts a loop of its own, as in Bash.
+    pub const fn loop_depth(&self) -> usize {
+        self.loop_depth
+    }
+
+    /// Sets how many loops the running command is inside: a loop adds itself while it
+    /// runs, and a function or a `( … )` subshell starts from none.
+    pub(crate) const fn set_loop_depth(&mut self, depth: usize) {
+        self.loop_depth = depth;
     }
 }
 

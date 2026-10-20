@@ -224,8 +224,15 @@ async fn signal_self<SE: cash_core::ShellExtensions>(
         .raise_signal_trap(signal, &context.params)
         .await
     {
-        result?;
-        return Ok(ExecutionResult::success());
+        // What the handler does to the commands around it is done there, as in Bash:
+        // `break` leaves the loop the shell is in, `exit` ends it, `return` returns from
+        // the function. It was dropped, and the loop went on.
+        let trap = result?;
+        return Ok(if trap.is_normal_flow() {
+            ExecutionResult::success()
+        } else {
+            trap
+        });
     }
     // Bash ignores QUIT in all cases, scripts included.
     if raw.leaves_the_shell_running() || name == "QUIT" {

@@ -251,6 +251,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             open_files: openfiles::OpenFiles::default(),
             working_dir: PathBuf::default(),
             at_slash: false,
+            loop_depth: 0,
             env: env::ShellEnvironment::default(),
             funcs: functions::FunctionEnv::default(),
             options: options::RuntimeOptions::default(),

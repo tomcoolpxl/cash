@@ -1,13 +1,13 @@
 use clap::Parser;
 
-use cash_core::{ExecutionControlFlow, ExecutionExitCode, ExecutionResult, builtins};
+use cash_core::{ExecutionControlFlow, builtins};
 
 /// Breaks out of a control-flow loop.
 #[derive(Parser)]
 pub(crate) struct BreakCommand {
     /// If specified, indicates which nested loop to break out of.
-    #[clap(default_value_t = 1)]
-    which_loop: i8,
+    #[arg(allow_hyphen_values = true)]
+    which_loop: Option<String>,
 }
 
 impl builtins::Command for BreakCommand {
@@ -15,20 +15,10 @@ impl builtins::Command for BreakCommand {
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
-        _context: cash_core::ExecutionContext<'_, SE>,
+        context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        // If specified, which_loop needs to be positive.
-        if self.which_loop <= 0 {
-            return Ok(ExecutionExitCode::InvalidUsage.into());
-        }
-
-        let mut result = ExecutionResult::success();
-
-        result.next_control_flow = ExecutionControlFlow::BreakLoop {
-            #[expect(clippy::cast_sign_loss)]
-            levels: (self.which_loop - 1) as usize,
-        };
-
-        Ok(result)
+        crate::leave_loops(&context, self.which_loop.as_deref(), |levels| {
+            ExecutionControlFlow::BreakLoop { levels }
+        })
     }
 }
