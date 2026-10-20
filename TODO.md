@@ -34,13 +34,15 @@ The user's picks after 1.37.0 (decisions.md, "The phase after 1.37.0"):
    the user's pick of the sources: done 2026-10-20 (DONE.md);
 2. `type -P` gives a bundled tool as `/usr/bin/NAME` (the user's pick, found in item 1):
    done 2026-10-20 (DONE.md);
-3. a design for an opt-in `/c/` mode, in research/, then a pick list (the user's pick,
+3. a design for an opt-in `/c/` mode, in research/, then a pick list: done 2026-10-20 (the user's pick,
    found in item 1): `$PWD`, `pwd` and `HOME` as `/c/...`, and `/c/` arguments turned into
    `C:/` for Windows programs, so that tools climbing to `/` (rbenv, asdf, pyenv, nvm)
    and bats' `load` work. To weigh in it too: `type -P` of a program cash does not carry
    gives its Windows path, under `C:/Program Files` for Git's own (`gawk`), whose space
    splits an unquoted `$(type -P gawk)`, where Git Bash gives `/usr/bin/gawk`
-   (`pyenv help`). bats-assert's corpus case is known to differ until then.
+   (`pyenv help`). bats-assert's corpus case is known to differ until then. Designed
+   2026-10-20 (research/unix-paths-mode-design.md); the user's picks are D82, to be built
+   in the next phase.
 
 ## The phase before (2026-10-20, done)
 

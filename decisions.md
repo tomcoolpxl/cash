@@ -86,6 +86,7 @@ the user's answers, with their dates. A new decision goes here, under its topic.
 | D79 | Ctrl-R: a history picker | The prompt, editing and completion |
 | D80 | `z`: the directory jump | The prompt, editing and completion |
 | D81 | `winglob`: at the prompt, a Windows program globs for itself | Paths, files and text |
+| D82 | An opt-in `/c/` mode: Git Bash's spelling, with arguments for Windows programs | Paths, files and text |
 
 ## 1. Scope and foundation
 
@@ -162,6 +163,21 @@ native program, where `/c/src` is fatal. `C:/`, `/c/`, `/tmp` and `/dev` names w
 cash opens a path itself; anywhere else an argument goes as written (D4). A backslash
 follows Bash's quoting (D53 covers the prompt). Turned down: printing `/c/...`; tracking
 how a path was typed; bending Bash's quoting so unquoted backslash paths work.
+
+### D82 — An opt-in `/c/` mode: Git Bash's spelling, with arguments for Windows programs
+
+The user's picks, 2026-10-20 (research/unix-paths-mode-design.md). With a shell option on,
+cash spells paths as Git Bash does, `/c/...`, for `pwd`, `$PWD`, `HOME`, `BASH_SOURCE`,
+`which` and `type -P`, through the one function that renders a path; and for a Windows
+program that is not an MSYS one, a whole-word `/c/...` argument, or the value after `=`
+of `--opt=/c/...`, becomes `C:/...`, as do `HOME`, `PWD` and `OLDPWD` in its environment.
+The option is inherited by a child cash through a variable. It is off by default, so D3
+stays, and D4 gives way only for those rules with it on. Why: rbenv, pyenv, nvm and asdf
+climb from `$PWD` until it is empty or `/`, which `C:/...` never reaches, and bats' `load`
+wants a path that starts with `/`. Turned down: spelling alone, which hands Windows
+programs `/c/` paths; MSYS's full conversion of variables and lists, with its misfires;
+an environment variable alone, which a script cannot set for itself; `/c/` as the default.
+To be built in the phase after 1.38.0.
 
 ### D4 — Arguments are never rewritten
 
