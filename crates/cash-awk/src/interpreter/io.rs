@@ -10,7 +10,7 @@ use std::{
     collections::{HashMap, hash_map::Entry},
     fs::File,
     io::{BufReader, Bytes, Read, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     rc::Rc,
     sync::OnceLock,
 };
@@ -394,11 +394,13 @@ impl SpecialFile {
 }
 
 /// The path to open for the file `name` names: Windows' `NUL` for `/dev/null`.
-fn system_path(name: &str) -> &str {
+/// The file awk opens for `name`: the null device for `/dev/null`, and a path spelled as
+/// cash reads it, `/c/x` as `C:/x` (D3), as an MSYS gawk opens it.
+pub(crate) fn system_path(name: &str) -> PathBuf {
     if SpecialFile::named(name) == Some(SpecialFile::Null) {
-        "NUL"
+        "NUL".into()
     } else {
-        name
+        cash_win32::path::accept_path(name)
     }
 }
 
@@ -560,7 +562,7 @@ impl WriteFiles {
                     .open(system_path(filename))
                     // gawk's words; Windows does not say that a directory is one.
                     .map_err(|e| {
-                        let reason = if Path::new(filename).is_dir() {
+                        let reason = if system_path(filename).is_dir() {
                             "Is a directory".to_string()
                         } else {
                             strerror(&e)

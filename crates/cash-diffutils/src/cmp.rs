@@ -6,7 +6,7 @@
 //! `cmp`: upstream's comparison, behind GNU cmp 3.12's command line and messages
 //! (CASH-PATCHES.md).
 
-use crate::utils::{format_failure_to_read_input_file, locale_is_posix, quote};
+use crate::utils::{format_failure_to_read_input_file, locale_is_posix, quote, system_path};
 use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
@@ -274,14 +274,14 @@ fn prepare_reader(
     } else {
         // cash: Windows opens a directory and fails on the read with "Access is denied";
         // GNU says what it is.
-        if fs::metadata(path).is_ok_and(|m| m.is_dir()) {
+        if fs::metadata(system_path(path)).is_ok_and(|m| m.is_dir()) {
             return Err(format!(
                 "{}: {}: Is a directory",
                 params.executable.to_string_lossy(),
                 path.to_string_lossy()
             ));
         }
-        let file = fs::File::open(path)
+        let file = fs::File::open(system_path(path))
             .map_err(|e| format_failure_to_read_input_file(&params.executable, path, &e))?;
         Box::new(BufReader::new(file))
     };
@@ -307,7 +307,10 @@ pub fn cmp(params: &Params) -> Result<Cmp, String> {
 
     let mut offset_width = params.max_bytes.unwrap_or(BytesLimitU64::MAX);
 
-    if let (Ok(a_meta), Ok(b_meta)) = (fs::metadata(&params.from), fs::metadata(&params.to)) {
+    if let (Ok(a_meta), Ok(b_meta)) = (
+        fs::metadata(system_path(&params.from)),
+        fs::metadata(system_path(&params.to)),
+    ) {
         #[cfg(not(target_os = "windows"))]
         let (a_size, b_size) = (a_meta.len(), b_meta.len());
 
@@ -460,7 +463,8 @@ pub fn main(args: &[OsString]) -> i32 {
     };
 
     if params.from == "-" && params.to == "-"
-        || same_file::is_same_file(&params.from, &params.to).unwrap_or(false)
+        || same_file::is_same_file(system_path(&params.from), system_path(&params.to))
+            .unwrap_or(false)
     {
         return 0;
     }

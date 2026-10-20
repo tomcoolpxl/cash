@@ -5,8 +5,10 @@
 //! `cdh`, `CDPATH`, `z`, redirections, `source`, `test`, `ls`, globs, a script run by
 //! its path, `PATH`, a bundled tool and a Windows program.
 //!
-//! A Unix spelling reaches a program as written, so `/c/…` given to `cat` or `git` is
-//! the one documented exception: cash warns and names the `C:/` spelling. Tab and
+//! A Unix spelling reaches a Windows program as written, so `/c/…` given to `git` is the
+//! one documented exception: cash warns and names the `C:/` spelling (under `unixpaths`,
+//! `unix_paths_mode.rs`, git is handed `C:/…`). cash's own tools, `cat` among them, read
+//! it as cash does. Tab and
 //! Alt-E's start directory have tables of their own, in `completion_windows.rs` and
 //! `cash-picker`'s `pick.rs`.
 
@@ -118,8 +120,8 @@ fn each_spelling_of_a_directory_works_in_each_place() {
                 .nth(1)
                 .and_then(|after| after.split("@@").next())
                 .unwrap_or_default();
-            // `/c/…` reaches a program as written, and cash says so.
-            let documented = *name == "/c/x" && matches!(place, "cat" | "git");
+            // `/c/…` reaches a Windows program as written, and cash says so.
+            let documented = *name == "/c/x" && place == "git";
             let worked = if documented {
                 section.contains(WARNING)
             } else {

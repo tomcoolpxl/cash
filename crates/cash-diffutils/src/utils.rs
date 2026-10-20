@@ -133,12 +133,23 @@ pub fn format_time(when: SystemTime) -> String {
     Zone::from_env().format(DateTime::<Utc>::from(when))
 }
 
+/// The file opened for `name`, spelled as cash reads it: `/c/x` is `C:/x` (D3), as an MSYS
+/// diff opens it. The name itself, as given, is what headers and messages show.
+#[must_use]
+pub fn system_path(name: impl AsRef<OsStr>) -> std::path::PathBuf {
+    let name = name.as_ref();
+    name.to_str().map_or_else(
+        || std::path::PathBuf::from(name),
+        cash_win32::path::accept_path,
+    )
+}
+
 /// The modification time of `path` for a header; a file that cannot be asked (standard
 /// input) shows the present, and an absent file (`-N`) the epoch, as GNU's does.
 #[must_use]
 pub fn modification_time(path: Option<&Path>) -> String {
     let when = match path {
-        Some(path) => std::fs::metadata(path)
+        Some(path) => std::fs::metadata(system_path(path))
             .and_then(|m| m.modified())
             .unwrap_or_else(|_| SystemTime::now()),
         None => SystemTime::UNIX_EPOCH,

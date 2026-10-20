@@ -115,10 +115,12 @@ pub fn resolve(
     cwd: &Path,
 ) -> Option<Dispatch> {
     if command.contains('/') || command.contains('\\') {
-        let candidate = if crate::path::is_absolute(Path::new(command)) {
-            PathBuf::from(command)
+        // A path in any spelling cash reads (D3), `/c/x` too.
+        let accepted = crate::path::accept_path(command);
+        let candidate = if crate::path::is_absolute(&accepted) {
+            accepted
         } else {
-            cwd.join(command)
+            cwd.join(accepted)
         };
         return classify_if_exists(&candidate, pathext);
     }

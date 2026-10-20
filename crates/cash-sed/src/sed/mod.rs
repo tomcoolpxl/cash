@@ -287,6 +287,13 @@ pub fn uu_app() -> Command {
 }
 
 // Iterate through script and file arguments specified in matches and
+/// A file named to sed, an input, a script or one an `r` or `w` command names, as cash
+/// reads it: `/c/x` is `C:/x` (D3), as an MSYS sed opens it. Scripts are never rewritten.
+pub(crate) fn system_path(path: &std::path::Path) -> PathBuf {
+    path.to_str()
+        .map_or_else(|| path.to_path_buf(), cash_win32::path::accept_path)
+}
+
 // return vectors of all scripts and input files in the specified order.
 // If no script is specified fail with "missing script" error.
 fn get_scripts_files(matches: &ArgMatches) -> UResult<(Vec<ScriptValue>, Vec<PathBuf>)> {
@@ -302,7 +309,7 @@ fn get_scripts_files(matches: &ArgMatches) -> UResult<(Vec<ScriptValue>, Vec<Pat
         // sed [-En] -e script [-e script]... [-f script_file]... [file...]
         // sed [-En] [-e script]... -f script_file [-f script_file]... [file...]
         if let Some(val) = matches.get_one::<String>("script") {
-            files.push(PathBuf::from(val.to_owned()));
+            files.push(system_path(std::path::Path::new(val)));
         }
     } else {
         // First POSIX spec usage case; script is the first arg.
@@ -329,7 +336,7 @@ fn get_scripts_files(matches: &ArgMatches) -> UResult<(Vec<ScriptValue>, Vec<Pat
                 .get_many::<PathBuf>("script-file")
                 .unwrap_or_default(),
         ) {
-            indexed_scripts.push((idx, ScriptValue::PathVal(val.to_owned())));
+            indexed_scripts.push((idx, ScriptValue::PathVal(system_path(val))));
         }
     }
 
@@ -344,7 +351,7 @@ fn get_scripts_files(matches: &ArgMatches) -> UResult<(Vec<ScriptValue>, Vec<Pat
     let rest_files: Vec<PathBuf> = matches
         .get_many::<PathBuf>("file")
         .unwrap_or_default()
-        .cloned()
+        .map(|file| system_path(file))
         .collect();
     if !rest_files.is_empty() {
         files.extend(rest_files);

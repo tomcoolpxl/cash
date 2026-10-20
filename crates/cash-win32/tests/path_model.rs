@@ -166,3 +166,36 @@ fn a_bare_drive_letter_flag_is_not_mistaken_for_a_path() {
     // And a directory that merely begins with a letter is not a drive.
     assert_eq!(cash_win32::path::unix_drive_spelling("/cash/foo"), None);
 }
+
+#[test]
+fn unixpaths_renders_a_drive_as_git_bash_does() {
+    // D82: `/c/dir` for `C:/dir`, the drive's letter in lower case, its root `/c`, as
+    // Git Bash's `pwd` prints them; what has no drive is `render`'s.
+    let unix = |text: &str| cash_win32::path::to_unix(Path::new(text));
+    assert_eq!(unix(r"C:\Users\me"), "/c/Users/me");
+    assert_eq!(unix("d:/data/x"), "/d/data/x");
+    assert_eq!(unix("C:/"), "/c");
+    assert_eq!(unix("C:"), "/c");
+    assert_eq!(unix("//server/share/x"), "//server/share/x");
+    assert_eq!(unix("/dev/null"), "/dev/null");
+    assert_eq!(unix("relative/x"), "relative/x");
+}
+
+#[test]
+fn unixpaths_gives_a_windows_program_its_paths_as_msys_does() {
+    // D82: a whole word `/c/x` and the value of `--opt=/c/x` or `NAME=/c/x` become `C:/x`;
+    // `//c/x` is a literal `/c/x`; nothing else is touched, so `cmd /c` and `/a/` survive.
+    let arg = cash_win32::path::windows_argument;
+    assert_eq!(arg("/c/Users/me").as_deref(), Some("C:/Users/me"));
+    assert_eq!(arg("--file=/d/data/x").as_deref(), Some("--file=D:/data/x"));
+    assert_eq!(arg("HOME=/c/Users/me").as_deref(), Some("HOME=C:/Users/me"));
+    assert_eq!(arg("//c/literal").as_deref(), Some("/c/literal"));
+    assert_eq!(arg("/c"), None);
+    assert_eq!(arg("/q"), None);
+    assert_eq!(arg("/a/"), None);
+    assert_eq!(arg("x=/notadrive/y"), None);
+    assert_eq!(arg("a b=/c/x"), None);
+    assert_eq!(arg("C:/Users/me"), None);
+    assert_eq!(arg("plain"), None);
+    assert!(arg("/tmp/x").is_some_and(|x| x.ends_with("/x") && !x.starts_with("/tmp")));
+}

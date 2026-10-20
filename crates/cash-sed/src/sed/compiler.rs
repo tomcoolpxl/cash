@@ -423,7 +423,7 @@ fn read_file_path(lines: &ScriptLineProvider, line: &mut ScriptCharProvider) -> 
         ))
     } else {
         os_string_from_bytes(path)
-            .map(PathBuf::from)
+            .map(|path| crate::sed::system_path(&PathBuf::from(path)))
             .map_err(|e| compilation_err(lines, line, format!("invalid characters file path: {e}")))
     }
 }

@@ -49,7 +49,7 @@ use std::time::SystemTime;
 mod array;
 mod builtins;
 mod format;
-mod io;
+pub(crate) mod io;
 pub use io::set_shell;
 pub(crate) use io::{flush_stdout, strerror};
 mod record;
@@ -1692,7 +1692,7 @@ impl MainInput {
 
             // gawk passes over a directory with a warning, placed as an error is; reading
             // one failed. It still counts as a file, so standard input is not read.
-            if arg.as_str() != "-" && std::path::Path::new(arg.as_str()).is_dir() {
+            if arg.as_str() != "-" && io::system_path(arg.as_str()).is_dir() {
                 let _ = io::flush_stdout();
                 let place = place
                     .map(|(file, line)| {

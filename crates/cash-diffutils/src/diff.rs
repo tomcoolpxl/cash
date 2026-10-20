@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use crate::engine;
 use crate::params::{Format, Params, Refusal, Request, parse_params};
-use crate::utils::{error_words, format_time, modification_time};
+use crate::utils::{error_words, format_time, modification_time, system_path};
 use crate::{context_diff, ed_diff, normal_diff, side_diff, unified_diff};
 
 /// The exit status for trouble: a file that cannot be read, a bad option.
@@ -143,7 +143,7 @@ impl Diff<'_> {
         if name == "-" {
             return Kind::Stdin;
         }
-        match std::fs::metadata(name) {
+        match std::fs::metadata(system_path(name)) {
             Ok(meta) if meta.is_dir() => Kind::Directory,
             Ok(_) => Kind::File,
             Err(error) => {
@@ -258,7 +258,7 @@ impl Diff<'_> {
                 let mut data = Vec::new();
                 std::io::stdin().lock().read_to_end(&mut data).map(|_| data)
             }
-            Kind::File | Kind::Directory => std::fs::read(name),
+            Kind::File | Kind::Directory => std::fs::read(system_path(name)),
         };
         match result {
             Ok(data) => Some(data),
@@ -355,7 +355,7 @@ impl Diff<'_> {
         let Some(dir) = dir else {
             return Vec::new();
         };
-        let listing = match std::fs::read_dir(dir) {
+        let listing = match std::fs::read_dir(system_path(dir)) {
             Ok(listing) => listing,
             Err(error) => {
                 self.trouble(&format!("{dir}: {}", error_words(&error)));
@@ -415,7 +415,7 @@ impl Diff<'_> {
             && present1
             && name0 != "-"
             && name1 != "-"
-            && same_file::is_same_file(name0, name1).unwrap_or(false);
+            && same_file::is_same_file(system_path(name0), system_path(name1)).unwrap_or(false);
         if same_file || (data0 == data1 && !p.has_ignore_options()) {
             self.report_identical(name0, name1);
             return;

@@ -224,7 +224,11 @@ pub fn maybe_dispatch() -> Option<i32> {
 
     let mut argv: Vec<OsString> = Vec::with_capacity(1 + args.len());
     argv.push(name.clone());
-    argv.extend(args.iter().cloned());
+    if takes_file_operands(name_str) {
+        argv.extend(args.iter().map(file_operand));
+    } else {
+        argv.extend(args.iter().cloned());
+    }
 
     // And it is `cut` to itself, not `cash.exe`, in its messages.
     cash_win32::cmdline::present(&argv);
@@ -404,6 +408,16 @@ fn cash_for_scripts(argv: Vec<OsString>) -> Vec<OsString> {
         return argv;
     };
     match cash_win32::resolve::resolve(&program, &path, &pathext, &cwd) {
+        // A program named `/c/x`, which `CreateProcess` cannot read, by the path it names.
+        Some(cash_win32::resolve::Dispatch::Native(target))
+            if cash_win32::path::unix_drive_spelling(&program).is_some() =>
+        {
+            let mut args = operand.args;
+            if let Some(slot) = args.get_mut(operand.index) {
+                *slot = target.into_os_string();
+            }
+            return args;
+        }
         Some(cash_win32::resolve::Dispatch::Native(_)) => return argv,
         Some(_) => {}
         // `/bin/rm`, no file but a command cash runs as the shell would.
@@ -483,6 +497,90 @@ fn relaying_msys_command(argv: Vec<OsString>) -> Vec<OsString> {
 /// once their inputs are. `pwd` is a shell builtin and never reaches this dispatcher.
 fn path_emitting(name: &str) -> bool {
     matches!(name, "mktemp" | "realpath" | "readlink")
+}
+
+/// Bundled tools whose operands are files: a `/c/x` among them, a whole word or the value of
+/// `--opt=/c/x`, reaches the tool as `C:/x`, as an MSYS tool opens it (D3), by the rule a
+/// Windows program's arguments follow under `unixpaths` (D82,
+/// `cash_win32::path::windows_argument`). The tools open what they are handed, and Windows
+/// has no `/c`.
+///
+/// Not here, deliberately: a tool that only handles text (`echo`, `printf`, `expr`,
+/// `basename`, `dirname`, `seq`, `tr`, `test`), which must give `/c/x` back as written, and
+/// `sed`, `awk`, `diff` and `cmp`, which read `/c/` themselves where they open a file, as
+/// their scripts and patterns must not be rewritten.
+fn takes_file_operands(name: &str) -> bool {
+    matches!(
+        name,
+        "b2sum"
+            | "base32"
+            | "base64"
+            | "basenc"
+            | "bc"
+            | "cat"
+            | "cksum"
+            | "comm"
+            | "cp"
+            | "csplit"
+            | "cut"
+            | "date"
+            | "dd"
+            | "df"
+            | "dir"
+            | "dircolors"
+            | "du"
+            | "expand"
+            | "fmt"
+            | "fold"
+            | "head"
+            | "join"
+            | "link"
+            | "ln"
+            | "ls"
+            | "md5sum"
+            | "mkdir"
+            | "mktemp"
+            | "more"
+            | "mv"
+            | "nl"
+            | "od"
+            | "paste"
+            | "pr"
+            | "ptx"
+            | "readlink"
+            | "realpath"
+            | "rm"
+            | "rmdir"
+            | "sha1sum"
+            | "sha224sum"
+            | "sha256sum"
+            | "sha384sum"
+            | "sha512sum"
+            | "shred"
+            | "shuf"
+            | "sort"
+            | "split"
+            | "sum"
+            | "sync"
+            | "tac"
+            | "tail"
+            | "tee"
+            | "touch"
+            | "truncate"
+            | "tsort"
+            | "unexpand"
+            | "uniq"
+            | "unlink"
+            | "vdir"
+            | "wc"
+    )
+}
+
+/// `arg` as a file tool is handed it: [`takes_file_operands`].
+fn file_operand(arg: &OsString) -> OsString {
+    arg.to_str()
+        .and_then(cash_win32::path::windows_argument)
+        .map_or_else(|| arg.clone(), OsString::from)
 }
 
 /// Whether the invocation is asking for help or a version rather than doing work.

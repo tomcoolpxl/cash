@@ -19,6 +19,7 @@ path = "src/bin/diffutils.rs"
 
 [dependencies]
 cash-getopt = { workspace = true }
+cash-win32 = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 glob = { workspace = true }

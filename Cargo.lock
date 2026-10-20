@@ -792,6 +792,7 @@ name = "cash-diffutils"
 version = "1.38.0"
 dependencies = [
  "cash-getopt",
+ "cash-win32",
  "chrono",
  "chrono-tz",
  "glob",

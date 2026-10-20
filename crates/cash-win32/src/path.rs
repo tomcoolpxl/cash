@@ -437,10 +437,34 @@ pub fn is_absolute(path: &Path) -> bool {
         && (bytes[2] == b'/' || bytes[2] == b'\\')
 }
 
-/// Convert a path to the Unix compat spelling, `/c/foo`.
+/// The variable that passes `unixpaths` (D82) to a cash this one starts, as Bash passes
+/// `set -o` options through `SHELLOPTS`; a bundled tool run as a process of its own reads it
+/// too, to show its paths so.
+pub const UNIX_PATHS_VARIABLE: &str = "CASH_UNIXPATHS";
+
+/// `path` as cash shows it to a script: [`render`]'s `C:/dir` (D3), or with `unix_paths`,
+/// the option `unixpaths`, [`to_unix`]'s `/c/dir` (D82). Every path shown is spelled here.
+#[must_use]
+pub fn shown(unix_paths: bool, path: &Path) -> String {
+    if unix_paths {
+        to_unix(path)
+    } else {
+        render(path)
+    }
+}
+
+/// Whether the cash that started this process passed `unixpaths` on.
+#[must_use]
+pub fn unix_paths_inherited() -> bool {
+    std::env::var_os(UNIX_PATHS_VARIABLE).is_some_and(|value| value == "1")
+}
+
+/// Convert a path to the Unix compat spelling, `/c/foo`, as Git Bash spells it; a
+/// drive's root is `/c`, as Git Bash's `pwd` prints it.
 ///
-/// The inverse of [`accept_path`]'s drive handling, and what the `winpath` builtin (D45)
-/// emits when asked for Unix form. Not used for rendering — D3 renders Windows-style.
+/// The inverse of [`accept_path`]'s drive handling. What the `winpath` builtin (D45)
+/// emits when asked for Unix form, what `PATH` is shown in (D5), and how the shell shows
+/// every path under `unixpaths` (D82, `cash_core::spelling`); D3 renders Windows-style.
 #[must_use]
 pub fn to_unix(path: &Path) -> String {
     let text = render(path);
@@ -536,4 +560,39 @@ pub fn unix_drive_spelling(arg: &str) -> Option<PathBuf> {
     }
 
     Some(accept_path(arg))
+}
+
+/// What a Windows program is given for the argument `arg` under `unixpaths` (D82), as
+/// MSYS gives it, or `None` when it goes as written.
+///
+/// A whole word that [`unix_drive_spelling`] reads as a path, `/c/x` or `/tmp/x`, becomes
+/// `C:/x`; so does the value after the first `=` of `--opt=/c/x` or `NAME=/c/x`. A word
+/// beginning `//` and a letter segment, `//c/x`, is MSYS's escape for a literal `/c/x`.
+/// Nothing else is rewritten: no lists, and no word that names no drive (`/q`, `/c` alone,
+/// a regular expression `/a/`), so `cmd /c` reaches cmd as typed.
+#[must_use]
+pub fn windows_argument(arg: &str) -> Option<String> {
+    if let Some(rest) = arg.strip_prefix("//") {
+        let mut chars = rest.chars();
+        let letter = chars.next().is_some_and(|c| c.is_ascii_alphabetic());
+        if letter && matches!(chars.next(), None | Some('/')) {
+            return Some(format!("/{rest}"));
+        }
+    }
+    // A drive's root alone, `/a/`, is more often a pattern than a path.
+    let path_in = |word: &str| {
+        unix_drive_spelling(word).filter(|_| word.len() > 3 || word.starts_with("/tmp"))
+    };
+    if let Some(path) = path_in(arg) {
+        return Some(render(&path));
+    }
+    let (head, value) = arg.split_once('=')?;
+    let named = head.starts_with('-')
+        || head
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && head.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    let path = path_in(value).filter(|_| named)?;
+    Some(format!("{head}={}", render(&path)))
 }

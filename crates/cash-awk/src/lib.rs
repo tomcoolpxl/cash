@@ -265,7 +265,7 @@ where
                     eprintln!("awk: could not read standard input: {e}");
                     return 1;
                 }
-            } else if std::path::Path::new(source_file).is_dir() {
+            } else if interpreter::io::system_path(source_file).is_dir() {
                 // gawk's words and status for each; Windows does not open a directory.
                 eprintln!(
                     "awk: {source_file}:1: error: cannot read source file `{source_file}': \
@@ -273,7 +273,7 @@ where
                 );
                 return 1;
             } else {
-                match std::fs::File::open(source_file) {
+                match std::fs::File::open(interpreter::io::system_path(source_file)) {
                     Ok(mut file) => {
                         if let Err(e) = file.read_to_string(&mut contents) {
                             eprintln!(
