@@ -167,7 +167,7 @@ impl Selector {
 pub(crate) fn listing<SE: cash_core::ShellExtensions>(
     shell: &cash_core::Shell<SE>,
 ) -> Vec<PathBuf> {
-    std::iter::once(shell.location())
+    std::iter::once(shell.working_dir().to_path_buf())
         .chain(shell.directory_stack().iter().rev().cloned())
         .collect()
 }

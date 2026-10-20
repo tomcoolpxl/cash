@@ -397,12 +397,9 @@ impl Spec {
 
             let expansions = pattern
                 .expand(
-                    &shell.pattern_base(),
+                    shell.working_dir(),
                     Some(&patterns::Pattern::accept_all_expand_filter),
-                    &patterns::FilenameExpansionOptions {
-                        directories: shell.pattern_directories(),
-                        ..Default::default()
-                    },
+                    &patterns::FilenameExpansionOptions::default(),
                 )?
                 .into_paths();
 
@@ -1385,7 +1382,7 @@ fn quoted_as_typed(
     let winpaths = shell.options().windows_drive_paths && is_unquoted_drive_path(prefix);
     (
         autoquote_candidates(candidates, prefix, options, winpaths, |name| {
-            shell.is_directory(name)
+            shell.absolute_path(Path::new(name)).is_dir()
         }),
         ProcessingOptions {
             no_autoquote_filenames: true,
@@ -1750,21 +1747,21 @@ async fn get_file_completions(
     let mut glob = typed_completion_pieces(glob_token);
     glob.push(patterns::PatternPiece::Pattern(String::from("*")));
 
-    let path_filter = |path: &Path| !must_be_dir || shell.is_directory(path);
+    let path_filter = |path: &Path| !must_be_dir || shell.absolute_path(path).is_dir();
 
     let pattern = patterns::Pattern::from(glob)
         .set_extended_globbing(shell.options().extended_globbing)
         .set_globstar(shell.options().enable_star_star_glob)
         .set_case_insensitive(shell.options().case_insensitive_pathname_expansion);
 
-    let expansion_options = shell.pattern_options();
+    let expansion_options = patterns::FilenameExpansionOptions {
+        require_dot_in_pattern_to_match_dot_files: !shell.options().glob_matches_dotfiles,
+        include_dot_and_dotdot: false,
+        unix_paths: shell.options().unix_paths,
+    };
 
     let mut completions: Vec<String> = pattern
-        .expand(
-            &shell.pattern_base(),
-            Some(&path_filter),
-            &expansion_options,
-        )
+        .expand(shell.working_dir(), Some(&path_filter), &expansion_options)
         .unwrap_or_default()
         .into_paths()
         .into_iter()
@@ -1807,7 +1804,7 @@ async fn get_file_completions(
             for completion in &mut completions {
                 let is_dir = keeps_tilde
                     && !completion.ends_with('/')
-                    && shell.is_directory(completion.as_str());
+                    && shell.absolute_path(Path::new(completion.as_str())).is_dir();
                 if let Some(rest) = completion.get(expanded.len()..) {
                     *completion = std::format!("{typed}{rest}{}", if is_dir { "/" } else { "" });
                 }

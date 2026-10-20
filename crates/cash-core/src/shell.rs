@@ -67,15 +67,8 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Manages files opened and accessible via redirection operators.
     open_files: openfiles::OpenFiles,
 
-    /// The current working directory: always one on disk, where the programs the shell
-    /// starts run.
+    /// The current working directory.
     working_dir: PathBuf,
-
-    /// The directory of cash's own the shell is in under `unixpaths` (D83), `/` or
-    /// `/usr/bin`, which has none on disk; `working_dir` is then the root of the drive it
-    /// came from. Asked through `Shell::location`.
-    #[cfg_attr(feature = "serde", serde(skip))]
-    virtual_dir: Option<cash_win32::root::Virtual>,
 
     /// The shell environment, containing shell variables.
     env: ShellEnvironment,
@@ -246,7 +239,6 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             traps: self.traps.clone(),
             open_files: self.open_files.clone(),
             working_dir: self.working_dir.clone(),
-            virtual_dir: self.virtual_dir,
             env: self.env.clone(),
             funcs: self.funcs.clone(),
             options: self.options.clone(),
@@ -378,10 +370,6 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         // An inherited HOME, as Windows spells it, shown as `/c/...` (D82), and a `$0` that
         // is this cash's own path, as Windows hands it over.
         if shell.options.unix_paths {
-            // D83: started by a shell in a directory of cash's own, `/`, which ran it at the
-            // drive's root and handed the directory on as `PWD`: in it, as Bash starts in
-            // the `$PWD` it inherits.
-            shell.enter_inherited_dir()?;
             shell.respell_shown_paths()?;
             if let Some(name) = &shell.name
                 && cash_win32::path::is_absolute(Path::new(name))
@@ -953,16 +941,6 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     /// Returns the shell's current working directory.
     pub fn working_dir(&self) -> &Path {
         &self.working_dir
-    }
-
-    /// Where the shell is, as a path names it: one of cash's own directories by its
-    /// spelling (`/`, D83), or the working directory. What `$PWD`, `cd -`, `dirs` and the
-    /// directory history hold.
-    pub fn location(&self) -> PathBuf {
-        self.virtual_dir.map_or_else(
-            || self.working_dir.clone(),
-            |directory| PathBuf::from(directory.spelled()),
-        )
     }
 
     /// `path` as the shell shows it to a script: `C:/dir`, or under `unixpaths` `/c/dir`

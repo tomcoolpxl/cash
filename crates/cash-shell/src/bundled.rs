@@ -576,15 +576,10 @@ fn takes_file_operands(name: &str) -> bool {
     )
 }
 
-/// `arg` as a file tool is handed it: [`takes_file_operands`]. A relative name, in a
-/// directory of cash's own the tool was started in under `unixpaths` (`c/x` at `/`), as the
-/// shell resolves it (D83).
+/// `arg` as a file tool is handed it: [`takes_file_operands`].
 fn file_operand(arg: &OsString) -> OsString {
     arg.to_str()
-        .and_then(|text| {
-            cash_win32::root::inherited_operand(text)
-                .or_else(|| cash_win32::path::windows_argument(text))
-        })
+        .and_then(cash_win32::path::windows_argument)
         .map_or_else(|| arg.clone(), OsString::from)
 }
 

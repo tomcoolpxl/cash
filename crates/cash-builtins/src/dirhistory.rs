@@ -114,7 +114,7 @@ fn history_listing(shell: &cash_core::Shell<impl cash_core::ShellExtensions>) ->
     for (i, dir) in back.iter().enumerate() {
         let _ = writeln!(out, "{:>3}) {}", back.len() - i, show(dir));
     }
-    let _ = writeln!(out, "     {}", show(&shell.location()));
+    let _ = writeln!(out, "     {}", show(shell.working_dir()));
     for (i, dir) in history.forward().enumerate() {
         let _ = writeln!(out, "{:>3}) {}", i + 1, show(dir));
     }
@@ -185,10 +185,10 @@ impl builtins::Command for CdhCommand {
 fn recent_directories(
     shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
 ) -> Vec<std::path::PathBuf> {
-    let current = shell.location();
+    let current = shell.working_dir();
     let mut seen = Vec::new();
     for dir in shell.directory_history().back().iter().rev() {
-        if *dir != current && !seen.contains(dir) {
+        if dir != current && !seen.contains(dir) {
             seen.push(dir.clone());
         }
     }

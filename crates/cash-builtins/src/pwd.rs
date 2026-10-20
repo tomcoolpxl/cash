@@ -31,18 +31,6 @@ impl builtins::Command for PwdCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        // In a directory of cash's own (D83), `/` and the rest: that, with no links to
-        // resolve; for `-W`, Windows' directory, the drive's root where programs start.
-        if let Some(directory) = context.shell.virtual_dir() {
-            let shown = if self.windows {
-                cash_win32::path::render(context.shell.working_dir())
-            } else {
-                directory.spelled().to_owned()
-            };
-            writeln!(context.stdout(), "{shown}")?;
-            return Ok(ExecutionResult::success());
-        }
-
         let mut cwd: Cow<'_, Path> = context.shell.working_dir().into();
 
         let should_canonicalize = self.physical

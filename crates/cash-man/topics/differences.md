@@ -21,11 +21,9 @@ and in the fewest places it can.
   test for `*/*` instead; rbenv, pyenv and nvm climb so, and a marker file they look
   for (`.python-version`, `package.json`) in a directory above ends the climb. Nor does
   one that climbs with `dirname` until it reaches `/`, as asdf 0.15 does: `dirname C:`
-  is `C:`, in Git Bash too, nor one that climbs with `cd ..` until `$PWD` is `/`, as
-  direnv's `find_up` does: `C:/..` is `C:/`. And bats' `load` takes a path for absolute
-  only when it starts with `/`, so a test file's `load` fails. `shopt -s unixpaths`
-  spells paths `/c/...` as Git Bash does, with `/` the directory above the drives, and
-  all of these run unchanged (`help paths`).
+  is `C:`, in Git Bash too. And bats' `load` takes a path for absolute only when it
+  starts with `/`, so a test file's `load` fails. `shopt -s unixpaths` spells paths
+  `/c/...` as Git Bash does, and all of these run unchanged (`help paths`).
 - Globbing and `find -name` ignore case, as the file system does; `shopt -u nocaseglob`
   turns that off.
 - Reading a variable from Windows, or one cash sets as it starts, ignores case when no

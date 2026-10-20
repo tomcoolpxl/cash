@@ -80,9 +80,6 @@ pub(crate) async fn apply_unary_predicate_to_str(
     if let Some(answer) = named_pipe_test(op, operand) {
         return Ok(answer);
     }
-    if let Some(answer) = own_directory_test(op, operand, shell) {
-        return Ok(answer);
-    }
     match op {
         ast::UnaryPredicate::StringHasNonZeroLength => Ok(!operand.is_empty()),
         ast::UnaryPredicate::StringHasZeroLength => Ok(operand.is_empty()),
@@ -259,44 +256,6 @@ fn named_pipe_test(op: &ast::UnaryPredicate, operand: &str) -> Option<bool> {
         | ast::UnaryPredicate::FileExistsAndIsSymlink
         | ast::UnaryPredicate::FileExistsAndIsBlockSpecialFile
         | ast::UnaryPredicate::FileExistsAndIsCharSpecialFile => Some(false),
-        _ => None,
-    }
-}
-
-/// cash (D83): the file tests of cash's own directories under `unixpaths`, `/`, `/usr`,
-/// `/usr/bin` (`/bin`) and `/dev`, and of a command `/usr/bin` holds, which no file on
-/// disk answers. A directory is there, readable and searchable, not one to write in; a
-/// command is a file that can be read and run, as `/usr/bin/sed` is in Git Bash. `None`
-/// for any other path, or a test that asks no file.
-fn own_directory_test(
-    op: &ast::UnaryPredicate,
-    operand: &str,
-    shell: &Shell<impl extensions::ShellExtensions>,
-) -> Option<bool> {
-    if !shell.options().unix_paths {
-        return None;
-    }
-    let directory = match shell.place(operand) {
-        cash_win32::root::Place::Virtual(_) => true,
-        cash_win32::root::Place::Command(_) => false,
-        _ => return None,
-    };
-    match op {
-        ast::UnaryPredicate::FileExists
-        | ast::UnaryPredicate::FileExistsAndIsReadable
-        | ast::UnaryPredicate::FileExistsAndIsExecutable
-        | ast::UnaryPredicate::FileExistsAndIsNotZeroLength => Some(true),
-        ast::UnaryPredicate::FileExistsAndIsDir => Some(directory),
-        ast::UnaryPredicate::FileExistsAndIsRegularFile => Some(!directory),
-        ast::UnaryPredicate::FileExistsAndIsWritable
-        | ast::UnaryPredicate::FileExistsAndIsSymlink
-        | ast::UnaryPredicate::FileExistsAndIsFifo
-        | ast::UnaryPredicate::FileExistsAndIsSocket
-        | ast::UnaryPredicate::FileExistsAndIsBlockSpecialFile
-        | ast::UnaryPredicate::FileExistsAndIsCharSpecialFile
-        | ast::UnaryPredicate::FileExistsAndIsSetgid
-        | ast::UnaryPredicate::FileExistsAndIsSetuid
-        | ast::UnaryPredicate::FileExistsAndHasStickyBit => Some(false),
         _ => None,
     }
 }

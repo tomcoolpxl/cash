@@ -114,7 +114,7 @@ impl builtins::Command for HashCommand {
         } else if let Some(path) = &self.path_to_use {
             // The shell's working directory is its own state, not the process's, so a
             // relative path is resolved against it before it's inspected -- but reported as given.
-            let is_dir = context.shell.is_directory(path);
+            let is_dir = context.shell.absolute_path(path).is_dir();
 
             for name in &self.names {
                 if is_dir {

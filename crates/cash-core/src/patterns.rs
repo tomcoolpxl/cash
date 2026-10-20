@@ -365,14 +365,16 @@ fn expand_globstar_paths(
     roots: Vec<PathBuf>,
     include_files: bool,
     skip_hidden: bool,
-    directories: &Directories,
 ) -> Vec<PathBuf> {
     let mut matches = Vec::new();
     let mut pending: VecDeque<PathBuf> = roots.into_iter().collect();
     let mut visited = HashSet::new();
 
     while let Some(directory) = pending.pop_front() {
-        if !visited.insert(directories.identity(&directory)) {
+        let identity = directory
+            .canonicalize()
+            .unwrap_or_else(|_| directory.clone());
+        if !visited.insert(identity) {
             continue;
         }
 
@@ -381,15 +383,24 @@ fn expand_globstar_paths(
             matches.push(directory.clone());
         }
 
-        for entry in directories.entries(&directory) {
-            if skip_hidden && entry.name.starts_with('.') {
+        let Ok(entries) = directory.read_dir() else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if skip_hidden && name.to_string_lossy().starts_with('.') {
                 continue;
             }
+
+            let path = entry.path();
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
             if include_files {
-                matches.push(entry.path.clone());
+                matches.push(path.clone());
             }
-            if entry.is_directory {
-                pending.push_back(entry.path);
+            if file_type.is_dir() && !file_type.is_symlink() {
+                pending.push_back(path);
             }
         }
     }
@@ -406,130 +417,6 @@ pub(crate) struct FilenameExpansionOptions {
     /// The matches of a pattern from an absolute start spelled `/c/...`, as the shell
     /// shows paths under `unixpaths` (D82).
     pub unix_paths: bool,
-    /// Where the directories are read.
-    pub directories: Directories,
-}
-
-/// Where a pattern's directories are read: on disk, a path that starts with one slash on
-/// the drive of the shell's directory (`/Windows`), as the shell reads it; and under
-/// `unixpaths` through cash's own directories of `/` (D83), which list what they hold and
-/// lead to the disk under `/c`. A path is kept as the pattern spells it, and only read
-/// where it leads, so `/c/x` matches come out as `/c/x/...`.
-#[derive(Clone, Debug, Default)]
-pub(crate) struct Directories {
-    /// The root of the drive of the shell's directory.
-    pub anchor: PathBuf,
-    /// Under `unixpaths`, what the paths under `/` name.
-    pub root: Option<cash_win32::root::View>,
-}
-
-/// An entry of a directory as [`Directories`] lists it: its name, its path as the pattern
-/// spells it, and whether it is a directory to go into, a link not being one.
-struct Listed {
-    name: String,
-    path: PathBuf,
-    is_directory: bool,
-}
-
-impl Directories {
-    /// What the pattern's path `path` leads to: under `unixpaths` what `/`'s directories
-    /// make of a path that starts with one slash; else the disk, a path from a single
-    /// slash read on the anchor's drive.
-    fn place(&self, path: &Path) -> cash_win32::root::Place {
-        let text = path.to_string_lossy().replace('\\', "/");
-        let rooted = text.starts_with('/') && !text.starts_with("//");
-        if rooted && let Some(root) = &self.root {
-            return root.place(&text);
-        }
-        if rooted && !self.anchor.as_os_str().is_empty() {
-            let accepted = cash_win32::path::accept_path(&text);
-            if cash_win32::path::is_absolute(&accepted) {
-                return cash_win32::root::Place::Real(accepted);
-            }
-            return cash_win32::root::Place::Real(self.anchor.join(text.trim_start_matches('/')));
-        }
-        cash_win32::root::Place::Real(path.to_path_buf())
-    }
-
-    /// The entries of the directory `directory`, its spelling kept in their paths.
-    fn entries(&self, directory: &Path) -> Vec<Listed> {
-        let real = match self.place(directory) {
-            cash_win32::root::Place::Virtual(own) => {
-                let Some(root) = &self.root else {
-                    return Vec::new();
-                };
-                return root
-                    .entries(own)
-                    .into_iter()
-                    .map(|entry| Listed {
-                        path: {
-                            let mut path = directory.to_path_buf();
-                            sys::fs::push_path_for_pattern(&mut path, &entry.name);
-                            path
-                        },
-                        is_directory: match &entry.place {
-                            cash_win32::root::Place::Virtual(_) => true,
-                            cash_win32::root::Place::Real(path) => path.is_dir(),
-                            _ => false,
-                        },
-                        name: entry.name,
-                    })
-                    .collect();
-            }
-            cash_win32::root::Place::Real(real) => real,
-            _ => return Vec::new(),
-        };
-        let Ok(read) = real.read_dir() else {
-            return Vec::new();
-        };
-        let same = real == directory;
-        read.flatten()
-            .map(|entry| {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                let path = if same {
-                    entry.path()
-                } else {
-                    let mut path = directory.to_path_buf();
-                    sys::fs::push_path_for_pattern(&mut path, &name);
-                    path
-                };
-                let is_directory = entry
-                    .file_type()
-                    .is_ok_and(|kind| kind.is_dir() && !kind.is_symlink());
-                Listed {
-                    name,
-                    path,
-                    is_directory,
-                }
-            })
-            .collect()
-    }
-
-    /// Whether `path` names an entry, as `lstat` says: a dangling link is one.
-    fn exists(&self, path: &Path) -> bool {
-        match self.place(path) {
-            cash_win32::root::Place::Real(real) => real.symlink_metadata().is_ok(),
-            _ => true,
-        }
-    }
-
-    /// Whether `path` names a directory.
-    fn is_dir(&self, path: &Path) -> bool {
-        match self.place(path) {
-            cash_win32::root::Place::Virtual(_) => true,
-            cash_win32::root::Place::Real(real) => real.is_dir(),
-            _ => false,
-        }
-    }
-
-    /// Who `path` is, to tell a directory reached twice: its canonical path on disk, or
-    /// its spelling for one of cash's own.
-    fn identity(&self, path: &Path) -> PathBuf {
-        match self.place(path) {
-            cash_win32::root::Place::Real(real) => real.canonicalize().unwrap_or(real),
-            other => other.into_path(),
-        }
-    }
 }
 
 /// Result of a pattern expansion, distinguishing "no glob metacharacters" from
@@ -826,7 +713,7 @@ impl Pattern {
                     if include_files && (component_index > 0 || starts_at_a_root) {
                         paths_so_far
                             .iter()
-                            .filter(|path| options.directories.is_dir(path))
+                            .filter(|path| path.is_dir())
                             .cloned()
                             .collect()
                     } else {
@@ -836,7 +723,6 @@ impl Pattern {
                     paths_so_far,
                     include_files,
                     options.require_dot_in_pattern_to_match_dot_files,
-                    &options.directories,
                 );
                 paths_so_far.extend(directories_too.into_iter().map(|directory| {
                     if written_out {
@@ -867,7 +753,7 @@ impl Pattern {
                     // bash. In particular this keeps dangling symlinks (which bash
                     // includes) while still rejecting a literal like `file/` whose
                     // trailing slash makes lstat fail with ENOTDIR for a regular file.
-                    options.directories.exists(p)
+                    p.symlink_metadata().is_ok()
                 });
                 written_out = true;
                 continue;
@@ -892,11 +778,15 @@ impl Pattern {
 
             let current_paths = std::mem::take(&mut paths_so_far);
             for current_path in current_paths {
-                for entry in options.directories.entries(&current_path) {
-                    if (allow_dot_files || !entry.name.starts_with('.'))
-                        && regex.is_match(&entry.name).unwrap_or(false)
-                    {
-                        paths_so_far.push(entry.path);
+                if let Ok(entries) = current_path.read_dir() {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name();
+                        let name = name.to_string_lossy();
+                        if (allow_dot_files || !name.starts_with('.'))
+                            && regex.is_match(&name).unwrap_or(false)
+                        {
+                            paths_so_far.push(entry.path());
+                        }
                     }
                 }
 
@@ -1707,7 +1597,6 @@ mod tests {
             require_dot_in_pattern_to_match_dot_files: true,
             include_dot_and_dotdot: false,
             unix_paths: false,
-            directories: Directories::default(),
         };
         let enabled = Pattern::from("**/needle.txt")
             .set_globstar(true)

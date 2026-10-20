@@ -284,8 +284,7 @@ impl builtins::Command for FindCommand {
                 max_depth: walk.max_depth,
                 one_file_system: false,
             };
-            let mut entries = walker::Walk::new(start, &actual, &options, stop.clone())
-                .own(context.shell.unix_root_view());
+            let mut entries = walker::Walk::new(start, &actual, &options, stop.clone());
             while let Some(next) = entries.next() {
                 let entry = match next {
                     Ok(entry) => entry,

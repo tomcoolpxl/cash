@@ -36,8 +36,7 @@ The user's pick after 1.40.0 (decisions.md, "The phase after 1.40.0"):
 2. under `unixpaths`, `/` is the directory above the drives, with `usr` and `bin` for the
    tools, in one module that the shell's directory, `cd`, globs, `ls` and `test` ask
    (D83, research/root-directory-design.md): found in item 1, a `cd ..` climb that never
-   ends (direnv's `find_up`); then direnv's missing-file search back in its case: done
-   2026-10-20 (DONE.md).
+   ends (direnv's `find_up`); then direnv's missing-file search back in its case.
 
 ## The phase before (2026-10-20, done)
 
@@ -197,11 +196,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   the standard handles, would lift the limit.
 
 ## Found along the way
-
-- **croot (Alt-E) at `/` opens at the drive's root** (found 2026-10-20, building D83):
-  under `unixpaths`, in one of cash's own directories, the picker starts at the root of
-  the drive the shell came from, its working directory on disk, not at `/` with the
-  drives in it; the picker reads directories itself, not through `cash_win32::root`.
 
 - **Three empty files, `1`, `f` and `file`, at the repository's root** (untracked, made
   2026-10-19 between 07:33 and 07:37): from no test that was found; perhaps a command

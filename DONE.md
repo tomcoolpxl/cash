@@ -2692,21 +2692,3 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   substitution's directory stays one that cannot be entered, as bash_unit's CLI suite
   would need, written down (D17); and a `cd ..` climb that never ends went to a design
   (item 2).
-- **`/` above the drives under `unixpaths`** (2026-10-20, the phase after 1.40.0, item 2,
-  D83, research/root-directory-design.md): `cd ..` from `/c` and `cd /` give `/`, so
-  direnv's `find_up` and every loop climbing with `cd ..` until `$PWD` is `/` end, as in
-  Git Bash. `/` holds the drives, `bin`, `dev`, `tmp` and `usr`; `/usr/bin` and `/bin`,
-  one directory, the commands cash carries (the user's addition), from the list `which`,
-  `type -P` and `cash --link-tools` use, moved into cash-core as `cash_core::carried`;
-  `/dev` cash's device names. One module, `cash_win32::root`, says what each holds and what
-  any path under `/` names; the shell's `place`, `absolute_path`, `set_working_dir` and
-  `location` resolve through it, and globs, `ls` (with `-a`, `-l`, `-d`, `-R`, `--tree`),
-  `test` and `[[ ]]`, `cd`'s `CDPATH` and `-P`, `pwd` and `pwd -W`, `dirs`, `pushd`, the
-  directory history and the shared directory walk (`find` with its types, sizes and
-  `-prune`, `grep -r`, `chmod -R`, `gzip -r`, `zstd -r`, `tar`, `zip`, `rar`) ask it, none
-  on its own. The shell's working directory stays one on disk, the drive's root, where a
-  program started at `/` runs and which it gets as `PWD`; a cash started there, and
-  cash's own tools, start in `/` itself (`root::inherited`), so `cat c/x` at `/` reads
-  `/c/x`. Turning the mode off at `/` leaves for that root. direnv's `unixpaths` twin has
-  its missing-file search back. Found in it: in the default mode `/*` read the root of the
-  drive cash was started on, not the shell's; it reads the shell's drive now.

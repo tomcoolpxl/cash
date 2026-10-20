@@ -10,6 +10,7 @@
 )]
 
 // cash (D45): Windows-specific builtins — winpath, start, elevate, detach.
+mod carried;
 mod win;
 // cash: `xdg-open`, `start` under the name cross-platform scripts try first.
 mod xdg_open;
@@ -295,7 +296,7 @@ mod lookup;
 mod unimp;
 
 pub use builder::ShellBuilderExt;
-pub use cash_core::carried::{carries_program, is_bash_builtin};
+pub use carried::{carries_program, is_bash_builtin};
 pub use factory::{BuiltinSet, default_builtins, is_default_builtin};
 
 /// Writes an alias definition in the reusable form printed by `alias` and `command -v`.

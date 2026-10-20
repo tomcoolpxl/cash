@@ -96,9 +96,6 @@ pub(crate) struct Entry {
     listed: Option<walkdir::DirEntry>,
     /// A link the walk went through: what it is, is what it names.
     followed: bool,
-    /// What gives the facts of an entry of cash's own (D83), which is no file on disk:
-    /// cash's own directory for a directory, cash for a command, as `ls -l` shows them.
-    stand_in: Option<PathBuf>,
 }
 
 impl Entry {
@@ -112,9 +109,6 @@ impl Entry {
     /// What it is itself, a link not followed: free from the listing where Windows gave
     /// it, a link's read again.
     pub(crate) fn own_metadata(&self) -> std::io::Result<std::fs::Metadata> {
-        if let Some(stand_in) = &self.stand_in {
-            return std::fs::metadata(stand_in);
-        }
         match &self.listed {
             Some(entry) if !entry.path_is_symlink() => entry.metadata().map_err(into_io),
             _ => std::fs::symlink_metadata(&self.path),
@@ -124,9 +118,6 @@ impl Entry {
     /// What it is, through a link the walk follows; free from the listing where Windows
     /// gave it. A dangling link's is its own.
     pub(crate) fn metadata(&self) -> std::io::Result<std::fs::Metadata> {
-        if let Some(stand_in) = &self.stand_in {
-            return std::fs::metadata(stand_in);
-        }
         if self.followed {
             return std::fs::metadata(&self.path);
         }
@@ -173,17 +164,6 @@ pub(crate) struct Walk {
     shown: String,
     stop: StopToken,
     stopped: bool,
-    /// Under `unixpaths`, what the paths under `/` name (D83): a root of cash's own, `/` or
-    /// `/usr/bin`, is walked through what it holds ([`Self::own`]).
-    own: Option<cash_win32::root::View>,
-    /// The root, when it is one of cash's own directories, until it is handed out.
-    own_root: Option<cash_win32::root::Virtual>,
-    /// The directories of cash's own under way, the innermost last; walkdir's walks go into
-    /// the directories on disk they hold.
-    frames: Vec<OwnFrame>,
-    /// The directory of cash's own just handed out, gone into on the next step unless
-    /// [`Self::skip_directory`] says not to.
-    pending_frame: Option<OwnFrame>,
 }
 
 /// One of walkdir's walks: the root's, or the one inside a link the walk goes through.
@@ -192,22 +172,6 @@ struct Inner {
     /// How deep its root is in the whole walk.
     depth: usize,
     /// With `contents_first`, the link it is inside, handed out once it is done.
-    deferred: Option<Entry>,
-    /// Where it starts, and the name that is shown by: the walk's root, or under a directory
-    /// of cash's own a directory on disk it holds (`/c`).
-    root: PathBuf,
-    shown: String,
-    /// Whether its root is handed out from it: one under a directory of cash's own is, a
-    /// link's is handed out from the walk around it.
-    emits_root: bool,
-}
-
-/// A directory of cash's own under way (D83): the names it has yet to hand out.
-struct OwnFrame {
-    shown: String,
-    depth: usize,
-    entries: std::collections::VecDeque<cash_win32::root::Entry>,
-    /// With `contents_first`, the directory itself, handed out once it is done.
     deferred: Option<Entry>,
 }
 
@@ -224,9 +188,6 @@ impl Walk {
             ),
             depth: 0,
             deferred: None,
-            root: actual.to_path_buf(),
-            shown: shown.to_owned(),
-            emits_root: true,
         };
         Self {
             walks: vec![root],
@@ -236,34 +197,12 @@ impl Walk {
             shown: shown.to_owned(),
             stop,
             stopped: false,
-            own: None,
-            own_root: None,
-            frames: Vec::new(),
-            pending_frame: None,
         }
-    }
-
-    /// The walk under `unixpaths` (D83, `Shell::root_view`): a root that is one of cash's
-    /// own directories, as the shell resolved it (`/`, `/usr/bin`), is walked through what
-    /// it holds, the drives' directories on disk among them.
-    pub(crate) fn own(mut self, view: Option<cash_win32::root::View>) -> Self {
-        if let Some(view) = &view
-            && let cash_win32::root::Place::Virtual(directory) =
-                view.place(&self.root.to_string_lossy())
-        {
-            self.walks.clear();
-            self.own_root = Some(directory);
-        }
-        self.own = view;
-        self
     }
 
     /// Goes no further into the directory just handed out (`find -prune`, an excluded
     /// directory).
     pub(crate) fn skip_directory(&mut self) {
-        if self.pending_frame.take().is_some() {
-            return;
-        }
         if self.pending.take().is_none()
             && let Some(walk) = self.walks.last_mut()
         {
@@ -271,131 +210,17 @@ impl Walk {
         }
     }
 
-    /// The name `path`, under the innermost walk's root, is shown by.
+    /// The name `path`, under the root, is shown by.
     fn shown(&self, path: &Path) -> String {
-        let (root, shown) = self
-            .walks
-            .last()
-            .map_or((&self.root, &self.shown), |walk| (&walk.root, &walk.shown));
         let below: Vec<String> = path
-            .strip_prefix(root)
+            .strip_prefix(&self.root)
             .map(|rest| {
                 rest.components()
                     .map(|part| part.as_os_str().to_string_lossy().into_owned())
                     .collect()
             })
             .unwrap_or_default();
-        join_shown(shown, &below.join("/"))
-    }
-
-    /// A directory of cash's own, a command or a device (D83), as an entry of the walk: none
-    /// is a file on disk, so it is not listed from one, and its path is its name under `/`.
-    fn own_entry(shown: String, path: PathBuf, depth: usize, kind: Kind) -> Entry {
-        let exe = std::env::current_exe().ok();
-        let stand_in = match kind {
-            Kind::Directory => exe.and_then(|exe| exe.parent().map(Path::to_path_buf)),
-            Kind::File => exe,
-            Kind::Link | Kind::Other => None,
-        };
-        Entry {
-            shown,
-            path,
-            depth,
-            kind,
-            listed: None,
-            followed: false,
-            stand_in,
-        }
-    }
-
-    /// What the directory of cash's own `directory`, `shown` and `depth` deep, has to hand
-    /// out: nothing at the deepest the walk goes.
-    fn own_frame(
-        &self,
-        directory: cash_win32::root::Virtual,
-        shown: &str,
-        depth: usize,
-    ) -> Option<OwnFrame> {
-        let view = self.own.as_ref()?;
-        (depth < self.options.max_depth).then(|| OwnFrame {
-            shown: shown.to_owned(),
-            depth,
-            entries: view.entries(directory).into(),
-            deferred: None,
-        })
-    }
-
-    /// The directory of cash's own `entry` is, handed out before what it holds, or after it
-    /// with `contents_first`; `None` when nothing is handed out now.
-    fn own_directory(&mut self, entry: Entry, frame: Option<OwnFrame>) -> Option<Entry> {
-        let shown_now = entry.depth >= self.options.min_depth;
-        if self.options.contents_first {
-            match frame {
-                Some(mut frame) => {
-                    frame.deferred = shown_now.then_some(entry);
-                    self.frames.push(frame);
-                    None
-                }
-                None => shown_now.then_some(entry),
-            }
-        } else if shown_now {
-            self.pending_frame = frame;
-            Some(entry)
-        } else {
-            self.frames.extend(frame);
-            None
-        }
-    }
-
-    /// The next step through the directories of cash's own under way, once walkdir's walks
-    /// are done: a directory of cash's own, a walk into one on disk, a command, a device;
-    /// `None` for a step that hands nothing out.
-    fn next_own(&mut self) -> Option<Entry> {
-        let frame = self.frames.last_mut()?;
-        let Some(next) = frame.entries.pop_front() else {
-            return self.frames.pop()?.deferred;
-        };
-        let depth = frame.depth + 1;
-        let shown = join_shown(&frame.shown, &next.name);
-        let shown_now = depth >= self.options.min_depth;
-        match next.place {
-            cash_win32::root::Place::Virtual(directory) => {
-                let frame = self.own_frame(directory, &shown, depth);
-                let entry = Self::own_entry(
-                    shown,
-                    PathBuf::from(directory.spelled()),
-                    depth,
-                    Kind::Directory,
-                );
-                self.own_directory(entry, frame)
-            }
-            cash_win32::root::Place::Real(path) => {
-                self.walks.push(Inner {
-                    iter: walkdir_of(
-                        &path,
-                        &self.options,
-                        self.options.links != Links::Never,
-                        self.options.max_depth - depth,
-                    ),
-                    depth,
-                    deferred: None,
-                    root: path,
-                    shown,
-                    emits_root: true,
-                });
-                None
-            }
-            cash_win32::root::Place::Command(name) => shown_now.then(|| {
-                Self::own_entry(
-                    shown,
-                    PathBuf::from(cash_win32::path::system_tool_path(&name)),
-                    depth,
-                    Kind::File,
-                )
-            }),
-            cash_win32::root::Place::Device(spelled) => shown_now
-                .then(|| Self::own_entry(shown, PathBuf::from(spelled), depth, Kind::Other)),
-        }
+        join_shown(&self.shown, &below.join("/"))
     }
 
     fn entry(&self, entry: walkdir::DirEntry, depth: usize) -> Entry {
@@ -406,7 +231,6 @@ impl Walk {
             kind: kind(entry.file_type()),
             listed: Some(entry),
             followed: false,
-            stand_in: None,
         }
     }
 
@@ -429,7 +253,6 @@ impl Walk {
                 kind: Kind::Link,
                 listed: None,
                 followed: false,
-                stand_in: None,
             });
         }
         // walkdir words both alike; what failed on a directory is its listing.
@@ -471,10 +294,6 @@ impl Walk {
                 ancestor,
             }));
         }
-        let (root, shown) = self.walks.last().map_or_else(
-            || (self.root.clone(), self.shown.clone()),
-            |walk| (walk.root.clone(), walk.shown.clone()),
-        );
         let mut inner = Inner {
             iter: walkdir_of(
                 &entry.path,
@@ -484,9 +303,6 @@ impl Walk {
             ),
             depth: entry.depth,
             deferred: None,
-            root,
-            shown,
-            emits_root: false,
         };
         if self.options.contents_first {
             inner.deferred = Some(entry);
@@ -499,11 +315,10 @@ impl Walk {
 
     /// The directory at or above the root that the link `link` names, shown: a loop.
     fn ancestor(&self, link: &Path) -> Option<String> {
-        let root = self.walks.last().map_or(&self.root, |walk| &walk.root);
         let above = link
             .ancestors()
             .skip(1)
-            .take_while(|directory| directory.starts_with(root));
+            .take_while(|directory| directory.starts_with(&self.root));
         loop_ancestor(link, above).map(|directory| self.shown(directory))
     }
 }
@@ -522,40 +337,11 @@ impl Iterator for Walk {
         if let Some(inner) = self.pending.take() {
             self.walks.push(inner);
         }
-        if let Some(frame) = self.pending_frame.take() {
-            self.frames.push(frame);
-        }
-        // A root of cash's own (D83), handed out first.
-        if let Some(directory) = self.own_root.take() {
-            let shown = self.shown.clone();
-            let frame = self.own_frame(directory, &shown, 0);
-            let entry = Self::own_entry(
-                shown,
-                PathBuf::from(directory.spelled()),
-                0,
-                Kind::Directory,
-            );
-            if let Some(entry) = self.own_directory(entry, frame) {
-                return Some(Ok(entry));
-            }
-        }
         loop {
-            if self.walks.is_empty() {
-                if self.frames.is_empty() {
-                    return None;
-                }
-                if let Some(entry) = self.next_own() {
-                    return Some(Ok(entry));
-                }
-                if let Some(frame) = self.pending_frame.take() {
-                    self.frames.push(frame);
-                }
-                continue;
-            }
             let nested = self.walks.len() > 1;
-            let (next, depth, emits_root) = {
+            let (next, depth) = {
                 let walk = self.walks.last_mut()?;
-                (walk.iter.next(), walk.depth, walk.emits_root)
+                (walk.iter.next(), walk.depth)
             };
             let Some(next) = next else {
                 let done = self.walks.pop()?;
@@ -571,7 +357,7 @@ impl Iterator for Walk {
                 Err(error) => return Some(Err(self.error(error, depth))),
             };
             // A link's own entry was handed out from the walk around the walk inside it.
-            if nested && !emits_root && found.depth() == 0 {
+            if nested && found.depth() == 0 {
                 continue;
             }
             let mut entry = self.entry(found, depth);
