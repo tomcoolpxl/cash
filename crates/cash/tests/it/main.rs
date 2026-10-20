@@ -128,6 +128,8 @@ mod gzip_builtin;
 // `head`: where it leaves a file under its standard input.
 mod head_builtin;
 mod held_descriptors;
+// `exec`, and the redirections of compound commands and function calls, as Bash 5.3.
+mod exec_redirections;
 // `help` and `cash help`: the catalogue covers every builtin, and its pages, topics and
 // search.
 mod help_catalogue;

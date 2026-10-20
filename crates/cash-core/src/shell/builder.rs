@@ -252,6 +252,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             working_dir: PathBuf::default(),
             at_slash: false,
             loop_depth: 0,
+            compound_redirection_failed: false,
             env: env::ShellEnvironment::default(),
             funcs: functions::FunctionEnv::default(),
             options: options::RuntimeOptions::default(),

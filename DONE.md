@@ -2754,3 +2754,19 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   every `isspace` character in IFS is IFS whitespace as in Bash 5.3, and an escaped
   character is marked as Bash marks it, never a delimiter. `mapfile -d ''` kept the NUL in
   each element.
+- **`exec` and the redirection state** (2026-10-21, the phase after 1.42.0, item 3):
+  `exec` with no command made every descriptor of the command it ran in the shell's, the
+  redirections of the block around it too: `{ exec 3>x; } >y` left standard output in `y`
+  for good, and all that followed was lost in the file; `{ exec 8<x; } 8<&-` left fd 8
+  open (modernish). Now `exec` makes only its own redirections the shell's, and a
+  compound command or a function call holds its redirections in the shell while it runs
+  and puts back what was there as it ends, as Bash does, so an `exec` inside is seen by
+  the commands after it and undone with the block for the block's descriptors.
+  `exec {v}<<EOF` and `exec {v}<<<word` ran `{v}` as a command. A failed `exec`: `shopt -s
+  execfail` was ignored, `exec .` went on after an i/o error (Bash: "cannot execute: Is a
+  directory", 126), `exec notthere 4>&2` went on, and `exec -i` ran a command named `-i`
+  and ended the script (Bash: an invalid option, status 2). A command started with `&`
+  read `/dev/null` even where its input was redirected around it, by a loop's
+  here-document or a pipe. A compound command whose own redirection failed ended the
+  script, or the `( )` around it, and ran no ERR trap; it fails with 1 as a simple command
+  does. `( ! exit 42 )` was 0: an `exit` leaves before the `!`.

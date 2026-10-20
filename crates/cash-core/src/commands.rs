@@ -181,6 +181,13 @@ impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
         self.params.try_fd(self.shell, fd)
     }
 
+    /// Makes the descriptors this command's own redirections set or closed the shell's, as
+    /// `exec` with no command does; the redirections of the commands around it stay
+    /// theirs.
+    pub fn make_own_redirections_permanent(&mut self) {
+        interp::make_redirections_permanent(self.shell, &self.params);
+    }
+
     /// Iterates over all open file descriptors.
     pub fn iter_fds(&self) -> impl Iterator<Item = (ShellFd, openfiles::OpenFile)> {
         self.params.iter_fds(self.shell)
@@ -1287,6 +1294,7 @@ pub async fn run_for_builtin_exporting<SE: extensions::ShellExtensions>(
     // command with "fd redirections".
     let mut params = params;
     params.command_redirected_fds.clear();
+    params.own_redirections.clear();
     let mut command = SimpleCommand::new(
         ShellForCommand::ParentShell(&mut shell),
         params,
@@ -2153,6 +2161,9 @@ pub(crate) async fn invoke_shell_function(
     // the function goes on. The caller's loops are its own again after.
     let caller_loops = context.shell.loop_depth();
     context.shell.set_loop_depth(0);
+    // The call's redirections, and the definition's, are the shell's while it runs, as in
+    // Bash: an `exec` in the function changes what its commands after it see.
+    let held = interp::hold_redirections(context.shell, &mut context.params);
 
     // A function executes within the current shell process and shares its caller's open files,
     // so the parameters are passed through by shared reference rather than cloned. This prevents
@@ -2181,6 +2192,7 @@ pub(crate) async fn invoke_shell_function(
     }
 
     // We've come back out, reflect it.
+    interp::release_redirections(context.shell, held);
     context.shell.set_loop_depth(caller_loops);
     context.shell.leave_function()?;
 

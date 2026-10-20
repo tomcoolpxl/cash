@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::borrow::Cow;
 use std::io::Write as _;
+use std::path::Path;
 
 use cash_core::{ErrorKind, ExecutionExitCode, ExecutionResult, builtins, commands};
 
@@ -19,8 +20,10 @@ pub(crate) struct ExecCommand {
     #[arg(short = 'l')]
     exec_as_login: bool,
 
-    /// Command and args.
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    /// Command and args. A word before the command that looks like an option is one, as
+    /// in Bash: `exec -i` is an invalid option, status 2, and the script goes on; it was
+    /// run as a command named `-i`, and the script ended.
+    #[arg(trailing_var_arg = true)]
     args: Vec<String>,
 }
 
@@ -51,13 +54,10 @@ impl builtins::Command for ExecCommand {
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         if self.args.is_empty() {
-            // When no arguments are present, then there's nothing for us to execute -- but we need
-            // to ensure that any redirections setup for this builtin get applied to the calling
-            // shell instance.
-            #[expect(clippy::needless_collect)]
-            let fds: Vec<_> = context.iter_fds().collect();
-
-            context.shell.replace_open_files(fds.into_iter());
+            // When no arguments are present, then there's nothing for us to execute -- but
+            // the redirections on `exec` itself are the shell's from now on, and only those.
+            let mut context = context;
+            context.make_own_redirections_permanent();
             return Ok(ExecutionResult::success());
         }
 
@@ -71,13 +71,28 @@ impl builtins::Command for ExecCommand {
             argv0 = Cow::Owned(std::format!("-{argv0}"));
         }
 
-        let mut cmd = commands::compose_std_command(
+        let mut cmd = match commands::compose_std_command(
             &context,
             &self.args[0],
             argv0.as_str(),
             &self.args[1..],
             self.empty_environment,
-        )?;
+        ) {
+            Ok(cmd) => cmd,
+            Err(error) => {
+                // Said as the shell says it, and ending as a command not found does: it
+                // went on (`exec notthere 4>&2` fails here, on the descriptor).
+                let status = if matches!(error.kind(), ErrorKind::CommandNotFound(_)) {
+                    127
+                } else {
+                    126
+                };
+                let _ = context
+                    .shell
+                    .display_error(&mut context.params.stderr(context.shell), &error);
+                return Ok(failed(&context, status));
+            }
+        };
 
         // `-a` and `-l` only change the program's `argv[0]`, which std's `Command` cannot
         // set on Windows: another program ran under its own name in silence (the user,
@@ -123,16 +138,24 @@ impl builtins::Command for ExecCommand {
                     )?;
                 }
 
-                // POSIX: when `exec` cannot run the command, a non-interactive shell
-                // exits. Without this, `exec missing; echo x` would print `x` — the
-                // script carrying on past a line that was meant to replace it.
-                let mut result: ExecutionResult = ExecutionExitCode::NotFound.into();
-                if !context.shell.options().interactive {
-                    result.next_control_flow = cash_core::ExecutionControlFlow::ExitShell;
-                }
-                return Ok(result);
+                return Ok(failed(&context, 127));
             }
-            Err(e) => return Err(ErrorKind::from(e).into()),
+            Err(e) => {
+                // A directory, or a file Windows will not start: "cannot execute", status
+                // 126, as Bash. It was an i/o error the script went on after.
+                let program = &self.args[0];
+                let reason = if context.shell.absolute_path(Path::new(program)).is_dir() {
+                    String::from("Is a directory")
+                } else {
+                    cash_core::error::os_error_text(&e)
+                };
+                writeln!(
+                    context.error_stream(),
+                    "{}: {program}: cannot execute: {reason}",
+                    context.command_name
+                )?;
+                return Ok(failed(&context, 126));
+            }
         };
 
         let code = status.code().unwrap_or(1);
@@ -141,6 +164,21 @@ impl builtins::Command for ExecCommand {
         result.next_control_flow = cash_core::ExecutionControlFlow::ExitShell;
         Ok(result)
     }
+}
+
+/// What a failed `exec` ends with, `status`: POSIX has a non-interactive shell exit, so
+/// that `exec missing; echo x` does not print `x`, unless `shopt -s execfail` asks it to
+/// go on, as Bash does; that was not asked.
+fn failed<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    status: u8,
+) -> ExecutionResult {
+    let mut result = ExecutionResult::new(status);
+    let options = context.shell.options();
+    if !options.interactive && !options.exit_on_exec_fail {
+        result.next_control_flow = cash_core::ExecutionControlFlow::ExitShell;
+    }
+    result
 }
 
 #[cfg(test)]

@@ -605,6 +605,14 @@ peg::parser! {
                     let (kind, target) = f;
                     ast::IoRedirect::VariableFile(name, kind, target)
                 } /
+            // `{v}<<<word` and `{v}<<EOF`, which Bash takes as it takes `{v}<file`; they
+            // were a command named `{v}`.
+            non_posix_extensions_enabled() name:io_variable() specific_operator("<<<") w:word() {
+                    ast::IoRedirect::VariableHereString(name, ast::Word::from(w))
+                } /
+            non_posix_extensions_enabled() name:io_variable() h:io_here() {
+                    ast::IoRedirect::VariableHereDocument(name, h)
+                } /
             n:io_number()? f:io_file() {
                     let (kind, target) = f;
                     ast::IoRedirect::File(n, kind, target)

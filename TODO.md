@@ -28,13 +28,10 @@ for working through it. What is done, phases and findings, is in DONE.md.
 ## Picked by the user (the current phase, after 1.42.0, 2026-10-21)
 
 The user's pick from the themes below (decisions.md, "The phase after 1.42.0"), in this
-order. Done, in DONE.md: 1, loop control (`break`, `continue`, `return`, `exit`), and 2,
-`read` with a mixed IFS and escapes, and `mapfile -d ''`.
+order. Done, in DONE.md: 1, loop control (`break`, `continue`, `return`, `exit`); 2,
+`read` with a mixed IFS and escapes, and `mapfile -d ''`; 3, `exec` and the redirection
+state, but for `exec 0<file` in a script read from standard input (below).
 
-3. `exec` and the redirection state: a redirection made permanent, `exec {v}<<EOF`,
-   failed `exec`, a background command's here-document or pipe input, a failed
-   redirection on a compound command, `exec 0<file` in a script read from standard input,
-   fd 8 after `{ exec 8<x; } 8<&-`, `( ! exit 42 )`.
 4. `fc -0` and `fc -s -0`; `set -o history` writing `$HISTFILE` in a script.
 5. The parser's cheapest subset: `! time`, `time --`, reserved words in `$(case ...)`, a
    here-document in `$(...)` ended by `EOF)`, `<<-'<TAB>END'`.
@@ -65,18 +62,13 @@ unquoted by `set`, `printf %q` and `declare -p`, and `**/**` giving the director
 path. The rest, by theme:
 
 **Scripts that end or go on in silence**
-- `exec` with a redirection inside a redirected `{ }` or function makes the outer
-  redirection permanent: what follows lands in the file.
-- `exec {v}<<EOF` and `exec {v}<<<word` run `{v}` as a command, status 127.
-- A failed `exec`: `shopt -s execfail` ignored; `exec .` and `exec notthere` go on;
-  `exec -1`/`exec -i` taken for commands, the script ended (Bash: invalid option, status 2).
-- A background command whose input is a here-document or a pipe, inside a block or
-  subshell, reads `/dev/null` (`echo x | ( cat & wait )` prints nothing).
-- A failed redirection on a compound command ends an enclosing `( )`, and the ERR trap
-  never runs for it.
-- A shell reading its script from standard input ignores `exec 0<file`.
-- `{ exec 8</dev/null; } 8<&-` leaves fd 8 open after the block (modernish).
-- `( ! exit 42 )` is 0 (Bash: 42).
+- A shell reading its script from standard input ignores `exec 0<file`: the script is
+  read ahead of the commands, from the input the shell started with (Bash reads it a
+  line at a time, from whatever fd 0 is then).
+- `eval` and `source` with a redirection keep it the command's: an `exec` inside that
+  changes the same descriptor is not seen by the commands after it there (`eval 'exec
+  >log; echo a' >out` writes `a` to `out`; Bash, to `log`). Compound commands and
+  function calls hold theirs in the shell, as Bash does.
 - `fc -0` and `fc -s -0` run the last command again (Bash: out of range).
 - `set -o history` in a script writes every command to `$HISTFILE` at once; Bash writes
   nothing.

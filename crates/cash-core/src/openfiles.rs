@@ -583,6 +583,14 @@ impl OpenFiles {
             .and_then(|f| f)
     }
 
+    /// Takes away what these files say of `fd`, open or closed, so that it is looked up
+    /// where they fall back to.
+    pub(crate) fn forget_fd(&mut self, fd: ShellFd) {
+        if self.files.contains_key(&fd) {
+            Arc::make_mut(&mut self.files).remove(&fd);
+        }
+    }
+
     /// Tries to lookup the `OpenFile` associated with a file descriptor.
     /// Returns `None` if the file descriptor is not present.
     ///

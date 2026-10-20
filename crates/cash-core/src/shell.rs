@@ -78,6 +78,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// and `continue` may leave. A function and a `( … )` subshell start from none.
     loop_depth: usize,
 
+    /// Whether the compound command just run failed on a redirection of its own, before
+    /// any command in it ran: its failure is then its own, for the ERR trap and `set -e`.
+    compound_redirection_failed: bool,
+
     /// The shell environment, containing shell variables.
     env: ShellEnvironment,
 
@@ -249,6 +253,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             working_dir: self.working_dir.clone(),
             at_slash: self.at_slash,
             loop_depth: self.loop_depth,
+            compound_redirection_failed: false,
             env: self.env.clone(),
             funcs: self.funcs.clone(),
             options: self.options.clone(),
@@ -729,6 +734,17 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     /// runs, and a function or a `( … )` subshell starts from none.
     pub(crate) const fn set_loop_depth(&mut self, depth: usize) {
         self.loop_depth = depth;
+    }
+
+    /// Notes that a compound command failed on a redirection of its own.
+    pub(crate) const fn note_compound_redirection_failed(&mut self) {
+        self.compound_redirection_failed = true;
+    }
+
+    /// Whether the compound command just run failed on a redirection of its own, which
+    /// it forgets.
+    pub(crate) const fn take_compound_redirection_failed(&mut self) -> bool {
+        std::mem::replace(&mut self.compound_redirection_failed, false)
     }
 }
 

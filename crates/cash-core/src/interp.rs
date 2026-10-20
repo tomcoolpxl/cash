@@ -91,6 +91,17 @@ pub struct ExecutionParameters {
     /// cleared, so a compound command's entries never reach the commands inside it.
     pub(crate) command_redirected_fds: Vec<ShellFd>,
 
+    /// Every descriptor the current command's own redirections set or closed, 0 to 2
+    /// too: what `exec` with no command makes the shell's, and what a compound command or
+    /// a function call holds in the shell while it runs ([`hold_redirections`]). Cleared
+    /// as each command sets up its redirections.
+    pub(crate) own_redirections: Vec<ShellFd>,
+
+    /// Whether standard input was redirected around the commands run under these
+    /// parameters, by a compound command, a function call or a pipe: a command started
+    /// with `&` then reads it, as in Bash, and not `/dev/null`.
+    pub(crate) stdin_redirected: bool,
+
     /// Whether these are the parameters of commands a program is running: a script, a
     /// `-c` string, a line typed at the prompt.
     ///
@@ -342,8 +353,16 @@ impl ExecutionParameters {
     /// Sets a descriptor on behalf of a redirection, noting it when it is above 2.
     fn set_redirected_fd(&mut self, fd: ShellFd, file: openfiles::OpenFile) {
         self.open_files.set_fd(fd, file);
+        self.note_own_redirection(fd);
         if fd > OpenFiles::STDERR_FD && !self.command_redirected_fds.contains(&fd) {
             self.command_redirected_fds.push(fd);
+        }
+    }
+
+    /// Notes that the current command's own redirections set or closed `fd`.
+    fn note_own_redirection(&mut self, fd: ShellFd) {
+        if !self.own_redirections.contains(&fd) {
+            self.own_redirections.push(fd);
         }
     }
 
@@ -573,8 +592,12 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
 
     let mut job_params = params.clone();
 
-    // Redirect stdin to null, per spec.
-    if let Ok(null) = openfiles::null() {
+    // Standard input is `/dev/null`, as POSIX has it without job control, unless it was
+    // redirected around the job, by a compound command, a function call or a pipe, as Bash
+    // keeps it then: a job in `while read ...; done <<EOF` read nothing.
+    if !params.stdin_redirected
+        && let Ok(null) = openfiles::null()
+    {
         job_params.set_fd(openfiles::OpenFiles::STDIN_FD, null);
     }
 
@@ -991,18 +1014,19 @@ impl Execute for ast::Pipeline {
             ready.notify_one();
         }
 
-        // Invert the exit code if requested.
-        if self.bang {
+        // Invert the exit code if requested; not an `exit`'s or `return`'s: `( ! exit 42 )`.
+        if self.bang && !result.is_return_or_exit() {
             result.exit_code = ExecutionExitCode::from(if result.is_success() { 1 } else { 0 });
         }
 
         // Update exit status.
         shell.set_last_exit_status(result.exit_code.into());
 
-        let status_from_ignored_failure = status_from_ignored_failure(self, shell, &result);
+        // A compound command that failed on its own redirection: the failure is its own.
+        let own_failure = shell.take_compound_redirection_failed();
+        let ignored = !own_failure && status_from_ignored_failure(self, shell, &result);
         shell.note_failure_ignored_by_errexit(
-            !result.is_success()
-                && (params.suppress_errexit || self.bang || status_from_ignored_failure),
+            !result.is_success() && (params.suppress_errexit || self.bang || ignored),
         );
 
         // Fire the ERR trap if the pipeline failed in a non-conditional context.
@@ -1015,7 +1039,7 @@ impl Execute for ast::Pipeline {
         if !result.is_success()
             && !params.suppress_errexit
             && !self.bang
-            && !is_compound_of_commands(self)
+            && (own_failure || !is_compound_of_commands(self))
             && had_err_trap
             && !matches!(
                 result.next_control_flow,
@@ -1039,7 +1063,7 @@ impl Execute for ast::Pipeline {
         }
 
         // Apply errexit if not suppressed (and not negated)
-        if !params.suppress_errexit && !self.bang && !status_from_ignored_failure {
+        if !params.suppress_errexit && !self.bang && !ignored {
             apply_errexit(shell, &params, &mut result).await;
         }
 
@@ -1122,9 +1146,11 @@ async fn spawn_pipeline_processes(
             cmd_params.spawned_pid_ready = None;
         }
 
-        // Install pipes.
+        // Install pipes. A stage that reads the pipe has its input redirected: what it
+        // starts with `&` reads the pipe too (`echo x | ( cat & wait )`).
         if let Some(Some(reader)) = pipe_readers.pop() {
             cmd_params.open_files.set_fd(OpenFiles::STDIN_FD, reader);
+            cmd_params.stdin_redirected = true;
         }
         if let Some(Some(writer)) = pipe_writers.pop() {
             cmd_params.open_files.set_fd(OpenFiles::STDOUT_FD, writer);
@@ -1391,10 +1417,24 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::Command {
         match self {
             Self::Simple(simple) => simple.execute_in_pipeline(pipeline_context, params).await,
             Self::Compound(compound, redirects) => {
-                // Set up any additional redirects.
+                // Set up any additional redirects; the shell holds them while it runs.
+                // One that fails is said, and the command fails with 1, as a simple command's
+                // does, the ERR trap run: it ended the script, or the `( )` around it.
+                params.own_redirections.clear();
                 if let Some(redirects) = redirects {
                     for redirect in &redirects.0 {
-                        setup_redirect(&mut pipeline_context.shell, &mut params, redirect).await?;
+                        if let Err(e) =
+                            setup_redirect(&mut pipeline_context.shell, &mut params, redirect).await
+                        {
+                            if e.is_silent_interrupt() {
+                                return Err(e);
+                            }
+                            let _ = pipeline_context
+                                .shell
+                                .display_error(&mut params.stderr(&pipeline_context.shell), &e);
+                            pipeline_context.shell.note_compound_redirection_failed();
+                            return Ok(ExecutionResult::general_error().into());
+                        }
                     }
                 }
 
@@ -1404,6 +1444,84 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::Command {
                 .execute(&mut pipeline_context.shell, &params)
                 .await?
                 .into()),
+        }
+    }
+}
+
+/// The descriptors a compound command or a function call redirected, held in the shell
+/// while it runs, each with what the shell had before ([`release_redirections`]).
+#[must_use]
+pub(crate) struct HeldRedirections(Vec<(ShellFd, Option<OpenFile>)>);
+
+/// Holds `params`' own redirections in the shell's descriptors while a compound command
+/// or a function call runs, as Bash applies them to the shell and undoes them after: an
+/// `exec` inside changes what the commands after it see, and is undone with them for
+/// these descriptors and kept for others. They were the parameters' alone, and `exec`
+/// made all of them the shell's: `{ exec 3>x; } >y` left standard output in `y` for good,
+/// and `{ exec 8<x; } 8<&-` left 8 open.
+pub(crate) fn hold_redirections(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &mut ExecutionParameters,
+) -> HeldRedirections {
+    let fds = std::mem::take(&mut params.own_redirections);
+    if fds.contains(&OpenFiles::STDIN_FD) {
+        params.stdin_redirected = true;
+    }
+    let held = fds
+        .into_iter()
+        .map(|fd| {
+            let before = shell.persistent_open_files().try_fd(fd).cloned();
+            match params.open_files.fd_entry(fd) {
+                openfiles::OpenFileEntry::Open(file) => {
+                    let file = file.clone();
+                    shell.open_files_mut().set_fd(fd, file);
+                }
+                openfiles::OpenFileEntry::NotPresent => {
+                    shell.open_files_mut().remove_fd(fd);
+                }
+                openfiles::OpenFileEntry::NotSpecified => {}
+            }
+            params.open_files.forget_fd(fd);
+            (fd, before)
+        })
+        .collect();
+    HeldRedirections(held)
+}
+
+/// Makes the descriptors `params`' own redirections set or closed the shell's, as `exec`
+/// with no command does (`exec 3>log`, `exec >&-`), and only those: it made every
+/// descriptor of the command the shell's, the redirections of the compound command it
+/// was in too.
+pub(crate) fn make_redirections_permanent(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+) {
+    for &fd in &params.own_redirections {
+        match params.open_files.fd_entry(fd) {
+            openfiles::OpenFileEntry::Open(file) => {
+                shell.open_files_mut().set_fd(fd, file.clone());
+            }
+            openfiles::OpenFileEntry::NotPresent => {
+                shell.open_files_mut().remove_fd(fd);
+            }
+            openfiles::OpenFileEntry::NotSpecified => {}
+        }
+    }
+}
+
+/// Puts back what the shell had for the descriptors [`hold_redirections`] held.
+pub(crate) fn release_redirections(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    held: HeldRedirections,
+) {
+    for (fd, before) in held.0 {
+        match before {
+            Some(file) => {
+                shell.open_files_mut().set_fd(fd, file);
+            }
+            None => {
+                shell.open_files_mut().remove_fd(fd);
+            }
         }
     }
 }
@@ -1446,9 +1564,12 @@ async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
                 ));
             };
             let mut shell = *target;
+            let mut params = params;
             let join_handle = tokio::task::spawn_blocking(move || {
                 let _guard = slot_guard;
                 let _lowered = params.lower_if_asynchronous();
+                // Its shell is its own: what it holds goes with it.
+                let _held = hold_redirections(&mut shell, &mut params);
                 let rt = tokio::runtime::Handle::current();
                 let outcome = rt.block_on(async {
                     let result = compound.execute(&mut shell, &params).await?;
@@ -1464,7 +1585,11 @@ async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
             Ok(ExecutionSpawnResult::StartedTask(join_handle))
         }
         commands::ShellForCommand::ParentShell(shell) => {
-            Ok(compound.execute(shell, &params).await?.into())
+            let mut params = params;
+            let held = hold_redirections(shell, &mut params);
+            let result = compound.execute(shell, &params).await;
+            release_redirections(shell, held);
+            Ok(result?.into())
         }
     }
 }
@@ -2351,6 +2476,7 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         // Only this command's own redirections count here (D26); anything an enclosing
         // compound command noted is not "on the command".
         params.command_redirected_fds.clear();
+        params.own_redirections.clear();
 
         for item in prefix_iter.chain(cmd_name_items.iter()).chain(suffix_iter) {
             match item {
@@ -3096,19 +3222,22 @@ pub(crate) async fn setup_redirect(
             if closes_existing {
                 shell.open_files_mut().remove_fd(fd_num);
             } else {
-                expansion::assign_to_named_parameter(shell, params, name, fd_num.to_string())
-                    .await?;
-
-                // Without varredir_close, Bash keeps the allocated descriptor beyond
-                // this command. With it, the command-local entry dies with `params`.
-                // A redirection-only `exec` copies `params` into the shell, preserving
-                // Bash's exec exception automatically.
-                if !shell.options().var_redir_close
-                    && let Some(file) = params.try_fd(shell, fd_num)
-                {
-                    shell.open_files_mut().set_fd(fd_num, file);
-                }
+                name_variable_redirection(shell, params, name, fd_num).await?;
             }
+        }
+
+        ast::IoRedirect::VariableHereDocument(name, io_here) => {
+            let fd_num = next_variable_redirection_fd(shell, params)?;
+            let numbered = ast::IoRedirect::HereDocument(Some(fd_num), io_here.clone());
+            Box::pin(setup_redirect(shell, params, &numbered)).await?;
+            name_variable_redirection(shell, params, name, fd_num).await?;
+        }
+
+        ast::IoRedirect::VariableHereString(name, word) => {
+            let fd_num = next_variable_redirection_fd(shell, params)?;
+            let numbered = ast::IoRedirect::HereString(Some(fd_num), word.clone());
+            Box::pin(setup_redirect(shell, params, &numbered)).await?;
+            name_variable_redirection(shell, params, name, fd_num).await?;
         }
 
         ast::IoRedirect::HereDocument(fd_num, io_here) => {
@@ -3140,6 +3269,24 @@ pub(crate) async fn setup_redirect(
         }
     }
 
+    Ok(())
+}
+
+/// Sets `name` to the descriptor `fd_num` a `{name}` redirection was given, and keeps it
+/// beyond the command, as Bash does without `varredir_close`; with it, the command-local
+/// entry dies with `params`. A redirection-only `exec` makes it the shell's anyway.
+async fn name_variable_redirection(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    name: &str,
+    fd_num: ShellFd,
+) -> Result<(), error::Error> {
+    expansion::assign_to_named_parameter(shell, params, name, fd_num.to_string()).await?;
+    if !shell.options().var_redir_close
+        && let Some(file) = params.try_fd(shell, fd_num)
+    {
+        shell.open_files_mut().set_fd(fd_num, file);
+    }
     Ok(())
 }
 
@@ -3208,6 +3355,7 @@ fn setup_duplicate_redirect(
                 .map_err(|_| error::ErrorKind::InvalidRedirection)?
         };
         params.open_files.remove_fd(fd_to_close);
+        params.note_own_redirection(fd_to_close);
     }
     Ok(())
 }
@@ -3250,6 +3398,8 @@ fn setup_redirect_output_and_error_to(
 
     params.open_files.set_fd(OpenFiles::STDOUT_FD, stdout_file);
     params.open_files.set_fd(OpenFiles::STDERR_FD, stderr_file);
+    params.note_own_redirection(OpenFiles::STDOUT_FD);
+    params.note_own_redirection(OpenFiles::STDERR_FD);
 
     Ok(())
 }

@@ -1762,6 +1762,12 @@ pub enum IoRedirect {
     HereDocument(Option<IoFd>, IoHereDocument),
     /// Redirection from a here-string.
     HereString(Option<IoFd>, Word),
+    /// Redirection from a here-document, to a descriptor allocated for a variable
+    /// (`exec {v}<<EOF`).
+    VariableHereDocument(String, IoHereDocument),
+    /// Redirection from a here-string, to a descriptor allocated for a variable
+    /// (`exec {v}<<<word`).
+    VariableHereString(String, Word),
     /// Redirection of both standard output and standard error (with optional append).
     OutputAndError(Word, bool),
 }
@@ -1808,6 +1814,12 @@ impl Display for IoRedirect {
                 }
 
                 write!(f, "<<< {s}")?;
+            }
+            Self::VariableHereDocument(name, here_doc) => {
+                write!(f, "{{{name}}}<<{here_doc}")?;
+            }
+            Self::VariableHereString(name, s) => {
+                write!(f, "{{{name}}}<<< {s}")?;
             }
         }
 
