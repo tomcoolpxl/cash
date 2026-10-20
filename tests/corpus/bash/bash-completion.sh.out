@@ -1,0 +1,38 @@
+loaded: 2 18 0
+quote: 'a b'\''c'
+dequote: [a bc de f]
+declare -a words=([0]="x" [1]="y" [2]="z")
+declare -a fields=([0]="1" [1]="2" [2]="" [3]="3")
+gamma
+garnet
+--
+beta
+--
+x
+y
+--
+file1.txt
+file2.log
+--
+with space.txt
+--
+dir1
+dir2
+--
+dir1
+dir2
+file1.txt
+with space.txt
+--
+--all
+--color
+--output=
+--verbose
+--
+cur=two prev=one cword=3 words=cmd -x one two
+args: 2
+words with = and : kept: cur=c:d prev=a=b
+./x looks like a path
+plain does not
+some
+complete -F _comp_complete_longopt ls

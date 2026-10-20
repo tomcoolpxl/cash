@@ -102,7 +102,7 @@ $results = $cases | ForEach-Object -ThrottleLimit $Throttle -Parallel {
     foreach ($k in $shells.Keys) {
         $cwd = Join-Path $using:workRoot "$safe/$k"
         New-Item -ItemType Directory -Force $cwd | Out-Null
-        if (Test-Path $using:fixtures) { Copy-Item (Join-Path $using:fixtures '*') $cwd -Recurse }
+        if (Test-Path $using:fixtures) { Get-ChildItem $using:fixtures | Where-Object { $c.script.Contains($_.Name) } | Copy-Item -Destination $cwd -Recurse }
         $viaEnv = if ($k -eq 'bash') { $c.script } else { $null }
         $res[$k] = & $run $shells[$k] @('--noprofile', '--norc', '-c', $c.script) $cwd $c.timeout $viaEnv
     }
@@ -110,12 +110,12 @@ $results = $cases | ForEach-Object -ThrottleLimit $Throttle -Parallel {
     if ($using:CheckArgPassing) {
         $cwd = Join-Path $using:workRoot "$safe/bashfile"
         New-Item -ItemType Directory -Force $cwd | Out-Null
-        if (Test-Path $using:fixtures) { Copy-Item (Join-Path $using:fixtures '*') $cwd -Recurse }
+        if (Test-Path $using:fixtures) { Get-ChildItem $using:fixtures | Where-Object { $c.script.Contains($_.Name) } | Copy-Item -Destination $cwd -Recurse }
         $f = & $run $using:Bash @('--noprofile', '--norc', ($c.file -replace '\\', '/')) $cwd $c.timeout $null
         $argCheck = ($f.stdout -ceq $res.bash.stdout) -and ("$($f.status)" -eq "$($res.bash.status)")
         $cwd = Join-Path $using:workRoot "$safe/cashfile"
         New-Item -ItemType Directory -Force $cwd | Out-Null
-        if (Test-Path $using:fixtures) { Copy-Item (Join-Path $using:fixtures '*') $cwd -Recurse }
+        if (Test-Path $using:fixtures) { Get-ChildItem $using:fixtures | Where-Object { $c.script.Contains($_.Name) } | Copy-Item -Destination $cwd -Recurse }
         $g = & $run $using:Cash @('--noprofile', '--norc', $c.file) $cwd $c.timeout $null
         $argCheck = $argCheck -and ($g.stdout -ceq $res.cash.stdout) -and ("$($g.status)" -eq "$($res.cash.status)")
     }

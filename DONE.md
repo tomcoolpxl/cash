@@ -2612,3 +2612,17 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   and keeps only git-subtree's own words, as Git's change between versions. bash-preexec
   hooks preexec into `PS0` under Bash 5.3, which no script expands; the case takes its
   DEBUG-trap hook for older Bash.
+- **A corpus and stress round: nvm, bash-completion, pyenv and bats-assert** (2026-10-20,
+  the phase after 1.37.0, items 1 and 2, the user's pick of the sources): nvm as a whole
+  offline (its fixture already there), bash-completion 2.18.0's helpers driven from a
+  script, pyenv 2.8.10 with python-build, and bats-assert 2.2.4 with bats-support 0.3.0,
+  unchanged. pyenv and nvm climb from `$PWD` until it is empty, which `C:/...` never is,
+  as rbenv and asdf do, and hang; their cases put the marker file they look for at the
+  top, and the differences page names them. bats' `load` wants a path that starts with
+  `/`, so bats-assert's case is known to differ until the `/c/` mode is designed (the
+  user's pick). `type -P` gave Git's grep.exe under `C:/Program Files`, not cash's, and its
+  space broke pyenv's `$(type -P grep)`: a command cash carries is `/usr/bin/NAME` now, the
+  path Git Bash prints and cash runs (the user's pick). Which commands cash carries is
+  decided in one place, `cash_builtins::carried`, for `which`, `type -P` and
+  `cash --link-tools`. The corpus runner `run.ps1` copies only the fixtures a case names,
+  as the golden test does, so that both see the same directory.

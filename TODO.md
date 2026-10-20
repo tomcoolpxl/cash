@@ -27,6 +27,23 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ## Picked by the user (the current phase, 2026-10-20)
 
+The user's picks after 1.37.0 (decisions.md, "The phase after 1.37.0"):
+
+1. a corpus round and a stress round: nvm as a whole, the bash-completion library,
+   pyenv with python-build, and bats-assert with bats-support, the downloads approved by
+   the user's pick of the sources: done 2026-10-20 (DONE.md);
+2. `type -P` gives a bundled tool as `/usr/bin/NAME` (the user's pick, found in item 1):
+   done 2026-10-20 (DONE.md);
+3. a design for an opt-in `/c/` mode, in research/, then a pick list (the user's pick,
+   found in item 1): `$PWD`, `pwd` and `HOME` as `/c/...`, and `/c/` arguments turned into
+   `C:/` for Windows programs, so that tools climbing to `/` (rbenv, asdf, pyenv, nvm)
+   and bats' `load` work. To weigh in it too: `type -P` of a program cash does not carry
+   gives its Windows path, under `C:/Program Files` for Git's own (`gawk`), whose space
+   splits an unquoted `$(type -P gawk)`, where Git Bash gives `/usr/bin/gawk`
+   (`pyenv help`). bats-assert's corpus case is known to differ until then.
+
+## The phase before (2026-10-20, done)
+
 The user's picks after 1.36.0 (decisions.md, "The phase after 1.36.0"), in this order:
 
 1. an `EXIT` trap run by `exit` inside a function: done (DONE.md);

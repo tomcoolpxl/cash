@@ -18,8 +18,11 @@ and in the fewest places it can.
   split on `:` cuts in two (`help paths`). The same colon ends a `sed` address
   delimited by `:` that holds `$PWD`, and a loop that climbs the tree with
   `dir=${dir%/*}` until `dir` is empty never ends, as `C:` has no `/` left to cut:
-  test for `*/*` instead. Nor does one that climbs with `dirname` until it reaches
-  `/`, as asdf 0.15 does: `dirname C:` is `C:`, in Git Bash too.
+  test for `*/*` instead; rbenv, pyenv and nvm climb so, and a marker file they look
+  for (`.python-version`, `package.json`) in a directory above ends the climb. Nor does
+  one that climbs with `dirname` until it reaches `/`, as asdf 0.15 does: `dirname C:`
+  is `C:`, in Git Bash too. And bats' `load` takes a path for absolute only when it
+  starts with `/`, so a test file's `load` fails.
 - Globbing and `find -name` ignore case, as the file system does; `shopt -u nocaseglob`
   turns that off.
 - Reading a variable from Windows, or one cash sets as it starts, ignores case when no

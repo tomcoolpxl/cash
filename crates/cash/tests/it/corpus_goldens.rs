@@ -27,6 +27,11 @@ use crate::common::{Scratch, cash_command};
 /// match the oracle fails the test until it is taken off the list.
 const KNOWN_DIFFERENT: &[(&str, &str)] = &[
     (
+        "bash/bats-assert.sh",
+        "D3: bats' `load` takes a path for absolute only when it starts with `/`, which \
+         `C:/…` does not; the `/c/` mode to be designed (TODO.md)",
+    ),
+    (
         "bash/nvm-helpers.sh",
         "D3: `$PWD` is `C:/…`, whose colon splits `nvm_strip_path`'s colon-separated list",
     ),
@@ -219,10 +224,10 @@ fn read(path: &Path) -> String {
 
 /// The fixtures every case runs beside, as `run.ps1` copies them: directories too, for a
 /// program of many files (bats-core, rbenv, git-flow).
-/// The fixtures `script` names, copied into `to`. Each case copied all of them, 389 files
-/// for each of 318 cases: two thirds of the test's time, 93 s against 30 s (2026-10-20).
-/// A case that uses one names it; `run.ps1` copies them all, so a case that needs one it
-/// does not name differs here and is seen.
+/// The fixtures `script` names, copied into `to`, as `run.ps1` copies them when it freezes
+/// a golden. Each case copied all of them, 389 files for each of 318 cases: two thirds of
+/// the test's time, 93 s against 30 s (2026-10-20). A case that uses one names it, and
+/// a case that lists its directory sees the same names in both.
 fn copy_named_fixtures(from: &Path, to: &Path, script: &str) {
     for entry in std::fs::read_dir(from)
         .expect("read the fixtures")
