@@ -27,6 +27,16 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ## Picked by the user (the current phase, 2026-10-20)
 
+The user's pick after 1.39.0 (decisions.md, "The phase after 1.39.0"):
+
+1. the DEBUG trap where Bash runs it (found in the phase before): `[[ ]]`, `(( ))`,
+   `for`, `case`, `select`, a function's start and each stage of a pipeline in the shell
+   itself; bats-assert's twin then matches Bash: done 2026-10-20 (DONE.md), with
+   `extdebug`'s skips, and a trap keeping `PIPESTATUS` and an ignored failure (found in
+   it).
+
+## The phase before (2026-10-20, done)
+
 The user's pick after 1.38.0 (decisions.md, "The phase after 1.38.0"):
 
 1. build the `/c/` mode of D82 (research/unix-paths-mode-design.md): a shell option,
@@ -173,16 +183,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   the standard handles, would lift the limit.
 
 ## Found along the way
-
-- **The DEBUG trap runs in fewer places than Bash's** (2026-10-20, the phase after 1.38.0,
-  bats-assert under `unixpaths`): Bash runs it before `[[ ]]`, `(( ))`, `for`, `case`
-  and `select`, at a function's start with the function's line, and before each stage
-  of a pipeline in the shell itself, where the stage then forks; cash runs it before
-  simple commands, and a pipeline's stages run it in their copies of the shell. bats
-  takes a failure's lines from its DEBUG trap, so its traces name an earlier line than
-  Bash's (`assert_output.bash, line 209` for 244) and leave out a function's frame
-  (`assert_equal`); the tests themselves pass and fail as in Bash.
-  `bash/bats-assert-unixpaths.sh` is known to differ until then.
 
 - **Three empty files, `1`, `f` and `file`, at the repository's root** (untracked, made
   2026-10-19 between 07:33 and 07:37): from no test that was found; perhaps a command

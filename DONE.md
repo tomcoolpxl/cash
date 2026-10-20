@@ -2654,3 +2654,19 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `cash --link-tools`' name check. The tests take the Windows directory, its drive and the
   scratch directory's drive from the machine, never `C:`, and `/d/`, `/e/` and `/q/` are
   tested beside `/c/`.
+- **The DEBUG trap where Bash runs it** (2026-10-20, the phase after 1.39.0, item 1,
+  found in the phase before): before `[[ ]]` and `(( ))`, each turn of a `for` loop
+  (`for i in "$@"` without `in`), each part of a `for ((…))` (`((j = 0 ))`, `((1))` for one
+  left out), once before a `case` (`case "$v" in `) and a `select`, before each simple
+  stage of a pipeline in the shell that starts it, set -T or not, and at a function's
+  start on its body's `{` line under `set -T` or `declare -ft`, with `$BASH_COMMAND` and
+  `$LINENO` as Bash has them; it ran before simple commands only, and a pipeline's stages
+  ran it in their copies of the shell, which kept nothing of what it set. One function,
+  `interp::run_debug_trap`, runs it everywhere. Under `extdebug` a trap that fails skips the
+  command (a stage then has no place in `PIPESTATUS`, a skipped `for` turn gives the loop
+  the trap's status, a skipped arithmetic part is 0), and one ending with 2 in a function
+  returns from it. Found in it: a trap lost `PIPESTATUS` and whether `set -e` had let the
+  last failure pass, so bats' trap between a loop's body and its condition ended a test on
+  `[[ … ]] && return 0`; `invoke_trap_handler` keeps both, as Bash does. bats-assert's
+  `unixpaths` twin now gives Bash's output to the line, failure traces too; two corpus
+  cases, `debug-trap-places.sh` and `debug-trap-extdebug.sh`, hold the places.

@@ -49,6 +49,14 @@ are events of the shell's own: `EXIT` when it exits, `ERR` when a command fails 
 `set -e` would see it), `DEBUG` before each command, `RETURN` when a function or a
 sourced file returns.
 
+`DEBUG` runs where Bash runs it: before each simple command, each stage of a pipeline
+included, `[[ ]]` and `(( ))`, each turn of a `for` loop and each part of a `for ((…))`,
+and once before a `case` or a `select`, with `$BASH_COMMAND` the command about to run and
+`$LINENO` its line. A function, and a subshell, runs it only under `set -T` (or for a
+function marked `declare -ft`), and then first at the function's start. Under
+`shopt -s extdebug`, a `DEBUG` trap that fails skips the command, and one that ends with
+2 in a function returns from it.
+
 A trap on `INT` keeps Ctrl-C from ending a script: the trap runs and the script goes
 on. `trap '' SIGNAL` ignores the signal; `trap - SIGNAL` puts back what it did before
 any trap. Quote COMMAND in single quotes, so its variables are read when it runs, not

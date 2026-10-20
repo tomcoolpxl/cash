@@ -32,12 +32,6 @@ const KNOWN_DIFFERENT: &[(&str, &str)] = &[
          `C:/…` does not; bats-assert-unixpaths.sh runs it under `unixpaths` (D82)",
     ),
     (
-        "bash/bats-assert-unixpaths.sh",
-        "bats takes a failure's lines from its DEBUG trap, which cash does not run before \
-         `[[ ]]`, `(( ))`, `for`, `case`, a function's start, or each stage of a pipeline \
-         in the shell itself, as Bash does (TODO.md); the tests pass and fail as in Bash",
-    ),
-    (
         "bash/nvm-helpers.sh",
         "D3: `$PWD` is `C:/…`, whose colon splits `nvm_strip_path`'s colon-separated list",
     ),

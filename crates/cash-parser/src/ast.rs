@@ -634,6 +634,29 @@ impl Display for ForClauseCommand {
     }
 }
 
+impl ForClauseCommand {
+    /// The loop's first line, as Bash names it in `$BASH_COMMAND` while the DEBUG trap runs
+    /// before each turn: `for i in a "b c"`, and `for i in "$@"` without `in`.
+    pub fn header(&self) -> String {
+        loop_header("for", &self.variable_name, self.values.as_deref())
+    }
+}
+
+/// A `for` or `select` loop's first line: [`ForClauseCommand::header`].
+fn loop_header(keyword: &str, name: &str, values: Option<&[Word]>) -> String {
+    let words = values.map_or_else(
+        || String::from("\"$@\""),
+        |values| {
+            values
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+    );
+    format!("{keyword} {name} in {words}")
+}
+
 /// A select clause: a numbered menu, read from, in a loop.
 ///
 /// Syntactically identical to a for clause; the difference is entirely in execution.
@@ -683,6 +706,13 @@ impl Display for SelectClauseCommand {
     }
 }
 
+impl SelectClauseCommand {
+    /// The loop's first line, `select s in a b`: [`ForClauseCommand::header`].
+    pub fn header(&self) -> String {
+        loop_header("select", &self.variable_name, self.values.as_deref())
+    }
+}
+
 /// An arithmetic for clause, which loops until an arithmetic condition is reached.
 #[derive(Clone, Debug)]
 #[cfg_attr(
@@ -729,6 +759,15 @@ impl Display for ArithmeticForClauseCommand {
     }
 }
 
+impl ArithmeticForClauseCommand {
+    /// A part of the loop as Bash names it in `$BASH_COMMAND` while the DEBUG trap runs
+    /// before it: `((j = 0 ))` for `for (( j = 0 ; ...`, the space before the text left out
+    /// and the one after kept, as Bash keeps them, and `((1))` for a part left out.
+    pub fn part_header(part: Option<&UnexpandedArithmeticExpr>) -> String {
+        format!("(({}))", part.map_or("1", |expr| expr.value.trim_start()))
+    }
+}
+
 /// A case clause, which selects a command based on a value and a set of
 /// pattern-based filters.
 #[derive(Clone, Debug)]
@@ -762,6 +801,14 @@ impl Display for CaseClauseCommand {
         }
         writeln!(f)?;
         write!(f, "esac")
+    }
+}
+
+impl CaseClauseCommand {
+    /// The clause's first line as Bash names it in `$BASH_COMMAND` while the DEBUG trap
+    /// runs before it, `case "$v" in `, its space at the end too.
+    pub fn header(&self) -> String {
+        format!("case {} in ", self.value)
     }
 }
 

@@ -932,7 +932,11 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   it is empty or `/`, which `C:/...` never reaches, and bats' `load` wants a path that
   starts with `/`. Turned down: `/c/` as the default, which reverses D3.
 - **The phase after 1.38.0** (the user, 2026-10-20, the last pick of the phase before):
-  build the `/c/` mode of D82.
+  build the `/c/` mode of D82. In it (the user's picks, 2026-10-20): cash's bundled tools
+  read `/c/` in either mode (D82); and no code or test takes Windows to be on `C:`.
+- **The phase after 1.39.0** (the user, 2026-10-20): the DEBUG trap where Bash runs it,
+  before `[[ ]]`, `(( ))`, `for`, `case` and `select`, at a function's start, and before
+  each stage of a pipeline in the shell itself; found in the phase before (bats' traces).
 
 ## 8. Archives and compression
 

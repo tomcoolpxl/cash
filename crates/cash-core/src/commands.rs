@@ -2135,10 +2135,19 @@ pub(crate) async fn invoke_shell_function(
     // so the parameters are passed through by shared reference rather than cloned. This prevents
     // direct mutation of the caller's `ExecutionParameters` open-file table, though the function
     // may still change the shell's persistent open files via builtins (e.g. `exec`).
-    let result = body
-        .execute(context.shell, &context.params)
-        .await
-        .map_err(|e| e.located_at(context.shell.error_prefix()));
+    //
+    // The DEBUG trap runs first, where the function inherits it (`set -T`, or `declare -t`),
+    // on the line of its body's `{`, `$BASH_COMMAND` still the call, as Bash runs it at a
+    // function's start; a trap that returns skips the body, and under `extdebug` one that
+    // fails skips it with the trap's status.
+    let result = match interp::run_debug_trap(context.shell, &context.params, || None, body).await {
+        Ok(interp::DebugTrap::Skip(result) | interp::DebugTrap::Leave(result)) => Ok(result),
+        Ok(interp::DebugTrap::Run) => body
+            .execute(context.shell, &context.params)
+            .await
+            .map_err(|e| e.located_at(context.shell.error_prefix())),
+        Err(error) => Err(error),
+    };
 
     // The RETURN trap runs in the function's own context, before its frame is popped, and
     // sees the caller-visible `$?`.

@@ -1,0 +1,11 @@
+kept 0
+cond true
+after cond 0
+after case 0
+ps 0
+after for 1
+after arith for j=0
+f status 1
+before
+g status 2
+end

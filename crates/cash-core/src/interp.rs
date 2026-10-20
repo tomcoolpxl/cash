@@ -124,6 +124,13 @@ pub struct ExecutionParameters {
     /// Whether the builtins run under these parameters write their output as it comes,
     /// as `stdbuf -oL` and `-o0` ask, rather than gathered (`crate::output`).
     pub(crate) builtins_stream_output: bool,
+
+    /// Whether the DEBUG trap has run for the simple command these parameters start, a
+    /// pipeline's stage in a shell of its own: the shell that starts the stage runs it, as
+    /// Bash runs it before the stage forks, so that what the trap sets stays in that
+    /// shell. The command takes it off, so that the commands it runs, a function's, still
+    /// run the trap themselves.
+    pub(crate) debug_trap_ran: bool,
 }
 
 impl ExecutionParameters {
@@ -773,6 +780,87 @@ impl Execute for ast::AndOrList {
     }
 }
 
+/// Runs the DEBUG trap before a command, where Bash runs it (`run_debug_trap` in
+/// `execute_cmd.c`): before a simple command, `[[ ]]` and `(( ))`, each turn of a `for` or
+/// `select` loop, each part of an arithmetic `for`, a `case`, each stage of a pipeline in
+/// the shell that starts it, and a function's start.
+///
+/// `$BASH_COMMAND` becomes `text` (a simple command names itself beforehand, and `None`
+/// leaves it), made only when a DEBUG or ERR trap can read it, and `$LINENO` the line of
+/// `at`. What the command is to do then is the [`DebugTrap`].
+pub(crate) async fn run_debug_trap(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    text: impl FnOnce() -> Option<std::sync::Arc<str>> + Send,
+    at: &(impl ast::Node + Sync),
+) -> Result<DebugTrap, error::Error> {
+    let debug = shell.traps().handles(crate::traps::TrapSignal::Debug);
+    if !debug && !shell.traps().handles(crate::traps::TrapSignal::Err) {
+        return Ok(DebugTrap::Run);
+    }
+    if let Some(text) = text() {
+        shell.set_current_command(text);
+    }
+    if !debug {
+        return Ok(DebugTrap::Run);
+    }
+    shell.set_current_cmd(at);
+    let result = shell
+        .invoke_trap_handler(crate::traps::TrapSignal::Debug, params)
+        .await?;
+    if matches!(
+        result.next_control_flow,
+        crate::ExecutionControlFlow::ExitShell
+            | crate::ExecutionControlFlow::ReturnFromFunctionOrScript
+    ) {
+        return Ok(DebugTrap::Leave(result));
+    }
+    // `extdebug`: a status other than 0 skips the command, and 2 in a function or a sourced
+    // file returns from it, as in Bash.
+    if shell.options().enable_debugger && !result.is_success() {
+        let status = u8::from(result.exit_code);
+        if status == 2 && (shell.call_stack().in_function() || shell.in_sourced_script()) {
+            let mut leave = ExecutionResult::new(status);
+            leave.next_control_flow = crate::ExecutionControlFlow::ReturnFromFunctionOrScript;
+            return Ok(DebugTrap::Leave(leave));
+        }
+        return Ok(DebugTrap::Skip(result));
+    }
+    Ok(DebugTrap::Run)
+}
+
+/// What a command is to do after its DEBUG trap ([`run_debug_trap`]).
+pub(crate) enum DebugTrap {
+    /// Run: the trap let it, or there was none.
+    Run,
+    /// Not run, under `extdebug`, the trap having ended with this status other than 0. A
+    /// command skipped so succeeds, as in Bash; a function's body skipped so gives it.
+    Skip(ExecutionResult),
+    /// End with this result: the trap exited or returned, or under `extdebug` ended with 2
+    /// in a function or a sourced file, which Bash takes for `return`.
+    Leave(ExecutionResult),
+}
+
+impl DebugTrap {
+    /// The result that takes the place of a command the trap did not let run, `None` for
+    /// one to run: a skipped command succeeds, as in Bash.
+    const fn replacing(self) -> Option<ExecutionResult> {
+        match self {
+            Self::Run => None,
+            Self::Skip(_) => Some(ExecutionResult::success()),
+            Self::Leave(result) => Some(result),
+        }
+    }
+}
+
+/// The text of a part of an arithmetic `for` for [`run_debug_trap`], made only when a trap
+/// asks for it: a loop runs its condition and update every turn.
+fn arithmetic_part(
+    part: Option<&ast::UnexpandedArithmeticExpr>,
+) -> impl FnOnce() -> Option<std::sync::Arc<str>> + Send + '_ {
+    move || Some(ast::ArithmeticForClauseCommand::part_header(part).into())
+}
+
 /// Ends the shell for `set -e` if it applies to `result`. Its `EXIT` trap runs here, inside
 /// a function too, as `exit`'s does, as in Bash.
 async fn apply_errexit(
@@ -1040,6 +1128,24 @@ async fn spawn_pipeline_processes(
         }
         if let Some(Some(writer)) = pipe_writers.pop() {
             cmd_params.open_files.set_fd(OpenFiles::STDOUT_FD, writer);
+        }
+
+        // A simple command run in a shell of its own has its DEBUG trap run here, in the
+        // shell that starts it, as Bash runs it before the stage forks: what the trap sets
+        // stays in this shell (bats' traces), and it runs whether or not a subshell
+        // inherits the trap. A trap that exits or returns starts no more stages; one that
+        // skips the stage (`extdebug`) leaves it out, with no place in `PIPESTATUS`, as Bash
+        // forks no process for it.
+        if !run_in_current_shell && let ast::Command::Simple(simple) = command {
+            let traced = shell.traps().handles(crate::traps::TrapSignal::Debug);
+            match run_debug_trap(shell, params, || Some(simple.printed()), simple).await? {
+                DebugTrap::Run => cmd_params.debug_trap_ran = traced,
+                DebugTrap::Skip(_) => continue,
+                DebugTrap::Leave(result) => {
+                    spawn_results.push_back(ExecutionSpawnResult::Completed(result));
+                    break;
+                }
+            }
         }
 
         let pipeline_context = if !run_in_current_shell {
@@ -1419,6 +1525,14 @@ impl Execute for ast::CompoundCommand {
             Self::ArithmeticForClause(a) => a.execute(shell, params).await,
             Self::Coprocess(c) => c.execute(shell, params).await,
             Self::ExtendedTest(e) => {
+                // DEBUG runs before `[[ ]]` as before a simple command, as in Bash.
+                if let Some(result) =
+                    run_debug_trap(shell, params, || Some(self.to_string().into()), e)
+                        .await?
+                        .replacing()
+                {
+                    return Ok(result);
+                }
                 let result =
                     match extendedtests::eval_extended_test_expr(&e.expr, shell, params).await {
                         Ok(true) => 0,
@@ -1555,6 +1669,7 @@ fn add_fd_at_or_below<SE: extensions::ShellExtensions>(
 }
 
 #[async_trait::async_trait]
+#[expect(clippy::too_many_lines)]
 impl Execute for ast::SelectClauseCommand {
     async fn execute(
         &self,
@@ -1571,6 +1686,14 @@ impl Execute for ast::SelectClauseCommand {
         } else {
             shell.current_shell_args().to_vec()
         };
+
+        // DEBUG runs once, before the first menu, as in Bash: not before each answer.
+        if let Some(result) = run_debug_trap(shell, params, || Some(self.header().into()), self)
+            .await?
+            .replacing()
+        {
+            return Ok(result);
+        }
 
         // bash exits immediately on an empty list rather than prompting forever.
         if choices.is_empty() {
@@ -1733,6 +1856,18 @@ impl Execute for ast::ForClauseCommand {
                 }
             }
 
+            // DEBUG runs before each turn, after its trace and before the variable is set,
+            // as in Bash; under `extdebug` a trap that fails skips the turn.
+            match run_debug_trap(shell, params, || Some(self.header().into()), self).await? {
+                DebugTrap::Run => {}
+                // The loop's status is then the trap's, as in Bash.
+                DebugTrap::Skip(skipped) => {
+                    result = skipped;
+                    continue;
+                }
+                DebugTrap::Leave(result) => return Ok(result),
+            }
+
             // Update the variable.
             shell.assign_variable(&self.variable_name, None, ShellValueLiteral::Scalar(value))?;
 
@@ -1768,6 +1903,14 @@ impl Execute for ast::CaseClauseCommand {
             shell
                 .trace_command(params, std::format!("case {} in", self.value))
                 .await;
+        }
+
+        // DEBUG runs once before the clause, after its trace, as in Bash.
+        if let Some(result) = run_debug_trap(shell, params, || Some(self.header().into()), self)
+            .await?
+            .replacing()
+        {
+            return Ok(result);
         }
 
         let expanded_value =
@@ -1941,6 +2084,13 @@ impl Execute for ast::ArithmeticCommand {
         shell: &mut Shell<impl extensions::ShellExtensions>,
         params: &ExecutionParameters,
     ) -> Result<ExecutionResult, error::Error> {
+        // DEBUG runs before `(( ))` as before a simple command, as in Bash.
+        if let Some(result) = run_debug_trap(shell, params, || Some(self.to_string().into()), self)
+            .await?
+            .replacing()
+        {
+            return Ok(result);
+        }
         // An arithmetic error fails `(( ))` with status 1 and the line goes on, as `let`
         // does; in an expansion (`$((1+))`) the same error abandons the line.
         let value = match self.expr.eval(shell, params, true).await {
@@ -1991,19 +2141,35 @@ impl Execute for ast::ArithmeticForClauseCommand {
             | arithmetic::EvalError::ExpandingUnsetVariable(_)) => e,
             e => arithmetic::EvalError::InArithmeticCommand(Box::new(e)),
         };
+        // DEBUG runs before each part, named as Bash names it (`((j<2))`); under `extdebug`
+        // a part the trap skips is 0, as in Bash, so a skipped condition ends the loop.
         let mut result = ExecutionResult::success();
-        initializer
-            .eval(shell, params, true)
-            .await
-            .map_err(in_command)?;
+        let start = arithmetic_part(self.initializer.as_ref());
+        match run_debug_trap(shell, params, start, self).await? {
+            DebugTrap::Run => {
+                initializer
+                    .eval(shell, params, true)
+                    .await
+                    .map_err(in_command)?;
+            }
+            DebugTrap::Skip(_) => {}
+            DebugTrap::Leave(result) => return Ok(result),
+        }
 
         loop {
-            if condition
-                .eval(shell, params, true)
-                .await
-                .map_err(in_command)?
-                == 0
-            {
+            let test = arithmetic_part(self.condition.as_ref());
+            let holds = match run_debug_trap(shell, params, test, self).await? {
+                DebugTrap::Run => {
+                    condition
+                        .eval(shell, params, true)
+                        .await
+                        .map_err(in_command)?
+                        != 0
+                }
+                DebugTrap::Skip(_) => false,
+                DebugTrap::Leave(result) => return Ok(result),
+            };
+            if !holds {
                 break;
             }
 
@@ -2020,10 +2186,18 @@ impl Execute for ast::ArithmeticForClauseCommand {
                 break;
             }
 
-            updater
-                .eval(shell, params, true)
-                .await
-                .map_err(in_command)?;
+            match run_debug_trap(shell, params, arithmetic_part(self.updater.as_ref()), self)
+                .await?
+            {
+                DebugTrap::Run => {
+                    updater
+                        .eval(shell, params, true)
+                        .await
+                        .map_err(in_command)?;
+                }
+                DebugTrap::Skip(_) => {}
+                DebugTrap::Leave(result) => return Ok(result),
+            }
         }
 
         shell.set_last_exit_status(result.exit_code.into());
@@ -2111,23 +2285,14 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         // redirections made, as Bash runs it before each simple command: an assignment
         // alone (`x=1`) too, which never reached a command to run, and what the trap
         // writes goes where the shell's output goes, not into the command's `> file`. A
-        // trap that exits or returns replaces the command.
-        if context
-            .shell
-            .traps()
-            .handles(crate::traps::TrapSignal::Debug)
+        // trap that exits or returns replaces the command. A pipeline's stage had it run
+        // by the shell that started it.
+        if !std::mem::take(&mut params.debug_trap_ran)
+            && let Some(result) = run_debug_trap(&mut context.shell, &params, || None, self)
+                .await?
+                .replacing()
         {
-            let result = context
-                .shell
-                .invoke_trap_handler(crate::traps::TrapSignal::Debug, &params)
-                .await?;
-            if matches!(
-                result.next_control_flow,
-                crate::ExecutionControlFlow::ExitShell
-                    | crate::ExecutionControlFlow::ReturnFromFunctionOrScript
-            ) {
-                return Ok(result.into());
-            }
+            return Ok(result.into());
         }
 
         let prefix_iter = self.prefix.as_ref().map(|s| s.0.iter()).unwrap_or_default();
