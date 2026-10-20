@@ -1,0 +1,108 @@
+hello world
+hello world
+--- reference
+greet               says hello to someone
+author:             tester
+version:            1.0
+parameters:
+                    1: who to greet
+                    2: how often
+examples:
+                    $ greet world
+                    $ greet world 2
+DEPRECATED: consider using lookup alias.
+--- metafor
+says hello to someone
+1: who to greet
+2: how often
+$ greet world
+$ greet world 2
+--- glossary
+greet         says hello to someone
+
+DEPRECATED: consider using lookup alias.
+cite          creates one or more meta keywords for use in your functions
+draft         wraps command from history into a new function, default is last command
+glossary      displays help summary for all functions, or summary for a group of
+              functions
+metafor       prints function metadata associated with keyword
+reference     displays apidoc help for a specific function
+revise        loads function into editor for revision
+write         writes one or more composed function definitions to stdout
+
+DEPRECATED: consider using lookup alias.
+--- cite
+cited keywords run as no-ops
+--- typeset -f greet
+greet () 
+{ 
+    about 'says hello to someone';
+    param '1: who to greet';
+    param '2: how often';
+    example '$ greet world';
+    example '$ greet world 2';
+    group 'demo';
+    author 'tester';
+    version '1.0';
+    typeset i;
+    for ((i = 0; i < ${2:-1}; i++))
+    do
+        echo "hello ${1:-you}";
+    done
+}
+--- write
+#!/usr/bin/env bash
+for f in "about author example group param version"
+do
+  type "" >/dev/null || eval "$f() { :; }"
+done
+unset f
+cite () 
+{ 
+    about 'creates one or more meta keywords for use in your functions';
+    param 'one or more keywords';
+    example '$ cite url username';
+    example '$ url http://somewhere.com';
+    example '$ username alice';
+    group 'composure';
+    if [ -z "$1" ]; then
+        printf '%s\n' 'missing parameter(s)';
+        reference cite;
+        return;
+    fi;
+    typeset keyword;
+    for keyword in "$@";
+    do
+        type "$keyword" > /dev/null || eval "$keyword() { :; }";
+    done
+}
+greet () 
+{ 
+    about 'says hello to someone';
+    param '1: who to greet';
+    param '2: how often';
+    example '$ greet world';
+    example '$ greet world 2';
+    group 'demo';
+    author 'tester';
+    version '1.0';
+    typeset i;
+    for ((i = 0; i < ${2:-1}; i++))
+    do
+        echo "hello ${1:-you}";
+    done
+}
+main() {
+  echo "edit me to do something useful!"
+  exit 0
+}
+
+main $*
+--- persisted
+cite.inc
+draft.inc
+glossary.inc
+metafor.inc
+reference.inc
+revise.inc
+write.inc

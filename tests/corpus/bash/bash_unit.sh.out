@@ -1,0 +1,87 @@
+Running tests in tests/test_core.sh
+	Running test_assert_equals_fails_when_not_equal ... SUCCESS
+	Running test_assert_equals_succeed_when_equal ... SUCCESS
+	Running test_assert_fails ... SUCCESS
+	Running test_assert_fails_fails ... SUCCESS
+	Running test_assert_fails_succeeds ... SUCCESS
+	Running test_assert_matches_fails_when_not_matching ... SUCCESS
+	Running test_assert_matches_succeed_when_matching ... SUCCESS
+	Running test_assert_no_diff_fails_when_diff ... SUCCESS
+	Running test_assert_no_diff_succeeds_when_no_diff ... SUCCESS
+	Running test_assert_not_equals_fails_when_equal ... SUCCESS
+	Running test_assert_not_equals_succeeds_when_not_equal ... SUCCESS
+	Running test_assert_not_matches_fails_when_matching ... SUCCESS
+	Running test_assert_not_matches_succeed_when_not_matching ... SUCCESS
+	Running test_assert_shows_stderr_on_failure ... SUCCESS
+	Running test_assert_shows_stdout_on_failure ... SUCCESS
+	Running test_assert_status_code_fails ... SUCCESS
+	Running test_assert_status_code_succeeds ... SUCCESS
+	Running test_assert_succeeds ... SUCCESS
+	Running test_assert_within_delta_fails ... SUCCESS
+	Running test_assert_within_delta_succeeds ... SUCCESS
+	Running test_bash_unit_changes_cwd_to_current_test_file_directory ... SUCCESS
+	Running test_fail_fails ... SUCCESS
+	Running test_fail_prints_failure_message ... SUCCESS
+	Running test_fail_prints_where_is_error ... SUCCESS
+	Running test_fake_actually_fakes_the_command ... SUCCESS
+	Running test_fake_can_fake_inline ... SUCCESS
+	Running test_fake_echo_stdin_when_no_params ... SUCCESS
+	Running test_fake_exports_faked_in_subshells ... SUCCESS
+	Running test_fake_transmits_params_to_fake_code ... SUCCESS
+	Running test_fake_transmits_params_to_fake_code_as_array ... SUCCESS
+	Running test_should_pretty_format_even_when_LANG_is_unset ... SUCCESS
+Overall result: SUCCESS
+core: 0
+Running tests in tests/test_own.sh
+	Running todo_later ... PENDING
+	Running test_skipped_by_pattern ... SKIPPED
+	Running test_equals ... SUCCESS
+	Running test_fails_assert ... FAILURE
+one is not two
+./test_own.sh:16:test_fails_assert()
+	Running test_fails_equals ... FAILURE
+a message
+ expected [expected] but was [actual]
+./test_own.sh:15:test_fails_equals()
+	Running test_fails_fail ... FAILURE
+plainly
+./test_own.sh:18:test_fails_fail()
+	Running test_fails_status ... FAILURE
+ expected status code 0 but was 4
+out> out
+err> err
+./test_own.sh:17:test_fails_status()
+	Running test_fake_reads_stdin ... SUCCESS
+	Running test_fake_with_args ... SUCCESS
+	Running test_matches ... SUCCESS
+	Running test_no_diff ... SUCCESS
+	Running test_setup_ran ... SUCCESS
+	Running test_status ... SUCCESS
+	Running test_within_delta ... SUCCESS
+suite done
+Overall result: FAILURE
+own: 1
+Running tests in tests/test_own.sh
+	Running test_equals ... SUCCESS
+	Running test_fails_equals ... FAILURE
+a message
+ expected [expected] but was [actual]
+./test_own.sh:15:test_fails_equals()
+	Running test_fails_status ... FAILURE
+ expected status code 0 but was 4
+out> out
+err> err
+./test_own.sh:17:test_fails_status()
+	Running test_status ... SUCCESS
+suite done
+Overall result: FAILURE
+pattern: 1
+# Running tests in tests/test_own.sh
+not ok - test_fails_fail
+# plainly
+# ./test_own.sh:18:test_fails_fail()
+ok - test_fake_reads_stdin
+ok - test_fake_with_args
+suite done
+1..3
+tap: 1

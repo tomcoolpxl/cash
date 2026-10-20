@@ -1,0 +1,47 @@
+(W/ex.sh:1):
+1:	x=1
+** Invalid line specification: 1,5
+** File "" not found in read-in files.
+** See 'info files' for a list of known files and
+** 'load' to read in a file.
+(W/ex.sh:10):
+10:	f arg1
+y=2 in arg1
+g got 2
+(W/ex.sh:11):
+11:	for i in 1 2; do
+(W/ex.sh:12):
+12:	  echo "i=$i"
+$1 = ex.sh
+
+i=1
+(W/ex.sh:11):
+11:	for i in 1 2; do
+(W/ex.sh:12):
+12:	  echo "i=$i"
+->0 in file `W/ex.sh' at line 12
+##1 source("ex.sh") called from file `W/bashdb' at line 116
+##2 main("-q", "-x", "cmds", "ex.sh") called from file `W/bashdb' at line 0
+i=2
+done
+(W/bashdb:1):
+1:	#!bash
+ 0: $i
+Breakpoint 1 set in file W/bashdb, line 12.
+Debugged program terminated normally. Use q to quit or R to restart.
+ 0: $i = 0
+** The program is not being run.
+ 0: $i = 0
+x=5
+$? is 0
+ 0: $i = 0
+Auto-display statements now in effect:
+Num Enb Expression          
+0     1 $i
+ 0: $i = 0
+Deleted breakpoint 1
+ 0: $i = 0
+** The program is not being run.
+ 0: $i = 0
+bashdb: That's all, folks...
+status: 0

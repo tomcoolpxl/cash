@@ -27,6 +27,22 @@ use crate::common::{Scratch, cash_command};
 /// match the oracle fails the test until it is taken off the list.
 const KNOWN_DIFFERENT: &[(&str, &str)] = &[
     (
+        "bash/bashdb.sh",
+        "D3: bashdb takes a file for absolute only when it starts with `/`, which `C:/…` \
+         does not, and reads no lines of it; bashdb-unixpaths.sh runs it under `unixpaths` \
+         (D82)",
+    ),
+    (
+        "bash/bats-file.sh",
+        "D3: bats' `load` takes a path for absolute only when it starts with `/`, which \
+         `C:/…` does not; bats-file-unixpaths.sh runs it under `unixpaths` (D82)",
+    ),
+    (
+        "bash/direnv.sh",
+        "D3: `$PWD` is `C:/…`, whose colon splits PATH_rm's colon-separated list and which \
+         expand_path takes for relative; direnv-unixpaths.sh runs it under `unixpaths` (D82)",
+    ),
+    (
         "bash/bats-assert.sh",
         "D3: bats' `load` takes a path for absolute only when it starts with `/`, which \
          `C:/…` does not; bats-assert-unixpaths.sh runs it under `unixpaths` (D82)",

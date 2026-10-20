@@ -87,6 +87,7 @@ the user's answers, with their dates. A new decision goes here, under its topic.
 | D80 | `z`: the directory jump | The prompt, editing and completion |
 | D81 | `winglob`: at the prompt, a Windows program globs for itself | Paths, files and text |
 | D82 | An opt-in `/c/` mode: Git Bash's spelling, with arguments for Windows programs | Paths, files and text |
+| D83 | Under `unixpaths`, `/` is the directory above the drives | Paths, files and text |
 
 ## 1. Scope and foundation
 
@@ -185,6 +186,21 @@ files by their operands, turned into `C:/...` as they start; a tool that only ha
 (`echo`, `expr`, `basename`, `dirname`) keeps its words. Turned down there: the rule for
 Windows programs on every bundled tool, which rewrites `sed '/c/d'`; the operands only
 under the mode, which leaves `cat /c/x` failing without it.
+
+### D83 — Under `unixpaths`, `/` is the directory above the drives
+
+The user's picks, 2026-10-20 (research/root-directory-design.md). Under `unixpaths`,
+`cd ..` from a drive's top (`/c`) and `cd /` give `/`, so a loop climbing with `cd ..`
+until `$PWD` is `/` ends, as in Git Bash (direnv's `find_up`). `/` holds the drives, `tmp`,
+`dev`, and `usr` and `bin` for the tools: `/usr/bin` and `/bin` are one directory, of the
+commands cash carries, which `/usr/bin/NAME` already runs. Another name under `/`
+(`/Windows`) keeps its meaning, the drive cash came from, and a program started in one of
+these directories runs in that drive's root. One module defines them, what each holds
+and what a name in it means; the shell's directory, `cd`, globs, `ls` and `test` ask it,
+and none decides on its own (the user, 2026-10-20). The default mode is unchanged:
+`C:/..` is `C:/`. Turned down: the same in the default mode, which puts `/`, a path no
+Windows program takes, in `$PWD`, and still leaves the `dirname` and `%/*` climbs at `C:`;
+Git's install directory as `/`; `cd ..` failing at a drive's top.
 
 ### D4 — Arguments are never rewritten
 
@@ -382,10 +398,13 @@ grandchild escape.
 ### D11 — cash owns job control
 
 brush's job manager is off; `jobs`, `fg`, `bg`, `kill`, suspend and resume are cash's, in
-Win32 terms, with the job object (D6) the one notion of a job. `trap` and `kill` take only
-the signals Windows can deliver (D13, D19, D21, D22, D64); `USR1`, `PIPE`, `ALRM` and the
-rest are refused, since a trap that can never fire fails silently. Turned down: keeping
-brush's job manager beside cash's; accepting signals Windows cannot deliver.
+Win32 terms, with the job object (D6) the one notion of a job. `kill` sends a program only
+the signals Windows can deliver (D13, D19, D21, D22, D64). `trap`, `trap -l` and `kill -l`
+know all 31 of Linux's, by Linux's numbers, since scripts name them (bashdb traps `ILL`):
+a trap on `USR1`, `PIPE` or the rest runs when the shell sends it itself, and sending one
+to a program is refused (the user, 2026-10-20). Turned down: keeping brush's job manager
+beside cash's; refusing those names, which bashdb filed under `EXIT`; Git Bash's Cygwin
+numbering.
 
 ### D13 — Ctrl-C is graceful first; the job object is the backstop
 
@@ -415,9 +434,13 @@ truncation alone, which turns `0xC0000100` into 0, a crash reported as success.
 
 `< <(cmd)` and `> >(cmd)` are anonymous pipes; one passed as a path is a named pipe; an
 opener that must stat, seek or create gets a temp file instead (`diff`, `cmp`, a program
-writing to `>(...)`). The shell waits for each `>(...)` before it exits. Turned down: temp
-files for everything, which never stream (`< <(tail -f log)` hangs); a named pipe for
-every path, which `tee -a` cannot append to.
+writing to `>(...)`). The shell waits for each `>(...)` before it exits. The named pipe is
+shown as `//./pipe/cash-procsub-PID-N`, and handed to a Git for Windows program as
+`\\.\pipe\...`; its directory cannot be entered, since Windows refuses the pipe namespace
+as a working directory (the user, 2026-10-20). Turned down: temp files for everything,
+which never stream (`< <(tail -f log)` hangs); a named pipe for every path, which `tee -a`
+cannot append to; `//./pipe` as a directory of the shell's alone, and Bash's `/dev/fd/N`
+spelling, which Windows programs cannot open.
 
 ### D19 — Suspend by enumerating threads, documented APIs only
 
@@ -937,6 +960,12 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
 - **The phase after 1.39.0** (the user, 2026-10-20): the DEBUG trap where Bash runs it,
   before `[[ ]]`, `(( ))`, `for`, `case` and `select`, at a function's start, and before
   each stage of a pipeline in the shell itself; found in the phase before (bats' traces).
+- **The phase after 1.40.0** (the user, 2026-10-20): another corpus round, of sources the
+  user picks: bashdb, bash_unit and bats-file, composure, direnv's stdlib. In it (the
+  user's picks, 2026-10-20): `trap` and `kill -l` know all of Linux's signals (D11); a
+  process substitution's directory stays one that cannot be entered, written down (D17);
+  and under `unixpaths`, `/` is the directory above the drives, with `usr` and `bin` for
+  the tools, built in one place (D83).
 
 ## 8. Archives and compression
 

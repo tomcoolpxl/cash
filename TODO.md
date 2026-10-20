@@ -27,6 +27,19 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ## Picked by the user (the current phase, 2026-10-20)
 
+The user's pick after 1.40.0 (decisions.md, "The phase after 1.40.0"):
+
+1. another corpus round, of sources the user picks: bashdb, bash_unit and bats-file,
+   composure, direnv's stdlib: done 2026-10-20 (DONE.md), with `trap` and `kill -l`
+   knowing all of Linux's signals (bashdb, D11), `man -w` (direnv), and a process
+   substitution's directory written down as one that cannot be entered (bash_unit, D17).
+2. under `unixpaths`, `/` is the directory above the drives, with `usr` and `bin` for the
+   tools, in one module that the shell's directory, `cd`, globs, `ls` and `test` ask
+   (D83, research/root-directory-design.md): found in item 1, a `cd ..` climb that never
+   ends (direnv's `find_up`); then direnv's missing-file search back in its case.
+
+## The phase before (2026-10-20, done)
+
 The user's pick after 1.39.0 (decisions.md, "The phase after 1.39.0"):
 
 1. the DEBUG trap where Bash runs it (found in the phase before): `[[ ]]`, `(( ))`,

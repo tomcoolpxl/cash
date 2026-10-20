@@ -1,0 +1,23 @@
+has: yes no
+join_args: a b\ c d\'e 
+expand_path: TOP/proj/sub
+expand_path from: TOP/proj/x
+user_rel_path: ~/notes/a.txt /elsewhere/b.txt
+PATH=TOP/proj/bin:/usr/bin:/bin
+MYPATH=TOP/proj/sub:TOP/one/two
+PATH=/usr/bin:/bin
+MYPATH=TOP/proj/sub
+MANPATH=TOP/home/.local/share/man:
+MANPATH=TOP/home/.local/share/man:/usr/share/man
+find_up: TOP/proj/marker
+direnv called: called: watch bash TOP/proj/.envrc
+direnv: -status loading TOP/proj/.envrc
+FROM_ENVRC=yes
+semver_search 20: 20.12.2
+semver_search 20.11: 20.11.0
+semver_search 18: 18.20.1
+direnv: -status loading done
+direnv: -error an error
+strict: ehuBc pipefail on
+unstrict: hBc
+layout dir: TOP/.direnv

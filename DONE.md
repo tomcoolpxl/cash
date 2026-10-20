@@ -2670,3 +2670,25 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `[[ … ]] && return 0`; `invoke_trap_handler` keeps both, as Bash does. bats-assert's
   `unixpaths` twin now gives Bash's output to the line, failure traces too; two corpus
   cases, `debug-trap-places.sh` and `debug-trap-extdebug.sh`, hold the places.
+- **A corpus round of the user's sources** (2026-10-20, the phase after 1.40.0, item 1):
+  bashdb 5.2-1.2.0 driving a script from a command file, bash_unit 2.3.3's core suite and
+  a suite of the case's, bats-file 0.4.0 under bats-core, composure 1.4.0's metadata
+  functions, and direnv 2.38.2's stdlib with a function for its program; each in its own
+  fixture with its licence, bashdb, bats-file and direnv with `-unixpaths` twins, whose
+  plain cases differ by `C:/` (D3). Found and fixed in it: a sourced file ran under the
+  DEBUG trap without `set -T`, where Bash sets the trap aside and puts it back, and a
+  `source` at the top did not push its arguments on `BASH_ARGV`; a subscript with spaces
+  (`m[k one]=v`, `([k one]=v)`) ended the assignment word at the space; `[[ -p <(cmd) ]]`
+  was a syntax error, and `-p`, `-e` and `-r` were false of a process substitution's pipe;
+  the pipe was shown as `\\.\pipe\...`, now `//./pipe/...` as every path cash shows, and
+  handed to an MSYS program in the backslash spelling it opens; `declare -f` printed a
+  here-document's body where its redirection stood, so the function read back ran the
+  body as commands; `typeset -f -- f` took the second `--` for an option, as it took any
+  `-` word after a name; and cash's `man` refused `-w`, which direnv's `MANPATH_add`
+  runs (it prints nothing: cash's pages are no files). With the user's picks: `trap`,
+  `trap -l` and `kill -l` know all 31 of Linux's signals by Linux's numbers, a trap on one
+  Windows never sends runs when the shell sends it itself, and `kill` refuses to send one
+  to a program, so bashdb no longer files `ILL` and `TRAP` under `EXIT` (D11); a process
+  substitution's directory stays one that cannot be entered, as bash_unit's CLI suite
+  would need, written down (D17); and a `cd ..` climb that never ends went to a design
+  (item 2).

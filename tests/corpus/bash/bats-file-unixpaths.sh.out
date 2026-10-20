@@ -1,0 +1,66 @@
+1..13
+ok 1 exists
+ok 2 does not exist
+ok 3 sizes
+ok 4 contents
+ok 5 equal files
+ok 6 temp dir
+ok 7 temp dir with a prefix
+not ok 8 fails: file exists
+# (from function `assert_file_exists' in file bats-file/src/file.bash, line 72,
+#  in test file t.bats, line 9)
+#   `@test "fails: file exists" { assert_file_exists files/none.txt; }' failed
+#
+# -- file does not exist --
+# path : files/none.txt
+# --
+#
+not ok 9 fails: dir not exists
+# (from function `assert_dir_not_exists' in file bats-file/src/file.bash, line 679,
+#  in test file t.bats, line 10)
+#   `@test "fails: dir not exists" { assert_dir_not_exists files/dir; }' failed
+#
+# -- directory exists, but it was expected to be absent --
+# path : files/dir
+# --
+#
+not ok 10 fails: size zero
+# (from function `assert_size_zero' in file bats-file/src/file.bash, line 369,
+#  in test file t.bats, line 11)
+#   `@test "fails: size zero" { assert_size_zero files/c.txt; }' failed
+#
+# -- file is greater than 0 byte --
+# path : files/c.txt
+# --
+#
+not ok 11 fails: file contains
+# (from function `assert_file_contains' in file bats-file/src/file.bash, line 548,
+#  in test file t.bats, line 12)
+#   `@test "fails: file contains" { assert_file_contains files/c.txt alpha; }' failed
+#
+# -- file does not contain regex --
+# path : files/c.txt
+# regex : alpha
+# --
+#
+not ok 12 fails: file empty
+# (from function `assert_file_empty' in file bats-file/src/file.bash, line 608,
+#  in test file t.bats, line 13)
+#   `@test "fails: file empty" { assert_file_empty files/c.txt; }' failed
+#
+# -- file is not empty --
+# path     : files/c.txt
+# output   : gamma
+# --
+#
+not ok 13 fails: files equal
+# (from function `assert_files_equal' in file bats-file/src/file.bash, line 266,
+#  in test file t.bats, line 14)
+#   `@test "fails: files equal" { assert_files_equal files/a.txt files/c.txt; }' failed
+#
+# -- files are not the same --
+# path : files/a.txt
+# path : files/c.txt
+# --
+#
+status: 1

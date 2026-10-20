@@ -84,6 +84,9 @@ and in the fewest places it can.
   since the job runs on a thread, not a forked process.
 - A `CHLD` trap runs once per child process cash reaps; builtins and bundled tools run
   none.
+- `kill -l` and `trap -l` list Linux's 31 signals by Linux's numbers, not Git Bash's
+  (`USR1` is 10, not 30). Windows cannot send a program `USR1`, `PIPE`, `ALRM` and the
+  rest, so `kill` refuses to; a trap on one runs only when the shell sends it to itself.
 - A program on `PATH` whose reader went away ends as it chooses, not with 141; cash's
   own tools end with 141.
 - `time` and `times` count a child that is still running.
@@ -91,6 +94,10 @@ and in the fewest places it can.
   optional, and never signal the shell or system processes.
 - `>(...)` hands a builtin a named pipe and a program a temp file read as it is
   written.
+- `<(...)` is a named pipe, `//./pipe/cash-procsub-PID-N`, not `/dev/fd/63`; `-p`, `-e`
+  and `-r` are true of it while it is open, and a program of Git for Windows' gets it
+  as `\\.\pipe\...`. Its directory cannot be entered: `cd "$(dirname "$f")"` fails, as
+  Windows will not make the pipe namespace a working directory.
 
 ## Tools
 
