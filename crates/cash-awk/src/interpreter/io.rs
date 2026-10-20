@@ -400,7 +400,7 @@ pub(crate) fn system_path(name: &str) -> PathBuf {
     if SpecialFile::named(name) == Some(SpecialFile::Null) {
         "NUL".into()
     } else {
-        cash_win32::path::accept_path(name)
+        cash_win32::path::tool_path(name)
     }
 }
 

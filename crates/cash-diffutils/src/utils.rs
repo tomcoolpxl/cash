@@ -140,7 +140,7 @@ pub fn system_path(name: impl AsRef<OsStr>) -> std::path::PathBuf {
     let name = name.as_ref();
     name.to_str().map_or_else(
         || std::path::PathBuf::from(name),
-        cash_win32::path::accept_path,
+        cash_win32::path::tool_path,
     )
 }
 

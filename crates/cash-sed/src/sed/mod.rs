@@ -288,10 +288,11 @@ pub fn uu_app() -> Command {
 
 // Iterate through script and file arguments specified in matches and
 /// A file named to sed, an input, a script or one an `r` or `w` command names, as cash
-/// reads it: `/c/x` is `C:/x` (D3), as an MSYS sed opens it. Scripts are never rewritten.
+/// reads it: `/c/x` is `C:/x` (D3), as an MSYS sed opens it; any other name as written.
+/// Scripts are never rewritten.
 pub(crate) fn system_path(path: &std::path::Path) -> PathBuf {
     path.to_str()
-        .map_or_else(|| path.to_path_buf(), cash_win32::path::accept_path)
+        .map_or_else(|| path.to_path_buf(), cash_win32::path::tool_path)
 }
 
 // return vectors of all scripts and input files in the specified order.
