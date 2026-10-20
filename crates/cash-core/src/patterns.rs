@@ -796,7 +796,8 @@ impl Pattern {
                     // trailing slash makes lstat fail with ENOTDIR for a regular file.
                     options.on_disk(p).symlink_metadata().is_ok()
                 });
-                written_out = true;
+                // Written out only while no pattern came before: `**/a/**` matches `a`, as
+                // in Bash, and `a/**` matches `a/`.
                 continue;
             }
 
@@ -855,10 +856,15 @@ impl Pattern {
                 let normalized = sys::fs::normalize_path_separators(&path_str);
                 let mut path_ref: &str = normalized.as_ref();
 
-                if let Some(prefix_to_remove) = &prefix_to_remove
-                    && let Some(stripped) = path_ref.strip_prefix(prefix_to_remove.as_str())
-                {
-                    path_ref = stripped;
+                if let Some(prefix_to_remove) = &prefix_to_remove {
+                    if let Some(stripped) = path_ref.strip_prefix(prefix_to_remove.as_str()) {
+                        path_ref = stripped;
+                    } else if prefix_to_remove.strip_suffix('/') == Some(path_ref) {
+                        // The working directory spelled without its last `/`, as a first
+                        // `**` hands it to a last one: `**/**` gave its whole path, and
+                        // `rm -r **/**` removed the directory itself.
+                        path_ref = "";
+                    }
                 }
 
                 // The working directory itself, which `**/` reaches, has no name to give:
@@ -878,6 +884,9 @@ impl Pattern {
         // walking is not enough: `a/b/needle` sorts before `a/needle` even
         // though the latter is discovered at the shallower level first.
         results.sort();
+        // Once each: a directory a first `**` found is found again by the last one, and
+        // `**/**` listed every entry twice.
+        results.dedup();
 
         tracing::debug!(target: trace_categories::PATTERN, "  => results: {results:?}");
 
@@ -1655,6 +1664,33 @@ mod tests {
             vec!["one/needle.txt".to_string()]
         );
 
+        Ok(())
+    }
+
+    /// `**/**` as Bash expands it: what `**` gives, once each, never the directory it
+    /// starts in. It gave that directory's whole path and every entry twice, so `rm -r
+    /// **/**` removed the directory itself.
+    #[test]
+    fn test_globstar_after_globstar_is_each_entry_once_without_the_start() -> Result<()> {
+        let scratch = tempfile::tempdir()?;
+        std::fs::create_dir_all(scratch.path().join("a/a"))?;
+        std::fs::write(scratch.path().join("a/a/f"), "")?;
+        std::fs::write(scratch.path().join("b"), "")?;
+        let options = FilenameExpansionOptions::default();
+        let expand = |pattern: &str| -> Result<Vec<String>> {
+            expect_expanded(
+                Pattern::from(pattern)
+                    .set_globstar(true)
+                    .expand::<fn(&Path) -> bool>(scratch.path(), None, &options)?,
+            )
+        };
+        let all = ["a", "a/a", "a/a/f", "b"].map(String::from).to_vec();
+        assert_eq!(expand("**")?, all);
+        assert_eq!(expand("**/**")?, all);
+        assert_eq!(expand("**/**/**")?, all);
+        assert_eq!(expand("a/**/**")?, ["a", "a/a", "a/a/f"].map(String::from).to_vec());
+        assert_eq!(expand("**/a/**")?, ["a", "a/a", "a/a/f"].map(String::from).to_vec());
+        assert_eq!(expand("a/**")?, ["a/", "a/a", "a/a/f"].map(String::from).to_vec());
         Ok(())
     }
 
