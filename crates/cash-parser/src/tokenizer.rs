@@ -1365,6 +1365,12 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                             // Consume the '{' and add it to the token.
                             state.append_char(self.next_peeked_char()?);
 
+                            // `${ cmd; }` and `${| cmd; }` run commands: a brace group in them
+                            // (a function's body) has a `}` of its own, which does not end
+                            // them, as in Bash. The first `}` ended them.
+                            let funsub = matches!(self.peek_char()?, Some(' ' | '\t' | '\n' | '|'));
+                            let mut groups = 0_usize;
+
                             let mut pending_here_doc_tokens = vec![];
                             let mut drain_here_doc_tokens = false;
 
@@ -1414,6 +1420,10 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                                 }
 
                                 if let Some(cur_token_value) = cur_token.token {
+                                    // Whitespace before a token is kept with it here.
+                                    if funsub && cur_token_value.to_str().trim() == "{" {
+                                        groups += 1;
+                                    }
                                     state.append_str(cur_token_value.to_str());
                                 }
 
@@ -1423,6 +1433,11 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                                     }
                                     TokenEndReason::NonNewLineBlank(blank) => {
                                         state.append_char(blank);
+                                    }
+                                    // The end of a brace group inside, not of the expansion.
+                                    TokenEndReason::SpecifiedTerminatingChar if groups > 0 => {
+                                        state.append_char(self.next_peeked_char()?);
+                                        groups -= 1;
                                     }
                                     TokenEndReason::SpecifiedTerminatingChar => {
                                         // We hit the end brace we were looking for but did not
@@ -1959,6 +1974,17 @@ bc"
                 [format!("$({reconstructed_blanks}\n)").as_str(), "\n"],
                 "tokenizing {input:?}"
             );
+        }
+    }
+
+    #[test]
+    fn tokenize_a_brace_group_inside_a_current_shell_substitution() {
+        // A function's body in `${ ... }` has a `}` of its own; the first `}` ended the
+        // substitution.
+        for input in ["x=${ g() { echo in; }; g; }", "x=${ { echo a; }; }"] {
+            let tokens = tokenize_str(input).unwrap();
+            let token_strs: Vec<_> = tokens.iter().map(Token::to_str).collect();
+            assert_eq!(token_strs, [input], "tokenizing {input:?}");
         }
     }
 

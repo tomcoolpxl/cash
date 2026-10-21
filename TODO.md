@@ -32,10 +32,8 @@ against Git Bash 5.3 first, cheapest first. Done, in DONE.md: 1, a trailing back
 (backslash-newline inside backquotes was found to be as Bash has it); 2, `case x in
 esac)` and loop names that are none; 3, text right after a list's `)` (a syntax error in
 a list was found to end the line as Bash's does); 4, here-documents, but for the `EOF)`
-warning (below).
+warning (below); 5, `${ cmd; }`.
 
-5. `${ cmd; }`: `return`, `local`, `exit`, a function inside it, `}` after a newline or
-   `)`.
 6. Aliases: one followed by a redirection (`foo>&2`); `eval` of a multi-line alias that
    unaliases itself.
 7. Functions printed that do not read back.
@@ -105,7 +103,6 @@ path. The rest, by theme:
   end-of-file"); the tokenizer that sees it has no way to say a warning. An unterminated
   `$(` in a here-document is said as "failed to parse word" (Bash: "unexpected EOF while
   looking for matching `)'").
-- `${ cmd; }`: `return`, `local`, `exit`, a function inside it, `}` after a newline or `)`.
 - Aliases: one followed by a redirection merges tokens (`foo>&2`); `eval` of a multi-line
   alias that unaliases itself; in POSIX mode, aliases inside `$(...)` at parse time and a
   reserved word after a blank-ending alias.

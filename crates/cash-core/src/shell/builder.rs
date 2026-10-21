@@ -253,6 +253,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             at_slash: false,
             loop_depth: 0,
             compound_redirection_failed: false,
+            current_shell_substitutions: 0,
             env: env::ShellEnvironment::default(),
             funcs: functions::FunctionEnv::default(),
             options: options::RuntimeOptions::default(),

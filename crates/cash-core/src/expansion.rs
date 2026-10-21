@@ -1502,6 +1502,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                         crate::variables::ShellVariable::new(String::new()),
                         env::EnvironmentScope::Local,
                     )?;
+                    scope.shell().note_current_shell_substitution(true);
                     let result = scope
                         .shell()
                         .run_string(
@@ -1509,8 +1510,16 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                             &crate::SourceInfo::from("current-shell substitution"),
                             &params,
                         )
-                        .await?;
+                        .await;
+                    scope.shell().note_current_shell_substitution(false);
+                    let result = result?;
                     scope.shell().set_last_exit_status(result.exit_code.into());
+                    if matches!(
+                        result.next_control_flow,
+                        crate::ExecutionControlFlow::ExitShell
+                    ) {
+                        return Err(error::ErrorKind::ExitShell(result.exit_code.into()).into());
+                    }
                     let shell = scope.shell();
                     shell
                         .env()
@@ -1526,6 +1535,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                         std::io::Read::read_to_string(&mut reader, &mut output)?;
                         Ok::<_, std::io::Error>(output)
                     });
+                    self.shell.note_current_shell_substitution(true);
                     let run_result = self
                         .shell
                         .run_string(
@@ -1534,10 +1544,19 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                             &params,
                         )
                         .await;
+                    self.shell.note_current_shell_substitution(false);
                     drop(params);
                     let mut output = read_task.await??;
                     let result = run_result?;
                     self.shell.set_last_exit_status(result.exit_code.into());
+                    // It runs in the shell itself: an `exit` in it ends the shell, as in
+                    // Bash. It ended the substitution only.
+                    if matches!(
+                        result.next_control_flow,
+                        crate::ExecutionControlFlow::ExitShell
+                    ) {
+                        return Err(error::ErrorKind::ExitShell(result.exit_code.into()).into());
+                    }
                     output.truncate(cash_win32::text::trim_substitution_output(&output).len());
                     output
                 };

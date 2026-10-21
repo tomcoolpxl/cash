@@ -33,6 +33,11 @@ pub enum ErrorKind {
     #[error("{0}: cannot assign list to array member")]
     AssigningListToArrayMember(String),
 
+    /// `exit` in a `${ cmd; }` substitution, which runs in the shell itself: the shell
+    /// ends with the status, as in Bash, and nothing is said.
+    #[error("exit {0}")]
+    ExitShell(u8),
+
     /// A word that is no name where one is needed, as `arr[0]` before a command.
     #[error("`{0}': not a valid identifier")]
     NotValidIdentifier(String),
@@ -512,6 +517,7 @@ impl From<&ErrorKind> for results::ExecutionExitCode {
             ErrorKind::FunctionNameShadowsSpecialBuiltin { .. } => Self::InvalidUsage,
             ErrorKind::EnvShebang(..) => Self::Custom(125),
             ErrorKind::TestError(_) => Self::InvalidUsage,
+            ErrorKind::ExitShell(code) => Self::from(*code),
             // 128 + SIGINT, the status Bash leaves after Ctrl-C.
             ErrorKind::Interrupted => Self::Interrupted,
             ErrorKind::IoError(io_err) => io_err.into(),
@@ -583,6 +589,7 @@ impl Error {
         match &self.kind {
             ErrorKind::ReadonlyVariable(_)
             | ErrorKind::AssignmentError(_)
+            | ErrorKind::ExitShell(_)
             | ErrorKind::BadSubstitutionText(_)
             | ErrorKind::CircularNameReference(_)
             | ErrorKind::EvalError(_)
@@ -625,7 +632,9 @@ impl Error {
         &self,
         shell: &Shell<impl extensions::ShellExtensions>,
     ) -> results::ExecutionControlFlow {
-        if (self.is_fatal() || self.is_silent_interrupt()) && !shell.options().interactive {
+        if matches!(self.kind, ErrorKind::ExitShell(_))
+            || ((self.is_fatal() || self.is_silent_interrupt()) && !shell.options().interactive)
+        {
             results::ExecutionControlFlow::ExitShell
         } else {
             results::ExecutionControlFlow::Normal

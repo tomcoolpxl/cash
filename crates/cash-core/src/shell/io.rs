@@ -145,6 +145,10 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
         err: &error::Error,
     ) -> Result<(), error::Error> {
         use crate::extensions::ErrorFormatter as _;
+        // An `exit` carried out of `${ cmd; }` is no error to say.
+        if matches!(err.kind(), error::ErrorKind::ExitShell(_)) {
+            return Ok(());
+        }
         let colour = self.colours(file);
         let str = self.error_formatter.format_error(err, self, colour);
         write!(file, "{str}")?;

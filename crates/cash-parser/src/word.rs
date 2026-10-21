@@ -1718,10 +1718,33 @@ peg::parser! {
                 WordPiece::CurrentShellCommandSubstitution { command: c.to_owned(), reply: false }
             }
 
+        // A brace group inside (a function's body) is read whole, its `}` its own, as Bash
+        // reads `${ g() { echo in; }; g; }`; the first `; }` ended the substitution.
         rule current_shell_command_piece() =
-            word_piece(<current_shell_end()>, true) {}
+            current_shell_group() /
+            word_piece(<current_shell_stop()>, true) {}
 
-        rule current_shell_end() -> () = ";" [' ' | '\t' | '\n']* "}" { () }
+        rule current_shell_group() =
+            prev_is_word_break() "{" [' ' | '\t' | '\n'] current_shell_command_piece()* current_shell_end()
+
+        rule current_shell_stop() -> () =
+            current_shell_end() /
+            prev_is_word_break() "{" [' ' | '\t' | '\n'] { () }
+
+        // The `}` that ends `${ cmd; }` comes where a command ends: after `;`, a newline or
+        // `&`, or right after a `)`, as in Bash (`${ echo a<newline>}`, `${ (echo b)}`). Only
+        // `; }` was taken.
+        rule current_shell_end() -> () =
+            [';' | '\n' | '&'] [' ' | '\t' | '\n']* "}" { () } /
+            prev_is_close_paren() [' ' | '\t']* "}" { () }
+
+        rule prev_is_close_paren() = #{|input, pos| {
+            if pos > 0 && input.as_bytes().get(pos - 1) == Some(&b')') {
+                peg::RuleResult::Matched(pos, ())
+            } else {
+                peg::RuleResult::Failed
+            }
+        }}
 
         pub(crate) rule command() -> &'input str =
             $(command_piece()*)

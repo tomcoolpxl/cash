@@ -18,7 +18,11 @@ impl builtins::Command for ReturnCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        if !(context.shell.in_function() || context.shell.in_sourced_script()) {
+        // `${ cmd; }` returns too, as a function does, as in Bash.
+        if !(context.shell.in_function()
+            || context.shell.in_sourced_script()
+            || context.shell.in_current_shell_substitution())
+        {
             let _ = writeln!(
                 context.error_stream(),
                 "return: can only `return' from a function or sourced script"

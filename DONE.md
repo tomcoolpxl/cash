@@ -2923,3 +2923,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   never ended; a backslash-newline joins them before the tag is looked for, as in Bash.
   A `$(` that nothing ends in a here-document was printed as written; the expansion
   fails, status 1, and the script goes on, as in Bash.
+- **`${ cmd; }`** (2026-10-21, the phase after 1.45.0, item 5): a function defined in it,
+  or any brace group, ended it at the group's `}`; the group is read whole, in the
+  tokenizer and the word parser both. Its `}` after a newline or right after a `)` was a
+  bad substitution; it ends it there, as in Bash. `exit` in it ended only it, where it
+  runs in the shell itself; the shell ends, as in Bash. `return` at the top level was
+  refused; it returns from the substitution, as from a function. `local` in it was found
+  to be as Bash has it.

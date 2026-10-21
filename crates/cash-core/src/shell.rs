@@ -82,6 +82,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// any command in it ran: its failure is then its own, for the ERR trap and `set -e`.
     compound_redirection_failed: bool,
 
+    /// How many `${ cmd; }` substitutions are running, in which `return` ends the
+    /// innermost, as in Bash, a function or not.
+    current_shell_substitutions: usize,
+
     /// The shell environment, containing shell variables.
     env: ShellEnvironment,
 
@@ -254,6 +258,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             at_slash: self.at_slash,
             loop_depth: self.loop_depth,
             compound_redirection_failed: false,
+            current_shell_substitutions: 0,
             env: self.env.clone(),
             funcs: self.funcs.clone(),
             options: self.options.clone(),
@@ -733,6 +738,20 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     pub fn history_list_mut(&mut self) -> &mut crate::history::History {
         self.history
             .get_or_insert_with(crate::history::History::default)
+    }
+
+    /// Whether a `${ cmd; }` substitution is running, which `return` may end.
+    pub const fn in_current_shell_substitution(&self) -> bool {
+        self.current_shell_substitutions > 0
+    }
+
+    /// Notes a `${ cmd; }` substitution starting (`true`) or ending.
+    pub(crate) const fn note_current_shell_substitution(&mut self, starting: bool) {
+        if starting {
+            self.current_shell_substitutions += 1;
+        } else {
+            self.current_shell_substitutions = self.current_shell_substitutions.saturating_sub(1);
+        }
     }
 
     /// How many loops the running command is inside, which `break` and `continue` may

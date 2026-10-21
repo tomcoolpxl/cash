@@ -3342,3 +3342,14 @@ fn text_right_after_a_lists_parenthesis_makes_one_word() {
     );
     assert_eq!((status, stdout.as_str()), (0, "6\n(x y)z 1\nq"));
 }
+
+#[test]
+fn a_current_shell_substitution_holds_groups_and_ends_as_bash_s_does() {
+    // A function's body inside ended it at its `}`; `}` after a newline or a `)` was a bad
+    // substitution; `exit` in it ended only it, and `return` at the top level was refused.
+    let (status, stdout) = output(
+        "x=${ g() { echo in; }; g; }; echo \"[$x]\"; y=${ echo a\n}; z=${ (echo b)}; \
+         echo \"[$y][$z]\"; r=${ return 2; echo no; }; echo \"[$r] $?\"; v=${ exit 4; }; echo after",
+    );
+    assert_eq!((status, stdout.as_str()), (4, "[in]\n[a][b]\n[] 2"));
+}
