@@ -94,6 +94,7 @@ fn every_builtin_has_a_page_and_every_page_names_a_builtin() {
     let covered: BTreeSet<&str> = manual
         .pages
         .iter()
+        .filter(|page| page.kind != cash_man::KEYWORDS)
         .flat_map(|page| page.names.iter().map(String::as_str))
         .collect();
     let missing: Vec<_> = registered.difference(&covered).collect();
@@ -107,5 +108,21 @@ fn every_builtin_has_a_page_and_every_page_names_a_builtin() {
         stale,
         Vec::<&&str>::new(),
         "pages in crates/cash-man/pages that name no builtin"
+    );
+    // A page of the shell's grammar names a reserved word, or `((`.
+    let reserved = run("compgen -k");
+    let mut words: BTreeSet<&str> = reserved.stdout.lines().map(str::trim).collect();
+    words.insert("((");
+    let not_reserved: Vec<&str> = manual
+        .pages
+        .iter()
+        .filter(|page| page.kind == cash_man::KEYWORDS)
+        .flat_map(|page| page.names.iter().map(String::as_str))
+        .filter(|name| !words.contains(name))
+        .collect();
+    assert_eq!(
+        not_reserved,
+        Vec::<&str>::new(),
+        "keyword pages that name no reserved word"
     );
 }

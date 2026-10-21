@@ -181,13 +181,36 @@ impl HelpCommand {
             let matcher = cash_core::patterns::Pattern::from(pattern.as_str())
                 .set_extended_globbing(context.shell.options().extended_globbing)
                 .set_case_insensitive(context.shell.options().case_insensitive_pathname_expansion);
+            // A word with no wildcard in it names every builtin it begins, as in Bash:
+            // `help -s rea` is read, readarray and readonly.
+            let prefix = !pattern.contains(['*', '?', '[']);
+            let matches =
+                |name: &str| -> Result<bool, cash_core::Error> {
+                    Ok(matcher.exactly_matches(name)?
+                        || (prefix && name.starts_with(pattern.as_str())))
+                };
             for (name, registration) in builtins_by_name(context) {
-                if matcher.exactly_matches(name.as_str())? {
+                if matches(name)? {
                     texts.push(self.builtin_text(name, registration, style)?);
                 }
             }
+            // The reserved words and constructs have pages of their own, as Bash has
+            // help for them: `help case`, `help [[`.
+            for page in keyword_pages() {
+                for name in &page.names {
+                    if matches(name)? {
+                        texts.push(self.keyword_text(name, page, style));
+                    }
+                }
+            }
+            // `help variables` is Bash's name for the topic of the shell's variables.
+            let topic_name = if pattern == "variables" {
+                "vars"
+            } else {
+                pattern.as_str()
+            };
             if texts.is_empty()
-                && let Some(topic) = cash_man::manual().topic(pattern)
+                && let Some(topic) = cash_man::manual().topic(topic_name)
             {
                 texts.push(self.topic_text(topic, style));
             }
@@ -227,6 +250,17 @@ impl HelpCommand {
             return short_usage(name, registration);
         }
         builtin_page(name, registration, style, self.man_page_style)
+    }
+
+    /// What `help` says about the reserved word or construct `name`, from its page.
+    fn keyword_text(&self, name: &str, page: &Page, style: Style) -> String {
+        if self.short_description {
+            format!("{name} - {}\n", render::plain(page.summary_of(name)))
+        } else if self.short_usage {
+            format!("{name}: {}\n", keyword_synopsis(name, page))
+        } else {
+            drawn(page, style)
+        }
     }
 
     fn topic_text(&self, topic: &Page, style: Style) -> String {
@@ -295,6 +329,76 @@ fn builtins_by_name<'a, SE: cash_core::ShellExtensions>(
         .iter()
         .sorted_by_key(|(name, _)| *name)
         .collect()
+}
+
+/// The names `help` lists under `kind`, each with whether it is disabled and its summary.
+/// The reserved words are listed from their pages: no builtin is one.
+fn kind_members<'a, SE: cash_core::ShellExtensions>(
+    kind: &str,
+    builtins: &[(&'a String, &'a builtins::Registration<SE>)],
+) -> Vec<(&'a str, bool, &'static str)> {
+    let manual = cash_man::manual();
+    if kind == cash_man::KEYWORDS {
+        keyword_pages()
+            .flat_map(|page| {
+                page.names
+                    .iter()
+                    .map(move |name| (name.as_str(), false, page.summary_of(name)))
+            })
+            .sorted_by_key(|(name, _, _)| *name)
+            .collect()
+    } else {
+        builtins
+            .iter()
+            .filter_map(|(name, registration)| {
+                let page = manual.page(name).filter(|page| page.kind == kind)?;
+                Some((name.as_str(), registration.disabled, page.summary_of(name)))
+            })
+            .collect()
+    }
+}
+
+/// The pages of the reserved words and constructs.
+fn keyword_pages() -> impl Iterator<Item = &'static Page> {
+    cash_man::manual()
+        .pages
+        .iter()
+        .filter(|page| page.kind == cash_man::KEYWORDS)
+}
+
+/// The usage line of the reserved word `name`: the first paragraph of its page's syntax,
+/// on one line, or of that paragraph the lines of `name` when each line is one of the
+/// page's words (`while` and `until`).
+fn keyword_synopsis(name: &str, page: &Page) -> String {
+    let lines: Vec<&str> = page
+        .section(cash_man::page::Heading::Syntax)
+        .map(|section| {
+            section
+                .body
+                .lines()
+                .skip_while(|line| line.trim().is_empty())
+                .take_while(|line| !line.trim().is_empty())
+                .map(str::trim)
+                .collect()
+        })
+        .unwrap_or_default();
+    let starts_with = |line: &str, word: &str| {
+        line.strip_prefix(word)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with(' '))
+    };
+    let each_its_own = lines.len() > 1
+        && lines
+            .iter()
+            .all(|line| page.names.iter().any(|word| starts_with(line, word)));
+    let chosen: Vec<&str> = if each_its_own {
+        lines
+            .into_iter()
+            .filter(|line| starts_with(line, name))
+            .collect()
+    } else {
+        lines
+    };
+    chosen.join(" ")
 }
 
 /// The builtin's one-line summary: its page's, or failing that, its own.
@@ -665,13 +769,7 @@ fn general_help<SE: cash_core::ShellExtensions>(
     };
 
     for kind in cash_man::KINDS {
-        let members: Vec<_> = builtins
-            .iter()
-            .filter_map(|(name, registration)| {
-                let page = manual.page(name).filter(|page| page.kind == kind)?;
-                Some((name.as_str(), registration.disabled, page.summary_of(name)))
-            })
-            .collect();
+        let members = kind_members(kind, &builtins);
         if members.is_empty() {
             continue;
         }

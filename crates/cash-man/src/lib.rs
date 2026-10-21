@@ -24,8 +24,9 @@ mod embedded {
 }
 
 /// The kinds of command a page's `kind:` names, in the order `help` lists them.
-pub const KINDS: [&str; 8] = [
+pub const KINDS: [&str; 9] = [
     "Bash builtins",
+    KEYWORDS,
     "cash's shell commands",
     "Terminal and clipboard",
     "Windows commands",
@@ -34,6 +35,10 @@ pub const KINDS: [&str; 8] = [
     "Coreutils written for Windows",
     "Bundled coreutils, from uutils",
 ];
+
+/// The kind of the pages of the shell's reserved words and constructs (`case`, `[[`,
+/// `((`), which are no builtins: `help` finds them as it finds a builtin.
+pub const KEYWORDS: &str = "Bash keywords";
 
 /// The order the topics are listed in; any other topic follows, by name.
 pub const TOPIC_ORDER: [&str; 11] = [

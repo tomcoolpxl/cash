@@ -2870,3 +2870,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   (`eval 'exec >log; echo a' >out` wrote `a` to `out` and the rest of the script to
   `log`); they hold it in the shell while they run and put it back after, as a function
   call does.
+- **`help` of the reserved words** (2026-10-21, the phase after 1.44.0, item 1): `help
+  case`, `help if`, `help [[` and the others Bash has help for were "no help topics
+  match". The manual has a page for each reserved word and construct (`case`, `if`,
+  `for`, `while` and `until`, `select`, `function`, `[[`, `((`, `{`, `coproc`), of a new
+  kind, Bash keywords, which `help` lists, shows (`-s`, `-d`, the page) and `man` opens;
+  `help variables` is the topic of the shell's variables. A word with no wildcard in it
+  is also a prefix, as in Bash: `help -s rea` is read, readarray and readonly.

@@ -989,6 +989,12 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   `**/` through links, collating classes), `touch` going on past a bad operand, and the
   last phase's small leftovers. Left for the user to pick: traps and jobs, POSIX mode,
   starting cash, the small builtins, the parser's remaining list.
+- **The phase after 1.44.0** (taken as recommended while the user was away, 2026-10-21,
+  as the user asked; the user may change it): the small builtins, each checked against
+  Git Bash 5.3 first: `help` of the reserved words and prefix matching, `complete -p`'s
+  `!`, missing usage errors, `history -s`/`-d`/`-p`, `declare -f +r`. Not the printing of
+  functions (`|cat`, `2>& 1`, `elif`), which reads back as it is. Still the user's to
+  pick: traps and jobs, POSIX mode, starting cash, the parser's remaining list.
 
 ## 8. Archives and compression
 

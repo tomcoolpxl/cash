@@ -1,0 +1,4 @@
+notes.txt: text
+photo.jpg: picture
+run.sh: other
+--- status 0

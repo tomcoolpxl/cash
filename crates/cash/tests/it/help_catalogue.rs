@@ -331,3 +331,44 @@ fn a_script_named_help_still_runs() {
     ));
     assert_eq!(out.stdout, "the script ran");
 }
+
+#[test]
+fn help_knows_the_reserved_words_and_takes_a_plain_word_as_a_prefix() {
+    // As Bash: `help case` and `help [[` were "no help topics match", and `help -s rea`
+    // matched nothing, where Bash names read, readarray and readonly.
+    let out = run("help -s case if [[ until; help -d rea; help -s variables");
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert!(
+        lines.contains(&"case: case WORD in PATTERN [| PATTERN]...) COMMANDS ;; ... esac"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.starts_with("if: if COMMANDS; then COMMANDS; [elif")),
+        "{}",
+        out.stdout
+    );
+    assert!(lines.contains(&"[[: [[ EXPRESSION ]]"), "{}", out.stdout);
+    assert!(
+        lines.contains(&"until: until COMMANDS; do COMMANDS; done"),
+        "{}",
+        out.stdout
+    );
+    for name in ["read - ", "readarray - ", "readonly - "] {
+        assert!(
+            lines.iter().any(|line| line.starts_with(name)),
+            "{name}: {}",
+            out.stdout
+        );
+    }
+    assert!(
+        lines.iter().any(|line| line.starts_with("vars - ")),
+        "{}",
+        out.stdout
+    );
+    let page = run("help case");
+    assert!(page.stdout.contains("case WORD in"), "{}", page.stdout);
+}
