@@ -3317,3 +3317,19 @@ fn compgen_k_lists_the_reserved_words_in_bashs_order() {
         )
     );
 }
+
+#[test]
+fn a_trailing_backslash_is_a_character_and_a_loop_name_must_be_one() {
+    // `echo a\` at the end of the text printed `a`: the newline added after it made a
+    // line continuation. `case x in esac)` ran; Bash ends the case at `esac`. `for 1 in`
+    // and `select 2 in` ran the loop; Bash says the name is none, status 1.
+    let (_, stdout) = output("echo a\\");
+    assert_eq!(stdout, "a\\");
+    let (status, _) = output("case x in esac) echo hit;; esac");
+    assert_eq!(status, 2);
+    let (status, stdout) = output(
+        "for 1 in a; do echo in; done; echo \"s $?\"; select 2 in a; do :; done </dev/null; \
+         echo \"s $?\"",
+    );
+    assert_eq!((status, stdout.as_str()), (0, "s 1\ns 1"));
+}

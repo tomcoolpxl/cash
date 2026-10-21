@@ -2907,3 +2907,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
 - **`compgen -k` in Bash's order** (2026-10-21, after 1.45.0, found in the phase before):
   the reserved words came from a set, in an order that changed from run to run; they are
   listed in the order of Bash's table, as Bash lists them.
+- **A trailing backslash, `case x in esac)`, loop names** (2026-10-21, the phase after
+  1.45.0, items 1 and 2): a backslash that ended a script or a `-c` string was dropped
+  (`echo a\` printed `a`), the newline added after the last line making it a line
+  continuation; it is a character, as in Bash. `case x in esac)` ran with `esac` as a
+  pattern; a first pattern of `esac` without its `(` ends the case, so the `)` is a
+  syntax error, as in Bash. `for 1 in a b` and `select 2 in a` ran their loops; the name
+  is not a valid identifier, status 1, and the loop does not run.

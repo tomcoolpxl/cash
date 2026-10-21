@@ -25,10 +25,23 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Next phase: the user's to pick (after 1.45.0)
+## Picked by the user (the current phase, after 1.45.0, 2026-10-21)
 
-Still open, by theme, below: traps and jobs, POSIX mode, starting cash, the parser's
-list, and the leftovers of the themes done.
+The parser's remaining list (decisions.md, "The phase after 1.45.0"), each item checked
+against Git Bash 5.3 first, cheapest first. Done, in DONE.md: 1, a trailing backslash
+(backslash-newline inside backquotes was found to be as Bash has it); 2, `case x in
+esac)` and loop names that are none.
+
+3. A syntax error in a compound array assignment; text after its `)`.
+4. Here-documents: the delimiter and backslash-newline, an unterminated `$(` in one, the
+   `EOF)` warning.
+5. `${ cmd; }`: `return`, `local`, `exit`, a function inside it, `}` after a newline or
+   `)`.
+6. Aliases: one followed by a redirection (`foo>&2`); `eval` of a multi-line alias that
+   unaliases itself.
+7. Functions printed that do not read back.
+8. The end of a `$(...)` found twice; a syntax error inside `$(...)` found only when it
+   runs.
 
 ## The phase before (2026-10-21, done, released as 1.45.0)
 
@@ -92,11 +105,8 @@ path. The rest, by theme:
 - A here-document's delimiter is checked before backslash-newline is joined (`EO\`+`F`);
   an unterminated `$(` in a here-document passes; a here-document in `$(...)` ended by
   `EOF)` gives no warning (Bash: "delimited by end-of-file").
-- A trailing backslash at the end of input is dropped; backslash-newline inside
-  backquotes is kept.
 - A syntax error in a compound array assignment ends the script; text after its `)`
   (`let a=(4*3)/2`, `c=(x y)z`).
-- `case x in esac)` accepted; `for 1 in a b` and `select` run with names that are none.
 - `${ cmd; }`: `return`, `local`, `exit`, a function inside it, `}` after a newline or `)`.
 - Aliases: one followed by a redirection merges tokens (`foo>&2`); `eval` of a multi-line
   alias that unaliases itself; in POSIX mode, aliases inside `$(...)` at parse time and a

@@ -437,16 +437,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         params: &ExecutionParameters,
         fatal: bool,
     ) -> Result<Result<ExecutionResult, usize>, error::Error> {
-        // A last line ends as the others do, as Bash ends a `-c` or `eval` string: `echo (`
-        // is wrong at its newline, not at the end of the text.
-        let mut ended;
-        let text = if text.last().is_some_and(|&byte| byte != b'\n') {
-            ended = text.to_vec();
-            ended.push(b'\n');
-            ended.as_slice()
-        } else {
-            text
-        };
+        let ended = ended_with_a_newline(text);
+        let text = ended.as_ref();
 
         let mut result = ExecutionResult::success();
         let mut pending: Vec<u8> = Vec::new();
@@ -817,6 +809,27 @@ enum Reading {
 /// The line Bash names for a here-document left open at the end: the line before its
 /// body, which is the `<<`'s line, or where the last of the here-documents before it on
 /// that line closed (`cat <<A; cat <<B`: the line of `A`).
+/// `text` with its last line ended as the others are, as Bash ends a `-c` or `eval`
+/// string: `echo (` is wrong at its newline, not at the end of the text. A backslash that
+/// ends the text is a character, as in Bash (`echo a\` prints `a\`): the newline added
+/// after it made it a line continuation, which took it away, so it is escaped first.
+fn ended_with_a_newline(text: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+    if text.last().is_none_or(|&byte| byte == b'\n') {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    let mut ended = text.to_vec();
+    let trailing = ended
+        .iter()
+        .rev()
+        .take_while(|&&byte| byte == b'\\')
+        .count();
+    if trailing % 2 == 1 {
+        ended.push(b'\\');
+    }
+    ended.push(b'\n');
+    std::borrow::Cow::Owned(ended)
+}
+
 fn here_document_opened(text: &[u8], tag_line: usize, open_tags: &[String]) -> usize {
     let lines: Vec<String> = text
         .split(|&byte| byte == b'\n')

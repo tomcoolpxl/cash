@@ -1841,6 +1841,10 @@ impl Execute for ast::SelectClauseCommand {
     ) -> Result<ExecutionResult, error::Error> {
         use std::io::{BufRead, Write};
 
+        if let Some(refused) = refuse_loop_name(shell, params, &self.variable_name) {
+            return Ok(refused);
+        }
+
         let mut result = ExecutionResult::success();
 
         // Same word source as a for clause: the given list, or the positional parameters.
@@ -1988,6 +1992,10 @@ impl Execute for ast::ForClauseCommand {
         shell: &mut Shell<impl extensions::ShellExtensions>,
         params: &ExecutionParameters,
     ) -> Result<ExecutionResult, error::Error> {
+        if let Some(refused) = refuse_loop_name(shell, params, &self.variable_name) {
+            return Ok(refused);
+        }
+
         let mut result = ExecutionResult::success();
 
         // If we were given explicit words to iterate over, then expand them all, with splitting
@@ -2064,6 +2072,24 @@ impl Execute for ast::ForClauseCommand {
         shell.set_last_exit_status(result.exit_code.into());
         Ok(result)
     }
+}
+
+/// The status of a `for` or `select` whose name is no variable's, said as Bash says it:
+/// `for 1 in a b` is `` `1': not a valid identifier ``, status 1, and the loop does not
+/// run. It ran, setting nothing.
+fn refuse_loop_name(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    name: &str,
+) -> Option<ExecutionResult> {
+    if valid_variable_name(name) {
+        return None;
+    }
+    let error = error::Error::from(error::ErrorKind::NotValidIdentifier(name.to_owned()))
+        .located_at(shell.error_prefix());
+    let _ = shell.display_error(&mut params.stderr(shell), &error);
+    shell.set_last_exit_status(1);
+    Some(ExecutionResult::general_error())
 }
 
 #[async_trait::async_trait]

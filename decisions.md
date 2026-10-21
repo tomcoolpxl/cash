@@ -995,6 +995,11 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   `!`, missing usage errors, `history -s`/`-d`/`-p`, `declare -f +r`. Not the printing of
   functions (`|cat`, `2>& 1`, `elif`), which reads back as it is. Still the user's to
   pick: traps and jobs, POSIX mode, starting cash, the parser's remaining list.
+- **The phase after 1.45.0** (the user, 2026-10-21, from a pick list): the parser's
+  remaining list, the recommended option. Not picked: the leftovers of the themes done,
+  starting cash, traps and jobs. The POSIX-mode parts of the parser's list (aliases in
+  `$(...)` at parse time, a reserved word after a blank-ending alias) stay with POSIX
+  mode, turned down before.
 
 ## 8. Archives and compression
 

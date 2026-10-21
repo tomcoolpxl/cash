@@ -419,8 +419,11 @@ peg::parser! {
             }
 
         // A case item, and whether a terminator such as `;;` ended it.
+        // A first pattern of `esac` without its `(` is the case's end, as in Bash: `case x
+        // in esac)` is a syntax error at the `)`; it was a pattern.
         rule case_item() -> (ast::CaseItem, bool) =
-            s:specific_operator("(")? p:pattern() e:specific_operator(")") linebreak() c:compound_list()?
+            s:(s:specific_operator("(") { Some(s) } / !specific_word("esac") { None })
+            p:pattern() e:specific_operator(")") linebreak() c:compound_list()?
             post_action:(a:case_item_post_action() linebreak() { a })? {
                 let start = s.map(Token::location).or_else(|| p.first().and_then(|w| w.loc.as_ref()));
                 let cmd_end = c.as_ref().and_then(|c| c.location());
