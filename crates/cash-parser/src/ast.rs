@@ -2191,8 +2191,6 @@ pub enum BinaryPredicate {
     StringExactlyMatchesString,
     /// Computes if a string does not exactly match another string.
     StringDoesNotExactlyMatchString,
-    /// Computes if a string contains a substring.
-    StringContainsSubstring,
     /// Computes if the left value sorts before the right.
     LeftSortsBeforeRight,
     /// Computes if the left value sorts after the right.
@@ -2220,7 +2218,6 @@ impl Display for BinaryPredicate {
             Self::StringExactlyMatchesPattern => write!(f, "=="),
             Self::StringDoesNotExactlyMatchPattern => write!(f, "!="),
             Self::StringMatchesRegex => write!(f, "=~"),
-            Self::StringContainsSubstring => write!(f, "=~"),
             Self::StringExactlyMatchesString => write!(f, "=="),
             Self::StringDoesNotExactlyMatchString => write!(f, "!="),
             Self::LeftSortsBeforeRight => write!(f, "<"),

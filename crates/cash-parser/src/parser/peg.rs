@@ -332,13 +332,11 @@ peg::parser! {
             left:extended_test_word() specific_word("-ot") right:extended_test_word() { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftFileIsOlderOrDoesNotExistWhenRightDoes, left, right) } /
             left:extended_test_word() (specific_word("==") / specific_word("=")) right:extended_test_word()  { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringExactlyMatchesPattern, left, right) } /
             left:extended_test_word() specific_word("!=") right:extended_test_word()  { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringDoesNotExactlyMatchPattern, left, right) } /
+            // A quoted part of the regex is literal text in it, as in Bash; a regex that began
+            // with a quote was a substring test, which set no BASH_REMATCH and took
+            // `"x"|b` whole.
             left:extended_test_word() specific_word("=~") right:regex_word()  {
-                if right.value.starts_with(['\'', '\"']) {
-                    // TODO(test): Confirm it ends with that too?
-                    ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringContainsSubstring, left, right)
-                } else {
-                    ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringMatchesRegex, left, right)
-                }
+                ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::StringMatchesRegex, left, right)
             } /
             left:extended_test_word() specific_operator("<") right:extended_test_word()   { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftSortsBeforeRight, left, right) } /
             left:extended_test_word() specific_operator(">") right:extended_test_word()   { ast::ExtendedTestExpr::BinaryTest(ast::BinaryPredicate::LeftSortsAfterRight, left, right) }

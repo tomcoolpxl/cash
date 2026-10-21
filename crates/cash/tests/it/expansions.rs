@@ -221,6 +221,26 @@ fn a_regular_expression_takes_the_longest_match_at_its_leftmost_start() {
 }
 
 #[test]
+fn a_quoted_part_of_a_regular_expression_is_literal_text_in_it() {
+    // A regex that began with a quote was a substring test: no BASH_REMATCH, and the rest
+    // of the regex (`"x"|b`) taken as text.
+    check(&[
+        (
+            r#"[[ abc =~ "bc" ]] && echo "<${BASH_REMATCH[0]}>""#,
+            "<bc>",
+        ),
+        (
+            r#"[[ abc =~ "x"|b ]] && echo "<${BASH_REMATCH[0]}>""#,
+            "<b>",
+        ),
+        (r#"[[ a.c =~ "." ]] && echo "<${BASH_REMATCH[0]}>""#, "<.>"),
+        (r#"[[ abc =~ "." ]] || echo no"#, "no"),
+        // `-t` of what is no number is said, and 2, the line going on.
+        (r#"[[ -t 1x ]] 2>/dev/null; echo "s $?""#, "s 2"),
+    ]);
+}
+
+#[test]
 fn an_assignment_seeds_random_as_in_bash() {
     // It was dropped (LANG-23); the numbers are Git Bash 5.3's.
     check(&[

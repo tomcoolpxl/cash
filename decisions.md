@@ -983,6 +983,12 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   and namerefs. Turned down for now: traps and job control, POSIX mode for modernish, and
   bytes that are not UTF-8 (very large: cash's strings are UTF-8 throughout). The user
   asked for independence while away: questions take the recommended answer.
+- **The phase after 1.43.0** (taken as recommended while the user was away, 2026-10-21,
+  as the user asked; the user may change it): conditionals (`[[ =~ "lit" ]]` and
+  BASH_REMATCH first, as scripts test so), globbing (quotes inside a bracket expression,
+  `**/` through links, collating classes), `touch` going on past a bad operand, and the
+  last phase's small leftovers. Left for the user to pick: traps and jobs, POSIX mode,
+  starting cash, the small builtins, the parser's remaining list.
 
 ## 8. Archives and compression
 

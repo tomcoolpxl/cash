@@ -1689,6 +1689,15 @@ impl Execute for ast::CompoundCommand {
                                 );
                                 2
                             }
+                            // `[[ -t X ]]`: `[[: X: integer expected`, and 2, as in Bash.
+                            error::ErrorKind::TestError(message) => {
+                                let error = error::Error::from(error::ErrorKind::TestError(
+                                    format!("[[: {message}"),
+                                ))
+                                .located_at(shell.error_prefix());
+                                let _ = shell.display_error(&mut params.stderr(shell), &error);
+                                2
+                            }
                             _ => return Err(err),
                         },
                     };

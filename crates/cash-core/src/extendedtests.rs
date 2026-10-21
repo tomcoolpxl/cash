@@ -132,13 +132,17 @@ pub(crate) async fn apply_unary_predicate_to_str(
             }
         }
         ast::UnaryPredicate::FdIsOpenTerminal => {
-            // Trim whitespace before parsing, matching bash behavior.
-            if let Ok(fd) = operand.trim().parse::<ShellFd>() {
-                if let Some(open_file) = params.try_fd(shell, fd) {
-                    Ok(open_file.is_terminal())
-                } else {
-                    Ok(false)
-                }
+            // Trim whitespace before parsing, matching bash behavior. What is no integer is
+            // `X: integer expected`, status 2, as for `-eq`; it was false in silence.
+            let number = operand.trim().parse::<i64>().map_err(|_| {
+                error::Error::from(error::ErrorKind::TestError(format!(
+                    "{operand}: integer expected"
+                )))
+            })?;
+            if let Ok(fd) = ShellFd::try_from(number)
+                && let Some(open_file) = params.try_fd(shell, fd)
+            {
+                Ok(open_file.is_terminal())
             } else {
                 Ok(false)
             }
@@ -478,18 +482,6 @@ async fn apply_binary_predicate(
 
             Ok(left != right)
         }
-        ast::BinaryPredicate::StringContainsSubstring => {
-            let s = expansion::basic_expand_word(shell, params, left).await?;
-            let substring = expansion::basic_expand_word(shell, params, right).await?;
-
-            if shell.options().print_commands_and_arguments {
-                shell
-                    .trace_command(params, std::format!("[[ {s} {op} {substring} ]]"))
-                    .await;
-            }
-
-            Ok(s.contains(substring.as_str()))
-        }
         ast::BinaryPredicate::FilesReferToSameDeviceAndInodeNumbers => {
             let left = expansion::basic_expand_word(shell, params, left).await?;
             let right = expansion::basic_expand_word(shell, params, right).await?;
@@ -745,7 +737,9 @@ pub(crate) fn apply_binary_predicate_to_strs(
         }
         ast::BinaryPredicate::StringExactlyMatchesString => Ok(left == right),
         ast::BinaryPredicate::StringDoesNotExactlyMatchString => Ok(left != right),
-        _ => error::unimp("unsupported test binary predicate"),
+        ast::BinaryPredicate::StringMatchesRegex => {
+            error::unimp("unsupported test binary predicate")
+        }
     }
 }
 

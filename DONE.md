@@ -2839,3 +2839,9 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   word to the first; it points the reference at each. `declare -n r=/` was taken, and a
   reference to `X[0]` used by `read` made a variable named `X[0]`; `${r=X}` of a
   reference with no target was `X`'s value, not `X`.
+- **Conditionals** (2026-10-21, the phase after 1.43.0, item 1): a regex for `=~` that
+  began with a quote was taken by the parser for a substring test: BASH_REMATCH was not
+  set (`[[ abc =~ "b" ]]` left it as it was) and the rest of the regex was text (`"x"|b`
+  matched no `b`). A quoted part is literal text in the regex, as in Bash. `[[ -t X ]]`
+  was false in silence; it is `[[: X: integer expected`, status 2, the line going on, and
+  `test -t X` as `-eq` has it.

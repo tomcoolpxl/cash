@@ -25,7 +25,22 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the current phase, after 1.42.0, 2026-10-21)
+## Picked (the current phase, after 1.43.0, 2026-10-21)
+
+Taken as recommended while the user was away, as the user asked (decisions.md, "The phase
+after 1.43.0"); the user may change it. In this order. Done, in DONE.md: 1, conditionals
+(`=~` with a quoted part, `[[ -t X ]]`), but for `['a]']` (below).
+
+2. Globbing: quotes and backslashes inside a bracket expression (`a[\;]b`, `a["b"]c`);
+   `**/` through a link to a directory; collating symbols and equivalence classes; a `/`
+   inside brackets with nullglob; `{Z..a}`.
+3. `touch` stops at the first operand it cannot touch (`touch x 'a"b' y` leaves no `y`;
+   GNU touch goes on to the rest, status 1).
+4. The last phase's small leftovers: `read -n -1`; `eval` and `source` holding their
+   redirections as compound commands do; `[i]+=v` in a list; a key holding `]` for `[[
+   -v A[$k] ]]`.
+
+## The phase before (2026-10-21, done, released as 1.43.0)
 
 The user's pick from the themes below (decisions.md, "The phase after 1.42.0"), in this
 order. Done, in DONE.md: 1, loop control (`break`, `continue`, `return`, `exit`); 2,
@@ -122,8 +137,9 @@ path. The rest, by theme:
   malformed bracket inside a group.
 - Collating symbols and equivalence classes (`[[.a.]]`, `[[=a=]]`); invalid class names
   match; GLOBIGNORE splits on `:` inside brackets; nullglob with `/` in brackets.
-- `[[ $s =~ "lit" ]]` leaves BASH_REMATCH empty; `[[ a =~ ['a]'] ]]` matches; `[[ -t X
-  ]]` is silent; POSIX mode globs a redirection's word.
+- `[[ a =~ ['a]'] ]]` matches (a quoted `]` in a bracket expression is escaped for Rust's
+  regex engine, where `\]` is a `]`; in POSIX's a backslash there is a character); POSIX
+  mode globs a redirection's word.
 
 **Traps, signals and jobs**
 - `kill -SIG $$` from a background job runs the trap in the job, not the shell.
