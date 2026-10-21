@@ -25,7 +25,12 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the current phase, after 1.45.0, 2026-10-21)
+## Next phase: the user's to pick (after 1.46.0)
+
+Still open, by theme, below: the leftovers of the themes done, starting cash, traps and
+jobs, POSIX mode.
+
+## The phase before (2026-10-21, done, released as 1.46.0)
 
 The parser's remaining list (decisions.md, "The phase after 1.45.0"), each item checked
 against Git Bash 5.3 first, cheapest first. Done, in DONE.md: 1, a trailing backslash
