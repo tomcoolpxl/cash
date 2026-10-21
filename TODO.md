@@ -30,10 +30,8 @@ for working through it. What is done, phases and findings, is in DONE.md.
 Taken as recommended while the user was away, as the user asked (decisions.md, "The phase
 after 1.43.0"); the user may change it. In this order. Done, in DONE.md: 1, conditionals
 (`=~` with a quoted part, `[[ -t X ]]`), but for `['a]']` (below); 2, globbing, but for
-the few below.
+the few below; 3, `touch` going on past an operand it cannot touch.
 
-3. `touch` stops at the first operand it cannot touch (`touch x 'a"b' y` leaves no `y`;
-   GNU touch goes on to the rest, status 1).
 4. The last phase's small leftovers: `read -n -1`; `eval` and `source` holding their
    redirections as compound commands do; `[i]+=v` in a list; a key holding `]` for `[[
    -v A[$k] ]]`.

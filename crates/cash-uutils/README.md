@@ -1,14 +1,15 @@
 # cash-uutils
 
 `cat`, `cp`, `head`, `ln`, `mkdir`, `mv`, `paste`, `pr`, `ptx`, `rm`, `rmdir`, `shred`,
-`shuf`, `sort`, `split`, `tac`, `tail`, `tee` and `uniq` for cash: taken from
+`shuf`, `sort`, `split`, `tac`, `tail`, `tee`, `touch` and `uniq` for cash: taken from
 [uutils coreutils](https://github.com/uutils/coreutils) 0.12.0 (`uu_cat`, `uu_cp`,
 `uu_head`, `uu_ln`, `uu_mkdir`, `uu_mv`, `uu_paste`, `uu_pr`, `uu_ptx`, `uu_rm`,
 `uu_rmdir`, `uu_shred`, `uu_shuf`, `uu_sort`, `uu_split`, `uu_tac`, `uu_tail`,
-`uu_tee`, `uu_uniq`), © the uutils developers, under the MIT License (`LICENSE`), and
+`uu_tee`, `uu_touch`, `uu_uniq`), © the uutils developers, under the MIT License (`LICENSE`), and
 made cash's own: `rm`, `sort`, `tee`, `uniq` and `shuf` on 2026-10-10, `head` and `tail`
 on 2026-10-17, eleven more on 2026-10-18 to say their errors in GNU's words, and
-`split` on 2026-10-19 for `--filter` on Windows. Until
+`split` on 2026-10-19 for `--filter` on Windows, and `touch` on 2026-10-21 to go on past
+an operand it cannot touch. Until
 then the first five were carried in `vendor/uutils` as patched copies, and the rest
 were used from crates.io as published, as the other uutils tools cash bundles still
 are.
@@ -134,6 +135,10 @@ as it registers the uutils tools it uses unchanged.
   uutils looked from the working directory.
 - **`-i` answered no exits 1**, in `cp`, `mv` and `ln`, as GNU coreutils 9 does; Git
   Bash's coreutils 8.32 exits 0.
+- **`touch` goes on past an operand it cannot touch** (2026-10-21), as GNU touch does:
+  one whose times could not be read, as a name Windows refuses (`touch x 'a"b' y`),
+  ended the run with its error and `y` was never made. Each is said and the rest are
+  touched, status 1. Marked `// cash:`.
 - **Style.** The workspace's style lints that uutils was not written to are allowed in
   `src/lib.rs`, as for `cash-sed`; the lints for code that can panic apply in full:
   each unwrap and slice the copied code had is rewritten, or says why it cannot fail

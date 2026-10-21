@@ -1,6 +1,6 @@
 [package]
 name = "cash-uutils"
-description = "cat, cp, head, ln, mkdir, mv, paste, pr, ptx, rm, rmdir, shred, shuf, sort, tac, tail, tee and uniq for cash, taken from uutils coreutils and made its own"
+description = "cat, cp, head, ln, mkdir, mv, paste, pr, ptx, rm, rmdir, shred, shuf, sort, tac, tail, tee, touch and uniq for cash, taken from uutils coreutils and made its own"
 version.workspace = true
 authors.workspace = true
 categories.workspace = true
@@ -84,6 +84,9 @@ rustc-hash = "2.1.1"
 sha3 = { version = "0.12.0", default-features = false, features = ["alloc"] }
 # tail
 notify = "8.2.0"
+# touch
+jiff = "0.2.38"
+parse_datetime = "0.16.0"
 
 [lints]
 workspace = true

@@ -2856,3 +2856,9 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   its backslash goes, as in Bash. An extended group whose alternative begins with a dot
   (`@(.foo)`, `*(.f*)`) matched no dot file; `!(...)` still matches none. With dotglob
   and globskipdots off, `*` and `[.]*` gave `.` and `..`, which only a written dot gives.
+- **`touch` goes on past an operand it cannot touch** (2026-10-21, the phase after 1.43.0,
+  item 3): uutils' touch ended the run at an operand whose times it could not read, as a
+  name Windows refuses (`touch x 'a"b' y` made no `y`); GNU touch says it and touches
+  the rest, status 1. `touch` was taken from uutils 0.12.0 into `cash-uutils` as cash's
+  own, as `cp` and the rest were, to change that: Windows only, its messages compiled in,
+  `--version` naming the uutils release.

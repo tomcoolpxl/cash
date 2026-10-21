@@ -771,7 +771,6 @@ dependencies = [
  "uu_sync",
  "uu_test",
  "uu_timeout",
- "uu_touch",
  "uu_tr",
  "uu_true",
  "uu_truncate",
@@ -992,10 +991,12 @@ dependencies = [
  "indicatif",
  "itertools 0.15.0",
  "itoa",
+ "jiff",
  "libc",
  "memchr",
  "memmap2",
  "notify",
+ "parse_datetime",
  "rand 0.10.3",
  "rand_chacha 0.10.0",
  "rayon",
@@ -5748,24 +5749,6 @@ dependencies = [
  "libc",
  "rustix",
  "uucore",
-]
-
-[[package]]
-name = "uu_touch"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1784987c9ae4beeb3153c173e5866e1907752180289f6d219cc6c1223ae7a5f0"
-dependencies = [
- "clap",
- "filetime",
- "fluent",
- "jiff",
- "libc",
- "parse_datetime",
- "rustix",
- "thiserror 2.0.21",
- "uucore",
- "windows-sys 0.61.2",
 ]
 
 [[package]]

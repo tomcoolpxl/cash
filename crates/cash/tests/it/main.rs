@@ -247,6 +247,8 @@ mod terminal_profile;
 mod text_tools;
 // top builtin batch mode and monitoring.
 mod top_builtin;
+// `touch`, cash's own: an operand it cannot touch, and its times.
+mod touch_builtin;
 // `tput` against ncurses 6.6's frozen output for xterm-256color, and the console's size.
 mod tput_builtin;
 mod tree_builtin;

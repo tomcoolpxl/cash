@@ -73,6 +73,8 @@ use cash_uutils::tac as uu_tac;
 use cash_uutils::tail as uu_tail;
 #[cfg(feature = "coreutils.tee")]
 use cash_uutils::tee as uu_tee;
+#[cfg(feature = "coreutils.touch")]
+use cash_uutils::touch as uu_touch;
 #[cfg(feature = "coreutils.uniq")]
 use cash_uutils::uniq as uu_uniq;
 
