@@ -569,6 +569,9 @@ pub(crate) fn init_well_known_vars(
     }
     shell.env_mut().set_global("SHELLOPTS", shellopts_var)?;
 
+    // POSIXLY_CORRECT handed down turns POSIX mode on, and the mode asked for sets it.
+    shell.start_following_posixly_correct();
+
     // SHLVL
     let input_shlvl = shell.env_str("SHLVL").unwrap_or_else(|| "0".into());
     let updated_shlvl = input_shlvl.as_ref().parse::<u32>().unwrap_or(0) + 1;

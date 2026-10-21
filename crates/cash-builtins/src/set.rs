@@ -388,6 +388,7 @@ impl builtins::Command for SetCommand {
                     "{}: {option_name}: invalid option name",
                     context.command_name
                 )?;
+                context.shell.note_special_builtin_error();
                 result = ExecutionExitCode::InvalidUsage.into();
             }
         }

@@ -2492,6 +2492,8 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         // the command itself and a DEBUG trap both observe the current command. The
         // variable reads it when read; the text is made once per command (`printed`).
         context.shell.set_current_command(self.printed());
+        // POSIX mode follows POSIXLY_CORRECT, and it the mode, before the command runs.
+        context.shell.follow_posixly_correct();
 
         // The DEBUG trap runs here, before the command's words are expanded and its
         // redirections made, as Bash runs it before each simple command: an assignment
@@ -2556,7 +2558,24 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                         let _ = context
                             .shell
                             .display_error(&mut params.stderr(&context.shell), &e);
-                        return Ok(ExecutionResult::general_error().into());
+                        // A special builtin's, named as written, ends a shell that is not
+                        // interactive in POSIX mode, as in Bash; it went on.
+                        let mut result = ExecutionResult::general_error();
+                        let shell = &context.shell;
+                        if shell.options().posix_mode
+                            && !shell.options().interactive
+                            && self.word_or_name.as_ref().is_some_and(|word| {
+                                shell
+                                    .builtins()
+                                    .get(word.value.as_str())
+                                    .is_some_and(|builtin| {
+                                        builtin.special_builtin && !builtin.disabled
+                                    })
+                            })
+                        {
+                            result.next_control_flow = crate::ExecutionControlFlow::ExitShell;
+                        }
+                        return Ok(result.into());
                     }
                 }
                 CommandPrefixOrSuffixItem::ProcessSubstitution(kind, subshell_command) => {

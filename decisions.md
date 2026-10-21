@@ -1003,6 +1003,11 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
 - **The phase after 1.46.0** (the user, 2026-10-21, from a pick list): the leftovers of the
   themes done (recommended), starting cash, and POSIX mode, which was turned down before
   and is now picked. Not picked: traps and jobs.
+- **`#!/bin/sh` and `sh` run in POSIX mode, as in Git Bash** (the user, 2026-10-21, from a
+  pick list, recommended): a cash started under the name `sh`, which `#!/bin/sh` and
+  `sh -c` are, is in POSIX mode, as Git Bash's `sh` is Bash in POSIX mode; `#!/bin/bash`
+  stays in normal mode. Turned down: only an executable named `sh.exe`, which kept
+  `#!/bin/sh` scripts in normal mode as in 1.46.0, and no POSIX mode by name at all.
 
 ## 8. Archives and compression
 

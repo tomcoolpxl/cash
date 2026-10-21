@@ -31,6 +31,7 @@ impl builtins::Command for ReturnCommand {
                 context.error_stream(),
                 "return: can only `return' from a function or sourced script"
             );
+            context.shell.note_special_builtin_error();
             return Ok(ExecutionExitCode::InvalidUsage.into());
         }
 

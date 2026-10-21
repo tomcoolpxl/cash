@@ -3015,3 +3015,17 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `exec -a name "$BASH"` was found to name `$0` already. Found on the way: `declare -f`
   and `type` wrote a pipe `|cat` and a duplication `2>& 1`; they are `| cat`, `2>&1`,
   `0<&3`, and a close `0>&-`, as Bash writes them.
+- **POSIX mode** (2026-10-21, the phase after 1.46.0, the user's third theme):
+  POSIXLY_CORRECT neither turned POSIX mode on nor followed it; set (handed down too) it
+  turns the mode on and unset off, and the mode on sets it to `y` and off unsets it, as
+  in Bash. A cash started as `sh`, as `#!/bin/sh` and `sh -c` start it, was not in POSIX
+  mode; it is, as Git Bash's `sh` is (decisions.md). A special builtin's error went on
+  in POSIX mode; a usage error, a failed redirection, `unset` of a read-only or of a bad
+  name with `-v`, `readonly` and `export` of a bad name, and `return` outside a function
+  end a shell that is not interactive, as in Bash, but run through `command`. `trap` with
+  a name that is no signal failed whole, ending a POSIX shell; it says the name and acts
+  on the others, status 1, as in Bash. `command eval` with a syntax error ended a POSIX
+  shell; it goes on. A command substitution took `set -e` only with `inherit_errexit`;
+  in POSIX mode too. A special builtin winning over a function of its name, a reserved
+  word after an alias ending in a blank, and quotes in a double-quoted `${v-'w'}` were
+  found to be as Bash has them.

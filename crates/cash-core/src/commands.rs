@@ -1517,6 +1517,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                     builtin,
                     self.command_name,
                     self.args,
+                    self.use_functions,
                 ))
             }
             ShellForCommand::ParentShell(..) => {
@@ -1557,6 +1558,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         builtin: builtins::Registration<SE>,
         command_name: String,
         args: Vec<CommandArg>,
+        special: bool,
     ) -> ExecutionSpawnResult {
         let last_arg = Self::take_last_arg(&args);
         let join_handle = tokio::task::spawn_blocking(move || {
@@ -1569,7 +1571,12 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
             };
 
             let rt = tokio::runtime::Handle::current();
-            let result = rt.block_on(execute_builtin_command(&builtin, cmd_context, args));
+            let result = rt.block_on(execute_builtin_command(
+                &builtin,
+                cmd_context,
+                args,
+                special,
+            ));
 
             // Update $_ after command execution.
             shell.update_last_arg_variable(last_arg);
@@ -1593,7 +1600,8 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
             params: self.params,
         };
 
-        let result = execute_builtin_command(&builtin, cmd_context, self.args).await;
+        let result =
+            execute_builtin_command(&builtin, cmd_context, self.args, self.use_functions).await;
 
         // Update $_ after command execution.
         shell.update_last_arg_variable(last_arg);
@@ -2055,14 +2063,21 @@ pub(crate) fn execute_external_command(
     }
 }
 
+/// Runs `builtin`; `special` when it was not run through `command` (or by a builtin that
+/// starts commands), which takes away a special builtin's power to end the shell.
 async fn execute_builtin_command<SE: extensions::ShellExtensions>(
     builtin: &builtins::Registration<SE>,
     mut context: ExecutionContext<'_, SE>,
     args: Vec<CommandArg>,
+    special: bool,
 ) -> Result<ExecutionResult, error::Error> {
-    // In POSIX mode, special builtins that return errors are to be treated as fatal.
-    let mark_errors_fatal = builtin.special_builtin && context.shell.options().posix_mode;
+    // In POSIX mode, special builtins that return errors are to be treated as fatal, and
+    // so are the errors they say and note, as in Bash; through `command` neither is.
+    let mark_errors_fatal =
+        special && builtin.special_builtin && context.shell.options().posix_mode;
     let interactive = context.shell.options().interactive;
+    context.shell.take_special_builtin_error();
+    context.shell.note_unspecial_call(!special);
 
     // `eval`, `source` and `.` hold their redirections in the shell while they run, as a
     // function call does and as Bash applies them: an `exec` in what they run changes what
@@ -2126,8 +2141,14 @@ async fn execute_builtin_command<SE: extensions::ShellExtensions>(
         }
     }
 
+    let noted = shell.take_special_builtin_error();
     match outcome {
-        Ok(result) => Ok(result),
+        Ok(mut result) => {
+            if mark_errors_fatal && noted && !interactive {
+                result.next_control_flow = ExecutionControlFlow::ExitShell;
+            }
+            Ok(result)
+        }
         Err(e) => {
             // A builtin whose reader went away ends the shell it runs in, a pipeline stage,
             // a subshell or a script, with 141 and in silence, as SIGPIPE ends Bash's
@@ -2284,8 +2305,9 @@ pub(crate) async fn invoke_command_in_subshell_and_get_output(
     subshell.enter_substitution();
 
     // Command substitutions don't inherit errexit by default. Only inherit it when
-    // command_subst_inherits_errexit is enabled, otherwise disable errexit in the subshell.
-    if !shell.options().command_subst_inherits_errexit {
+    // command_subst_inherits_errexit is enabled, or in POSIX mode, as in Bash, otherwise
+    // disable errexit in the subshell.
+    if !shell.options().command_subst_inherits_errexit && !shell.options().posix_mode {
         subshell.options_mut().exit_on_nonzero_command_exit = false;
     }
 

@@ -246,6 +246,18 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// What `BASH_ARGV0` set `$0` to, which takes the place of the shell's or the
     /// script's name.
     pub(crate) renamed_zero: Option<String>,
+
+    /// Whether the builtin running now said an error that, from a special builtin in
+    /// POSIX mode, ends a shell that is not interactive ([`Self::note_special_builtin_error`]).
+    special_builtin_error: bool,
+
+    /// Whether the builtin starting now was run through `command`, which takes away a
+    /// special builtin's power to end the shell, `eval`'s syntax error's too.
+    unspecial_call: bool,
+
+    /// Whether `POSIXLY_CORRECT` was set, and POSIX mode on, when last looked at
+    /// ([`Self::follow_posixly_correct`]).
+    posix_seen: (bool, bool),
 }
 
 impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
@@ -307,6 +319,9 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             umask: self.umask,
             random: crate::random::ShellRandom::default(),
             renamed_zero: self.renamed_zero.clone(),
+            special_builtin_error: false,
+            unspecial_call: false,
+            posix_seen: self.posix_seen,
             depth: self.depth + 1,
             subshell_level: self.subshell_level,
             trace_level: self.trace_level,
@@ -511,9 +526,11 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     ) -> Result<crate::ExecutionResult, error::Error> {
         self.trace_level += 1;
         // A syntax error fails `eval` with 2 and the script goes on, where cash ended
-        // it; in POSIX mode it ends the script, as an error in a special builtin does.
+        // it; in POSIX mode it ends the script, as an error in a special builtin does, but
+        // for `command eval`, as in Bash.
         let whole = self.parse_string(command.as_str());
-        let fatal = self.options().posix_mode;
+        let unspecial = self.take_unspecial_call();
+        let fatal = self.options().posix_mode && !unspecial;
         let line = self
             .call_stack
             .current_frame()
@@ -533,6 +550,72 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         self.leave_nested_text(nested);
         self.trace_level -= 1;
         result
+    }
+
+    /// Keeps POSIX mode and `POSIXLY_CORRECT` together, as Bash does: the variable set turns
+    /// the mode on and unset turns it off, and the mode turned on (`set -o posix`) sets it
+    /// to `y` and turned off unsets it. Bash does it as either changes; cash looks before
+    /// each simple command, and at the start, where a `POSIXLY_CORRECT` handed down turns the
+    /// mode on and the mode asked for sets it. Neither followed the other.
+    pub(crate) fn follow_posixly_correct(&mut self) {
+        let set = |shell: &Self| {
+            shell
+                .env
+                .get("POSIXLY_CORRECT")
+                .is_some_and(|(_, var)| var.value().is_set())
+        };
+        let (was_set, was_on) = self.posix_seen;
+        let now_set = set(self);
+        if now_set != was_set {
+            if self.options.posix_mode != now_set {
+                self.options.set_posix_mode(now_set);
+            }
+        } else if self.options.posix_mode != was_on {
+            if self.options.posix_mode {
+                let _ = self
+                    .env
+                    .set_global("POSIXLY_CORRECT", crate::variables::ShellVariable::new("y"));
+            } else {
+                let _ = self.env.unset("POSIXLY_CORRECT");
+            }
+        }
+        self.posix_seen = (set(self), self.options.posix_mode);
+    }
+
+    /// [`Self::follow_posixly_correct`] at the start: a `POSIXLY_CORRECT` handed down turns
+    /// POSIX mode on, its value kept; else the mode asked for sets it to `y`.
+    pub(crate) fn start_following_posixly_correct(&mut self) {
+        if self.env.get("POSIXLY_CORRECT").is_some() {
+            self.options.set_posix_mode(true);
+            self.posix_seen = (true, true);
+        } else {
+            self.posix_seen = (false, false);
+            self.follow_posixly_correct();
+        }
+    }
+
+    /// Notes that the builtin running now said an error that ends a shell that is not
+    /// interactive when a special builtin says it in POSIX mode, as Bash's do: a usage
+    /// error, `unset` of a read-only or a bad name, `readonly` and `export` of a bad name,
+    /// `return` outside a function. Run through `command`, or not special, it only fails.
+    pub const fn note_special_builtin_error(&mut self) {
+        self.special_builtin_error = true;
+    }
+
+    /// Takes the note of [`Self::note_special_builtin_error`].
+    pub(crate) const fn take_special_builtin_error(&mut self) -> bool {
+        std::mem::replace(&mut self.special_builtin_error, false)
+    }
+
+    /// Notes whether the builtin starting now was run through `command`.
+    pub(crate) const fn note_unspecial_call(&mut self, unspecial: bool) {
+        self.unspecial_call = unspecial;
+    }
+
+    /// Whether the builtin starting now was run through `command`, taken: `eval` asks as it
+    /// starts, for whether a syntax error in its text ends the shell in POSIX mode.
+    pub(crate) const fn take_unspecial_call(&mut self) -> bool {
+        std::mem::replace(&mut self.unspecial_call, false)
     }
 
     /// Whether a fatal expansion error (`${u:?}`, an unset variable under `set -u`) ends

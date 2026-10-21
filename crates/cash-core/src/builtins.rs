@@ -675,11 +675,18 @@ async fn exec_simple_builtin_impl<
 /// included, on standard error. A builtin Bash does not have keeps clap's words, on
 /// standard error, with its `--help` on standard output and status 0.
 fn report_parse_error(
-    context: &commands::ExecutionContext<'_, impl extensions::ShellExtensions>,
+    context: &mut commands::ExecutionContext<'_, impl extensions::ShellExtensions>,
     error: &clap::Error,
 ) -> results::ExecutionResult {
     use clap::error::{ContextKind, ContextValue, ErrorKind};
 
+    // A usage error ends the shell when a special builtin says it in POSIX mode.
+    if !matches!(
+        error.kind(),
+        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
+    ) {
+        context.shell.note_special_builtin_error();
+    }
     let name = context.command_name.as_str();
     let synopsis = crate::bash_synopses::synopsis(name);
     if matches!(
@@ -746,7 +753,7 @@ fn exec_builtin<T: Command + Send + Sync, SE: extensions::ShellExtensions>(
 }
 
 async fn exec_builtin_impl<T: Command + Send + Sync, SE: extensions::ShellExtensions>(
-    context: commands::ExecutionContext<'_, SE>,
+    mut context: commands::ExecutionContext<'_, SE>,
     args: Vec<CommandArg>,
 ) -> Result<results::ExecutionResult, error::Error> {
     let plain_args = args.into_iter().map(|arg| match arg {
@@ -757,7 +764,7 @@ async fn exec_builtin_impl<T: Command + Send + Sync, SE: extensions::ShellExtens
     let result = T::new(plain_args);
     let command = match result {
         Ok(command) => command,
-        Err(e) => return Ok(report_parse_error(&context, &e)),
+        Err(e) => return Ok(report_parse_error(&mut context, &e)),
     };
 
     call_builtin(command, context).await
@@ -777,7 +784,7 @@ async fn exec_declaration_builtin_impl<
     T: DeclarationCommand + Send + Sync,
     SE: extensions::ShellExtensions,
 >(
-    context: commands::ExecutionContext<'_, SE>,
+    mut context: commands::ExecutionContext<'_, SE>,
     args: Vec<CommandArg>,
 ) -> Result<results::ExecutionResult, error::Error> {
     let mut options = vec![];
@@ -806,7 +813,7 @@ async fn exec_declaration_builtin_impl<
     let result = T::new(options);
     let mut command = match result {
         Ok(command) => command,
-        Err(e) => return Ok(report_parse_error(&context, &e)),
+        Err(e) => return Ok(report_parse_error(&mut context, &e)),
     };
 
     command.set_declarations(declarations);

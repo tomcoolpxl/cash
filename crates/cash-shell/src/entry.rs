@@ -348,6 +348,17 @@ pub fn run_with_args(args: Vec<String>) {
 
     // An option name `-o` or `-O` does not know ends the shell with status 2, said as Bash
     // says it; it was passed over.
+    // Started as `sh` it is in POSIX mode, as Bash is (not cash's `--sh`, whose builtins
+    // are fewer); it was not.
+    let mut parsed_args = parsed_args;
+    if args
+        .first()
+        .and_then(|name| Path::new(name).file_stem())
+        .is_some_and(|stem| stem.eq_ignore_ascii_case("sh"))
+    {
+        parsed_args.posix = true;
+    }
+
     let shell_name = args
         .first()
         .map_or_else(|| "cash".to_owned(), |name| name.replace('\\', "/"));

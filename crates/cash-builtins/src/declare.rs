@@ -721,6 +721,8 @@ impl DeclareCommand {
                 "{}: {name}: not a valid variable name",
                 context.command_name
             )?;
+            // `readonly 1bad` ends the shell in POSIX mode, as in Bash.
+            context.shell.note_special_builtin_error();
             return Ok(false);
         }
 

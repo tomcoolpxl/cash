@@ -110,6 +110,8 @@ impl ExportCommand {
                         "{}: `{refused}': not a valid identifier",
                         context.command_name
                     )?;
+                    // It ends the shell in POSIX mode, as in Bash.
+                    context.shell.note_special_builtin_error();
                     return Ok(ExecutionResult::general_error());
                 }
                 // A word such as `export "X=1 2"` or `export $spec` is still an
@@ -167,6 +169,7 @@ impl ExportCommand {
                             "{}: `{name}[{index}]': not a valid identifier",
                             context.command_name
                         )?;
+                        context.shell.note_special_builtin_error();
                         return Ok(ExecutionResult::general_error());
                     }
                 };

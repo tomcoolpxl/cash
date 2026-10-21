@@ -3697,3 +3697,131 @@ fn pretty_print_writes_the_script_as_bash_does() {
         (0, String::new(), String::new())
     );
 }
+
+#[test]
+fn posixly_correct_and_posix_mode_follow_each_other() {
+    // POSIXLY_CORRECT neither turned POSIX mode on nor followed it.
+    let mode = "shopt -o posix | tr -d ' \\t'";
+    assert_eq!(
+        start(
+            &["-c", &format!("{mode}; echo \"$POSIXLY_CORRECT\"")],
+            &[("POSIXLY_CORRECT", "1")],
+            None
+        )
+        .1,
+        "posixon\n1"
+    );
+    assert_eq!(
+        start(
+            &[
+                "-c",
+                "set -o posix; echo \"${POSIXLY_CORRECT-unset}\"; set +o posix; \
+                 echo \"${POSIXLY_CORRECT-unset}\""
+            ],
+            &[],
+            None
+        )
+        .1,
+        "y\nunset"
+    );
+    assert_eq!(
+        start(
+            &[
+                "-c",
+                &format!("POSIXLY_CORRECT=1; {mode}; unset POSIXLY_CORRECT; {mode}")
+            ],
+            &[],
+            None
+        )
+        .1,
+        "posixon\nposixoff"
+    );
+    assert_eq!(
+        start(&["--posix", "-c", "echo \"$POSIXLY_CORRECT\""], &[], None).1,
+        "y"
+    );
+}
+
+#[test]
+fn a_special_builtins_error_ends_a_posix_shell() {
+    // A redirection on `:`, `unset` of a read-only, `return` outside a function, a bad
+    // name to `readonly` or `export`, and a usage error went on in POSIX mode; Bash ends
+    // there. `trap` with a name that is no signal, and `command eval` with a syntax
+    // error, ended it; Bash goes on.
+    for (script, status) in [
+        (": > /nonexistent/x", 1),
+        ("readonly r=1; unset r", 1),
+        ("return", 2),
+        ("readonly 1bad=2", 1),
+        ("export 1bad", 1),
+        ("set -Z", 2),
+        ("set -o nosuch", 2),
+        ("unset -v 1bad", 1),
+    ] {
+        let (got, stdout, _) = start(
+            &["-c", &format!("set -o posix; {script}; echo went-on")],
+            &[],
+            None,
+        );
+        assert_eq!((got, stdout.as_str()), (status, ""), "{script}");
+    }
+    for script in [
+        "trap 'echo t' SIGNOSIG",
+        "command eval '( '",
+        "command : > /nonexistent/x",
+        "command unset -x",
+    ] {
+        let (_, stdout, _) = start(
+            &["-c", &format!("set -o posix; {script}; echo went-on")],
+            &[],
+            None,
+        );
+        assert_eq!(stdout, "went-on", "{script}");
+    }
+    // Out of POSIX mode they go on, and `trap` acts on the names that are signals.
+    assert_eq!(
+        start(
+            &[
+                "-c",
+                "readonly r=1; unset r; trap 'echo t' NOSIG INT; trap -p INT"
+            ],
+            &[],
+            None
+        )
+        .1,
+        "trap -- 'echo t' SIGINT"
+    );
+}
+
+#[test]
+fn cash_started_as_sh_and_a_substitution_under_set_e_are_posix() {
+    // A cash named `sh`, which `#!/bin/sh` and `sh -c` start, was not in POSIX mode; a
+    // command substitution there did not take `set -e`.
+    let scratch = Scratch::new("cash-as-sh");
+    let sh = scratch.path().join("sh.exe");
+    if std::fs::hard_link(CASH, &sh).is_err() {
+        std::fs::copy(CASH, &sh).unwrap();
+    }
+    let result = std::process::Command::new(&sh)
+        .args([
+            "--noprofile",
+            "--norc",
+            "-c",
+            "shopt -o posix | tr -d ' \\t'",
+        ])
+        .env("CASH_NO_OFFER", "1")
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&result.stdout).trim_end(),
+        "posixon"
+    );
+    assert_eq!(
+        start(
+            &["-c", "set -o posix -e; x=$(false; echo in); echo \"[$x]\""],
+            &[],
+            None
+        ),
+        (1, String::new(), String::new())
+    );
+}

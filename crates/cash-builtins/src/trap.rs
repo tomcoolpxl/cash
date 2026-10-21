@@ -41,27 +41,28 @@ impl builtins::Command for TrapCommand {
                 writeln!(context.error_stream(), "trap: -P: signal argument required")?;
                 return Ok(ExecutionResult::new(2));
             }
-            for signal_type in &self.args {
-                let sig: TrapSignal = signal_type.parse()?;
+            let (signals, refused) = Self::signals(&context, &self.args);
+            for sig in signals {
                 if let Some(handler) = context.shell.traps().get_handler(sig) {
                     writeln!(context.stdout(), "{}", handler.command)?;
                 }
             }
-            return Ok(ExecutionResult::success());
+            return Ok(Self::status(refused));
         }
 
         if self.list_signals {
             cash_core::traps::format_signals(context.stdout(), TrapSignal::iterator())
                 .map(|()| ExecutionResult::success())
         } else if self.print_trap_commands || self.args.is_empty() {
-            if !self.args.is_empty() {
-                for signal_type in &self.args {
-                    Self::display_handlers_for(&context, signal_type.parse()?)?;
-                }
-            } else {
+            if self.args.is_empty() {
                 Self::display_all_handlers(&context)?;
+                return Ok(ExecutionResult::success());
             }
-            Ok(ExecutionResult::success())
+            let (signals, refused) = Self::signals(&context, &self.args);
+            for signal in signals {
+                Self::display_handlers_for(&context, signal)?;
+            }
+            Ok(Self::status(refused))
         } else if self.args.len() == 1 {
             // When only a single argument is given, it is assumed to be a signal name
             // and an indication to remove the handlers for that signal.
@@ -71,25 +72,58 @@ impl builtins::Command for TrapCommand {
         } else if self.args[0] == "-" {
             // "-" as the first argument indicates that the remaining
             // arguments are signal names and we need to remove the handlers for them.
-            for signal in &self.args[1..] {
-                Self::remove_all_handlers(&mut context, signal.parse()?);
+            let (signals, refused) = Self::signals(&context, &self.args[1..]);
+            for signal in signals {
+                Self::remove_all_handlers(&mut context, signal);
             }
-            Ok(ExecutionResult::success())
+            Ok(Self::status(refused))
         } else {
             let handler = &self.args[0];
 
-            let mut signal_types = Vec::with_capacity(self.args.len() - 1);
-            for signal in &self.args[1..] {
-                signal_types.push(signal.parse()?);
-            }
-
+            let (signal_types, refused) = Self::signals(&context, &self.args[1..]);
             Self::register_handler(&mut context, signal_types, handler.as_str());
-            Ok(ExecutionResult::success())
+            Ok(Self::status(refused))
         }
     }
 }
 
 impl TrapCommand {
+    /// The signals `names` name, each one that names none said, as Bash says it: the
+    /// others are acted on, and the status is 1 (`Self::status`). A name that was no
+    /// signal failed the whole `trap`, which ended a POSIX-mode shell.
+    fn signals(
+        context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+        names: &[String],
+    ) -> (Vec<TrapSignal>, bool) {
+        let mut refused = false;
+        let mut signals = Vec::with_capacity(names.len());
+        for name in names {
+            match name.parse::<TrapSignal>() {
+                Ok(signal) => signals.push(signal),
+                Err(error) => {
+                    refused = true;
+                    let said = cash_core::Error::from(cash_core::ErrorKind::BuiltinError(
+                        Box::new(error),
+                        context.command_name.clone(),
+                    ));
+                    let _ = context
+                        .shell
+                        .display_error(&mut context.params.stderr(context.shell), &said);
+                }
+            }
+        }
+        (signals, refused)
+    }
+
+    /// The status after [`Self::signals`]: 1 when a name was refused.
+    const fn status(refused: bool) -> ExecutionResult {
+        if refused {
+            ExecutionResult::general_error()
+        } else {
+            ExecutionResult::success()
+        }
+    }
+
     fn display_all_handlers(
         context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
     ) -> Result<(), cash_core::Error> {

@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::io::Write as _;
 
 use cash_core::{ErrorKind, ExecutionResult, Shell, builtins};
 
@@ -109,6 +110,16 @@ impl builtins::Command for UnsetCommand {
                     if result {
                         continue;
                     }
+                } else if self.name_interpretation.shell_variables {
+                    // With `-v` a word that is no name is said, as in Bash, and the rest
+                    // are unset; it was passed over. Without, it may be a function's.
+                    writeln!(
+                        context.error_stream(),
+                        "{}: `{name}': not a valid identifier",
+                        context.command_name
+                    )?;
+                    failed = true;
+                    continue;
                 }
             }
 
@@ -137,7 +148,9 @@ impl builtins::Command for UnsetCommand {
             }
         }
 
+        // A read-only name it could not unset ends the shell in POSIX mode, as in Bash.
         if failed {
+            context.shell.note_special_builtin_error();
             return Ok(ExecutionResult::general_error());
         }
         Ok(ExecutionResult::success())

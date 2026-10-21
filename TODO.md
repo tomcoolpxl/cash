@@ -111,8 +111,7 @@ path. The rest, by theme:
   "unexpected EOF while looking for matching `)'").
 - Aliases: `eval` of a multi-line alias that unaliases itself says the alias is no
   command (Bash runs the rest of its text, though after the next command: an artifact of
-  the text Bash pushes back into its input, not worth copying); in POSIX mode, aliases
-  inside `$(...)` at parse time and a reserved word after a blank-ending alias.
+  the text Bash pushes back into its input, not worth copying).
 
 **Assignments, declarations, readonly**
 - Associative arrays: `(( A[\$k]++ ))` expands `$k`; a key that is no name for `read`
@@ -122,8 +121,7 @@ path. The rest, by theme:
   `read` writes element 0.
 
 **Expansion and quoting**
-- POSIX mode's literal single quotes in a double-quoted `${v-word}`; an unquoted
-  `${v-$@}` with `IFS=:` is three words (Bash: one, joined with spaces).
+- An unquoted `${v-$@}` with `IFS=:` is three words (Bash: one, joined with spaces).
 - `${x@P}`: `\v` is cash's version, `\s` the script's name (by design).
 - Bytes that are not UTF-8 become U+FFFD (`$'\xff'`, `read`, `%q`), and `$'\U'` above
   U+10FFFF.
@@ -153,13 +151,9 @@ path. The rest, by theme:
 - Widths and precisions above INT_MAX, and `%(abde)Z`'s warning, are said otherwise.
 
 **POSIX mode**
-- `POSIXLY_CORRECT` does not turn POSIX mode on or off, nor does the mode set it
-  (modernish reads `export -p` so).
-- A special builtin's error does not end the shell (a redirection on `:`, `unset` of a
-  readonly, `return` outside a function, `readonly` of a bad name); `trap ... SIGNOSIG`
-  and `command eval "( "` end it, where Bash goes on.
-- cash started as `sh` is not in POSIX mode; a command substitution does not inherit
-  `set -e`; a special builtin does not win over a function of its name.
+- An alias inside `$(...)` is expanded as the substitution runs, not as it is read
+  (Bash in POSIX mode: a function defined before the alias does not see it); it needs
+  the substitution's text rewritten as it is parsed, much work for a rare case.
 
 **Starting cash**
 - A second `-c` after a cluster holding one (`cash -ec -c cmd`) is refused (Bash takes

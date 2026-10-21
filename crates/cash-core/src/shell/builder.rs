@@ -296,6 +296,9 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             umask: 0o022,
             random: crate::random::ShellRandom::default(),
             renamed_zero: None,
+            special_builtin_error: false,
+            unspecial_call: false,
+            posix_seen: (false, false),
         }
     }
 }
