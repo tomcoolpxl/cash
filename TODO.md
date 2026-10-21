@@ -166,9 +166,11 @@ path. The rest, by theme:
   itself (`resolve_named_interpreter` asks for the stem `cash`).
 
 **Builtins, small**
-- `hash -p` ignored; `declare -f -a`; `set -r` restricts nothing; history numbers restart after HISTSIZE, script lines not history-expanded under `set
-  -H`; `find /dev/null` (modernish's find check); about
-  thirty missing usage errors.
+- `hash -p` ignored; `declare -f -a`; `set -r` restricts nothing; history numbers
+  restart after HISTSIZE, script lines not history-expanded under `set -H`; `find
+  /dev/null` (modernish's find check); about two dozen missing usage errors (seven
+  done in the phase after 1.44.0); `compgen -k` in no fixed order (Bash: the order of
+  its table).
 - An assignment to a read-only variable is reported at line 1 of a script, whatever its
   line (bash-it's case, line 10 in Bash).
 - Printing: `declare -f`/`type` (`|cat`, `2>& 1`, `$( )`, `elif`), xtrace of a compound
