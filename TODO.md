@@ -25,7 +25,12 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked (the current phase, after 1.44.0, 2026-10-21)
+## Next phase: the user's to pick (after 1.45.0)
+
+Still open, by theme, below: traps and jobs, POSIX mode, starting cash, the parser's
+list, and the leftovers of the themes done.
+
+## The phase before (2026-10-21, done, released as 1.45.0)
 
 Taken as recommended while the user was away, as the user asked (decisions.md, "The phase
 after 1.44.0"); the user may change it. The small builtins, each against Git Bash 5.3, in

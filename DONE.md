@@ -2896,7 +2896,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   expansion, as in Bash, and `-p` says so. Found on the way: `history -w /dev/null`, and
   `HISTFILE=/dev/null`, the usual way to keep no history file, wrote to `C:/dev/null`;
   `/dev/null` takes the lines. `fc -s` with nothing to find said "history item not
-  found"; it is Bash's "no command found".
+  found"; it is Bash's "no command found". With the list there in scripts, `history -w
+  FILE` ran where it had done nothing, and FILE, and `HISTFILE`, were opened as written,
+  so a Unix spelling or a relative path missed (bashdb's `history -w`, in the corpus, on
+  CI); they are resolved as any path the shell takes.
 - **`declare -f +r`** (2026-10-21, the phase after 1.44.0, item 5): `declare -f +r f`
   printed the function, status 0; Bash keeps a read-only function one and says so,
   `declare: f: readonly function`, status 1, and for a function that is not read-only
