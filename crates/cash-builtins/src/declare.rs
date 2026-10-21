@@ -380,6 +380,21 @@ impl DeclareCommand {
             return Ok(true);
         };
 
+        // A reference stands for a variable or an element of one, as in Bash: `declare -n
+        // r=/` was taken.
+        let target_name = target
+            .strip_suffix(']')
+            .and_then(|t| t.split_once('['))
+            .map_or(target.as_str(), |(base, _)| base);
+        if !target.is_empty() && !env::valid_variable_name(target_name) {
+            writeln!(
+                context.error_stream(),
+                "{}: `{target}': invalid variable name for name reference",
+                context.command_name
+            )?;
+            return Ok(false);
+        }
+
         if target != name {
             return Ok(true);
         }
@@ -412,7 +427,9 @@ impl DeclareCommand {
         name: &str,
         lookup: EnvironmentLookup,
     ) -> Option<&'a mut ShellVariable> {
-        if self.make_nameref.to_bool() == Some(true) {
+        // `-n` and `+n` are the reference's own, not its target's: `declare +n r` made
+        // nothing of `r`.
+        if self.make_nameref.to_bool().is_some() {
             context
                 .shell
                 .env_mut()
@@ -702,7 +719,8 @@ impl DeclareCommand {
                 self.apply_attributes_before_update(&mut var)?;
 
                 if let Some(initial_value) = initial_value {
-                    var.assign(initial_value, append || assigned_index.is_some())?;
+                    var.assign(initial_value, append || assigned_index.is_some())
+                        .map_err(|e| e.of_variable(&name).of_assignment())?;
                 }
 
                 if context.shell.options().export_variables_on_modification
@@ -750,10 +768,10 @@ impl DeclareCommand {
                     e
                 }
             };
-            if self.make_associative_array.is_some() {
+            if self.make_associative_array.to_bool() == Some(true) {
                 var.convert_to_associative_array().map_err(refused)?;
             }
-            if self.make_indexed_array.is_some() {
+            if self.make_indexed_array.to_bool() == Some(true) {
                 var.convert_to_indexed_array().map_err(refused)?;
             }
 
@@ -762,14 +780,15 @@ impl DeclareCommand {
             if let Some(initial_value) = initial_value {
                 // We append for `name+=value`, or if the declaration included
                 // an explicit index.
-                var.assign(initial_value, append || assigned_index.is_some())?;
+                var.assign(initial_value, append || assigned_index.is_some())
+                    .map_err(|e| e.of_variable(&name).of_assignment())?;
             }
 
             self.apply_attributes_after_update(var, verb)?;
         } else {
-            let unset_type = if self.make_indexed_array.is_some() {
+            let unset_type = if self.make_indexed_array.to_bool() == Some(true) {
                 ShellValueUnsetType::IndexedArray
-            } else if self.make_associative_array.is_some() {
+            } else if self.make_associative_array.to_bool() == Some(true) {
                 ShellValueUnsetType::AssociativeArray
             } else if name_is_array {
                 ShellValueUnsetType::IndexedArray
@@ -782,7 +801,8 @@ impl DeclareCommand {
             self.apply_attributes_before_update(&mut var)?;
 
             if let Some(initial_value) = initial_value {
-                var.assign(initial_value, append)?;
+                var.assign(initial_value, append)
+                    .map_err(|e| e.of_variable(&name).of_assignment())?;
             }
 
             if context.shell.options().export_variables_on_modification && !var.value().is_array() {
@@ -1060,6 +1080,11 @@ impl DeclareCommand {
             EnvironmentLookup::Anywhere
         };
 
+        // Only `declare` alone lists `name=value`; with an attribute (`declare -a`), and
+        // `local` and `readonly`, each is a declaration, as in Bash.
+        let declarations =
+            self.print || self.any_attribute_given() || !matches!(verb, DeclareVerb::Declare);
+
         // Iterate through an ordered list of all matching declarations tracked in the
         // environment.
         for (name, variable) in context
@@ -1069,7 +1094,7 @@ impl DeclareCommand {
             .filter(|pair| filters.iter().all(|f| f(*pair)))
             .sorted_by_key(|v| v.0)
         {
-            if self.print {
+            if declarations {
                 let mut cs = variable.attribute_flags(context.shell);
                 if cs.is_empty() {
                     cs.push('-');

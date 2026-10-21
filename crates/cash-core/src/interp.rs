@@ -2022,8 +2022,21 @@ impl Execute for ast::ForClauseCommand {
                 DebugTrap::Leave(result) => return Ok(result),
             }
 
-            // Update the variable.
-            shell.assign_variable(&self.variable_name, None, ShellValueLiteral::Scalar(value))?;
+            // Update the variable. A name reference is pointed at each word in turn, as in
+            // Bash; the second word was assigned to the first.
+            if let Some(reference) = shell
+                .env_mut()
+                .get_mut_using_policy_raw(&self.variable_name, EnvironmentLookup::Anywhere)
+                .filter(|var| var.is_treated_as_nameref())
+            {
+                reference.assign(ShellValueLiteral::Scalar(value), false)?;
+            } else {
+                shell.assign_variable(
+                    &self.variable_name,
+                    None,
+                    ShellValueLiteral::Scalar(value),
+                )?;
+            }
 
             result = self.body.list.execute(shell, params).await?;
             if result.is_return_or_exit() {
@@ -2650,7 +2663,8 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                     None,
                     EnvironmentScope::Global,
                 )
-                .await?;
+                .await
+                .map_err(error::Error::of_assignment)?;
             }
             // A process substitution in the value (`f=<(cmd)`) ends with the statement, as
             // Bash's descriptor is closed then.
@@ -2703,8 +2717,18 @@ async fn execute_command<T: Into<String>>(
         // A read-only variable is not assigned, as in Bash: said, and the command runs
         // without it, or in POSIX mode does not run. It was set for the command in silence.
         let name = match &assignment.name {
-            ast::AssignmentName::VariableName(name)
-            | ast::AssignmentName::ArrayElementName(name, _) => name,
+            ast::AssignmentName::VariableName(name) => name,
+            // An element is no name a command's environment can hold: said, and the
+            // command runs without it, as in Bash. It was set for the command.
+            ast::AssignmentName::ArrayElementName(name, index) => {
+                let shell = guard.shell();
+                let error = error::Error::from(error::ErrorKind::NotValidIdentifier(format!(
+                    "{name}[{index}]"
+                )))
+                .located_at(shell.error_prefix());
+                let _ = shell.display_error(&mut params.stderr(shell), &error);
+                continue;
+            }
         };
         if guard
             .shell()
@@ -2938,10 +2962,19 @@ async fn apply_assignment(
             let mut elements = vec![];
             for (unexpanded_key, unexpanded_value) in unexpanded_values {
                 let key = match unexpanded_key {
-                    Some(unexpanded_key) if associative => Some(
-                        expansion::basic_expand_assignment_word(shell, params, unexpanded_key)
-                            .await?,
-                    ),
+                    Some(unexpanded_key) if associative => {
+                        let key =
+                            expansion::basic_expand_assignment_word(shell, params, unexpanded_key)
+                                .await?;
+                        // An empty key is none, as in Bash: `[""]=y: bad array subscript`.
+                        if key.is_empty() {
+                            return Err(error::ErrorKind::ArrayIndexOutOfRange(format!(
+                                "[{unexpanded_key}]={unexpanded_value}"
+                            ))
+                            .into());
+                        }
+                        Some(key)
+                    }
                     Some(unexpanded_key) => Some(
                         arithmetic::expand_and_eval(
                             shell,
@@ -2993,12 +3026,25 @@ async fn apply_assignment(
             .get(variable_name)
             .is_some_and(|(_, existing_value)| existing_value.is_associative(shell));
 
+        // An empty subscript, or an empty key, names no element, as in Bash: `b[]=x` and
+        // `A[""]=x` are bad array subscripts. Both were element 0, or key "".
+        let bad_subscript = || {
+            error::Error::from(error::ErrorKind::ArrayIndexOutOfRange(format!("[{idx}]")))
+                .of_variable(variable_name)
+        };
+        if idx.is_empty() {
+            return Err(bad_subscript());
+        }
         array_index = Some(if will_be_indexed_array {
             arithmetic::expand_and_eval(shell, params, idx.as_str(), false)
                 .await?
                 .to_string()
         } else {
-            expansion::basic_expand_word(shell, params, idx).await?
+            let key = expansion::basic_expand_word(shell, params, idx).await?;
+            if key.is_empty() {
+                return Err(bad_subscript());
+            }
+            key
         });
     }
 
@@ -3066,9 +3112,9 @@ async fn apply_assignment(
     // If we fell down here, then we need to add it.
     let new_value = if let Some(array_index) = array_index {
         match new_value {
-            ShellValueLiteral::Scalar(s) => {
-                ShellValue::indexed_array_from_literals(ArrayLiteral(vec![(Some(array_index), s)]))
-            }
+            // `z[-1]=4` of an unset `z` is before its start, as in Bash; it was element 0.
+            ShellValueLiteral::Scalar(s) => ShellValue::indexed_array_with_element(&array_index, s)
+                .map_err(|e| e.of_variable(variable_name))?,
             ShellValueLiteral::Array(_) => {
                 return error::unimp("cannot assign list to array member");
             }
@@ -3079,7 +3125,17 @@ async fn apply_assignment(
                 export = export || shell.options().export_variables_on_modification;
                 ShellValue::String(s)
             }
-            ShellValueLiteral::Array(values) => ShellValue::indexed_array_from_literals(values),
+            // The array is made even when a subscript in the list is bad, with the elements
+            // before it, as in Bash.
+            ShellValueLiteral::Array(values) => {
+                let mut array = ShellVariable::new(ShellValue::Unset(ShellValueUnsetType::Untyped));
+                let assigned = array.assign(ShellValueLiteral::Array(values), false);
+                if export {
+                    array.export();
+                }
+                shell.env_mut().add(variable_name, array, creation_scope)?;
+                return assigned;
+            }
         }
     };
 

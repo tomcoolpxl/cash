@@ -33,9 +33,8 @@ order. Done, in DONE.md: 1, loop control (`break`, `continue`, `return`, `exit`)
 state, but for `exec 0<file` in a script read from standard input (below); 4, `fc -0`, and
 a script's history written as it ends; 5, the parser's cheapest subset; 6, readonly and
 prefix assignments, `declare -g`; 7, `printf` but for a `TZ` with daylight-saving rules
-(below); 8, expansion edge cases, but for the few below.
-
-9. Arrays and namerefs.
+(below); 8, expansion edge cases, but for the few below; 9, arrays and namerefs, but for
+the few below.
 
 ## The phase before (2026-10-20, done, released as 1.42.0)
 
@@ -90,22 +89,17 @@ path. The rest, by theme:
   -f` of one with a here-document and a later redirection, names that are no identifiers.
 
 **Assignments, declarations, readonly**
-- `arr[0]=1 cmd` is taken as a prefix assignment (Bash: not a valid identifier).
-- `declare name[sub]=v` writes element 0; `a+=5 cmd` assigns; `[i]+=v` in a compound
-  assignment.
-- Associative lists: unquoted words split and globbed, `( [k]=v one )`, an empty key;
-  keys holding `]` or quote characters break `(( ))`, `[[ -v ]]`, `unset`, `read`,
-  `printf -v`; `(( A['$key']++ ))` expands `$key`.
-- `(( a[i++]++ ))` evaluates the subscript twice; bad or negative subscripts (`b[]=x`,
-  `[-65]=v`, `x+=([-1]=v)`) land on element 0; `declare +a scalar` makes an array.
-- A failed indexed assignment leaves the variable unset; `x+=7` on a bad old value.
-- `declare -a` with no names prints `name=(...)`, not `declare -a name=(...)`.
+- `declare name[sub]=v` writes element 0; `[i]+=v` in a compound assignment is taken as a
+  word (`a+=([0]+=z)`; Bash appends to element 0).
+- Associative arrays: unquoted words in a list split and globbed; a key holding `]` is
+  not found by `[[ -v A[$k] ]]`; `(( A[\$k]++ ))` expands `$k`; a key that is no name
+  for `read` and `printf -v` is said otherwise.
 - `set -a` does not export a variable reassigned by `declare`; `set -k`; `shopt -s
   localvar_inherit`/`localvar_unset` do nothing; `export -a` refused; `set -u` misses an
   unset element in `$(( a[0] ))`.
-- Namerefs: `declare +n`; attributes go to the reference, not its target; `for` over a
-  reference; targets unchecked (`declare -n r=/`, a reference to `X[0]` used by `read`);
-  a reference named as its target in a function; `${ref=X}`.
+- Namerefs: a reference named as its target in a function warns once (Bash: again when
+  used); a reference to an element with an arithmetic subscript (`X[i+1]`) used by
+  `read` writes element 0.
 
 **Expansion and quoting**
 - POSIX mode's literal single quotes in a double-quoted `${v-word}`; an unquoted

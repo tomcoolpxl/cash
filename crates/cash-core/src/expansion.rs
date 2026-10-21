@@ -2477,11 +2477,25 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         };
 
         let value = value.into();
+        // A reference that stands for nothing yet is pointed at the value, which is the
+        // expansion's, as in Bash: `${r=X}` is `X`. It was `X`'s value.
+        let unpointed_reference = index.is_none()
+            && self
+                .shell
+                .env()
+                .get_raw(variable_name)
+                .is_some_and(|(_, var)| {
+                    var.is_treated_as_nameref()
+                        && (!var.value().is_set() || var.value().to_cow_str(self.shell).is_empty())
+                });
         self.shell.assign_variable(
             variable_name,
             index.clone(),
             variables::ShellValueLiteral::Scalar(value.clone()),
         )?;
+        if unpointed_reference {
+            return Ok(value);
+        }
 
         // The value stored, after the variable's attributes: `${x:=1+2}` with `-i` is 3
         // and with `-u` upper case, as in Bash; it was the text given (LANG-18). Not read

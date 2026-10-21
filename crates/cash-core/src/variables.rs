@@ -348,8 +348,7 @@ impl ShellVariable {
                         self.assign_at_index(String::from("0"), new_value, append)
                     }
                     ShellValueLiteral::Array(new_values) => {
-                        ShellValue::update_indexed_array_from_literals(existing_values, new_values);
-                        Ok(())
+                        ShellValue::update_indexed_array_from_literals(existing_values, new_values)
                     }
                 },
                 ShellValue::AssociativeArray(existing_values) => match value {
@@ -392,8 +391,13 @@ impl ShellVariable {
                     | ShellValue::Dynamic { .. },
                     ShellValueLiteral::Array(literal_values),
                 ) => {
-                    self.value = ShellValue::indexed_array_from_literals(literal_values);
-                    Ok(())
+                    // The elements before a bad subscript are assigned, as in Bash, and the
+                    // array is there, empty or not.
+                    let mut values = BTreeMap::new();
+                    let result =
+                        ShellValue::update_indexed_array_from_literals(&mut values, literal_values);
+                    self.value = ShellValue::IndexedArray(values);
+                    result
                 }
 
                 // If we're updating an associative array value with an array, then preserve the
@@ -403,8 +407,14 @@ impl ShellVariable {
                     | ShellValue::Unset(ShellValueUnsetType::AssociativeArray),
                     ShellValueLiteral::Array(literal_values),
                 ) => {
-                    self.value = ShellValue::associative_array_from_literals(literal_values)?;
-                    Ok(())
+                    // What can be assigned is, an error or not.
+                    let mut values = BTreeMap::new();
+                    let result = ShellValue::update_associative_array_from_literals(
+                        &mut values,
+                        literal_values,
+                    );
+                    self.value = ShellValue::AssociativeArray(values);
+                    result
                 }
 
                 // Handle updates to dynamic values; for now we just drop them.
@@ -872,17 +882,31 @@ impl ShellValue {
     /// # Arguments
     ///
     /// * `literals` - The literals to construct the indexed array from.
-    pub fn indexed_array_from_literals(literals: ArrayLiteral) -> Self {
+    pub fn indexed_array_from_literals(literals: ArrayLiteral) -> Result<Self, error::Error> {
         let mut values = BTreeMap::new();
-        Self::update_indexed_array_from_literals(&mut values, literals);
+        Self::update_indexed_array_from_literals(&mut values, literals)?;
 
-        Self::IndexedArray(values)
+        Ok(Self::IndexedArray(values))
+    }
+
+    /// Returns a new indexed array holding `value` at `index`, a subscript already
+    /// evaluated: a negative one is before the start of the empty array, `[-1]`.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The element's subscript.
+    /// * `value` - The element's value.
+    pub fn indexed_array_with_element(index: &str, value: String) -> Result<Self, error::Error> {
+        let mut values = BTreeMap::new();
+        let key = get_key_for_indexed_array(&values, index)?;
+        values.insert(key, value);
+        Ok(Self::IndexedArray(values))
     }
 
     fn update_indexed_array_from_literals(
         existing_values: &mut BTreeMap<u64, String>,
         literal_values: ArrayLiteral,
-    ) {
+    ) -> Result<(), error::Error> {
         let mut new_key = if let Some((largest_index, _)) = existing_values.last_key_value() {
             largest_index + 1
         } else {
@@ -891,12 +915,21 @@ impl ShellValue {
 
         for (key, value) in literal_values.0 {
             if let Some(key) = key {
-                new_key = key.parse().unwrap_or(0);
+                // A negative subscript counts back from the end of the array as it is so
+                // far, as in Bash (`x+=([-1]=v)` replaces the last element); one before the
+                // start is said with the element, `[-1]=v: bad array subscript`. Both were
+                // element 0.
+                new_key = get_key_for_indexed_array(existing_values, key.trim()).map_err(|_| {
+                    error::Error::from(error::ErrorKind::ArrayIndexOutOfRange(format!(
+                        "[{key}]={value}"
+                    )))
+                })?;
             }
 
             existing_values.insert(new_key, value);
             new_key += 1;
         }
+        Ok(())
     }
 
     /// Returns a new associative array value constructed from the given literals.
@@ -915,6 +948,30 @@ impl ShellValue {
         existing_values: &mut BTreeMap<String, String>,
         literal_values: ArrayLiteral,
     ) -> Result<(), error::Error> {
+        // Words without a subscript are key and value in turn, but beside words with one,
+        // where they are refused and the rest assigned, as in Bash: `([k]=v one)` made
+        // `one` a key.
+        if literal_values.0.iter().any(|(key, _)| key.is_some()) {
+            let mut refused = None;
+            for (key, value) in literal_values.0 {
+                match key {
+                    Some(key) => {
+                        existing_values.insert(key, value);
+                    }
+                    None => {
+                        refused.get_or_insert(value);
+                    }
+                }
+            }
+            return match refused {
+                Some(word) => Err(error::ErrorKind::AssociativeElementWithoutSubscript(
+                    String::new(),
+                    word,
+                )
+                .into()),
+                None => Ok(()),
+            };
+        }
         let mut current_key = None;
         for (key, value) in literal_values.0 {
             if let Some(current_key) = current_key.take() {

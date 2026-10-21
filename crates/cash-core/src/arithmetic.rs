@@ -370,14 +370,17 @@ fn eval_expr_impl(
             apply_unary_assignment_op(shell, lvalue, *op, depth)?
         }
         ast::ArithmeticExpr::BinaryAssignment(op, lvalue, operand) => {
+            // The target's subscript is evaluated once, as for `++`.
+            let target = resolve_target(shell, lvalue, depth)?;
+            let current = deref_target(shell, &target, depth)?;
             let value = apply_binary_op(
                 shell,
                 *op,
-                &ast::ArithmeticExpr::Reference(lvalue.clone()),
+                &ast::ArithmeticExpr::Literal(current),
                 operand,
                 depth,
             )?;
-            assign(shell, lvalue, value, depth)?
+            assign_target(shell, target, value)?
         }
     };
 
@@ -486,32 +489,63 @@ fn plain_decimal(text: &str) -> Option<i64> {
     plain.then(|| text.parse().ok()).flatten()
 }
 
+/// An arithmetic target with its subscript evaluated, so that an operator that reads and
+/// writes it evaluates the subscript once, as Bash does: `(( a[i++]++ ))` stepped `i`
+/// twice and wrote the next element.
+enum Target<'a> {
+    Variable(&'a str),
+    Element(&'a str, String),
+    /// `a[]`: said when read, and element 0.
+    EmptySubscript(&'a str),
+}
+
+fn resolve_target<'a>(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    lvalue: &'a ast::ArithmeticTarget,
+    depth: u32,
+) -> Result<Target<'a>, EvalError> {
+    Ok(match lvalue {
+        ast::ArithmeticTarget::Variable(name) => Target::Variable(name),
+        ast::ArithmeticTarget::ArrayElement(name, subscript) if subscript.text.is_empty() => {
+            Target::EmptySubscript(name)
+        }
+        ast::ArithmeticTarget::ArrayElement(name, subscript) => {
+            Target::Element(name, resolve_subscript(shell, name, subscript, depth)?)
+        }
+    })
+}
+
 fn deref_lvalue(
     shell: &mut Shell<impl extensions::ShellExtensions>,
     lvalue: &ast::ArithmeticTarget,
     depth: u32,
 ) -> Result<i64, EvalError> {
-    let value_str: Cow<'_, str> = match lvalue {
-        ast::ArithmeticTarget::Variable(name) => get_var_value(shell, name.as_str())?,
+    let target = resolve_target(shell, lvalue, depth)?;
+    deref_target(shell, &target, depth)
+}
+
+fn deref_target(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    target: &Target<'_>,
+    depth: u32,
+) -> Result<i64, EvalError> {
+    let value_str: Cow<'_, str> = match target {
+        Target::Variable(name) => get_var_value(shell, name)?,
         // An empty subscript is said, `a[]: bad array subscript`, and is 0, as in Bash.
-        ast::ArithmeticTarget::ArrayElement(name, subscript) if subscript.text.is_empty() => {
+        Target::EmptySubscript(name) => {
             let warning = crate::error::ErrorKind::ArrayIndexOutOfRange(format!("{name}[]")).into();
             let _ = shell.display_error(&mut shell.stderr(), &warning);
             return Ok(0);
         }
-        ast::ArithmeticTarget::ArrayElement(name, subscript) => {
-            let index_str = resolve_subscript(shell, name, subscript, depth)?;
-
-            shell
-                .env()
-                .get(name)
-                .map_or_else(
-                    || Ok(None),
-                    |(_, v)| v.value().get_at(index_str.as_str(), shell),
-                )
-                .map_err(|_err| EvalError::FailedToAccessArray)?
-                .unwrap_or(Cow::Borrowed(""))
-        }
+        Target::Element(name, index_str) => shell
+            .env()
+            .get(name)
+            .map_or_else(
+                || Ok(None),
+                |(_, v)| v.value().get_at(index_str.as_str(), shell),
+            )
+            .map_err(|_err| EvalError::FailedToAccessArray)?
+            .unwrap_or(Cow::Borrowed("")),
     };
 
     // A plain decimal number, the usual value of a counter, is that number: parsing it
@@ -643,30 +677,23 @@ fn apply_unary_assignment_op(
     op: ast::UnaryAssignmentOperator,
     depth: u32,
 ) -> Result<i64, EvalError> {
-    let value = deref_lvalue(shell, lvalue, depth)?;
+    let target = resolve_target(shell, lvalue, depth)?;
+    let value = deref_target(shell, &target, depth)?;
 
-    match op {
+    let (new_value, result) = match op {
         ast::UnaryAssignmentOperator::PrefixIncrement => {
             let new_value = value.wrapping_add(1);
-            assign(shell, lvalue, new_value, depth)?;
-            Ok(new_value)
+            (new_value, new_value)
         }
         ast::UnaryAssignmentOperator::PrefixDecrement => {
             let new_value = value.wrapping_sub(1);
-            assign(shell, lvalue, new_value, depth)?;
-            Ok(new_value)
+            (new_value, new_value)
         }
-        ast::UnaryAssignmentOperator::PostfixIncrement => {
-            let new_value = value.wrapping_add(1);
-            assign(shell, lvalue, new_value, depth)?;
-            Ok(value)
-        }
-        ast::UnaryAssignmentOperator::PostfixDecrement => {
-            let new_value = value.wrapping_sub(1);
-            assign(shell, lvalue, new_value, depth)?;
-            Ok(value)
-        }
-    }
+        ast::UnaryAssignmentOperator::PostfixIncrement => (value.wrapping_add(1), value),
+        ast::UnaryAssignmentOperator::PostfixDecrement => (value.wrapping_sub(1), value),
+    };
+    assign_target(shell, target, new_value)?;
+    Ok(result)
 }
 
 fn assign(
@@ -675,29 +702,28 @@ fn assign(
     value: i64,
     depth: u32,
 ) -> Result<i64, EvalError> {
-    match lvalue {
-        // As any assignment: `(( RANDOM = 5 ))` seeds it.
-        ast::ArithmeticTarget::Variable(name) => {
-            shell
-                .assign_variable(
-                    name.as_str(),
-                    None,
-                    variables::ShellValueLiteral::Scalar(value.to_string()),
-                )
-                .map_err(|_err| EvalError::FailedToUpdateEnvironment)?;
-        }
-        ast::ArithmeticTarget::ArrayElement(name, subscript) => {
-            let index_str = resolve_subscript(shell, name, subscript, depth)?;
+    let target = resolve_target(shell, lvalue, depth)?;
+    assign_target(shell, target, value)
+}
 
-            shell
-                .assign_variable(
-                    name.as_str(),
-                    Some(index_str),
-                    variables::ShellValueLiteral::Scalar(value.to_string()),
-                )
-                .map_err(|_err| EvalError::FailedToUpdateEnvironment)?;
-        }
-    }
+fn assign_target(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    target: Target<'_>,
+    value: i64,
+) -> Result<i64, EvalError> {
+    // As any assignment: `(( RANDOM = 5 ))` seeds it.
+    let (name, index) = match target {
+        Target::Variable(name) => (name, None),
+        Target::Element(name, index) => (name, Some(index)),
+        Target::EmptySubscript(name) => (name, Some("0".to_owned())),
+    };
+    shell
+        .assign_variable(
+            name,
+            index,
+            variables::ShellValueLiteral::Scalar(value.to_string()),
+        )
+        .map_err(|_err| EvalError::FailedToUpdateEnvironment)?;
 
     Ok(value)
 }

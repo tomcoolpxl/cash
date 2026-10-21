@@ -33,6 +33,15 @@ pub enum ErrorKind {
     #[error("{0}: cannot assign list to array member")]
     AssigningListToArrayMember(String),
 
+    /// A word that is no name where one is needed, as `arr[0]` before a command.
+    #[error("`{0}': not a valid identifier")]
+    NotValidIdentifier(String),
+
+    /// A word without a subscript in a list given to an associative array beside words
+    /// with one: the array, where the caller knows it ([`Error::of_variable`]), and the word.
+    #[error("{}{}: must use subscript when assigning associative array", named(.0), .1)]
+    AssociativeElementWithoutSubscript(String, String),
+
     /// An attempt was made to convert an associative array to an indexed array, named
     /// where the caller knows it ([`Error::of_variable`]).
     #[error("{}cannot convert associative to indexed array", named(.0))]
@@ -716,6 +725,21 @@ impl Error {
         }
     }
 
+    /// This error as one of an assignment, where Bash jumps back to the top level for it,
+    /// abandoning the command a function's assignment was made in: a bad subscript, and
+    /// a word without one in a list for an associative array.
+    #[must_use]
+    pub fn of_assignment(self) -> Self {
+        if matches!(
+            self.kind,
+            ErrorKind::ArrayIndexOutOfRange(_) | ErrorKind::AssociativeElementWithoutSubscript(..)
+        ) {
+            ErrorKind::AssignmentError(Box::new(self)).into()
+        } else {
+            self
+        }
+    }
+
     /// This error with the variable `name` it is about, where it is one that names a
     /// variable and does not yet: `r: readonly variable`.
     #[must_use]
@@ -724,12 +748,16 @@ impl Error {
             ErrorKind::ReadonlyVariable(named)
             | ErrorKind::ConvertingAssociativeArrayToIndexedArray(named)
             | ErrorKind::ConvertingIndexedArrayToAssociativeArray(named)
+            | ErrorKind::AssociativeElementWithoutSubscript(named, _)
                 if named.is_empty() =>
             {
                 name.clone_into(named);
             }
-            // `[-3]` becomes `a[-3]`, as Bash names the element of an assignment.
-            ErrorKind::ArrayIndexOutOfRange(element) if element.starts_with('[') => {
+            // `[-3]` becomes `a[-3]`, as Bash names the element of an assignment; an
+            // element of a list, `[-3]=v`, is named as it is.
+            ErrorKind::ArrayIndexOutOfRange(element)
+                if element.starts_with('[') && !element.contains("]=") =>
+            {
                 element.insert_str(0, name);
             }
             _ => {}

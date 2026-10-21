@@ -720,6 +720,22 @@ impl ShellEnvironment {
             Some(Some(target)) => target,
         };
 
+        // A reference to an element (`declare -n r=X[0]; read r`) writes the element, as in
+        // Bash; it made a variable named `X[0]`.
+        if let variables::ShellValueLiteral::Scalar(scalar) = &value
+            && let Some((base, subscript)) = name.strip_suffix(']').and_then(|n| n.split_once('['))
+            && valid_variable_name(base)
+        {
+            return self.update_or_add_array_element(
+                base.to_owned(),
+                subscript.to_owned(),
+                scalar.clone(),
+                updater,
+                lookup_policy,
+                scope_if_creating,
+            );
+        }
+
         // `set -a` marks a variable assigned for export, an array never, as Bash does.
         let auto_export = self.export_variables_on_modification;
         if let Some(var) = self.get_mut_using_policy_raw(&name, lookup_policy) {

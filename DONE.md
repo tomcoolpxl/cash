@@ -2826,3 +2826,16 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   tilde after `=` or `:` in an unquoted word is a character (`${A:=PATH=~/bin}`). `"$@"`
   of no parameters: `"$x$@"` and `"$x${a[@]}"` were one empty word, as Bash none, and
   `"${foo:-$@}"` none, as Bash one.
+- **Arrays and namerefs** (2026-10-21, the phase after 1.42.0, item 9): a bad subscript
+  in an assignment was element 0, or key "", in silence: `b[]=x`, `z[-1]=4` of an unset
+  `z`, `x=([-65]=v)`, `declare -a x=([-1]=v)`, `A[""]=x` and `([""]=y)`; each is said as
+  Bash says it and abandons the command, in a function the command it was called in, a
+  list keeping the elements before it. `x+=([-1]=v)` counts back from the end, as Bash.
+  `([k]=v one)` made `one` a key of the associative array; it is refused, the rest
+  assigned. `arr[0]=1 cmd` set the element for the command; it is no valid identifier
+  there. `(( a[i++]++ ))` and `(( a[i++] += 5 ))` evaluated the subscript twice. `declare
+  +a` made a scalar an array, `declare -a` alone (and `-i`, `local`) listed `name=(...)`,
+  and `declare +n r` acted on the target. `for` over a reference assigned the second
+  word to the first; it points the reference at each. `declare -n r=/` was taken, and a
+  reference to `X[0]` used by `read` made a variable named `X[0]`; `${r=X}` of a
+  reference with no target was `X`'s value, not `X`.

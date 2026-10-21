@@ -81,3 +81,122 @@ fn a_reference_to_an_element_assigns_to_the_element() {
         ),
     ]);
 }
+
+/// Runs each script and checks its standard output, and its standard error with each
+/// line's prefix up to `line ` taken off, against Bash's.
+fn check_with_errors(cases: &[(&str, &str, &str)]) {
+    for &(script, expected_out, expected_err) in cases {
+        let out = run(script);
+        let errors = out
+            .stderr
+            .lines()
+            .map(|line| line.split_once(": line ").map_or(line, |(_, rest)| rest))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(
+            (out.stdout.as_str(), errors.as_str()),
+            (expected_out, expected_err),
+            "{script}"
+        );
+    }
+}
+
+#[test]
+fn a_bad_subscript_is_said_and_abandons_the_line() {
+    // Each was element 0, or key "", in silence; an element before a command was set for
+    // it. A bad subscript in a list keeps the elements before it; in a function it
+    // abandons the command the function was called in.
+    check_with_errors(&[
+        (
+            "b[]=x\necho \"after $?\"",
+            "after 1",
+            "1: b[]: bad array subscript",
+        ),
+        (
+            "z[-1]=4\necho \"after $?\"",
+            "after 1",
+            "1: z[-1]: bad array subscript",
+        ),
+        (
+            "y=(a b)\ny=(p [-65]=v w)\ndeclare -p y",
+            "declare -a y=([0]=\"p\")",
+            "2: [-65]=v: bad array subscript",
+        ),
+        (
+            "x=(a b); x+=([-1]=v w); declare -p x",
+            "declare -a x=([0]=\"a\" [1]=\"v\" [2]=\"w\")",
+            "",
+        ),
+        (
+            "declare -a x=([-1]=v)\necho \"after $?\"",
+            "after 1",
+            "1: [-1]=v: bad array subscript",
+        ),
+        (
+            "f() { b[]=x; echo in; }; f; echo same\necho \"next $?\"",
+            "next 1",
+            "1: b[]: bad array subscript",
+        ),
+        (
+            "declare -A A; A[\"\"]=x\nA=([\"\"]=y [k]=z)\nA=([k]=v one)\ndeclare -p A",
+            "declare -A A=([k]=\"v\" )",
+            "1: A[\"\"]: bad array subscript\n2: [\"\"]=y: bad array subscript\n\
+             3: A: one: must use subscript when assigning associative array",
+        ),
+        (
+            "arr[0]=1 echo hi; echo \"s $?\"",
+            "hi\ns 0",
+            "1: `arr[0]': not a valid identifier",
+        ),
+    ]);
+}
+
+#[test]
+fn an_operator_that_reads_and_writes_an_element_evaluates_its_subscript_once() {
+    // `i` was stepped twice and the next element written.
+    check(&[(
+        r#"a=(1 2 3); i=0; (( a[i++]++ )); echo "$i ${a[*]}"; (( a[i++] += 5 )); echo "$i ${a[*]}""#,
+        "1 2 2 3\n2 2 7 3",
+    )]);
+}
+
+#[test]
+fn declare_takes_attributes_away_and_lists_with_them_as_bash_does() {
+    // `+a` made an array; `-a` alone listed `name=(...)`; `+n` changed the target.
+    check(&[
+        ("s=1; declare +a s; declare -p s", "declare -- s=\"1\""),
+        (
+            r#"a=(1 2); declare -a | grep "^declare -a a=""#,
+            "declare -a a=([0]=\"1\" [1]=\"2\")",
+        ),
+        (
+            "x=1; declare -n r=x; declare +n r; declare -p r",
+            "declare -- r=\"x\"",
+        ),
+    ]);
+}
+
+#[test]
+fn a_reference_is_pointed_by_for_and_checked_and_writes_an_element_for_read() {
+    // `for` assigned the second word to the first; `declare -n r=/` was taken; `read`
+    // made a variable named `X[0]`; `${r=X}` was `X`'s value.
+    check(&[
+        (
+            r#"declare -n r; for r in a b; do echo "[$r]"; done; declare -p r"#,
+            "[]\n[]\ndeclare -n r=\"b\"",
+        ),
+        (
+            r#"declare -n r; echo "${r=X}"; declare -p r"#,
+            "X\ndeclare -n r=\"X\"",
+        ),
+        (
+            "declare -n r=X[0]; read r <<< hi; declare -p X",
+            "declare -a X=([0]=\"hi\")",
+        ),
+    ]);
+    check_with_errors(&[(
+        "declare -n r=/; echo \"s $?\"",
+        "s 1",
+        "1: declare: `/': invalid variable name for name reference",
+    )]);
+}
