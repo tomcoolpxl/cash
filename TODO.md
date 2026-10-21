@@ -32,11 +32,9 @@ against Git Bash 5.3 first, cheapest first. Done, in DONE.md: 1, a trailing back
 (backslash-newline inside backquotes was found to be as Bash has it); 2, `case x in
 esac)` and loop names that are none; 3, text right after a list's `)` (a syntax error in
 a list was found to end the line as Bash's does); 4, here-documents, but for the `EOF)`
-warning (below); 5, `${ cmd; }`.
+warning (below); 5, `${ cmd; }`; 6, aliases: `foo>&2` was found to be as Bash has it,
+and the self-unaliasing one is left (below); 7, functions printed that did not read back.
 
-6. Aliases: one followed by a redirection (`foo>&2`); `eval` of a multi-line alias that
-   unaliases itself.
-7. Functions printed that do not read back.
 8. The end of a `$(...)` found twice; a syntax error inside `$(...)` found only when it
    runs.
 
@@ -103,11 +101,10 @@ path. The rest, by theme:
   end-of-file"); the tokenizer that sees it has no way to say a warning. An unterminated
   `$(` in a here-document is said as "failed to parse word" (Bash: "unexpected EOF while
   looking for matching `)'").
-- Aliases: one followed by a redirection merges tokens (`foo>&2`); `eval` of a multi-line
-  alias that unaliases itself; in POSIX mode, aliases inside `$(...)` at parse time and a
-  reserved word after a blank-ending alias.
-- Functions printed that do not read back: a here-document in an `if` condition, `export
-  -f` of one with a here-document and a later redirection, names that are no identifiers.
+- Aliases: `eval` of a multi-line alias that unaliases itself says the alias is no
+  command (Bash runs the rest of its text, though after the next command: an artifact of
+  the text Bash pushes back into its input, not worth copying); in POSIX mode, aliases
+  inside `$(...)` at parse time and a reserved word after a blank-ending alias.
 
 **Assignments, declarations, readonly**
 - `declare name[sub]=v` writes element 0; `[i]+=v` in a compound assignment is taken as a

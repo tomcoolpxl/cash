@@ -2930,3 +2930,9 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   runs in the shell itself; the shell ends, as in Bash. `return` at the top level was
   refused; it returns from the substitution, as from a function. `local` in it was found
   to be as Bash has it.
+- **Functions printed so they read back** (2026-10-21, the phase after 1.45.0, item 7): a
+  condition that ends in a here-document (`if cat <<EOF` ... `EOF`, `then`) was printed
+  with its `;` on a line of its own after the end tag, which did not read back; none is
+  written there, as Bash writes none, for `if`, `elif`, `while` and `until`. A here-
+  document followed by a redirection and a name that is no identifier were found to
+  read back already.

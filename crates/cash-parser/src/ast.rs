@@ -999,9 +999,23 @@ impl SourceLocation for IfClauseCommand {
     }
 }
 
+/// A condition as printed before `then` or `do`, with its `; `: none after one that ends
+/// in a here-document's end tag, whose line it is, as Bash prints it. A `;` there was a
+/// line of its own, which did not read back.
+/// The condition is written as it always is, through the formatter, so that a
+/// here-document's lines stay unindented; it is only rendered here to see how it ends.
+fn condition_separator(condition: &impl Display) -> &'static str {
+    if condition.to_string().ends_with('\n') {
+        ""
+    } else {
+        "; "
+    }
+}
+
 impl Display for IfClauseCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "if {}; then", self.condition)?;
+        let separator = condition_separator(&self.condition);
+        writeln!(f, "if {}{separator}then", self.condition)?;
         write!(indented(f), "{}", self.then.terminated())?;
         if let Some(elses) = &self.elses {
             for else_clause in elses {
@@ -1037,7 +1051,8 @@ impl Display for ElseClause {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
         if let Some(condition) = &self.condition {
-            writeln!(f, "elif {condition}; then")?;
+            let separator = condition_separator(condition);
+            writeln!(f, "elif {condition}{separator}then")?;
         } else {
             writeln!(f, "else")?;
         }
@@ -1175,7 +1190,8 @@ impl SourceLocation for WhileOrUntilClauseCommand {
 
 impl Display for WhileOrUntilClauseCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}; {}", self.0, self.1)
+        let separator = condition_separator(&self.0);
+        write!(f, "{}{separator}{}", self.0, self.1)
     }
 }
 

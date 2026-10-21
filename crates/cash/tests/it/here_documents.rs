@@ -31,6 +31,23 @@ fn a_function_with_a_here_document_is_written_so_it_reads_back() {
 }
 
 #[test]
+fn a_condition_ending_in_a_here_document_is_written_so_it_reads_back() {
+    // The `;` before `then` and `do` went on a line of its own after the end tag, which
+    // did not read back; Bash writes none there.
+    check(&[
+        (
+            "f() { if cat <<EOF\ncond\nEOF\nthen echo yes; fi; }\neval \"$(declare -f f)\"; f",
+            "cond\nyes",
+        ),
+        (
+            "w() { while grep -q x <<EOF\nx\nEOF\ndo echo once; break; done; }\n\
+             eval \"$(declare -f w)\"; w",
+            "once",
+        ),
+    ]);
+}
+
+#[test]
 fn a_shift_after_a_nested_arithmetic_expansion_is_a_shift() {
     // The inner `$((1))` ended the outer one's arithmetic, and `<< 2` was read as a
     // here-document (PI-05).
