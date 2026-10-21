@@ -25,10 +25,12 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the current phase, after 1.46.0, 2026-10-21)
+## The phase before (2026-10-21, done, released as 1.47.0)
 
 Three themes (decisions.md, "The phase after 1.46.0"), in this order, each item checked
-against Git Bash 5.3 first; the items are the ones below under their themes:
+against Git Bash 5.3 first. Done, in DONE.md, but for what is left under the themes
+below: an alias in `$(...)` read in POSIX mode, and `-ec -c`. `#!/bin/sh` running in
+POSIX mode was put to the user and kept (decisions.md).
 
 1. The leftovers of the themes done: arithmetic (single quotes, assignment's precedence),
    associative keys holding `]`, `[i]+=v` in a list, `${#/}`, the `EOF)` warning, the
