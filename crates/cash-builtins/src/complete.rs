@@ -403,10 +403,17 @@ impl CompleteCommand {
             )?;
         }
         if let Some(filter_pattern) = &spec.filter_pattern {
+            // A pattern that keeps what it matches was given with a `!`, which is put
+            // back, as Bash prints it; the spec printed did not read back.
+            let given = if spec.filter_pattern_excludes {
+                filter_pattern.clone()
+            } else {
+                format!("!{filter_pattern}")
+            };
             write!(
                 s,
                 " -X {}",
-                escape::force_quote(filter_pattern, escape::QuoteMode::SingleQuote)
+                escape::force_quote(&given, escape::QuoteMode::SingleQuote)
             )?;
         }
         if let Some(prefix) = &spec.prefix {
@@ -488,6 +495,17 @@ impl builtins::Command for CompGenCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
+        // `-V` takes a name, as in Bash: `1bad` is none, status 2. It was 1, in silence.
+        if let Some(name) = &self.variable_name
+            && !env::valid_variable_name(name)
+        {
+            writeln!(
+                context.error_stream(),
+                "compgen: `{name}': not a valid identifier"
+            )?;
+            return Ok(ExecutionResult::new(2));
+        }
+
         let mut spec = self
             .common_args
             .create_spec(context.shell.options().extended_globbing);

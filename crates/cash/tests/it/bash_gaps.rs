@@ -3265,3 +3265,14 @@ fn return_and_exit_read_their_status_as_bash_does() {
     assert_eq!(run_all("exit -- -2").0, 254);
     assert_eq!(run_all("exit 2 3; echo no").0, 1);
 }
+
+#[test]
+fn complete_p_prints_a_keeping_pattern_with_its_bang() {
+    // The `!` of `-X '!*.txt'` was dropped, so the spec printed did not read back.
+    let (status, stdout) =
+        output("complete -X '!*.txt' -f foo; complete -X '*.o' -f bar; complete -p foo bar");
+    assert_eq!(
+        (status, stdout.as_str()),
+        (0, "complete -f -X '!*.txt' foo\ncomplete -f -X '*.o' bar")
+    );
+}

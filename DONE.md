@@ -2877,3 +2877,7 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   kind, Bash keywords, which `help` lists, shows (`-s`, `-d`, the page) and `man` opens;
   `help variables` is the topic of the shell's variables. A word with no wildcard in it
   is also a prefix, as in Bash: `help -s rea` is read, readarray and readonly.
+- **`complete -p` and `compgen -V`** (2026-10-21, the phase after 1.44.0, item 2):
+  `complete -p` dropped the `!` of `-X '!*.txt'`, a pattern that keeps what it matches,
+  so the spec it printed did not read back; it is printed with it, as Bash does.
+  `compgen -V 1bad` was status 1 in silence; it is not a valid identifier, status 2.

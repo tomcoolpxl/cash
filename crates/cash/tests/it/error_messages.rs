@@ -215,6 +215,11 @@ fn errors_are_worded_as_bash_words_them() {
             "read -u -1 x",
             "read: -1: invalid file descriptor specification",
         ),
+        // It was status 1, in silence.
+        (
+            "compgen -V 1bad x",
+            "compgen: `1bad': not a valid identifier",
+        ),
     ];
     for (script, expected) in cases {
         let out = run_in(scratch.path(), script);

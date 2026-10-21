@@ -30,10 +30,8 @@ for working through it. What is done, phases and findings, is in DONE.md.
 Taken as recommended while the user was away, as the user asked (decisions.md, "The phase
 after 1.44.0"); the user may change it. The small builtins, each against Git Bash 5.3, in
 this order. Done, in DONE.md: 1, `help` of the reserved words, and a plain word as a
-prefix.
+prefix; 2, `complete -p`'s `!` and `compgen -V`'s name.
 
-2. `complete -p` drops the `!` of `-X '!*.txt'`, so its output does not read back;
-   `compgen -V 1bad` is silent, status 1 (Bash: not a valid identifier, 2).
 3. Usage errors Bash gives and cash does not: `unalias` with no name, `pushd -z`,
    `command -z`, `builtin -z`, `history -z`, `fc -z`.
 4. `history -s` while history is off adds nothing (Bash adds it); `history -d 1-2`
@@ -174,8 +172,7 @@ path. The rest, by theme:
   itself (`resolve_named_interpreter` asks for the stem `cash`).
 
 **Builtins, small**
-- `complete -p` drops the `!` of `-X '!pat'`; `complete -r` and `compgen -V` of a bad
-  name are silent; `hash -p` ignored; `declare -f +r` and
+- `hash -p` ignored; `declare -f +r` and
   `-f -a`; `set -r` restricts nothing; `history` does nothing while history is off,
   numbers restart after HISTSIZE, `history -d 2-3`, `history -p '!!:z'`, script lines not
   history-expanded under `set -H`; `find /dev/null` (modernish's find check); about
