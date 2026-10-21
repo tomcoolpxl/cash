@@ -1723,6 +1723,18 @@ impl Execute for ast::CoprocessCommand {
             return Ok(ExecutionExitCode::GeneralError.into());
         }
 
+        // A read-only name cannot take its descriptors, as in Bash: it was replaced by them.
+        if shell
+            .env()
+            .get(name.as_ref())
+            .is_some_and(|(_, var)| var.is_readonly())
+        {
+            let error = error::Error::from(error::ErrorKind::ReadonlyVariable(name.to_string()))
+                .located_at(shell.error_prefix());
+            let _ = shell.display_error(&mut params.stderr(shell), &error);
+            return Ok(ExecutionExitCode::GeneralError.into());
+        }
+
         // Set up the pipes that we'll use to communicate with the coprocess.
         let (stdin_reader, stdin_writer) = std::io::pipe()?;
         let (stdout_reader, stdout_writer) = std::io::pipe()?;
@@ -2675,9 +2687,57 @@ async fn execute_command<T: Into<String>>(
     // Push a new ephemeral environment scope for the duration of the command. We'll
     // set command-scoped variable assignments after doing so, and revert them before
     // returning.
+    let cmd_name = cmd_name.into();
+    let posix = context.shell.options().posix_mode;
+    // In POSIX mode, what a special builtin is given before it stays (`y=5 eval :`), as
+    // Bash has it; it went with the command.
+    let lasting = posix
+        && context
+            .shell
+            .builtins()
+            .get(cmd_name.as_str())
+            .is_some_and(|builtin| builtin.special_builtin && !builtin.disabled);
     let mut guard = crate::env::ScopeGuard::new(&mut context.shell, EnvironmentScope::Command);
 
     for assignment in assignments {
+        // A read-only variable is not assigned, as in Bash: said, and the command runs
+        // without it, or in POSIX mode does not run. It was set for the command in silence.
+        let name = match &assignment.name {
+            ast::AssignmentName::VariableName(name)
+            | ast::AssignmentName::ArrayElementName(name, _) => name,
+        };
+        if guard
+            .shell()
+            .env()
+            .get(name.as_str())
+            .is_some_and(|(_, var)| var.is_readonly())
+        {
+            let shell = guard.shell();
+            let error = error::Error::from(error::ErrorKind::ReadonlyVariable(name.clone()))
+                .located_at(shell.error_prefix());
+            let _ = shell.display_error(&mut params.stderr(shell), &error);
+            if posix {
+                // An assignment error ends a POSIX shell that is not interactive.
+                let mut result = ExecutionResult::general_error();
+                if !shell.options().interactive {
+                    result.next_control_flow = crate::ExecutionControlFlow::ExitShell;
+                }
+                return Ok(result.into());
+            }
+            continue;
+        }
+        if lasting {
+            apply_assignment(
+                assignment,
+                guard.shell(),
+                &params,
+                false,
+                None,
+                EnvironmentScope::Global,
+            )
+            .await?;
+            continue;
+        }
         // Ensure it's tagged as exported and created in the command scope.
         apply_assignment(
             assignment,
@@ -2709,7 +2769,7 @@ async fn execute_command<T: Into<String>>(
 
     // Construct the command struct.
     let mut cmd =
-        commands::SimpleCommand::new(context.shell, params, cmd_name.into(), args.iter().cloned());
+        commands::SimpleCommand::new(context.shell, params, cmd_name, args.iter().cloned());
     cmd.process_group_id = context.process_group_id;
 
     // Arrange to pop off that ephemeral environment scope.

@@ -114,6 +114,20 @@ impl ExportCommand {
                         append,
                     );
                 }
+                // A name the command's own prefix assignment set (`var=60 export var`) is
+                // that variable, as Bash moves it out of the temporary environment: the
+                // export was made on it and lost with the prefix.
+                else if let Some(mut variable) =
+                    context.shell.env_mut().take_from_command_scope(s)
+                {
+                    if self.unexport {
+                        variable.unexport();
+                    }
+                    context
+                        .shell
+                        .env_mut()
+                        .add(s.as_str(), variable, EnvironmentScope::Global)?;
+                }
                 // Try to find the variable already present; if we find it, then mark it
                 // exported.
                 else if let Some((_, variable)) = context.shell.env_mut().get_mut(s) {

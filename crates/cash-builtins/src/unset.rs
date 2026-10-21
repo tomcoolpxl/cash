@@ -71,16 +71,7 @@ impl builtins::Command for UnsetCommand {
                                 Ok(unset) => unset.is_some(),
                                 // Said, and the rest are unset, as in Bash.
                                 Err(e) if matches!(e.kind(), ErrorKind::ReadonlyVariable(_)) => {
-                                    let refused = cash_core::Error::from(ErrorKind::BuiltinError(
-                                        Box::new(cash_core::Error::from(
-                                            ErrorKind::CannotUnsetReadonly(name),
-                                        )),
-                                        context.command_name.clone(),
-                                    ));
-                                    let _ = context.shell.display_error(
-                                        &mut context.params.stderr(context.shell),
-                                        &refused,
-                                    );
+                                    say_cannot_unset(&context, name);
                                     failed = true;
                                     continue;
                                 }
@@ -88,13 +79,23 @@ impl builtins::Command for UnsetCommand {
                             }
                         }
                         cash_parser::word::Parameter::NamedWithIndex { name, index } => {
-                            unset_array_index(
+                            match unset_array_index(
                                 context.shell,
                                 &context.params,
                                 name.as_str(),
                                 index.as_str(),
                             )
-                            .await?
+                            .await
+                            {
+                                Ok(unset) => unset,
+                                // An element of a read-only array, said as the array is.
+                                Err(e) if matches!(e.kind(), ErrorKind::ReadonlyVariable(_)) => {
+                                    say_cannot_unset(&context, name);
+                                    failed = true;
+                                    continue;
+                                }
+                                Err(e) => return Err(e),
+                            }
                         }
                         cash_parser::word::Parameter::NamedWithAllIndices { name, concatenate } => {
                             unset_all_indices(
@@ -141,6 +142,20 @@ impl builtins::Command for UnsetCommand {
         }
         Ok(ExecutionResult::success())
     }
+}
+
+/// Says that `name`, read-only, cannot be unset, as Bash says it.
+fn say_cannot_unset<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    name: String,
+) {
+    let refused = cash_core::Error::from(ErrorKind::BuiltinError(
+        Box::new(cash_core::Error::from(ErrorKind::CannotUnsetReadonly(name))),
+        context.command_name.clone(),
+    ));
+    let _ = context
+        .shell
+        .display_error(&mut context.params.stderr(context.shell), &refused);
 }
 
 fn unset_all_indices(

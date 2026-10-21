@@ -144,6 +144,18 @@ impl ShellEnvironment {
         self.export_variables_on_modification = on;
     }
 
+    /// Takes `name` out of the innermost scope when that is a command's, where its prefix
+    /// assignment set it (`var=60 export var`): for the command's declaration to adopt.
+    pub fn take_from_command_scope(&mut self, name: &str) -> Option<ShellVariable> {
+        let (scope_type, map) = self.scopes.last_mut()?;
+        if *scope_type != EnvironmentScope::Command {
+            return None;
+        }
+        let var = map.unset(name)?;
+        self.entry_count = self.entry_count.saturating_sub(1);
+        Some(var)
+    }
+
     /// Records `name` as a variable inherited from Windows, so that a name differing
     /// from it only in case, and not all in lower case, is it.
     ///

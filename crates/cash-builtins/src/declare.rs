@@ -652,9 +652,36 @@ impl DeclareCommand {
             return Ok(false);
         }
 
-        // Figure out where we should look.
+        // A local over a read-only global, or over one of the function's own, is refused, as
+        // in Bash: it shadowed it. A caller's read-only local may be shadowed.
+        let env = context.shell.env();
+        if create_var_local
+            && (env
+                .get_using_policy(name.as_str(), EnvironmentLookup::OnlyInCurrentLocal)
+                .is_some_and(ShellVariable::is_readonly)
+                || matches!(
+                    env.get(name.as_str()),
+                    Some((EnvironmentScope::Global, var)) if var.is_readonly()
+                ))
+        {
+            writeln!(
+                context.error_stream(),
+                "{}: {name}: readonly variable",
+                context.command_name
+            )?;
+            return Ok(false);
+        }
+
+        if initial_value.is_none() {
+            Self::adopt_prefix_assignment(context, &name, create_var_local)?;
+        }
+
+        // Figure out where we should look: `-g` at the globals alone, as Bash; it found a
+        // caller's local of the name and set that.
         let lookup = if create_var_local {
             EnvironmentLookup::OnlyInCurrentLocal
+        } else if self.create_global {
+            EnvironmentLookup::OnlyInGlobal
         } else {
             EnvironmentLookup::Anywhere
         };
@@ -774,6 +801,36 @@ impl DeclareCommand {
         }
 
         Ok(true)
+    }
+
+    /// The variable a prefix assignment gave `name`, adopted by a declaration that gives it
+    /// no value, as Bash moves it out of the temporary environment: the command's own
+    /// (`var=60 export var`, `x=4 declare -r x`, `z=y typeset z`), its value and export
+    /// going to the scope the declaration is for; and for a local, the function call's (`a=4
+    /// f` and `local a` in `f`). The declaration made a variable beside it, and the value
+    /// went with the prefix.
+    fn adopt_prefix_assignment(
+        context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+        name: &str,
+        local: bool,
+    ) -> Result<(), cash_core::Error> {
+        let env = context.shell.env_mut();
+        let adopted = env.take_from_command_scope(name).or_else(|| {
+            local
+                .then(|| env.get(name))
+                .flatten()
+                .filter(|(scope, _)| *scope == EnvironmentScope::Command)
+                .map(|(_, var)| var.clone())
+        });
+        if let Some(var) = adopted {
+            let scope = if local {
+                EnvironmentScope::Local
+            } else {
+                EnvironmentScope::Global
+            };
+            env.add(name, var, scope)?;
+        }
+        Ok(())
     }
 
     /// Splits a word of the form `name=value`, `name+=value` or `name[index]=value` into

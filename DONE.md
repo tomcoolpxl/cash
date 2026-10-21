@@ -2789,3 +2789,15 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `)` the substitution. `<<-'<TAB>END'` never ended: the tag loses its leading tabs as
   its lines do. Found on the way: a run of tabs before an `esac` reached the scan as a
   word of its own (git-prompt's case, which caught it).
+- **Readonly and prefix assignments, `declare -g`** (2026-10-21, the phase after 1.42.0,
+  item 6): a declaration that gives a name no value adopts the variable the command's own
+  prefix assignment set, value and export, in the scope it is for, as Bash moves it out of
+  the temporary environment: `var=60 export var`, `x=4 declare -r x`, `y=5 readonly y` and
+  `z=y typeset z` made a variable beside the prefix's, and the value went with it; a
+  `local` takes a function call's prefix value (`a=4 f`). In POSIX mode a prefix assignment
+  before a special builtin stays (`y=5 eval :`). Read-only is kept: a prefix assignment to
+  a read-only variable is refused with Bash's words, and the command runs without it, or in
+  POSIX mode the script ends; an element of a read-only associative array was assigned or
+  unset in silence; `local` shadowed a read-only global; `coproc RO` replaced it with its
+  descriptors. `declare -g` in a function set its caller's local of the name, not the
+  global.

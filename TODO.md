@@ -31,9 +31,9 @@ The user's pick from the themes below (decisions.md, "The phase after 1.42.0"), 
 order. Done, in DONE.md: 1, loop control (`break`, `continue`, `return`, `exit`); 2,
 `read` with a mixed IFS and escapes, and `mapfile -d ''`; 3, `exec` and the redirection
 state, but for `exec 0<file` in a script read from standard input (below); 4, `fc -0`, and
-a script's history written as it ends; 5, the parser's cheapest subset.
+a script's history written as it ends; 5, the parser's cheapest subset; 6, readonly and
+prefix assignments, `declare -g`.
 
-6. Readonly and prefix assignments, `declare -g`.
 7. `printf`.
 8. Expansion edge cases.
 9. Arrays and namerefs.
@@ -91,14 +91,9 @@ path. The rest, by theme:
   -f` of one with a here-document and a later redirection, names that are no identifiers.
 
 **Assignments, declarations, readonly**
-- A prefix assignment before a declaration builtin is ignored (`var=60 export var`, `x=4
-  declare -r x`, `z=y typeset z`); in POSIX mode one before a special builtin does not
-  last (`y=5 eval :`); `local` does not take a prefix assignment's value (`a=4 f`).
-- Readonly not enforced: an element of a readonly array assigned or unset; `local var`
-  over a readonly global; `coproc RO`; a prefix assignment to a readonly variable runs the
-  command in silence.
-- `declare -g` in a function writes the caller's local; `declare name[sub]=v` writes
-  element 0; `a+=5 cmd` assigns; `[i]+=v` in a compound assignment.
+- `arr[0]=1 cmd` is taken as a prefix assignment (Bash: not a valid identifier).
+- `declare name[sub]=v` writes element 0; `a+=5 cmd` assigns; `[i]+=v` in a compound
+  assignment.
 - Associative lists: unquoted words split and globbed, `( [k]=v one )`, an empty key;
   keys holding `]` or quote characters break `(( ))`, `[[ -v ]]`, `unset`, `read`,
   `printf -v`; `(( A['$key']++ ))` expands `$key`.

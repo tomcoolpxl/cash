@@ -435,6 +435,11 @@ impl ShellVariable {
         value: String,
         append: bool,
     ) -> Result<(), error::Error> {
+        // An element of a read-only array is read-only, as in Bash: an associative one's
+        // took the value.
+        if self.is_readonly() {
+            return Err(error::ErrorKind::ReadonlyVariable(String::new()).into());
+        }
         self.stamp = next_stamp();
         match &self.value {
             ShellValue::Unset(_) => {
@@ -570,6 +575,10 @@ impl ShellVariable {
     ///
     /// * `index` - The index at which to unset the value.
     pub fn unset_index(&mut self, index: &str) -> Result<bool, error::Error> {
+        // Nor is one unset, as in Bash: an associative one's went.
+        if self.is_readonly() {
+            return Err(error::ErrorKind::ReadonlyVariable(String::new()).into());
+        }
         self.stamp = next_stamp();
         match &mut self.value {
             ShellValue::Unset(ty) => match ty {

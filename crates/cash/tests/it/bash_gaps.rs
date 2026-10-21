@@ -3157,6 +3157,69 @@ fn break_and_continue_leave_only_the_loops_there_are() {
 }
 
 #[test]
+fn a_declaration_adopts_what_its_prefix_assigned() {
+    // `var=60 export var` exported a variable beside the prefix's, and the value went
+    // with the prefix; `local` took no value from a function call's prefix (`a=4 f`);
+    // `declare -g` in a function set its caller's local.
+    let (status, stdout, _) = run_all(
+        "var=10; var=60 export var; declare -p var\n\
+         x=1; x=4 declare -r x; declare -p x\n\
+         y=5 readonly y; declare -p y\n\
+         f() { z=y typeset z; echo \"|$z|\"; }; f\n\
+         g() { local -i a; a+=3; echo $a; }; a=4 g\n\
+         h() { local w; k; echo \"h: w=$w\"; }; k() { declare -g w=one; }; h; echo \"global: w=$w\"",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (
+            0,
+            "declare -x var=\"60\"\ndeclare -rx x=\"4\"\ndeclare -rx y=\"5\"\n|y|\n7\nh: w=\n\
+             global: w=one"
+        )
+    );
+    // In POSIX mode what a special builtin is given before it stays.
+    assert_eq!(
+        output("set -o posix; y=2; y=5 eval :; echo $y; z=1 :; echo $z"),
+        (0, "5\n1".into())
+    );
+}
+
+#[test]
+fn a_read_only_variable_stays_as_it_is() {
+    // A prefix assignment to it, a local over it, an element of a read-only associative
+    // array, and `coproc` of its name all changed it, or shadowed it, in silence.
+    let (status, stdout, stderr) = run_all(
+        "readonly x=4; x=8 echo ran\n\
+         readonly var=outside; f() { local var=inside; echo \"in: $var\"; }; f\n\
+         readonly RO=1; coproc RO { :; }; echo \"RO=$RO\"\n\
+         declare -rA A=([k]=v); unset 'A[k]'; declare -p A; A[k]=w; echo not here",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (1, "ran\nin: outside\nRO=1\ndeclare -Ar A=([k]=\"v\" )")
+    );
+    for said in [
+        "x: readonly variable",
+        "local: var: readonly variable",
+        "RO: readonly variable",
+        "unset: A: cannot unset: readonly variable",
+        "A: readonly variable",
+    ] {
+        assert!(stderr.contains(said), "{said}: {stderr}");
+    }
+    // In POSIX mode the prefix assignment ends the script.
+    assert_eq!(
+        run_all("set -o posix; readonly x=4; x=8 echo ran; echo no").0,
+        1
+    );
+    // A caller's read-only local may be shadowed, as bats-support's `local -ir width` is.
+    assert_eq!(
+        output("f() { local -r q=1; g; echo \"f: $q\"; }; g() { local q=2; echo \"g: $q\"; }; f"),
+        (0, "g: 2\nf: 1".into())
+    );
+}
+
+#[test]
 fn return_and_exit_read_their_status_as_bash_does() {
     // `return -1` was refused as an option and `return abc` went on with the function;
     // Bash's statuses are taken modulo 256, a word that is no number is 2, and a second
