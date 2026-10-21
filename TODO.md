@@ -32,9 +32,9 @@ order. Done, in DONE.md: 1, loop control (`break`, `continue`, `return`, `exit`)
 `read` with a mixed IFS and escapes, and `mapfile -d ''`; 3, `exec` and the redirection
 state, but for `exec 0<file` in a script read from standard input (below); 4, `fc -0`, and
 a script's history written as it ends; 5, the parser's cheapest subset; 6, readonly and
-prefix assignments, `declare -g`.
+prefix assignments, `declare -g`; 7, `printf` but for a `TZ` with daylight-saving rules
+(below).
 
-7. `printf`.
 8. Expansion edge cases.
 9. Arrays and namerefs.
 
@@ -142,11 +142,12 @@ path. The rest, by theme:
 - `fg` with monitor off, `%1` as a command, `fg %name`, `bg`; `[N]+ Done` printed by a
   script with `set -m`.
 
-**printf**
-- `\c` ends the output (Bash prints it); `\'` and `\?`; width or precision on `%b` and
-  `*` on `%q`/`%b`; `%(...)T` with nested parentheses or a TZ with DST rules; `%ls`/`%lc`
-  count bytes; `%S`/`%C`; `\u` with fewer than four digits; text before a bad conversion
-  is lost; widths above INT_MAX.
+**printf, and times**
+- A POSIX `TZ` with daylight-saving rules (`EST5EDT,M3.2.0/2,M11.1.0/2`) keeps standard
+  time all year (`timefmt::Zone::Fixed` drops the rules; a name chrono-tz knows,
+  `EST5EDT`, works): `printf %(...)T`, `date`. A rule engine for `Mm.w.d/time`, `Jn` and
+  `n` is a medium job, for a `TZ` rarely set on Windows.
+- Widths and precisions above INT_MAX, and `%(abde)Z`'s warning, are said otherwise.
 
 **POSIX mode**
 - `POSIXLY_CORRECT` does not turn POSIX mode on or off, nor does the mode set it

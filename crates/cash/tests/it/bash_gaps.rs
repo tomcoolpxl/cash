@@ -3157,6 +3157,33 @@ fn break_and_continue_leave_only_the_loops_there_are() {
 }
 
 #[test]
+fn printf_reads_its_format_and_conversions_as_bash_does() {
+    // `\c` in the format ended all output, `\'` and `\?` stayed, `\u` wanted four
+    // digits; `%5b`, `%*q`, `%S` and `%C` were parsing errors and `%ls` counted bytes;
+    // `%(...)T` ended at its first `)`; and a bad conversion lost the text before it.
+    let (status, stdout, stderr) = run_all(
+        "printf 'a\\cb|\\x27q\\x27|\\?|\\u41\\uff|\\n'\n\
+         printf '[%5b][%-5b][%.1b][%*b]\\n' ab ab ab 4 ab\n\
+         printf '[%*q][%.*q]\\n' 6 'a b' 2 abc\n\
+         printf '[%ls][%lc][%.2ls][%S][%C]\\n' ééé ééé ééé ab ab\n\
+         TZ=UTC printf '%(%Y (x))T\\n' 0\n\
+         printf -v v 'ab%z'; echo \"[$v] $?\"",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (
+            0,
+            "a\\cb|'q'|?|Aÿ|\n[   ab][ab   ][a][  ab]\n[  a\\ b][ab]\n[ééé][é][éé][ab][a]\n\
+             1970 (x)\n[ab] 1"
+        )
+    );
+    assert!(
+        stderr.contains("printf: `%z': missing format character"),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn a_declaration_adopts_what_its_prefix_assigned() {
     // `var=60 export var` exported a variable beside the prefix's, and the value went
     // with the prefix; `local` took no value from a function call's prefix (`a=4 f`);

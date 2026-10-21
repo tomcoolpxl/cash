@@ -93,6 +93,14 @@ impl builtins::Command for PrintfCommand {
         let Some((fmt, args)) = self.format_and_args.split_first() else {
             return Err(ErrorKind::PrintfInvalidUsage("missing operand".into()).into());
         };
+        // The format's escapes as Bash reads them, before uucore reads the rest.
+        let (format, warning) = bash_format(fmt);
+        say_bad_conversion(
+            &context,
+            warning.map(str::to_owned),
+            ExecutionResult::success(),
+        )?;
+        let fmt = &format;
         // `-v` names a variable or an array's element (`a[1]`), which Bash checks before
         // it formats anything; a bad name said "failed to parse parameter", status 1.
         if let Some(name) = &self.output_variable
@@ -130,7 +138,7 @@ impl builtins::Command for PrintfCommand {
         if has_count_spec(fmt) {
             let mut output = Vec::new();
             let mut counts = Vec::new();
-            format_via_uucore_with_counts(
+            let bad = format_via_uucore_with_counts(
                 fmt,
                 &zone,
                 args.iter().cloned(),
@@ -165,12 +173,12 @@ impl builtins::Command for PrintfCommand {
                 context.stdout().write_all(&output)?;
                 context.stdout().flush()?;
             }
-            return Ok(status);
+            return say_bad_conversion(&context, bad, status);
         }
-        if let Some(variable_name) = &self.output_variable {
+        let bad = if let Some(variable_name) = &self.output_variable {
             // Format to a u8 vector.
             let mut result: Vec<u8> = vec![];
-            format_via_uucore(fmt, &zone, args.iter().cloned(), &mut result, &mut say)?;
+            let bad = format_via_uucore(fmt, &zone, args.iter().cloned(), &mut result, &mut say)?;
 
             // Convert to a string.
             let result_str = String::from_utf8(result).map_err(|_| {
@@ -185,13 +193,30 @@ impl builtins::Command for PrintfCommand {
                 result_str,
             )
             .await?;
+            bad
         } else {
-            print_formatted(fmt, &zone, args.iter().cloned(), context.stdout(), &mut say)?;
+            let bad =
+                print_formatted(fmt, &zone, args.iter().cloned(), context.stdout(), &mut say)?;
             context.stdout().flush()?;
-        }
+            bad
+        };
 
-        Ok(status)
+        say_bad_conversion(&context, bad, status)
     }
+}
+
+/// Says what Bash says of a conversion that is none, `bad`, once the text before it is
+/// out, and fails with 1; `status` otherwise.
+fn say_bad_conversion<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    bad: Option<String>,
+    status: ExecutionResult,
+) -> Result<ExecutionResult, Error> {
+    let Some(bad) = bad else {
+        return Ok(status);
+    };
+    writeln!(context.error_stream(), "{}: {bad}", context.command_name)?;
+    Ok(ExecutionResult::general_error())
 }
 
 /// `format_via_uucore` into `stdout`, each pass of the format held and written at once,
@@ -203,11 +228,11 @@ fn print_formatted(
     args: impl Iterator<Item = impl Into<OsString>>,
     stdout: impl Write,
     before_pass: &mut dyn FnMut(usize) -> Result<(), Error>,
-) -> Result<(), cash_core::Error> {
+) -> Result<Option<String>, cash_core::Error> {
     let mut out = std::io::BufWriter::with_capacity(64 * 1024, stdout);
-    format_via_uucore(format_string, zone, args, &mut out, before_pass)?;
+    let bad = format_via_uucore(format_string, zone, args, &mut out, before_pass)?;
     out.flush()?;
-    Ok(())
+    Ok(bad)
 }
 
 /// Whether `-v` may assign to `name`: a variable's name, or an array element's, a name
@@ -219,6 +244,93 @@ fn assignable(name: &str) -> bool {
         }
         None => cash_core::env::valid_variable_name(name),
     }
+}
+
+/// The format as Bash's printf reads its escapes, for uucore's parser, which reads
+/// coreutils': `\'`, `\"`, `\?` and `\e` are their characters, `\u` and `\U` take one to
+/// four or eight hex digits, `\c` is a backslash and a `c` (it ended all output), and a
+/// `\x` without a hex digit is a backslash and an `x`, with the warning it comes back with.
+/// `%ls` and `%lc` become `%S` and `%C`, wide strings and characters counted in characters
+/// (they counted bytes). The rest is left to uucore, which reads it as Bash does, the bytes
+/// of `\xff` and `\377` too.
+fn bash_format(format: &str) -> (String, Option<&'static str>) {
+    // A character an escape gave, which uucore is to take as it is.
+    fn literal(out: &mut String, c: char) {
+        match c {
+            '%' => out.push_str("%%"),
+            '\\' => out.push_str("\\\\"),
+            c => out.push(c),
+        }
+    }
+    let mut out = String::with_capacity(format.len());
+    let mut warning = None;
+    let mut chars = format.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => match chars.next() {
+                None => out.push_str("\\\\"),
+                Some(quote @ ('\'' | '"' | '?')) => out.push(quote),
+                Some('e' | 'E') => out.push('\x1b'),
+                Some('c') => out.push_str("\\\\c"),
+                Some(unicode @ ('u' | 'U')) => {
+                    let most = if unicode == 'u' { 4 } else { 8 };
+                    let mut digits = String::new();
+                    while digits.len() < most
+                        && let Some(digit) = chars.next_if(char::is_ascii_hexdigit)
+                    {
+                        digits.push(digit);
+                    }
+                    if let Some(ch) = u32::from_str_radix(&digits, 16)
+                        .ok()
+                        .and_then(char::from_u32)
+                    {
+                        literal(&mut out, ch);
+                    } else {
+                        out.push_str("\\\\");
+                        out.push(unicode);
+                        out.push_str(&digits);
+                    }
+                }
+                Some('x') if !chars.peek().is_some_and(char::is_ascii_hexdigit) => {
+                    warning = Some("missing hex digit for \\x");
+                    out.push_str("\\\\x");
+                }
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+            },
+            '%' => {
+                out.push('%');
+                if let Some(percent) = chars.next_if_eq(&'%') {
+                    out.push(percent);
+                    continue;
+                }
+                while let Some(part) =
+                    chars.next_if(|c| c.is_ascii_digit() || "-+ #.*$'".contains(*c))
+                {
+                    out.push(part);
+                }
+                if chars.peek() == Some(&'l') {
+                    let mut ahead = chars.clone();
+                    ahead.next();
+                    match ahead.next() {
+                        Some('s') => {
+                            chars = ahead;
+                            out.push('S');
+                        }
+                        Some('c') => {
+                            chars = ahead;
+                            out.push('C');
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            c => out.push(c),
+        }
+    }
+    (out, warning)
 }
 
 fn has_count_spec(fmt: &str) -> bool {
@@ -243,14 +355,15 @@ fn has_count_spec(fmt: &str) -> bool {
     false
 }
 
-/// `before_pass` is told the number of each pass over the format before it starts.
+/// `before_pass` is told the number of each pass over the format before it starts. What is
+/// said of a conversion that is none comes back, once the text before it is written.
 fn format_via_uucore(
     format_string: &str,
     zone: &Zone,
     args: impl Iterator<Item = impl Into<OsString>>,
     writer: impl Write,
     before_pass: &mut dyn FnMut(usize) -> Result<(), Error>,
-) -> Result<(), cash_core::Error> {
+) -> Result<Option<String>, cash_core::Error> {
     format_via_uucore_with_counts(
         format_string,
         zone,
@@ -268,14 +381,14 @@ fn format_via_uucore_with_counts(
     mut writer: impl Write,
     counts: &mut Vec<(String, usize)>,
     before_pass: &mut dyn FnMut(usize) -> Result<(), Error>,
-) -> Result<(), cash_core::Error> {
+) -> Result<Option<String>, cash_core::Error> {
     // Convert string arguments to FormatArgument::Unparsed
     let format_args: Vec<_> = args
         .map(|s| format::FormatArgument::Unparsed(s.into()))
         .collect();
 
     // Parse format string once.
-    let format_items = parse_format_string(format_string)?;
+    let (format_items, bad) = parse_format_string(format_string)?;
 
     // Wrap the format arguments.
     let mut format_args_wrapper = format::FormatArguments::new(&format_args);
@@ -322,11 +435,14 @@ fn format_via_uucore_with_counts(
                         ErrorKind::PrintfInvalidUsage("invalid quoted format".into()).into(),
                     );
                 };
-                let arg = format_args_wrapper.next_string(*position).to_string_lossy();
-                let rendered = match custom {
-                    Custom::Quoted(quoted_format) => quoted_format.render(&arg),
-                    Custom::Time(time_format) => time_format.render(&arg, zone),
+                // Where `$` cannot be, `position` is the next argument, a `*`'s too.
+                let next = || {
+                    format_args_wrapper
+                        .next_string(*position)
+                        .to_string_lossy()
+                        .into_owned()
                 };
+                let rendered = custom.render(next, zone);
                 write!(writer, "{rendered}")?;
                 written += rendered.len();
                 continue;
@@ -359,8 +475,13 @@ fn format_via_uucore_with_counts(
             // A `\c` ends all output, not only this pass over the format: the
             // arguments left over were formatted again (BI-10).
             if control_flow == ControlFlow::Break(()) {
-                return Ok(());
+                return Ok(None);
             }
+        }
+
+        // A conversion that is none ends the output there, as in Bash.
+        if bad.is_some() {
+            return Ok(bad);
         }
 
         // If the format string doesn't consume any arguments, stop now; otherwise we'd reprocess
@@ -379,7 +500,7 @@ fn format_via_uucore_with_counts(
         }
     }
 
-    Ok(())
+    Ok(None)
 }
 
 /// The alternate form of `%q` (Bash 5.3 `%#q`): always single-quoted, even when no
@@ -415,6 +536,29 @@ type ParsedFormatItem = (
 enum Custom {
     Quoted(QuotedFormat),
     Time(TimeFormat),
+}
+
+impl Custom {
+    /// The item, from the arguments `next` hands out: a `*` width or precision first, as in
+    /// Bash, then the value.
+    fn render(&self, mut next: impl FnMut() -> String, zone: &Zone) -> String {
+        match self {
+            Self::Quoted(quoted) => {
+                let mut star = || next().trim().parse::<i64>().unwrap_or(0);
+                let mut quoted = *quoted;
+                if quoted.width_star {
+                    let width = star();
+                    quoted.left_align |= width < 0;
+                    quoted.width = usize::try_from(width.unsigned_abs()).ok();
+                }
+                if quoted.precision_star {
+                    quoted.precision = usize::try_from(star()).ok();
+                }
+                quoted.render(&next())
+            }
+            Self::Time(time) => time.render(&next(), zone),
+        }
+    }
 }
 
 /// Bash's `%(FMT)T`: the argument, a number of seconds since 1970, as strftime formats it
@@ -497,10 +641,23 @@ impl TimeFormat {
 }
 
 /// Where a `%(FMT)T` that opens at `open`, the `(`, ends: past its `T`. `None` when its
-/// `)` is missing or not followed by `T`.
+/// `)` is missing or not followed by `T`. Parentheses in FMT nest, as Bash counts them
+/// (`%(%Y (x))T`); the first `)` ended it.
 fn time_format_end(bytes: &[u8], open: usize) -> Option<usize> {
-    let close = open + bytes.get(open..)?.iter().position(|&b| b == b')')?;
-    (bytes.get(close + 1) == Some(&b'T')).then_some(close + 2)
+    let mut depth = 0_usize;
+    for (at, &byte) in bytes.iter().enumerate().skip(open) {
+        match byte {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return (bytes.get(at + 1) == Some(&b'T')).then_some(at + 2);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// The first `%(FMT)T` in `format`: what is before it, the spec between `%` and `(`, FMT,
@@ -546,9 +703,13 @@ fn split_time_spec(format: &str) -> Result<Option<(&str, &str, &str, &str)>, Str
 }
 
 /// A `%q`/`%Q` spec with fixed modifiers, or a `%s` with the `0` flag, which uucore
-/// rejects but Bash accepts: `%05s` pads the string with zeros, and `-` overrides `0`.
+/// rejects but Bash accepts: `%05s` pads the string with zeros, and `-` overrides `0`. Also
+/// `%b` with a width or precision, and `%S` and `%C` (`%ls`, `%lc`), counted in characters,
+/// which were a parsing error.
 #[derive(Clone, Copy)]
 struct QuotedFormat {
+    /// The conversion: `q`, `Q`, `s`, `b`, `S` or `C`.
+    conversion: u8,
     uppercase: bool,
     alternate: bool,
     /// A zero-flagged `%s`: printed as is, padded with `0` on the left.
@@ -556,13 +717,16 @@ struct QuotedFormat {
     left_align: bool,
     width: Option<usize>,
     precision: Option<usize>,
+    /// `*`: the width is the argument before the value; `-` aligns left.
+    width_star: bool,
+    /// `.*`: the precision is the argument before the value; one below 0 is none.
+    precision_star: bool,
 }
 
 impl QuotedFormat {
     fn parse(spec: &[u8]) -> Option<Self> {
         let (&conversion, body) = spec.split_last()?;
-        if !matches!(conversion, b'q' | b'Q' | b's') || body.contains(&b'*') || body.contains(&b'$')
-        {
+        if !matches!(conversion, b'q' | b'Q' | b's' | b'b' | b'S' | b'C') || body.contains(&b'$') {
             return None;
         }
 
@@ -575,6 +739,10 @@ impl QuotedFormat {
             index += 1;
         }
 
+        let width_star = body.get(index) == Some(&b'*');
+        if width_star {
+            index += 1;
+        }
         let width_start = index;
         while body.get(index).is_some_and(u8::is_ascii_digit) {
             index += 1;
@@ -588,8 +756,13 @@ impl QuotedFormat {
             })
             .flatten();
 
+        let mut precision_star = false;
         let precision = if body.get(index) == Some(&b'.') {
             index += 1;
+            precision_star = body.get(index) == Some(&b'*');
+            if precision_star {
+                index += 1;
+            }
             let start = index;
             while body.get(index).is_some_and(u8::is_ascii_digit) {
                 index += 1;
@@ -607,6 +780,9 @@ impl QuotedFormat {
         };
 
         (index == body.len()).then_some(Self {
+            width_star,
+            precision_star,
+            conversion,
             uppercase: conversion == b'Q',
             alternate,
             zero_padded_string: conversion == b's',
@@ -617,6 +793,32 @@ impl QuotedFormat {
     }
 
     fn render(self, argument: &str) -> String {
+        // `%b`'s escapes are `echo -e`'s; then it is a string as `%S` is, in characters.
+        let text = match self.conversion {
+            b'b' => Some(
+                cash_core::escape::expand_backslash_escapes(
+                    argument,
+                    cash_core::escape::EscapeExpansionMode::EchoBuiltin,
+                )
+                .map_or_else(
+                    |_| argument.to_owned(),
+                    |(bytes, _)| String::from_utf8_lossy(&bytes).into_owned(),
+                ),
+            ),
+            b'S' => Some(argument.to_owned()),
+            b'C' => Some(argument.chars().take(1).collect()),
+            _ => None,
+        };
+        if let Some(text) = text {
+            let mut text = truncate_chars(&text, self.precision);
+            let padding = self.width.unwrap_or(0).saturating_sub(text.chars().count());
+            if self.left_align {
+                text.push_str(&" ".repeat(padding));
+            } else {
+                text.insert_str(0, &" ".repeat(padding));
+            }
+            return text;
+        }
         if self.zero_padded_string {
             let mut text = truncate_chars(argument, self.precision);
             let padding = self.width.unwrap_or(0).saturating_sub(text.chars().count());
@@ -683,13 +885,21 @@ impl<W: Write> Write for CountWriter<'_, W> {
 
 /// The format's items: a `%(FMT)T` is cut out of it here, as uucore knows no such spec,
 /// and the text around it is uucore's to parse.
-fn parse_format_string(format_string: &str) -> Result<Vec<ParsedFormatItem>, cash_core::Error> {
+/// The format's items, up to a conversion that is none, and what is to be said of that
+/// one, as Bash says it once the text before it is printed; the text was lost with it.
+fn parse_format_string(
+    format_string: &str,
+) -> Result<(Vec<ParsedFormatItem>, Option<String>), cash_core::Error> {
     let mut items = Vec::new();
     let mut rest = format_string;
     while let Some((before, spec, time_format, after)) =
         split_time_spec(rest).map_err(ErrorKind::PrintfInvalidUsage)?
     {
-        items.extend(parse_plain_format(before)?);
+        let (before, bad) = parse_plain_format(before);
+        items.extend(before);
+        if bad.is_some() {
+            return Ok((items, bad));
+        }
         let invalid =
             || ErrorKind::PrintfInvalidUsage(format!("`{spec}({time_format})T': invalid format"));
         let (time, position) =
@@ -704,13 +914,32 @@ fn parse_format_string(format_string: &str) -> Result<Vec<ParsedFormatItem>, cas
         items.push((Some(item), false, Some(Custom::Time(time))));
         rest = after;
     }
-    items.extend(parse_plain_format(rest)?);
-    Ok(items)
+    let (rest, bad) = parse_plain_format(rest);
+    items.extend(rest);
+    Ok((items, bad))
 }
 
-fn parse_plain_format(format_string: &str) -> Result<Vec<ParsedFormatItem>, cash_core::Error> {
-    let format_items: Result<Vec<_>, _> = format::parse_spec_and_escape(format_string.as_bytes())
-        .map(|result| match result {
+/// What Bash says of the conversion `spec` that is none: a length with nothing after it is
+/// missing its character, anything else is an invalid one.
+fn bad_conversion(error: &format::FormatError) -> String {
+    match error {
+        format::FormatError::SpecError(spec, _) => {
+            let spec = String::from_utf8_lossy(spec);
+            match spec.chars().last() {
+                Some(last) if !"hlLqjzt".contains(last) => {
+                    format!("`{last}': invalid format character")
+                }
+                _ => format!("`%{spec}': missing format character"),
+            }
+        }
+        other => format!("{other}"),
+    }
+}
+
+fn parse_plain_format(format_string: &str) -> (Vec<ParsedFormatItem>, Option<String>) {
+    let mut parsed = Vec::new();
+    let items =
+        format::parse_spec_and_escape(format_string.as_bytes()).map(|result| match result {
             Ok(item @ format::FormatItem::Spec(format::Spec::QuotedString { .. })) => {
                 Ok((Some(item), true, None))
             }
@@ -721,12 +950,11 @@ fn parse_plain_format(format_string: &str) -> Result<Vec<ParsedFormatItem>, cash
             {
                 Ok((None, false, None))
             }
-            // Fixed q/Q modifiers are deliberately ignored; dynamic modifiers remain unsupported
-            // until uucore exposes quoted-string metadata.
+            // What uucore refuses and Bash takes, rendered by cash: a `*` width or precision
+            // is read from the arguments as the item is printed.
             Err(format::FormatError::SpecError(spec, span))
-                if (matches!(spec.last(), Some(b'q' | b'Q'))
+                if (matches!(spec.last(), Some(b'q' | b'Q' | b'b' | b'S' | b'C'))
                     || (spec.last() == Some(&b's') && spec.contains(&b'0')))
-                    && !spec.contains(&b'*')
                     && !spec.contains(&b'$') =>
             {
                 let quoted_format = QuotedFormat::parse(&spec)
@@ -738,14 +966,14 @@ fn parse_plain_format(format_string: &str) -> Result<Vec<ParsedFormatItem>, cash
                 Ok((Some(item), false, Some(Custom::Quoted(quoted_format))))
             }
             Err(error) => Err(error),
-        })
-        .collect();
-
-    // Observe any errors we encountered along the way.
-    let format_items = format_items
-        .map_err(|e| ErrorKind::PrintfInvalidUsage(format!("printf parsing error: {e}")))?;
-
-    Ok(format_items)
+        });
+    for item in items {
+        match item {
+            Ok(item) => parsed.push(item),
+            Err(error) => return (parsed, Some(bad_conversion(&error))),
+        }
+    }
+    (parsed, None)
 }
 
 #[cfg(test)]

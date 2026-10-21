@@ -2801,3 +2801,12 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   unset in silence; `local` shadowed a read-only global; `coproc RO` replaced it with its
   descriptors. `declare -g` in a function set its caller's local of the name, not the
   global.
+- **`printf` as Bash's** (2026-10-21, the phase after 1.42.0, item 7): cash's printf is
+  uucore's, which reads coreutils' format; the format's escapes are now read as Bash
+  reads them before uucore reads the rest: `\c` in the format ended all output (Bash
+  prints it), `\'`, `\"`, `\?` and `\e` stayed, `\u` and `\U` wanted all their digits,
+  and a `\x` without a hex digit is said as Bash says it. `%5b`, `%.1b`, `%*b`, `%*q`,
+  `%.*q`, `%S` and `%C` were parsing errors, and `%ls`/`%lc` counted bytes: they are
+  rendered by cash, in characters, a `*` read from the arguments. `%(...)T` ended at its
+  first `)`. A conversion that is none lost the text before it, and `-v` got nothing; the
+  text is written, or assigned, and Bash's words follow, status 1.
