@@ -3410,3 +3410,18 @@ fn a_list_element_with_plus_equals_appends_to_its_element() {
         )
     );
 }
+
+#[test]
+fn a_length_takes_its_parameter_as_bash_does() {
+    // `${#/}` and `${#^}` were `$#` with an operator; Bash finds no parameter to measure.
+    // `${##x}` and `${#@Q}` were refused; they are `$#` with an operator.
+    let (status, stdout) = output(
+        "set -- a b c; for e in '${#/}' '${#%}' '${#=}' '${#+}' '${#^}' '${#,}' '${#~}' \
+         '${##x}' '${###}' '${#@Q}' '${#/x}' '${#?}'; do \
+         (eval \"echo \\\"$e\\\"\") 2>/dev/null || echo bad; done",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (0, "bad\nbad\nbad\nbad\nbad\nbad\nbad\n3\n3\n'3'\n3\n1")
+    );
+}

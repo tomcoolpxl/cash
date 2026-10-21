@@ -1523,7 +1523,12 @@ peg::parser! {
         // What a `${` that is no parameter expansion holds, up to its `}`, braces balanced.
         rule bad_substitution_body() = ([^ '{' | '}'] / "{" bad_substitution_body() "}")*
 
+        // `${#%}`, `${#=}`, `${#+}` and `${#/}` are Bash's bad substitutions, as is `${#`
+        // before `^`, `,` or `~`, the length of no parameter; they were `$#` with the operator.
         rule parameter_expression() -> ParameterExpr =
+            !("#" (['%' | '=' | '+' | '/'] "}" / ['^' | ',' | '~'])) e:parameter_body() { e }
+
+        rule parameter_body() -> ParameterExpr =
             // cash: `${#?}` is the length of `$?`, as in Bash, when nothing follows the
             // parameter; read as `${#}` with the `?` operator it was `$#` or an error.
             "#" parameter:parameter() &"}" {
@@ -1556,9 +1561,8 @@ peg::parser! {
             indirect:parameter_indirection() parameter:parameter() test_type:parameter_test_type() "+" alternative_value:parameter_expression_word()? {
                 ParameterExpr::UseAlternativeValue { parameter, indirect, test_type, alternative_value }
             } /
-            "#" parameter:parameter() {
-                ParameterExpr::ParameterLength { parameter, indirect: false }
-            } /
+            // A length with more after its parameter is `$#` with an operator, as in Bash
+            // (`${##x}`, `${#@Q}`), or nothing; a length was taken and the rest refused.
             indirect:parameter_indirection() parameter:parameter() "%%" pattern:parameter_expression_word()? {
                 ParameterExpr::RemoveLargestSuffixPattern { parameter, indirect, pattern }
             } /

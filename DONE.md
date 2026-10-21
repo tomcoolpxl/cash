@@ -2968,3 +2968,7 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   is by then, in the array or earlier in the list, as in Bash, and adds to it for an
   integer array; `declare`, `local` and `readonly` lists too, and `declare -f` prints it
   back.
+- **`${#...}` as Bash reads it** (2026-10-21, the phase after 1.46.0, leftovers):
+  `${#/}`, `${#%}`, `${#=}`, `${#+}`, and `${#` before `^`, `,` or `~`, were `$#` with the
+  operator; they are bad substitutions, as in Bash. `${##x}`, `${###}` and `${#@Q}` were
+  refused, a length followed by more; they are `$#` with the operator, as in Bash.

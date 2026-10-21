@@ -131,7 +131,6 @@ path. The rest, by theme:
 **Expansion and quoting**
 - POSIX mode's literal single quotes in a double-quoted `${v-word}`; an unquoted
   `${v-$@}` with `IFS=:` is three words (Bash: one, joined with spaces).
-- `${#/}` is taken (Bash: bad substitution); `${!n[@]@Q}` is said otherwise.
 - `${x@P}`: `\v` is cash's version, `\s` the script's name (by design).
 - Bytes that are not UTF-8 become U+FFFD (`$'\xff'`, `read`, `%q`), and `$'\U'` above
   U+10FFFF.
