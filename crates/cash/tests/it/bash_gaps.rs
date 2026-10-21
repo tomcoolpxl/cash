@@ -3485,3 +3485,23 @@ fn a_length_takes_its_parameter_as_bash_does() {
         (0, "bad\nbad\nbad\nbad\nbad\nbad\nbad\n3\n3\n'3'\n3\n1")
     );
 }
+
+#[test]
+fn a_here_document_closed_by_a_parenthesis_is_warned_of() {
+    // `$(cat <<EOF` ... `EOF)` was taken in silence; Bash warns that the here-document was
+    // delimited by end-of-file, with the line of the `)` and the line it began on.
+    let (stdout, stderr) = script_output(
+        "here-document-parenthesis",
+        "echo start\nx=$(cat <<EOF\nhello\nEOF)\necho \"[$x]\"\ny=$(cat <<-'END'\n\ttwo\n\tEND)\n\
+         echo \"[$y]\"\n",
+    );
+    assert_eq!(stdout, "start\n[hello]\n[two]");
+    assert!(
+        stderr.contains(
+            "line 4: warning: here-document at line 2 delimited by end-of-file (wanted `EOF')"
+        ) && stderr.contains(
+            "line 8: warning: here-document at line 6 delimited by end-of-file (wanted `END')"
+        ),
+        "{stderr}"
+    );
+}

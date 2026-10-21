@@ -2987,3 +2987,9 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `umask`, `caller` and `mapfile` refused operands Bash ignores. `cd ''` and `cd a b`,
   `pushd a b`, `shift x` and `history x` were said in clap's or Rust's words; they are
   Bash's (`null directory`, `too many arguments`, `numeric argument required`).
+- **The `EOF)` warning** (2026-10-21, the phase after 1.46.0, leftovers): a
+  here-document in `$(...)` that its tag and the `)` close (`$(cat <<EOF` ... `EOF)`)
+  was taken in silence; Bash's warning that it was "delimited by end-of-file" is said as
+  its command is read, with both lines. The tokenizer notes each one it closes so; a
+  text where one may be is read a command at a time, as Bash reads it, and a cheap look
+  for a `<<TAG` with a line `TAG)` keeps the rest from being read twice.

@@ -405,6 +405,15 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             {
                 parsed = None;
             }
+            // So is one with a here-document that a `)` closes, for the warning said as its
+            // command is read.
+            if matches!(parsed, Some(Ok(_)))
+                && !self
+                    .here_documents_closed_by_parenthesis(after_lines(text, lines_run))
+                    .is_empty()
+            {
+                parsed = None;
+            }
             if let Some(parsed) = parsed.take() {
                 match self
                     .run_parsed_text(parsed, lines_run, source_info, params)
@@ -429,6 +438,43 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                 }
             }
         }
+    }
+
+    /// A here-document of `command`, whose first line is line `first`, that a `)` closes
+    /// (`$(cat <<EOF` ... `EOF)`) is taken with Bash's warning, said as the command is read;
+    /// it was taken in silence.
+    fn warn_here_documents_closed(
+        &self,
+        command: &[u8],
+        first: usize,
+        params: &ExecutionParameters,
+    ) {
+        for (tag, opened, closed) in self.here_documents_closed_by_parenthesis(command) {
+            let warning = format!(
+                "{}: line {}: warning: here-document at line {} delimited by end-of-file \
+                 (wanted `{tag}')\n",
+                self.name_for_errors(),
+                first + closed - 1,
+                first + opened - 1,
+            );
+            let _ = params.stderr(self).write_all(warning.as_bytes());
+        }
+    }
+
+    /// The here-documents of `text` that a `)` closes, as `cash_parser` finds them: tag, line
+    /// begun on, line closed on. Only text where a `<<TAG` has a line `TAG)` is read for
+    /// them, most text having none.
+    fn here_documents_closed_by_parenthesis(&self, text: &[u8]) -> Vec<(String, usize, usize)> {
+        let Ok(text) = std::str::from_utf8(text) else {
+            return vec![];
+        };
+        if !may_close_a_here_document_at_a_parenthesis(text) {
+            return vec![];
+        }
+        cash_parser::here_documents_closed_by_parenthesis(
+            text,
+            &self.parser_options().tokenizer_options(),
+        )
     }
 
     /// The syntax error in a `$(...)` of `text`, a command that parsed: the token the text
@@ -569,6 +615,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                     )));
                 }
             };
+
+            self.warn_here_documents_closed(&pending, first_line(origin) + lines_before, params);
 
             // A script with `set -o history` on keeps what it reads, before it runs, as
             // Bash does: the lines of each command, as one entry.
@@ -962,6 +1010,34 @@ const fn first_line(origin: TextOrigin) -> usize {
         TextOrigin::Whole => 1,
         TextOrigin::Eval { line } => line,
     }
+}
+
+/// Whether a here-document of `text` may be closed by a `)`: a `<<TAG` (or `<<-TAG`, the
+/// tag's quotes aside) with a line, its leading tabs aside, that begins `TAG)`.
+fn may_close_a_here_document_at_a_parenthesis(text: &str) -> bool {
+    let mut rest = text;
+    while let Some(at) = rest.find("<<") {
+        rest = rest.get(at + 2..).unwrap_or_default();
+        if let Some(after) = rest.strip_prefix('<') {
+            rest = after;
+            continue;
+        }
+        let word = rest.trim_start_matches('-').trim_start_matches([' ', '\t']);
+        let tag: String = word
+            .chars()
+            .take_while(|c| !c.is_whitespace() && !";|&<>()".contains(*c))
+            .filter(|c| !matches!(c, '\'' | '"' | '\\'))
+            .collect();
+        if !tag.is_empty()
+            && text.lines().any(|line| {
+                line.trim_start_matches('\t')
+                    .starts_with(&format!("{tag})"))
+            })
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// `text` after its first `lines` lines.

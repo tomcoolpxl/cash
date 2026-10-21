@@ -112,10 +112,8 @@ path. The rest, by theme:
   each with its own `case` scan; one scan shared by both would end the mismatches (none
   known now). A syntax error in a backquoted substitution is said without Bash's
   `command substitution:` before it.
-- A here-document in `$(...)` ended by `EOF)` gives no warning (Bash: "delimited by
-  end-of-file"); the tokenizer that sees it has no way to say a warning. An unterminated
-  `$(` in a here-document is said as "failed to parse word" (Bash: "unexpected EOF while
-  looking for matching `)'").
+- An unterminated `$(` in a here-document is said as "failed to parse word" (Bash:
+  "unexpected EOF while looking for matching `)'").
 - Aliases: `eval` of a multi-line alias that unaliases itself says the alias is no
   command (Bash runs the rest of its text, though after the next command: an artifact of
   the text Bash pushes back into its input, not worth copying); in POSIX mode, aliases

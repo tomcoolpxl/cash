@@ -255,6 +255,9 @@ struct HereTag {
 struct CrossTokenParseState {
     /// Cursor within the overall token stream; used for error reporting.
     cursor: SourcePosition,
+    /// The here-documents a `)` closed (`$(cat <<EOF` ... `EOF)`): each tag, the line it
+    /// is on and the line of the `)`, for Bash's warning.
+    closed_by_parenthesis: Vec<(String, usize, usize)>,
     /// Current state of parsing here-documents.
     here_state: HereState,
     /// Ordered queue of here tags for which we're still looking for matching here-document bodies.
@@ -596,6 +599,29 @@ fn uncached_tokenize_string(
     })
 }
 
+/// The here-documents of `input` that a `)` closes, as in `$(cat <<EOF` ... `EOF)`.
+///
+/// For Bash's warning that each was "delimited by end-of-file": the tag, the line the
+/// here-document begins on and the line of the `)`. What tokenizes before an error counts.
+///
+/// # Arguments
+///
+/// * `input` - The shell script to look in.
+/// * `options` - Options controlling how the tokenizer operates.
+pub fn here_documents_closed_by_parenthesis(
+    input: &str,
+    options: &TokenizerOptions,
+) -> Vec<(String, usize, usize)> {
+    let mut reader = std::io::BufReader::new(input.as_bytes());
+    let mut tokenizer = crate::tokenizer::Tokenizer::new(&mut reader, options);
+    while let Ok(result) = tokenizer.next_token() {
+        if matches!(result.reason, TokenEndReason::EndOfInput) {
+            break;
+        }
+    }
+    std::mem::take(&mut tokenizer.cross_state.closed_by_parenthesis)
+}
+
 /// Break the given input shell script string into tokens, returning the tokens.
 /// No caching is performed.
 ///
@@ -701,6 +727,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                     line: 1,
                     column: 1,
                 },
+                closed_by_parenthesis: vec![],
                 here_state: HereState::None,
                 current_here_tags: vec![],
                 queued_tokens: vec![],
@@ -1162,11 +1189,26 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                 // In `$(...)`, a line of the tag and the `)` ends the here-document there,
                 // and the `)` ends the substitution, as Bash reads `v=$(cat <<EOF` ... `EOF)`
                 // (with a warning). It was read to the end of the input.
-                if terminating_char == Some(c)
-                    && c == ')'
+                let closing = (terminating_char == Some(c) && c == ')')
+                    .then(|| self.cross_state.current_here_tags.first())
+                    .flatten()
+                    .map(|tag| {
+                        let name = if tag.tag_was_escaped_or_quoted {
+                            unquote_str(tag.tag.as_str())
+                        } else {
+                            tag.tag.clone()
+                        };
+                        let name = name.trim_start_matches('\t').trim_end_matches('\n');
+                        (name.to_owned(), tag.position.line)
+                    });
+                if let Some((name, line)) = closing
                     && self.remove_here_end_tag(&mut state, &mut result, false)?
                 {
                     // The `)` is read again, as the end of the substitution.
+                    let closed_on = self.cross_state.cursor.line;
+                    self.cross_state
+                        .closed_by_parenthesis
+                        .push((name, line, closed_on));
                 } else if !self.cross_state.current_here_tags.is_empty()
                     && self.cross_state.current_here_tags[0].remove_tabs
                     && (!state.started_token() || state.current_token().ends_with('\n'))
