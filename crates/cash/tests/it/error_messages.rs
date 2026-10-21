@@ -595,3 +595,31 @@ fn a_builtin_says_an_option_it_does_not_know_with_its_usage() {
     let out = run("times x >/dev/null; echo \"s $?\"");
     assert_eq!(out.stdout, "s 0", "{}", out.stderr);
 }
+
+#[test]
+fn a_syntax_error_inside_a_substitution_is_found_as_its_line_is_read() {
+    // It was found when the substitution ran: `a` was echoed, and the script went on.
+    let scratch = Scratch::new("substitution-syntax");
+    std::fs::write(
+        scratch.path().join("bad.sh"),
+        "echo first\necho a; echo \"$(if)\"; echo b\necho never\n",
+    )
+    .expect("write");
+    let out = output_of(cash_command().arg("bad.sh").current_dir(scratch.path()));
+    assert_eq!(
+        (out.stdout.as_str(), out.stderr.as_str(), out.code),
+        (
+            "first",
+            "bad.sh: line 2: syntax error near unexpected token `)'\nbad.sh: line 2: `echo a; echo \"$(if)\"; echo b'",
+            2
+        )
+    );
+    let out = run("x=$(fi); echo \"x=$x\"");
+    assert!(
+        out.stderr
+            .contains("syntax error near unexpected token `fi' while looking for matching `)'"),
+        "{}",
+        out.stderr
+    );
+    assert_eq!(out.stdout, "");
+}

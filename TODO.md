@@ -33,10 +33,8 @@ against Git Bash 5.3 first, cheapest first. Done, in DONE.md: 1, a trailing back
 esac)` and loop names that are none; 3, text right after a list's `)` (a syntax error in
 a list was found to end the line as Bash's does); 4, here-documents, but for the `EOF)`
 warning (below); 5, `${ cmd; }`; 6, aliases: `foo>&2` was found to be as Bash has it,
-and the self-unaliasing one is left (below); 7, functions printed that did not read back.
-
-8. The end of a `$(...)` found twice; a syntax error inside `$(...)` found only when it
-   runs.
+and the self-unaliasing one is left (below); 7, functions printed that did not read back;
+8, a syntax error inside `$(...)`, but for the end found twice (below).
 
 ## The phase before (2026-10-21, done, released as 1.45.0)
 
@@ -95,8 +93,9 @@ path. The rest, by theme:
 
 **Scripts refused that Bash runs (parser)**
 - The end of a `$(...)` is found twice, by the tokenizer and again by the word parser,
-  each with its own `case` scan; one scan shared by both would end the mismatches. A
-  syntax error inside `$(...)` is found only when it runs.
+  each with its own `case` scan; one scan shared by both would end the mismatches (none
+  known now). A syntax error in a backquoted substitution is said without Bash's
+  `command substitution:` before it.
 - A here-document in `$(...)` ended by `EOF)` gives no warning (Bash: "delimited by
   end-of-file"); the tokenizer that sees it has no way to say a warning. An unterminated
   `$(` in a here-document is said as "failed to parse word" (Bash: "unexpected EOF while

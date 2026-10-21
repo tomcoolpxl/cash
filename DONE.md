@@ -2936,3 +2936,11 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   written there, as Bash writes none, for `if`, `elif`, `while` and `until`. A here-
   document followed by a redirection and a name that is no identifier were found to
   read back already.
+- **A syntax error inside `$(...)`** (2026-10-21, the phase after 1.45.0, item 8): it was
+  found only when the substitution ran, so the commands before it on its line ran, and a
+  script went on after it. It is found as the line is read, as Bash finds it: the line
+  does not run, a script ends, and the error names the token inside (`fi' while looking
+  for matching `)') or the `)` when the text ends too soon (`$(if)`), as Bash names
+  them. A script with one is read a command at a time, so the lines before it run. A
+  here-document's and a backquoted substitution's text are still read when they run, as
+  in Bash.

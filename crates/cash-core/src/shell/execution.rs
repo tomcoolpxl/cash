@@ -396,6 +396,15 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         let mut lines_run = 0;
         loop {
             let mut reading = Reading::WholeDidNotParse;
+            // A `$(...)` whose text does not parse is a syntax error of its line, as Bash
+            // reads it: the text is read a command at a time, and the lines before it run.
+            if matches!(parsed, Some(Ok(_)))
+                && self
+                    .substitution_syntax_error(after_lines(text, lines_run))
+                    .is_some()
+            {
+                parsed = None;
+            }
             if let Some(parsed) = parsed.take() {
                 match self
                     .run_parsed_text(parsed, lines_run, source_info, params)
@@ -420,6 +429,55 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                 }
             }
         }
+    }
+
+    /// The syntax error in a `$(...)` of `text`, a command that parsed: the token the text
+    /// inside fails at, or its `)` when it ends too soon (`$(if)`), as Bash names them, on
+    /// the line the substitution ends on.
+    fn substitution_syntax_error(&self, text: &[u8]) -> Option<cash_parser::ParseError> {
+        // Most commands hold none, and are not read again.
+        if !text.windows(2).any(|pair| pair == b"$(") {
+            return None;
+        }
+        let text = std::str::from_utf8(text).ok()?;
+        let options = self.parser_options();
+        let tokens =
+            cash_parser::tokenize_str_with_options(text, &options.tokenizer_options()).ok()?;
+        let word_options = self.word_parser_options();
+        for token in &tokens {
+            let cash_parser::Token::Word(word, location) = token else {
+                continue;
+            };
+            if !word.contains("$(") {
+                continue;
+            }
+            let Ok(pieces) = cash_parser::word::parse(word, &word_options) else {
+                continue;
+            };
+            for command in command_substitutions(pieces) {
+                // Parsed as the substitution parses it when it runs, which then finds it
+                // remembered; one that fails is read again as a line, to its end, for the
+                // token Bash names.
+                if self.parse_string(command.as_str()).is_ok() {
+                    continue;
+                }
+                let Err(error) = self.parse_string(command + "\n") else {
+                    continue;
+                };
+                // A token inside is named with what Bash adds; the end of the text is the
+                // `)`.
+                let token = match error {
+                    cash_parser::ParseError::ParsingNear(_, token) if token != "newline" => {
+                        format!("{token}' while looking for matching `)")
+                    }
+                    _ => String::from(")"),
+                };
+                let mut position = (*location.end).clone();
+                position.index = position.index.saturating_sub(1);
+                return Some(cash_parser::ParseError::ParsingNear(position, token));
+            }
+        }
+        None
     }
 
     /// Runs `text` from line `lines_run` on a command at a time, as Bash reads it: the
@@ -486,6 +544,16 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                 }
                 parsed = self.parse_prefix(&pending);
             }
+            // A command substitution's text that does not parse is an error of the line,
+            // found as it is read, as Bash finds it: the line does not run, and a script
+            // ends. It ran, and the substitution failed when it was reached.
+            let parsed = match parsed {
+                Prefix::Complete(program) => match self.substitution_syntax_error(&pending) {
+                    Some(err) => Prefix::Wrong(err),
+                    None => Prefix::Complete(program),
+                },
+                other => other,
+            };
             let program = match parsed {
                 Prefix::NeedsMore(_) if lines.peek().is_some() => continue,
                 Prefix::Complete(program) | Prefix::NeedsMore(Ok(program)) => program,
@@ -809,6 +877,23 @@ enum Reading {
 /// The line Bash names for a here-document left open at the end: the line before its
 /// body, which is the `<<`'s line, or where the last of the here-documents before it on
 /// that line closed (`cat <<A; cat <<B`: the line of `A`).
+/// The text of each `$(...)` among `pieces`, in double quotes too; not a backquoted one,
+/// which Bash reads only when it runs.
+fn command_substitutions(pieces: Vec<cash_parser::word::WordPieceWithSource>) -> Vec<String> {
+    let mut commands = Vec::new();
+    for piece in pieces {
+        match piece.piece {
+            cash_parser::word::WordPiece::CommandSubstitution(command) => commands.push(command),
+            cash_parser::word::WordPiece::DoubleQuotedSequence(inner)
+            | cash_parser::word::WordPiece::GettextDoubleQuotedSequence(inner) => {
+                commands.extend(command_substitutions(inner));
+            }
+            _ => {}
+        }
+    }
+    commands
+}
+
 /// `text` with its last line ended as the others are, as Bash ends a `-c` or `eval`
 /// string: `echo (` is wrong at its newline, not at the end of the text. A backslash that
 /// ends the text is a character, as in Bash (`echo a\` prints `a\`): the newline added
