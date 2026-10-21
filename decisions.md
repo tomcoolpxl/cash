@@ -1000,6 +1000,9 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   starting cash, traps and jobs. The POSIX-mode parts of the parser's list (aliases in
   `$(...)` at parse time, a reserved word after a blank-ending alias) stay with POSIX
   mode, turned down before.
+- **The phase after 1.46.0** (the user, 2026-10-21, from a pick list): the leftovers of the
+  themes done (recommended), starting cash, and POSIX mode, which was turned down before
+  and is now picked. Not picked: traps and jobs.
 
 ## 8. Archives and compression
 

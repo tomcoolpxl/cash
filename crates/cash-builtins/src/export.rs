@@ -24,6 +24,14 @@ pub(crate) struct ExportCommand {
     #[arg(short = 'p')]
     display_exported_names: bool,
 
+    /// Taken and not acted on, as Bash takes them (`export -a name`): they were invalid
+    /// options, status 2.
+    #[arg(short = 'a', hide = true)]
+    _indexed_array: bool,
+
+    #[arg(short = 'A', hide = true)]
+    _associative_array: bool,
+
     //
     // Declarations
     //

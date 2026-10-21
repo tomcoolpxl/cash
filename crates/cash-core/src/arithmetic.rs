@@ -537,6 +537,17 @@ fn deref_target(
             let _ = shell.display_error(&mut shell.stderr(), &warning);
             return Ok(0);
         }
+        // Under `set -u`, an array that is not set at all is unbound, as in Bash, though an
+        // element it does not have is 0: `$(( a[0] ))` of an unset `a` was 0.
+        Target::Element(name, _)
+            if shell.options().treat_unset_variables_as_error
+                && shell
+                    .env()
+                    .get(name)
+                    .is_none_or(|(_, var)| !var.value().is_set()) =>
+        {
+            return Err(EvalError::ExpandingUnsetVariable((*name).to_owned()));
+        }
         Target::Element(name, index_str) => shell
             .env()
             .get(name)

@@ -2944,3 +2944,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   them. A script with one is read a command at a time, so the lines before it run. A
   here-document's and a backquoted substitution's text are still read when they run, as
   in Bash.
+- **Declarations and options left from the arrays phase** (2026-10-21, the phase after
+  1.46.0, leftovers): `declare n[sub]=v` wrote element 0; its subscript is evaluated, as
+  in Bash. Under `set -u`, `$(( a[0] ))` of an unset `a` was 0; an array not set at all
+  is unbound there, as in Bash, an element it lacks still 0, and the shell ends with
+  127 as for `$u`. An associative array's list split and globbed its unsubscripted words
+  (`A=($v)` with `v='p q'` made `[p]=q`); they stay whole, as in Bash, `declare -A` too.
+  `export -a` and `export -A` were invalid options; Bash takes them and does nothing.
+  `shopt -s localvar_inherit` did nothing; a new local takes the value and attributes
+  of the variable it hides, as `local -I` does. `set -k` did nothing; an assignment
+  anywhere among a command's words is the command's, a declaration's too, as in Bash.
+  `set -a` with `declare` and `localvar_unset` were found to be as Bash has them.

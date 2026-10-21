@@ -552,11 +552,21 @@ impl DeclareCommand {
         context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
         declaration: &cash_core::CommandArg,
     ) -> Result<Option<String>, cash_core::Error> {
-        let cash_core::CommandArg::String(s) = declaration else {
-            return Ok(None);
-        };
-        let Some((name, Some(index), _, _)) = Self::string_assignment(s) else {
-            return Ok(None);
+        // An element assigned as written (`declare n[sub]=v`) has its subscript evaluated
+        // too, as in Bash: it was taken for element 0.
+        let (name, index) = match declaration {
+            cash_core::CommandArg::String(s) => {
+                let Some((name, Some(index), _, _)) = Self::string_assignment(s) else {
+                    return Ok(None);
+                };
+                (name, index)
+            }
+            cash_core::CommandArg::Assignment(ast::Assignment {
+                name: ast::AssignmentName::ArrayElementName(name, index),
+                value: ast::AssignmentValue::Scalar(_),
+                ..
+            }) => (name.clone(), index.clone()),
+            cash_core::CommandArg::Assignment(_) => return Ok(None),
         };
         let associative = self.make_associative_array.to_bool() == Some(true);
         let index = cash_core::expansion::resolve_subscript(
@@ -717,7 +727,11 @@ impl DeclareCommand {
         // enclosing scope instead of starting unset; `+=` appends to the
         // inherited value. With no same-name variable anywhere, fall through
         // to ordinary creation.
-        if self.locals_inherit_from_prev_scope && create_var_local {
+        // `shopt -s localvar_inherit` makes every new local one, as in Bash; it did nothing.
+        let inherit = self.locals_inherit_from_prev_scope
+            || (initial_value.is_none()
+                && context.shell.options().local_vars_inherit_value_and_attrs);
+        if inherit && create_var_local {
             let inherited = context
                 .shell
                 .env()

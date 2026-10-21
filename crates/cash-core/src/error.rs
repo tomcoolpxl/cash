@@ -655,10 +655,15 @@ impl Error {
         // interactive with 127, where Bash's top level catches them, a forked pipeline
         // stage's included; a subshell, a compound stage and a command substitution catch
         // them themselves and end with 1 (`execute_in_subshell`). Cash ended with 1.
-        let discarded = matches!(
+        let discarded = (matches!(
             self.kind,
             ErrorKind::CheckedExpansionError(..) | ErrorKind::ExpandingUnsetVariable(..)
         ) && self.is_fatal()
+            // An unbound array in arithmetic (`$(( a[0] ))` under `set -u`) too.
+            || matches!(
+                self.kind,
+                ErrorKind::EvalError(crate::arithmetic::EvalError::ExpandingUnsetVariable(..))
+            ))
             && !shell.catches_fatal_errors();
         let exit_code = if (discarded
             || matches!(self.kind, ErrorKind::InvalidParameterTransformation(..)))

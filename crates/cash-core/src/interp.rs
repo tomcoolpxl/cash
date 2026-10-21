@@ -2570,7 +2570,14 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                     args.push(CommandArg::String(arg_path));
                 }
                 CommandPrefixOrSuffixItem::AssignmentWord(assignment, word) => {
-                    if args.is_empty() {
+                    // With `set -k`, an assignment anywhere among the words is the
+                    // command's, as in Bash (`f a y=5 b` gives `f` a `y` of 5 and the words
+                    // `a b`), a declaration's too; it was a word.
+                    let keyword = context
+                        .shell
+                        .options()
+                        .place_all_assignment_args_in_command_env;
+                    if args.is_empty() || keyword {
                         // If we haven't yet seen any arguments, then this must be a proper
                         // scoped assignment. Add it to the list we're accumulating.
                         assignments.push(assignment);
@@ -2579,8 +2586,27 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                             // This looks like an assignment, and the command being invoked is a
                             // well-known builtin that takes arguments that need to function like
                             // assignments (but which are processed by the builtin).
-                            let expanded =
-                                expand_assignment(&mut context.shell, &params, assignment).await?;
+                            // An associative array's list (`declare -A B=($v)`, or one
+                            // already) keeps its words whole, as in Bash.
+                            let name = match &assignment.name {
+                                ast::AssignmentName::VariableName(name)
+                                | ast::AssignmentName::ArrayElementName(name, _) => name,
+                            };
+                            let associative = args.iter().skip(1).any(|arg| {
+                                matches!(arg, CommandArg::String(s)
+                                    if s.starts_with('-') && s.contains('A'))
+                            }) || context
+                                .shell
+                                .env()
+                                .get(name)
+                                .is_some_and(|(_, var)| var.is_associative(&context.shell));
+                            let expanded = expand_assignment(
+                                &mut context.shell,
+                                &params,
+                                assignment,
+                                associative,
+                            )
+                            .await?;
                             args.push(CommandArg::Assignment(expanded));
                         } else {
                             // This *looks* like an assignment, but it's really a string we should
@@ -2857,8 +2883,9 @@ async fn expand_assignment(
     shell: &mut Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
     assignment: &ast::Assignment,
+    associative: bool,
 ) -> Result<ast::Assignment, error::Error> {
-    let value = expand_assignment_value(shell, params, &assignment.value).await?;
+    let value = expand_assignment_value(shell, params, &assignment.value, associative).await?;
     Ok(ast::Assignment {
         name: basic_expand_assignment_name(shell, params, &assignment.name).await?,
         value,
@@ -2892,6 +2919,7 @@ async fn expand_assignment_value(
     shell: &mut Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
     value: &ast::AssignmentValue,
+    associative: bool,
 ) -> Result<ast::AssignmentValue, error::Error> {
     let expanded = match value {
         ast::AssignmentValue::Scalar(s) => {
@@ -2910,6 +2938,13 @@ async fn expand_assignment_value(
                             .await?
                             .into();
                     expanded_values.push((Some(expanded_key), expanded_value));
+                } else if associative {
+                    // An associative array's word is one, neither split nor globbed.
+                    let expanded_value =
+                        expansion::basic_expand_assignment_word(shell, params, value)
+                            .await?
+                            .into();
+                    expanded_values.push((None, expanded_value));
                 } else {
                     // Array elements are treated as regular words, not assignments
                     let split_expanded_value =
@@ -3028,6 +3063,14 @@ async fn apply_assignment(
                         expansion::basic_expand_assignment_word(shell, params, unexpanded_value)
                             .await?;
                     elements.push((key, value));
+                } else if associative {
+                    // A word of an associative array's list, a key or a value, is one word,
+                    // neither split nor globbed, as in Bash: `A=($v)` with `v='p q'` has the
+                    // key `p q`. It was split into a key and a value.
+                    let value =
+                        expansion::basic_expand_assignment_word(shell, params, unexpanded_value)
+                            .await?;
+                    elements.push((None, value));
                 } else {
                     // Array elements are treated as regular words, not assignments
                     let values =

@@ -25,10 +25,21 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Next phase: the user's to pick (after 1.46.0)
+## Picked by the user (the current phase, after 1.46.0, 2026-10-21)
 
-Still open, by theme, below: the leftovers of the themes done, starting cash, traps and
-jobs, POSIX mode.
+Three themes (decisions.md, "The phase after 1.46.0"), in this order, each item checked
+against Git Bash 5.3 first; the items are the ones below under their themes:
+
+1. The leftovers of the themes done: arithmetic (single quotes, assignment's precedence),
+   associative keys holding `]`, `[i]+=v` in a list, `${#/}`, the `EOF)` warning, the
+   small builtins left (`hash -p`, `declare -f -a`, more usage errors), `set -a` with
+   `declare`, `set -u` in `$(( a[0] ))`, `exec 0<file` in a script read from stdin.
+2. Starting cash: `+B`, `+o braceexpand`, `-O badopt`, SHELLOPTS and BASHOPTS from the
+   environment, `exec -a name` and BASH_ARGV0 as `$0`, the script operand on PATH, a
+   renamed cash running `#!/bin/sh` with itself.
+3. POSIX mode: POSIXLY_CORRECT, a special builtin's error, cash started as `sh`, `set
+   -e` in a command substitution, a special builtin before a function of its name,
+   aliases in `$(...)`, literal single quotes in `"${v-word}"`.
 
 ## The phase before (2026-10-21, done, released as 1.46.0)
 
@@ -111,14 +122,10 @@ path. The rest, by theme:
   inside `$(...)` at parse time and a reserved word after a blank-ending alias.
 
 **Assignments, declarations, readonly**
-- `declare name[sub]=v` writes element 0; `[i]+=v` in a compound assignment is taken as a
-  word (`a+=([0]+=z)`; Bash appends to element 0).
-- Associative arrays: unquoted words in a list split and globbed; a key holding `]` is
-  not found by `[[ -v A[$k] ]]`; `(( A[\$k]++ ))` expands `$k`; a key that is no name
-  for `read` and `printf -v` is said otherwise.
-- `set -a` does not export a variable reassigned by `declare`; `set -k`; `shopt -s
-  localvar_inherit`/`localvar_unset` do nothing; `export -a` refused; `set -u` misses an
-  unset element in `$(( a[0] ))`.
+- `[i]+=v` in a compound assignment is taken as a word (`a+=([0]+=z)`; Bash appends to
+  element 0).
+- Associative arrays: a key holding `]` is not found by `[[ -v A[$k] ]]`; `(( A[\$k]++
+  ))` expands `$k`; a key that is no name for `read` and `printf -v` is said otherwise.
 - Namerefs: a reference named as its target in a function warns once (Bash: again when
   used); a reference to an element with an arithmetic subscript (`X[i+1]`) used by
   `read` writes element 0.

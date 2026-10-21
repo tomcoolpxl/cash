@@ -3353,3 +3353,23 @@ fn a_current_shell_substitution_holds_groups_and_ends_as_bash_s_does() {
     );
     assert_eq!((status, stdout.as_str()), (4, "[in]\n[a][b]\n[] 2"));
 }
+
+#[test]
+fn declarations_and_options_left_from_the_arrays_phase_match_bash() {
+    // `declare n[sub]=v` wrote element 0; `set -u` let `$(( a[0] ))` of an unset `a` be
+    // 0; an associative list split `$v`; `export -a` was refused; `localvar_inherit` and
+    // `set -k` did nothing.
+    let (status, stdout) = output(
+        "sub=2; declare n[sub]=v; declare -p n; declare -A A; v='p q'; A=($v); declare -p A; \
+         export -a e; echo \"e $?\"; shopt -s localvar_inherit; declare -i x=1; \
+         f() { local x; x=2+3; echo \"$x\"; }; f; set -k; g() { echo \"[$y] $*\"; }; g z y=5 w; \
+         set +k; set -u; unset a; echo $(( a[0] )); echo never",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (
+            127,
+            "declare -a n=([2]=\"v\")\ndeclare -A A=([\"p q\"]=\"\" )\ne 0\n5\n[5] z w"
+        )
+    );
+}
