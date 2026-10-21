@@ -3276,3 +3276,20 @@ fn complete_p_prints_a_keeping_pattern_with_its_bang() {
         (0, "complete -f -X '!*.txt' foo\ncomplete -f -X '*.o' bar")
     );
 }
+
+#[test]
+fn the_history_list_is_there_with_history_off_and_takes_ranges() {
+    // As Git Bash 5.3: `history -s` in a script added nothing, `fc -l` said history was
+    // not enabled, `history -d 2-3` was refused, `history -p '!!:z'` printed the line,
+    // and `history -w /dev/null` looked for `C:/dev/null`.
+    let (status, stdout) = output(
+        "fc -l; echo \"l $?\"; history -s foo; history; history -c; \
+         for w in a b c d e; do history -s $w; done; history -d 2-3; history -d -1; history; \
+         history -d 9 2>/dev/null; echo \"d $?\"; \
+         history -p '!!:z' 2>/dev/null; echo \"p $?\"; history -w /dev/null; echo \"w $?\"",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (0, "l 0\n    1  foo\n    1  a\n    2  d\nd 1\np 1\nw 0")
+    );
+}

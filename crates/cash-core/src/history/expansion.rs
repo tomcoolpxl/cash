@@ -656,16 +656,17 @@ pub fn expand_history(
             let mut current_text = selected_text.unwrap_or(event_text);
 
             while i < len && chars[i] == ':' {
-                if i + 1 >= len {
-                    break;
-                }
-                let mod_ch = chars[i + 1];
+                // A `:` with no modifier after it, a letter none knows (`!!:z`), a blank or
+                // nothing at all, fails the expansion, as in Bash; it was kept as text.
+                let Some(&mod_ch) = chars.get(i + 1) else {
+                    return Err(HistoryExpansionError::UnrecognizedModifier(':'));
+                };
                 let is_modifier = matches!(
                     mod_ch,
                     'h' | 't' | 'r' | 'e' | 'p' | 'q' | 'x' | 's' | 'g' | 'a' | 'G' | '&'
                 );
                 if !is_modifier {
-                    break;
+                    return Err(HistoryExpansionError::UnrecognizedModifier(mod_ch));
                 }
 
                 i += 2; // Consume ':' and mod_ch

@@ -44,6 +44,11 @@ impl builtins::Command for FcCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // The history list is there with history off too, as in Bash: `fc -l` in a script
+        // lists it, empty or not, and `fc -s` finds no command in an empty one. It was
+        // "command history is not enabled".
+        context.shell.history_list_mut();
+
         // An option it does not know is said, as in Bash, before anything else: `fc -z`
         // was taken for a history specification.
         if let Some(first) = self.first.as_deref()

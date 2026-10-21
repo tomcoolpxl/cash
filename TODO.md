@@ -30,10 +30,9 @@ for working through it. What is done, phases and findings, is in DONE.md.
 Taken as recommended while the user was away, as the user asked (decisions.md, "The phase
 after 1.44.0"); the user may change it. The small builtins, each against Git Bash 5.3, in
 this order. Done, in DONE.md: 1, `help` of the reserved words, and a plain word as a
-prefix; 2, `complete -p`'s `!` and `compgen -V`'s name; 3, the usage errors.
+prefix; 2, `complete -p`'s `!` and `compgen -V`'s name; 3, the usage errors; 4,
+`history` with history off, `-d` ranges and `-p` failures.
 
-4. `history -s` while history is off adds nothing (Bash adds it); `history -d 1-2`
-   refused; `history -p '!!:z'` succeeds (Bash: expansion failed, 1).
 5. `declare -f +r f` of a read-only function prints it, status 0 (Bash: readonly
    function, 1).
 
@@ -171,9 +170,8 @@ path. The rest, by theme:
 
 **Builtins, small**
 - `hash -p` ignored; `declare -f +r` and
-  `-f -a`; `set -r` restricts nothing; `history` does nothing while history is off,
-  numbers restart after HISTSIZE, `history -d 2-3`, `history -p '!!:z'`, script lines not
-  history-expanded under `set -H`; `find /dev/null` (modernish's find check); about
+  `-f -a`; `set -r` restricts nothing; history numbers restart after HISTSIZE, script lines not history-expanded under `set
+  -H`; `find /dev/null` (modernish's find check); about
   thirty missing usage errors.
 - An assignment to a read-only variable is reported at line 1 of a script, whatever its
   line (bash-it's case, line 10 in Bash).

@@ -14,10 +14,11 @@ pub(crate) struct HistoryCommand {
     #[arg(short = 'c')]
     clear_history: bool,
 
-    /// Deletes the history entry at the given offset. Positive offsets are relative to the
-    /// beginning of the history, while negative offsets are relative to the end of the history.
-    #[arg(short = 'd', value_name = "OFFSET")]
-    delete_offset: Option<i64>,
+    /// Deletes the history entry at the given offset, or the entries from one offset to
+    /// another (`START-END`). Positive offsets are relative to the beginning of the
+    /// history, while negative offsets are relative to the end of the history.
+    #[arg(short = 'd', value_name = "OFFSET", allow_hyphen_values = true)]
+    delete_offset: Option<String>,
 
     /// Appends the history from the current session to the history file.
     #[arg(short = 'a', group = "anrw", num_args = 0..=1, value_name = "HIST_FILE")]
@@ -94,20 +95,14 @@ impl builtins::Command for HistoryCommand {
         let stdout = context.stdout();
         let stderr = context.error_stream();
 
-        if let Some(history) = context.shell.history_mut() {
-            self.execute_with_history(history, &config, stdout, stderr)
-        } else {
-            // Bash compatibility: running history in a non-interactive shell where history
-            // is not enabled silently succeeds with status 0.
-            Ok(ExecutionExitCode::Success.into())
-        }
+        // The list is there with history off too, as in Bash: `history -s foo` adds to it
+        // in a script, and `history` lists it. It did nothing, status 0.
+        let history = context.shell.history_list_mut();
+        self.execute_with_history(history, &config, stdout, stderr)
     }
 }
 
 impl HistoryCommand {
-    #[expect(clippy::cast_possible_wrap)]
-    #[expect(clippy::cast_possible_truncation)]
-    #[expect(clippy::cast_sign_loss)]
     fn execute_with_history(
         &self,
         history: &mut history::History,
@@ -119,28 +114,20 @@ impl HistoryCommand {
             history.clear()?;
         }
 
-        if let Some(offset) = self.delete_offset {
-            if offset == 0 {
-                writeln!(stderr, "cannot delete history item at offset 0")?;
-                return Ok(ExecutionExitCode::InvalidUsage.into());
-            }
-
-            if offset > 0 {
-                // Convert to 0-based index.
-                let index = (offset - 1) as usize;
-                if !history.remove_nth_item(index) {
-                    writeln!(stderr, "index past end of history")?;
-                    return Ok(ExecutionExitCode::InvalidUsage.into());
+        if let Some(spec) = &self.delete_offset {
+            // An offset, or a range of them (`2-3`, `-2--1`), as Bash takes them; a
+            // position outside the history and what is no number are said, status 1. A
+            // range was refused, and an offset of 0 was a usage error.
+            let count = history.count();
+            let (start, end) = match delete_range(spec, count) {
+                Ok(range) => range,
+                Err(message) => {
+                    writeln!(stderr, "history: {message}")?;
+                    return Ok(ExecutionResult::general_error());
                 }
-            } else {
-                let count = history.count() as i64;
-                let index = count + offset;
-                if index < 0 {
-                    writeln!(stderr, "index before beginning of history")?;
-                    return Ok(ExecutionExitCode::InvalidUsage.into());
-                }
-
-                let _ = history.remove_nth_item(index as usize);
+            };
+            for index in (start..=end).rev() {
+                let _ = history.remove_nth_item(index);
             }
 
             return Ok(ExecutionResult::success());
@@ -201,13 +188,12 @@ impl HistoryCommand {
         if let Some(args) = &self.expand_args {
             let mut stdout = stdout;
             for arg in args {
-                match history::expand_history(arg, Some(history)) {
-                    Ok(expanded) => writeln!(stdout, "{}", expanded.line)?,
-                    Err(err) => {
-                        writeln!(stderr, "{err}")?;
-                        return Ok(ExecutionResult::general_error());
-                    }
-                }
+                // A failure is said as Bash says it for `-p`.
+                let Ok(expanded) = history::expand_history(arg, Some(history)) else {
+                    writeln!(stderr, "history: {arg}: history expansion failed")?;
+                    return Ok(ExecutionResult::general_error());
+                };
+                writeln!(stdout, "{}", expanded.line)?;
             }
             return Ok(ExecutionResult::success());
         }
@@ -267,11 +253,61 @@ fn display_history(
     Ok(())
 }
 
+/// The entries `history -d` deletes, 0-based and inclusive, of `count`: one offset or
+/// `START-END`, a negative offset counting back from the end (`-1` is the last), or what
+/// Bash says of the spec.
+fn delete_range(spec: &str, count: usize) -> Result<(usize, usize), String> {
+    let position = |text: &str| -> Result<usize, String> {
+        let number: i64 = text
+            .trim()
+            .parse()
+            .map_err(|_| format!("{text}: invalid number"))?;
+        let count = i64::try_from(count).unwrap_or(i64::MAX);
+        let one_based = if number < 0 {
+            count + 1 + number
+        } else {
+            number
+        };
+        if (1..=count).contains(&one_based) {
+            usize::try_from(one_based - 1).map_err(|_| format!("{text}: invalid number"))
+        } else {
+            Err(format!("{text}: history position out of range"))
+        }
+    };
+    // The `-` between two offsets is one after the first character, which may be the
+    // first offset's sign.
+    let split = spec
+        .char_indices()
+        .skip(1)
+        .find(|&(_, c)| c == '-')
+        .map(|(at, _)| at);
+    match split.map(|at| (spec.get(..at), spec.get(at + 1..))) {
+        Some((Some(first), Some(last))) if !last.is_empty() => {
+            let (start, end) = (position(first)?, position(last)?);
+            if start > end {
+                return Err(format!("{first}: history position out of range"));
+            }
+            Ok((start, end))
+        }
+        _ => position(spec).map(|index| (index, index)),
+    }
+}
+
+/// The file `-a`, `-n`, `-r` or `-w` names, or `HISTFILE`; none for `/dev/null`, which
+/// takes the lines and gives none, as in Bash: it was looked for as `C:/dev/null`.
 fn get_effective_history_file_path<'a>(
     default_history_file_path: Option<&'a Path>,
     option: Option<&'a str>,
 ) -> Option<&'a Path> {
-    option.map(Path::new).or(default_history_file_path)
+    option
+        .map(Path::new)
+        .or(default_history_file_path)
+        .filter(|path| {
+            !matches!(
+                cash_win32::path::accept(&path.to_string_lossy()),
+                cash_win32::path::Target::Null
+            )
+        })
 }
 
 #[cfg(test)]

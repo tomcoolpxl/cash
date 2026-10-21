@@ -724,6 +724,14 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         &mut self.abbreviations
     }
 
+    /// The history list, made when there is none: Bash keeps one whether history is on or
+    /// not, so `history -s` adds to it and `history` and `fc -l` list it in a script.
+    /// Lines are recorded in it only while history is on ([`Self::history_mut`]).
+    pub fn history_list_mut(&mut self) -> &mut crate::history::History {
+        self.history
+            .get_or_insert_with(crate::history::History::default)
+    }
+
     /// How many loops the running command is inside, which `break` and `continue` may
     /// leave; none in a function, until it starts a loop of its own, as in Bash.
     pub const fn loop_depth(&self) -> usize {

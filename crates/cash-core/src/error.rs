@@ -100,7 +100,7 @@ pub enum ErrorKind {
     FailedToExecuteCommand(String, #[source] std::io::Error),
 
     /// History item was not found.
-    #[error("history item not found")]
+    #[error("no command found")]
     HistoryItemNotFound,
 
     /// The requested functionality has not yet been implemented in this shell.

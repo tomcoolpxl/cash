@@ -2886,3 +2886,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   first, `command -z` ran `-z`, `builtin -z` looked for a builtin of that name, `history
   -z` did nothing and `fc -z` said there was no history; each says the option and its
   usage, status 2, as in Bash. `times x` was an error; Bash does not read the word.
+- **`history` and `fc` with history off, `-d` ranges, `-p` failures** (2026-10-21, the
+  phase after 1.44.0, item 4): Bash keeps the history list whether history is on or not;
+  cash had none in a script, so `history -s foo` added nothing, `history` listed nothing
+  and `fc -l` said history was not enabled. The list is there now, and lines are still
+  recorded only while history is on. `history -d 2-3` and `-d -2--1` were refused; they
+  delete the range, and a position outside the history is said as Bash says it, status
+  1. `history -p '!!:z'` printed the line; a `:` that no modifier follows fails the
+  expansion, as in Bash, and `-p` says so. Found on the way: `history -w /dev/null`, and
+  `HISTFILE=/dev/null`, the usual way to keep no history file, wrote to `C:/dev/null`;
+  `/dev/null` takes the lines. `fc -s` with nothing to find said "history item not
+  found"; it is Bash's "no command found".
