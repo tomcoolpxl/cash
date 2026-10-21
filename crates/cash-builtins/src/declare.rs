@@ -243,6 +243,21 @@ fn defined_at(
     (line, file)
 }
 
+/// Which elements of a declaration's list, by position, append to the element their
+/// subscript names (`[k]+=v`); none for any other declaration.
+fn appending_elements(declaration: &cash_core::CommandArg) -> Vec<bool> {
+    match declaration {
+        cash_core::CommandArg::Assignment(ast::Assignment {
+            value: ast::AssignmentValue::Array(elements),
+            ..
+        }) => elements
+            .iter()
+            .map(|(key, _)| key.as_ref().is_some_and(|(_, append)| *append))
+            .collect(),
+        _ => vec![],
+    }
+}
+
 impl DeclareCommand {
     fn try_display_declaration(
         &self,
@@ -516,7 +531,7 @@ impl DeclareCommand {
         };
         let mut expanded = Vec::new();
         for (key, word) in elements {
-            if let Some(key) = key {
+            if let Some((key, append)) = key {
                 let key = context
                     .shell
                     .basic_expand_string(&context.params, &key.value)
@@ -525,7 +540,7 @@ impl DeclareCommand {
                     .shell
                     .basic_expand_string(&context.params, &word.value)
                     .await?;
-                expanded.push((Some(ast::Word::new(&key)), ast::Word::new(&word)));
+                expanded.push((Some((ast::Word::new(&key), append)), ast::Word::new(&word)));
             } else {
                 for field in context
                     .shell
@@ -610,6 +625,7 @@ impl DeclareCommand {
         // Extract the variable name and the initial value being assigned (if any).
         let (name, assigned_index, mut initial_value, name_is_array, append) =
             Self::declaration_to_name_and_value(declaration)?;
+        let appending = appending_elements(declaration);
         if let Some(subscript) = resolved_subscript
             && let Some(ShellValueLiteral::Array(ArrayLiteral(elements))) = &mut initial_value
             && let Some((key, _)) = elements.first_mut()
@@ -742,8 +758,12 @@ impl DeclareCommand {
                 self.apply_attributes_before_update(&mut var)?;
 
                 if let Some(initial_value) = initial_value {
-                    var.assign(initial_value, append || assigned_index.is_some())
-                        .map_err(|e| e.of_variable(&name).of_assignment())?;
+                    var.assign_appending(
+                        initial_value,
+                        append || assigned_index.is_some(),
+                        &appending,
+                    )
+                    .map_err(|e| e.of_variable(&name).of_assignment())?;
                 }
 
                 if context.shell.options().export_variables_on_modification
@@ -803,8 +823,12 @@ impl DeclareCommand {
             if let Some(initial_value) = initial_value {
                 // We append for `name+=value`, or if the declaration included
                 // an explicit index.
-                var.assign(initial_value, append || assigned_index.is_some())
-                    .map_err(|e| e.of_variable(&name).of_assignment())?;
+                var.assign_appending(
+                    initial_value,
+                    append || assigned_index.is_some(),
+                    &appending,
+                )
+                .map_err(|e| e.of_variable(&name).of_assignment())?;
             }
 
             self.apply_attributes_after_update(var, verb)?;
@@ -824,7 +848,7 @@ impl DeclareCommand {
             self.apply_attributes_before_update(&mut var)?;
 
             if let Some(initial_value) = initial_value {
-                var.assign(initial_value, append)
+                var.assign_appending(initial_value, append, &appending)
                     .map_err(|e| e.of_variable(&name).of_assignment())?;
             }
 
@@ -1010,7 +1034,7 @@ impl DeclareCommand {
                         initial_value = Some(ShellValueLiteral::Array(ArrayLiteral(
                             a.iter()
                                 .map(|(i, v)| {
-                                    (i.as_ref().map(|w| w.value.clone()), v.value.clone())
+                                    (i.as_ref().map(|(w, _)| w.value.clone()), v.value.clone())
                                 })
                                 .collect(),
                         )));

@@ -122,8 +122,6 @@ path. The rest, by theme:
   inside `$(...)` at parse time and a reserved word after a blank-ending alias.
 
 **Assignments, declarations, readonly**
-- `[i]+=v` in a compound assignment is taken as a word (`a+=([0]+=z)`; Bash appends to
-  element 0).
 - Associative arrays: `(( A[\$k]++ ))` expands `$k`; a key that is no name for `read`
   and `printf -v` is said otherwise.
 - Namerefs: a reference named as its target in a function warns once (Bash: again when

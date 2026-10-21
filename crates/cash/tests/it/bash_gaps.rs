@@ -3391,3 +3391,22 @@ fn arithmetic_reads_assignment_and_quotes_as_bash_does() {
         (0, "s 1 x 1\nx 3\nq 1\nk 1\nv 8\nset\nunset")
     );
 }
+
+#[test]
+fn a_list_element_with_plus_equals_appends_to_its_element() {
+    // `[k]+=v` in a list was a word, an element of its own; it appends to element `k` as
+    // it is by then, in the array or earlier in the list, and adds for an integer.
+    let (status, stdout) = output(
+        "a=(x y); a+=([0]+=z); echo \"${a[*]}\"; b=([0]=x [0]+=y [3]+=w); echo \"${b[*]}\"; \
+         declare -ai d=(1 2); d+=([0]+=5 [1]+=3*2); echo \"${d[*]}\"; \
+         declare -A A=([k]=v); A+=([k]+=w); echo \"${A[k]}\"; f=('[0]+=q'); echo \"${f[*]}\"; \
+         g() { local -a l=(p [0]+=q); echo \"${l[*]}\"; }; g; declare -f g | sed -n 3p",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (
+            0,
+            "xz y\nxy w\n6 8\nvw\n[0]+=q\npq\n    local -a l=(p [0]+=q);"
+        )
+    );
+}

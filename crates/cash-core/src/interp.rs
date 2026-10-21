@@ -2929,7 +2929,7 @@ async fn expand_assignment_value(
         ast::AssignmentValue::Array(arr) => {
             let mut expanded_values = vec![];
             for (key, value) in arr {
-                if let Some(k) = key {
+                if let Some((k, append)) = key {
                     let expanded_key = expansion::basic_expand_assignment_word(shell, params, k)
                         .await?
                         .into();
@@ -2937,7 +2937,7 @@ async fn expand_assignment_value(
                         expansion::basic_expand_assignment_word(shell, params, value)
                             .await?
                             .into();
-                    expanded_values.push((Some(expanded_key), expanded_value));
+                    expanded_values.push((Some((expanded_key, *append)), expanded_value));
                 } else if associative {
                     // An associative array's word is one, neither split nor globbed.
                     let expanded_value =
@@ -3011,7 +3011,8 @@ async fn apply_assignment(
     }
     let variable_name = &resolved_name;
 
-    // Expand the values.
+    // Expand the values. Which elements of a list append (`[k]+=v`), by position.
+    let mut appending = vec![];
     let new_value = match &assignment.value {
         ast::AssignmentValue::Scalar(unexpanded_value) => {
             let value =
@@ -3030,7 +3031,8 @@ async fn apply_assignment(
                 )
             });
             let mut elements = vec![];
-            for (unexpanded_key, unexpanded_value) in unexpanded_values {
+            for (subscript, unexpanded_value) in unexpanded_values {
+                let unexpanded_key = subscript.as_ref().map(|(key, _)| key);
                 let key = match unexpanded_key {
                     Some(unexpanded_key) if associative => {
                         let key =
@@ -3063,6 +3065,8 @@ async fn apply_assignment(
                         expansion::basic_expand_assignment_word(shell, params, unexpanded_value)
                             .await?;
                     elements.push((key, value));
+                    appending.resize(elements.len() - 1, false);
+                    appending.push(subscript.as_ref().is_some_and(|(_, append)| *append));
                 } else if associative {
                     // A word of an associative array's list, a key or a value, is one word,
                     // neither split nor globbed, as in Bash: `A=($v)` with `v='p q'` has the
@@ -3174,7 +3178,7 @@ async fn apply_assignment(
                 }
 
                 existing_value
-                    .assign(new_value, assignment.append)
+                    .assign_appending(new_value, assignment.append, &appending)
                     .map_err(|e| e.of_variable(variable_name))?;
             }
 
@@ -3207,7 +3211,8 @@ async fn apply_assignment(
             // before it, as in Bash.
             ShellValueLiteral::Array(values) => {
                 let mut array = ShellVariable::new(ShellValue::Unset(ShellValueUnsetType::Untyped));
-                let assigned = array.assign(ShellValueLiteral::Array(values), false);
+                let assigned =
+                    array.assign_appending(ShellValueLiteral::Array(values), false, &appending);
                 if export {
                     array.export();
                 }

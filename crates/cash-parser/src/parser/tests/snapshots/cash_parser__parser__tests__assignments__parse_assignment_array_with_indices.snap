@@ -15,24 +15,24 @@ ParseResult(
                   AssignmentWord(Assignment(
                     name: VariableName("arr"),
                     value: Array([
-                      (Some(Word(
+                      (Some((Word(
                         value: "0",
                         loc: "[location]",
-                      )), Word(
+                      ), false)), Word(
                         value: "a",
                         loc: "[location]",
                       )),
-                      (Some(Word(
+                      (Some((Word(
                         value: "1",
                         loc: "[location]",
-                      )), Word(
+                      ), false)), Word(
                         value: "b",
                         loc: "[location]",
                       )),
-                      (Some(Word(
+                      (Some((Word(
                         value: "2",
                         loc: "[location]",
-                      )), Word(
+                      ), false)), Word(
                         value: "c",
                         loc: "[location]",
                       )),

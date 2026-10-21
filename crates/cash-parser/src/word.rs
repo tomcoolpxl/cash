@@ -925,7 +925,7 @@ pub fn parse_scalar_assignment(
 pub fn parse_compound_assignment_value(
     value: &str,
     options: &ParserOptions,
-) -> Option<Vec<(Option<ast::Word>, ast::Word)>> {
+) -> Option<Vec<ast::ArrayElement>> {
     let elements = crate::parser::parse_compound_assignment_value(value, options)?;
     parse_array_elements(elements.iter(), options).ok()
 }
@@ -1000,14 +1000,14 @@ fn zero_padded_width(start: &str, end: &str) -> Option<usize> {
 fn parse_array_elements<'a>(
     elements: impl IntoIterator<Item = &'a String>,
     options: &ParserOptions,
-) -> Result<Vec<(Option<ast::Word>, ast::Word)>, &'static str> {
+) -> Result<Vec<ast::ArrayElement>, &'static str> {
     elements
         .into_iter()
         .map(|element| {
             let (key, value) = expansion_parser::literal_array_element(element, options)
                 .map_err(|_| "invalid array element in literal")?;
             Ok((
-                key.map(|key| ast::Word::new(key.as_str())),
+                key.map(|(key, append)| (ast::Word::new(key.as_str()), append)),
                 ast::Word::new(value.as_str()),
             ))
         })
@@ -1874,9 +1874,10 @@ peg::parser! {
                 (name, append.is_some())
             }
 
-        pub(crate) rule literal_array_element() -> (Option<String>, String) =
-            "[" inner:$((!"]" [_])*) "]=" value:$([_]*) {
-                (Some(inner.to_owned()), value.to_owned())
+        // `[k]+=v` appends to element `k`, as in Bash; it was a word, a value of its own.
+        pub(crate) rule literal_array_element() -> (Option<(String, bool)>, String) =
+            "[" inner:$((!"]" [_])*) "]" append:"+"? "=" value:$([_]*) {
+                (Some((inner.to_owned(), append.is_some())), value.to_owned())
             } /
             value:$([_]+) {
                 (None, value.to_owned())
@@ -2206,10 +2207,14 @@ mod tests {
 
         assert_matches!(
             parse(r#"([key]=value "other one")"#).as_deref(),
-            Some([(Some(key), value), (None, other)])
+            Some([(Some((key, false)), value), (None, other)])
                 if key.value == "key"
                     && value.value == "value"
                     && other.value == r#""other one""#);
+
+        assert_matches!(
+            parse("([0]+=more)").as_deref(),
+            Some([(Some((key, true)), value)]) if key.value == "0" && value.value == "more");
 
         // Text that is not exclusively a compound value must not be accepted; otherwise trailing
         // shell syntax hidden in an expanded value would be silently dropped.

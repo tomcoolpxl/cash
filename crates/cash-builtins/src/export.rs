@@ -178,7 +178,7 @@ impl ExportCommand {
                     ast::AssignmentValue::Array(a) => {
                         variables::ShellValueLiteral::Array(variables::ArrayLiteral(
                             a.iter()
-                                .map(|(k, v)| (k.as_ref().map(|k| k.flatten()), v.flatten()))
+                                .map(|(k, v)| (k.as_ref().map(|(k, _)| k.flatten()), v.flatten()))
                                 .collect(),
                         ))
                     }

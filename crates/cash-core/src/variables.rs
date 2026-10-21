@@ -280,8 +280,26 @@ impl ShellVariable {
     ///
     /// * `value` - The value to assign to the variable.
     /// * `append` - Whether or not to append the value to the preexisting value.
-    #[expect(clippy::too_many_lines)]
     pub fn assign(&mut self, value: ShellValueLiteral, append: bool) -> Result<(), error::Error> {
+        self.assign_appending(value, append, &[])
+    }
+
+    /// [`Self::assign`] of a list some of whose elements append to the element their
+    /// subscript names (`[k]+=v`), as in Bash: `v` goes after what the element holds by then,
+    /// in the array or earlier in the list, or is added to it for an integer.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The value to assign to the variable.
+    /// * `append` - Whether or not to append the value to the preexisting value.
+    /// * `appending` - Whether each element of a list, by position, appends; none past its end.
+    #[expect(clippy::too_many_lines)]
+    pub fn assign_appending(
+        &mut self,
+        value: ShellValueLiteral,
+        append: bool,
+        appending: &[bool],
+    ) -> Result<(), error::Error> {
         self.stamp = next_stamp();
         if self.is_readonly() {
             return Err(error::ErrorKind::ReadonlyVariable(String::new()).into());
@@ -348,7 +366,12 @@ impl ShellVariable {
                         self.assign_at_index(String::from("0"), new_value, append)
                     }
                     ShellValueLiteral::Array(new_values) => {
-                        ShellValue::update_indexed_array_from_literals(existing_values, new_values)
+                        ShellValue::update_indexed_array_from_literals(
+                            existing_values,
+                            new_values,
+                            appending,
+                            treat_as_int,
+                        )
                     }
                 },
                 ShellValue::AssociativeArray(existing_values) => match value {
@@ -359,6 +382,8 @@ impl ShellVariable {
                         ShellValue::update_associative_array_from_literals(
                             existing_values,
                             new_values,
+                            appending,
+                            treat_as_int,
                         )
                     }
                 },
@@ -367,6 +392,7 @@ impl ShellVariable {
                 ShellValue::Dynamic { .. } => Ok(()),
             }
         } else {
+            let treat_as_int = self.is_treated_as_integer();
             match (&self.value, value) {
                 // If we're updating an array value with a string, then treat it as an update to
                 // just the "0"-indexed element of the array.
@@ -394,8 +420,12 @@ impl ShellVariable {
                     // The elements before a bad subscript are assigned, as in Bash, and the
                     // array is there, empty or not.
                     let mut values = BTreeMap::new();
-                    let result =
-                        ShellValue::update_indexed_array_from_literals(&mut values, literal_values);
+                    let result = ShellValue::update_indexed_array_from_literals(
+                        &mut values,
+                        literal_values,
+                        appending,
+                        treat_as_int,
+                    );
                     self.value = ShellValue::IndexedArray(values);
                     result
                 }
@@ -412,6 +442,8 @@ impl ShellVariable {
                     let result = ShellValue::update_associative_array_from_literals(
                         &mut values,
                         literal_values,
+                        appending,
+                        treat_as_int,
                     );
                     self.value = ShellValue::AssociativeArray(values);
                     result
@@ -468,52 +500,22 @@ impl ShellVariable {
             ShellValue::IndexedArray(arr) => {
                 let key = get_key_for_indexed_array(arr, array_index.as_str())?;
 
-                if append {
-                    let existing_value = arr.get(&key).map_or("", |v| v.as_str());
-
-                    let mut new_value;
-                    if treat_as_int {
-                        let existing_val = crate::arithmetic::eval_pure_str(existing_value)
-                            .or_else(|| existing_value.parse::<i64>().ok())
-                            .unwrap_or(0);
-                        let val = crate::arithmetic::eval_pure_str(value.as_str())
-                            .or_else(|| value.parse::<i64>().ok())
-                            .unwrap_or(0);
-                        new_value = existing_val.wrapping_add(val).to_string();
-                    } else {
-                        new_value = existing_value.to_owned();
-                        new_value.push_str(value.as_str());
-                    }
-
-                    arr.insert(key, new_value);
+                let value = if append {
+                    appended(arr.get(&key), &value, treat_as_int)
                 } else {
-                    arr.insert(key, value);
-                }
+                    value
+                };
+                arr.insert(key, value);
 
                 Ok(())
             }
             ShellValue::AssociativeArray(arr) => {
-                if append {
-                    let existing_value = arr.get(array_index.as_str()).map_or("", |v| v.as_str());
-
-                    let mut new_value;
-                    if treat_as_int {
-                        let existing_val = crate::arithmetic::eval_pure_str(existing_value)
-                            .or_else(|| existing_value.parse::<i64>().ok())
-                            .unwrap_or(0);
-                        let val = crate::arithmetic::eval_pure_str(value.as_str())
-                            .or_else(|| value.parse::<i64>().ok())
-                            .unwrap_or(0);
-                        new_value = existing_val.wrapping_add(val).to_string();
-                    } else {
-                        new_value = existing_value.to_owned();
-                        new_value.push_str(value.as_str());
-                    }
-
-                    arr.insert(array_index, new_value.clone());
+                let value = if append {
+                    appended(arr.get(array_index.as_str()), &value, treat_as_int)
                 } else {
-                    arr.insert(array_index, value);
-                }
+                    value
+                };
+                arr.insert(array_index, value);
                 Ok(())
             }
             // Only a dynamic variable is left. The shell gives an element of `DIRSTACK` or
@@ -884,7 +886,7 @@ impl ShellValue {
     /// * `literals` - The literals to construct the indexed array from.
     pub fn indexed_array_from_literals(literals: ArrayLiteral) -> Result<Self, error::Error> {
         let mut values = BTreeMap::new();
-        Self::update_indexed_array_from_literals(&mut values, literals)?;
+        Self::update_indexed_array_from_literals(&mut values, literals, &[], false)?;
 
         Ok(Self::IndexedArray(values))
     }
@@ -906,6 +908,8 @@ impl ShellValue {
     fn update_indexed_array_from_literals(
         existing_values: &mut BTreeMap<u64, String>,
         literal_values: ArrayLiteral,
+        appending: &[bool],
+        treat_as_int: bool,
     ) -> Result<(), error::Error> {
         let mut new_key = if let Some((largest_index, _)) = existing_values.last_key_value() {
             largest_index + 1
@@ -913,7 +917,7 @@ impl ShellValue {
             0
         };
 
-        for (key, value) in literal_values.0 {
+        for (position, (key, value)) in literal_values.0.into_iter().enumerate() {
             if let Some(key) = key {
                 // A negative subscript counts back from the end of the array as it is so
                 // far, as in Bash (`x+=([-1]=v)` replaces the last element); one before the
@@ -926,6 +930,11 @@ impl ShellValue {
                 })?;
             }
 
+            let value = if appending.get(position).copied().unwrap_or(false) {
+                appended(existing_values.get(&new_key), &value, treat_as_int)
+            } else {
+                value
+            };
             existing_values.insert(new_key, value);
             new_key += 1;
         }
@@ -939,7 +948,7 @@ impl ShellValue {
     /// * `literals` - The literals to construct the associative array from.
     pub fn associative_array_from_literals(literals: ArrayLiteral) -> Result<Self, error::Error> {
         let mut values = BTreeMap::new();
-        Self::update_associative_array_from_literals(&mut values, literals)?;
+        Self::update_associative_array_from_literals(&mut values, literals, &[], false)?;
 
         Ok(Self::AssociativeArray(values))
     }
@@ -947,15 +956,22 @@ impl ShellValue {
     fn update_associative_array_from_literals(
         existing_values: &mut BTreeMap<String, String>,
         literal_values: ArrayLiteral,
+        appending: &[bool],
+        treat_as_int: bool,
     ) -> Result<(), error::Error> {
         // Words without a subscript are key and value in turn, but beside words with one,
         // where they are refused and the rest assigned, as in Bash: `([k]=v one)` made
         // `one` a key.
         if literal_values.0.iter().any(|(key, _)| key.is_some()) {
             let mut refused = None;
-            for (key, value) in literal_values.0 {
+            for (position, (key, value)) in literal_values.0.into_iter().enumerate() {
                 match key {
                     Some(key) => {
+                        let value = if appending.get(position).copied().unwrap_or(false) {
+                            appended(existing_values.get(&key), &value, treat_as_int)
+                        } else {
+                            value
+                        };
                         existing_values.insert(key, value);
                     }
                     None => {
@@ -1216,6 +1232,22 @@ fn get_key_for_indexed_array(
     // to a u64 without any fuss.
     #[expect(clippy::cast_sign_loss)]
     Ok(index_value as u64)
+}
+
+/// An element's value after `+=` of `value`: `value` after what it holds, or the two added
+/// for an integer.
+fn appended(existing: Option<&String>, value: &str, treat_as_int: bool) -> String {
+    let existing = existing.map_or("", String::as_str);
+    if treat_as_int {
+        let number = |text: &str| {
+            crate::arithmetic::eval_pure_str(text)
+                .or_else(|| text.parse::<i64>().ok())
+                .unwrap_or(0)
+        };
+        number(existing).wrapping_add(number(value)).to_string()
+    } else {
+        format!("{existing}{value}")
+    }
 }
 
 impl From<&str> for ShellValue {

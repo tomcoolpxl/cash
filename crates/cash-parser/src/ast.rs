@@ -1680,6 +1680,10 @@ impl Display for AssignmentName {
     }
 }
 
+/// An element of an array's list: its subscript, if it has one, with whether it appends
+/// to the element it names (`[k]+=v`), and its value.
+pub type ArrayElement = (Option<(Word, bool)>, Word);
+
 /// A value being assigned to a variable.
 #[derive(Clone, Debug)]
 #[cfg_attr(
@@ -1690,7 +1694,7 @@ pub enum AssignmentValue {
     /// A scalar (word) value.
     Scalar(Word),
     /// An array of elements.
-    Array(Vec<(Option<Word>, Word)>),
+    Array(Vec<ArrayElement>),
 }
 
 impl Node for AssignmentValue {}
@@ -1720,7 +1724,10 @@ impl Display for AssignmentValue {
                         write!(f, " ")?;
                     }
                     match value {
-                        (Some(key), value) => write!(f, "[{key}]={value}")?,
+                        (Some((key, append)), value) => {
+                            let plus = if *append { "+" } else { "" };
+                            write!(f, "[{key}]{plus}={value}")?;
+                        }
                         (None, value) => write!(f, "{value}")?,
                     }
                 }

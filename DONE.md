@@ -2963,3 +2963,8 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   in Bash, but in an associative array's subscript (`A['k']`), where the quotes go. A
   variable holding `b[$d]` was not expanded in its subscript; it is. `[[ -v A[$k] ]]`
   cut a key holding `]` at it; the subscript is split off before it is expanded.
+- **`[k]+=v` in a list** (2026-10-21, the phase after 1.46.0, leftovers): it was a word,
+  an element of its own (`a+=([0]+=z)` added `[0]+=z`). It appends to element `k` as it
+  is by then, in the array or earlier in the list, as in Bash, and adds to it for an
+  integer array; `declare`, `local` and `readonly` lists too, and `declare -f` prints it
+  back.

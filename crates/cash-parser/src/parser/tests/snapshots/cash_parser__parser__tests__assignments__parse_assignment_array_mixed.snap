@@ -19,10 +19,10 @@ ParseResult(
                         value: "a",
                         loc: "[location]",
                       )),
-                      (Some(Word(
+                      (Some((Word(
                         value: "5",
                         loc: "[location]",
-                      )), Word(
+                      ), false)), Word(
                         value: "b",
                         loc: "[location]",
                       )),
