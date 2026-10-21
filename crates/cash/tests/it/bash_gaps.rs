@@ -3333,3 +3333,12 @@ fn a_trailing_backslash_is_a_character_and_a_loop_name_must_be_one() {
     );
     assert_eq!((status, stdout.as_str()), (0, "s 1\ns 1"));
 }
+
+#[test]
+fn text_right_after_a_lists_parenthesis_makes_one_word() {
+    // `let a=(4*3)/2` was the list `a=(4*3)` and a word `/2`; Bash reads one word.
+    let (status, stdout) = output(
+        "let a=(4*3)/2; echo \"$a\"; c=(x y)z; echo \"${c[@]}\" \"${#c[@]}\"; d=(p q); echo \"${d[1]}\"",
+    );
+    assert_eq!((status, stdout.as_str()), (0, "6\n(x y)z 1\nq"));
+}

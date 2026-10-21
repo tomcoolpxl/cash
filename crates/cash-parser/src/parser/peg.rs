@@ -780,6 +780,22 @@ peg::parser! {
         }
 
         pub(crate) rule assignment_word() -> (ast::Assignment, ast::Word) =
+            // Text right after the `)` makes the whole one word, as in Bash: `c=(x y)z`
+            // sets `c` to `(x y)z`, and `let a=(4*3)/2` takes `a=(4*3)/2`. The list was
+            // assigned and the text was a word of its own.
+            non_posix_extensions_enabled() [Token::Word(w, l)] specific_operator("(") elements:array_elements() end:specific_operator(")")
+            [Token::Word(rest, rest_loc) if locations_are_contiguous(end.location(), rest_loc)] {?
+                let mut text = w.to_owned();
+                text.push('(');
+                text.push_str(&elements.iter().map(|e| e.as_str()).collect::<Vec<_>>().join(" "));
+                text.push(')');
+                text.push_str(rest);
+                let mut parsed = word::parse_scalar_assignment(text.as_str(), parser_options)
+                    .map_err(|_| "not assignment word")?;
+                let loc = SourceSpan::within(l, rest_loc);
+                parsed.loc = loc.clone();
+                Ok((parsed, ast::Word::with_location(&text, &loc)))
+            } /
             non_posix_extensions_enabled() [Token::Word(w, l)] specific_operator("(") elements:array_elements() end:specific_operator(")") {?
                 let mut parsed = word::parse_array_assignment(w.as_str(), elements.as_slice(), parser_options)?;
 

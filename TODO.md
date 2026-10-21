@@ -30,9 +30,9 @@ for working through it. What is done, phases and findings, is in DONE.md.
 The parser's remaining list (decisions.md, "The phase after 1.45.0"), each item checked
 against Git Bash 5.3 first, cheapest first. Done, in DONE.md: 1, a trailing backslash
 (backslash-newline inside backquotes was found to be as Bash has it); 2, `case x in
-esac)` and loop names that are none.
+esac)` and loop names that are none; 3, text right after a list's `)` (a syntax error in
+a list was found to end the line as Bash's does).
 
-3. A syntax error in a compound array assignment; text after its `)`.
 4. Here-documents: the delimiter and backslash-newline, an unterminated `$(` in one, the
    `EOF)` warning.
 5. `${ cmd; }`: `return`, `local`, `exit`, a function inside it, `}` after a newline or
@@ -105,8 +105,6 @@ path. The rest, by theme:
 - A here-document's delimiter is checked before backslash-newline is joined (`EO\`+`F`);
   an unterminated `$(` in a here-document passes; a here-document in `$(...)` ended by
   `EOF)` gives no warning (Bash: "delimited by end-of-file").
-- A syntax error in a compound array assignment ends the script; text after its `)`
-  (`let a=(4*3)/2`, `c=(x y)z`).
 - `${ cmd; }`: `return`, `local`, `exit`, a function inside it, `}` after a newline or `)`.
 - Aliases: one followed by a redirection merges tokens (`foo>&2`); `eval` of a multi-line
   alias that unaliases itself; in POSIX mode, aliases inside `$(...)` at parse time and a

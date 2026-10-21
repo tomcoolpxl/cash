@@ -2914,3 +2914,7 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   pattern; a first pattern of `esac` without its `(` ends the case, so the `)` is a
   syntax error, as in Bash. `for 1 in a b` and `select 2 in a` ran their loops; the name
   is not a valid identifier, status 1, and the loop does not run.
+- **Text right after a list's `)`** (2026-10-21, the phase after 1.45.0, item 3): `let
+  a=(4*3)/2` was read as the list `a=(4*3)` and a word `/2`, and `c=(x y)z` as the list
+  `(x y)` and a command `z`; text right after the `)` makes the whole one word, as in
+  Bash: `let` takes `a=(4*3)/2`, 6, and `c` is `(x y)z`.
