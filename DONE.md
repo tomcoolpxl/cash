@@ -2862,3 +2862,11 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   the rest, status 1. `touch` was taken from uutils 0.12.0 into `cash-uutils` as cash's
   own, as `cp` and the rest were, to change that: Windows only, its messages compiled in,
   `--version` naming the uutils release.
+- **The last phase's small leftovers** (2026-10-21, the phase after 1.43.0, item 4): `read
+  -n -1`, `-N x` and `-u -1` were refused as options, with the usage, status 2; they are
+  `invalid number` and `invalid file descriptor specification`, status 1, as in Bash.
+  `eval`, `source` and `.` with a redirection kept it the builtin's: an `exec` in what
+  they ran was not seen by the commands after it there, and stayed the shell's for good
+  (`eval 'exec >log; echo a' >out` wrote `a` to `out` and the rest of the script to
+  `log`); they hold it in the shell while they run and put it back after, as a function
+  call does.

@@ -137,3 +137,17 @@ fn a_variable_takes_a_here_document_or_string_s_descriptor() {
     );
     assert_eq!(stdout, "v=10\nline 1\nw=11\nherestring\n", "{stderr}");
 }
+
+#[test]
+fn eval_and_source_hold_their_redirections_as_a_function_call_does() {
+    // An `exec` in what they run changes what the commands after it there see, and is
+    // undone with them, as in Bash: `a` went to `out` and `b` to `log`.
+    let scratch = Scratch::new("eval-source-redir");
+    std::fs::write(scratch.path().join("s.sh"), "exec >log2\necho s\n").expect("write");
+    let (_, stdout, stderr) = run_in(
+        scratch.path(),
+        "eval 'exec >log; echo a' >out; echo b; . ./s.sh >out2; echo c; \
+         cat out log out2 log2",
+    );
+    assert_eq!(stdout, "b\nc\na\ns\n", "{stderr}");
+}

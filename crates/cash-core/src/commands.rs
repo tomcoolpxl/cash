@@ -2064,14 +2064,22 @@ async fn execute_builtin_command<SE: extensions::ShellExtensions>(
     let mark_errors_fatal = builtin.special_builtin && context.shell.options().posix_mode;
     let interactive = context.shell.options().interactive;
 
+    // `eval`, `source` and `.` hold their redirections in the shell while they run, as a
+    // function call does and as Bash applies them: an `exec` in what they run changes what
+    // the commands after it there see (`eval 'exec >log; echo a' >out` writes `a` to
+    // `log`), and is undone with them. They were the builtin's alone, and the `exec` the
+    // shell's for good.
+    let holds_redirections = matches!(context.command_name.as_str(), "eval" | "source" | ".");
+
     // The builtin's output is gathered into larger writes, unless it streams, or is run
-    // by `stdbuf -oL` (`crate::output`).
-    let output = if builtin.streams_output || context.params.builtins_stream_output {
-        context.params.stream_output();
-        None
-    } else {
-        context.params.gather_output(context.shell)
-    };
+    // by `stdbuf -oL` (`crate::output`); what `eval` and the like run gathers its own.
+    let output =
+        if builtin.streams_output || context.params.builtins_stream_output || holds_redirections {
+            context.params.stream_output();
+            None
+        } else {
+            context.params.gather_output(context.shell)
+        };
 
     // Release a background job's `$!` waiter once this builtin is done. A builtin is the
     // shell's own code, so if it did not publish a pid along the way there will never be
@@ -2089,7 +2097,21 @@ async fn execute_builtin_command<SE: extensions::ShellExtensions>(
             ready.notify_one();
         }
     }
+    let ExecutionContext {
+        shell,
+        command_name,
+        mut params,
+    } = context;
+    let held = holds_redirections.then(|| interp::hold_redirections(shell, &mut params));
+    let context = ExecutionContext {
+        shell: &mut *shell,
+        command_name,
+        params,
+    };
     let mut outcome = (builtin.execute_func)(context, args).await;
+    if let Some(held) = held {
+        interp::release_redirections(shell, held);
+    }
     if let Some(ready) = pid_ready {
         ready.notify_one();
     }

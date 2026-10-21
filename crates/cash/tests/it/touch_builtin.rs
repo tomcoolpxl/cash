@@ -30,8 +30,7 @@ fn touch_sets_and_copies_times_and_names_the_uutils_release() {
          [ -e nope ] || echo none; touch --version | head -1",
     );
     assert_eq!(
-        out.stdout,
-        "2020-01-02\nnone\ntouch (uutils coreutils) 0.12.0",
+        out.stdout, "2020-01-02\nnone\ntouch (uutils coreutils) 0.12.0",
         "{}",
         out.stderr
     );

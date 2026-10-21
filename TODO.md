@@ -30,11 +30,10 @@ for working through it. What is done, phases and findings, is in DONE.md.
 Taken as recommended while the user was away, as the user asked (decisions.md, "The phase
 after 1.43.0"); the user may change it. In this order. Done, in DONE.md: 1, conditionals
 (`=~` with a quoted part, `[[ -t X ]]`), but for `['a]']` (below); 2, globbing, but for
-the few below; 3, `touch` going on past an operand it cannot touch.
-
-4. The last phase's small leftovers: `read -n -1`; `eval` and `source` holding their
-   redirections as compound commands do; `[i]+=v` in a list; a key holding `]` for `[[
-   -v A[$k] ]]`.
+the few below; 3, `touch` going on past an operand it cannot touch; 4, the last phase's
+small leftovers, `read -n -1` and `eval` and `source` holding their redirections, but for
+`[i]+=v` in a list (it needs the list's words to carry `+=`, which they do not) and a key
+holding `]` for `[[ -v A[$k] ]]` (both below).
 
 ## The phase before (2026-10-21, done, released as 1.43.0)
 
@@ -72,13 +71,6 @@ path. The rest, by theme:
 - A shell reading its script from standard input ignores `exec 0<file`: the script is
   read ahead of the commands, from the input the shell started with (Bash reads it a
   line at a time, from whatever fd 0 is then).
-- `eval` and `source` with a redirection keep it the command's: an `exec` inside that
-  changes the same descriptor is not seen by the commands after it there (`eval 'exec
-  >log; echo a' >out` writes `a` to `out`; Bash, to `log`). Compound commands and
-  function calls hold theirs in the shell, as Bash does.
-
-**`read`**
-- `read -n -1` is refused as an option, status 2 (Bash: "invalid number", status 1).
 
 **Scripts refused that Bash runs (parser)**
 - The end of a `$(...)` is found twice, by the tokenizer and again by the word parser,

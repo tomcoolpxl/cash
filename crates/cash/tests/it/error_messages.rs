@@ -208,6 +208,13 @@ fn errors_are_worded_as_bash_words_them() {
         (": ${1:=x}", "$1: cannot assign in this way"),
         ("umask 999", "umask: 999: octal number out of range"),
         ("umask u=q", "umask: `q': invalid symbolic mode character"),
+        // They were refused as options, with the usage, status 2.
+        ("read -n -1 x <<< abc", "read: -1: invalid number"),
+        ("read -N x y <<< abc", "read: x: invalid number"),
+        (
+            "read -u -1 x",
+            "read: -1: invalid file descriptor specification",
+        ),
     ];
     for (script, expected) in cases {
         let out = run_in(scratch.path(), script);

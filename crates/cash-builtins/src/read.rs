@@ -54,12 +54,19 @@ pub(crate) struct ReadCommand {
 
     /// Read only the first N characters or until a specified
     /// delimiter is reached, whichever happens first.
-    #[clap(short = 'n', value_name = "COUNT")]
-    return_after_n_chars: Vec<usize>,
+    ///
+    /// Taken as text, so that what is no count is said as Bash says it, `-1: invalid
+    /// number`, status 1; clap refused `-1` as an option, status 2.
+    #[clap(short = 'n', value_name = "COUNT", allow_hyphen_values = true)]
+    return_after_n_chars: Vec<String>,
 
     /// Read exactly N characters, ignoring any specified delimiter.
-    #[clap(short = 'N', value_name = "COUNT")]
-    return_after_n_chars_no_delimiter: Vec<usize>,
+    #[clap(short = 'N', value_name = "COUNT", allow_hyphen_values = true)]
+    return_after_n_chars_no_delimiter: Vec<String>,
+
+    /// The first `-n`/`-N` value that is no count, populated by `Command::new`.
+    #[clap(skip)]
+    invalid_count: Option<String>,
 
     /// Last `-n`/`-N` value in command-line order, populated by `Command::new`.
     #[clap(skip)]
@@ -88,7 +95,13 @@ pub(crate) struct ReadCommand {
     timeout_in_seconds: Option<String>,
 
     /// File descriptor to read from instead of stdin.
-    #[clap(short = 'u', name = "FD")]
+    ///
+    /// Taken as text, so that what is none is said as Bash says it, status 1.
+    #[clap(short = 'u', name = "FD", allow_hyphen_values = true)]
+    fd_text: Option<String>,
+
+    /// The `-u` descriptor, populated by `Command::new`.
+    #[clap(skip)]
     fd_num_to_read: Option<u8>,
 
     /// Optionally, names of variables to receive read input.
@@ -136,15 +149,47 @@ impl ReadCommand {
         let mut command = Self::from_arg_matches(&matches)?;
         command.ordered_char_limit = ordered_char_limit;
         command.saw_capital_n = saw_capital_n;
+        command.invalid_count = first_invalid_count(&matches);
+        command.fd_num_to_read = command
+            .fd_text
+            .as_deref()
+            .and_then(|text| text.trim().parse::<u8>().ok());
         Ok(command)
+    }
+
+    /// `-n`, `-N`, `-u` or `-t` given what is none, said as Bash says it, status 1.
+    fn validate_numbers(
+        &self,
+        context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+    ) -> Result<Option<cash_core::ExecutionResult>, cash_core::Error> {
+        let problem = if let Some(text) = &self.invalid_count {
+            format!("{text}: invalid number")
+        } else if let Some(text) = &self.fd_text
+            && self.fd_num_to_read.is_none()
+        {
+            match text.trim().parse::<i64>() {
+                Ok(fd) if fd >= 0 => {
+                    format!("{text}: invalid file descriptor: Bad file descriptor")
+                }
+                _ => format!("{text}: invalid file descriptor specification"),
+            }
+        } else {
+            return self.validate_timeout(context);
+        };
+        writeln!(
+            context.error_stream(),
+            "{}: {problem}",
+            context.command_name
+        )?;
+        Ok(Some(cash_core::ExecutionResult::general_error()))
     }
 
     async fn run<SE: cash_core::ShellExtensions>(
         &self,
         mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, cash_core::Error> {
-        // Validate timeout value if provided.
-        if let Some(result) = self.validate_timeout(&context)? {
+        // Validate the counts, the descriptor and the timeout, if given.
+        if let Some(result) = self.validate_numbers(&context)? {
             return Ok(result);
         }
 
@@ -1480,8 +1525,12 @@ impl ReadCommand {
         } else {
             self.return_after_n_chars_no_delimiter
                 .last()
-                .copied()
-                .or_else(|| self.return_after_n_chars.last().copied())
+                .and_then(|text| count(text))
+                .or_else(|| {
+                    self.return_after_n_chars
+                        .last()
+                        .and_then(|text| count(text))
+                })
         }
     }
 
@@ -1492,12 +1541,29 @@ impl ReadCommand {
 
 /// Return the final value for an option together with Clap's command-line index.
 /// Comparing these indices preserves Bash's sequential `-n`/`-N` semantics.
+/// Values that are no count are left out; [`first_invalid_count`] finds them.
 fn last_indexed_value(matches: &clap::ArgMatches, id: &str) -> Option<(usize, usize)> {
     matches
         .indices_of(id)?
-        .zip(matches.get_many::<usize>(id)?)
-        .map(|(index, value)| (index, *value))
+        .zip(matches.get_many::<String>(id)?)
+        .filter_map(|(index, value)| Some((index, count(value)?)))
         .max_by_key(|(index, _)| *index)
+}
+
+/// A `-n` or `-N` value as a count: digits, blanks around them allowed.
+fn count(text: &str) -> Option<usize> {
+    text.trim().parse::<usize>().ok()
+}
+
+/// The first `-n` or `-N` value, in command-line order, that is no count.
+fn first_invalid_count(matches: &clap::ArgMatches) -> Option<String> {
+    ["return_after_n_chars", "return_after_n_chars_no_delimiter"]
+        .into_iter()
+        .filter_map(|id| Some(matches.indices_of(id)?.zip(matches.get_many::<String>(id)?)))
+        .flatten()
+        .filter(|(_, value)| count(value).is_none())
+        .min_by_key(|(index, _)| *index)
+        .map(|(_, value)| value.clone())
 }
 
 /// Splits a line by IFS (Internal Field Separator) according to shell rules.
