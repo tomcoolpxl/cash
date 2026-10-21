@@ -95,3 +95,18 @@ fn a_backslash_newline_joins_lines_in_an_unquoted_here_document() {
         ("x=$(cat <<EOF\nin \\\nsub\nEOF\n)\necho \"$x\"", "in sub"),
     ]);
 }
+
+#[test]
+fn a_joined_line_can_end_a_here_document_and_an_open_substitution_is_an_error() {
+    // `EO\` and `F` were two lines of the body, which never ended; Bash joins them first,
+    // in a here-document whose tag is not quoted. A `$(` that nothing ends was printed
+    // as written; Bash fails the expansion, status 1, and goes on.
+    check(&[
+        ("cat <<EOF\nx\nEO\\\nF\necho after", "x\nafter"),
+        ("cat <<'Q'\ny\nQ\\\nQ\necho after", "y\nQ\\\nafter"),
+        (
+            "cat <<EOF 2>/dev/null\na $(echo\nEOF\necho \"after $?\"",
+            "after 1",
+        ),
+    ]);
+}

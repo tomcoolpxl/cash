@@ -1666,6 +1666,8 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
             tag_str.as_ref()
         };
 
+        let quoted = next_here_tag.tag_was_escaped_or_quoted;
+        let mut body = None;
         if let Some(current_token_without_here_tag) = state.current_token().strip_suffix(tag_str) {
             // Make sure that was either the start of the here document, or there
             // was a newline between the preceding part
@@ -1673,18 +1675,50 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
             if current_token_without_here_tag.is_empty()
                 || current_token_without_here_tag.ends_with('\n')
             {
-                state.replace_with_here_doc(current_token_without_here_tag.to_owned());
-
-                // Delimit the end of the here-document body.
-                *result = state.delimit_current_token(
-                    TokenEndReason::HereDocumentBodyEnd,
-                    &mut self.cross_state,
-                )?;
-
-                return Ok(true);
+                body = Some(current_token_without_here_tag.to_owned());
             }
         }
+        // In a here-document whose tag is not quoted, a backslash-newline joins two lines
+        // before the tag is looked for, as in Bash: `EO\` and `F` end it. They were two
+        // lines of the body.
+        if body.is_none() && !quoted && ends_with_newline {
+            body =
+                Self::body_before_joined_tag(state.current_token(), tag_str.trim_end_matches('\n'));
+        }
+        if let Some(body) = body {
+            state.replace_with_here_doc(body);
+
+            // Delimit the end of the here-document body.
+            *result = state.delimit_current_token(
+                TokenEndReason::HereDocumentBodyEnd,
+                &mut self.cross_state,
+            )?;
+
+            return Ok(true);
+        }
         Ok(false)
+    }
+
+    /// The body before the last line of `token`, when that line, its backslash-newlines
+    /// joined, is `tag`: `EO\` and `F` on two lines of the token are the tag `EOF`.
+    fn body_before_joined_tag(token: &str, tag: &str) -> Option<String> {
+        let text = token.strip_suffix('\n')?;
+        if !text.contains("\\\n") {
+            return None;
+        }
+        // The last line begins after the last newline that no backslash escapes.
+        let bytes = text.as_bytes();
+        let start = (0..bytes.len())
+            .rev()
+            .find(|&at| {
+                bytes.get(at) == Some(&b'\n')
+                    && bytes.get(..at).is_some_and(|before| {
+                        before.iter().rev().take_while(|&&b| b == b'\\').count() % 2 == 0
+                    })
+            })
+            .map_or(0, |at| at + 1);
+        let line = text.get(start..)?.replace("\\\n", "");
+        (line == tag).then(|| text.get(..start).unwrap_or_default().to_owned())
     }
 
     const fn can_start_extglob(c: char) -> bool {

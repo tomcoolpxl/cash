@@ -31,10 +31,9 @@ The parser's remaining list (decisions.md, "The phase after 1.45.0"), each item 
 against Git Bash 5.3 first, cheapest first. Done, in DONE.md: 1, a trailing backslash
 (backslash-newline inside backquotes was found to be as Bash has it); 2, `case x in
 esac)` and loop names that are none; 3, text right after a list's `)` (a syntax error in
-a list was found to end the line as Bash's does).
+a list was found to end the line as Bash's does); 4, here-documents, but for the `EOF)`
+warning (below).
 
-4. Here-documents: the delimiter and backslash-newline, an unterminated `$(` in one, the
-   `EOF)` warning.
 5. `${ cmd; }`: `return`, `local`, `exit`, a function inside it, `}` after a newline or
    `)`.
 6. Aliases: one followed by a redirection (`foo>&2`); `eval` of a multi-line alias that
@@ -102,9 +101,10 @@ path. The rest, by theme:
 - The end of a `$(...)` is found twice, by the tokenizer and again by the word parser,
   each with its own `case` scan; one scan shared by both would end the mismatches. A
   syntax error inside `$(...)` is found only when it runs.
-- A here-document's delimiter is checked before backslash-newline is joined (`EO\`+`F`);
-  an unterminated `$(` in a here-document passes; a here-document in `$(...)` ended by
-  `EOF)` gives no warning (Bash: "delimited by end-of-file").
+- A here-document in `$(...)` ended by `EOF)` gives no warning (Bash: "delimited by
+  end-of-file"); the tokenizer that sees it has no way to say a warning. An unterminated
+  `$(` in a here-document is said as "failed to parse word" (Bash: "unexpected EOF while
+  looking for matching `)'").
 - `${ cmd; }`: `return`, `local`, `exit`, a function inside it, `}` after a newline or `)`.
 - Aliases: one followed by a redirection merges tokens (`foo>&2`); `eval` of a multi-line
   alias that unaliases itself; in POSIX mode, aliases inside `$(...)` at parse time and a

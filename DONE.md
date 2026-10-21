@@ -2918,3 +2918,8 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   a=(4*3)/2` was read as the list `a=(4*3)` and a word `/2`, and `c=(x y)z` as the list
   `(x y)` and a command `z`; text right after the `)` makes the whole one word, as in
   Bash: `let` takes `a=(4*3)/2`, 6, and `c` is `(x y)z`.
+- **Here-documents** (2026-10-21, the phase after 1.45.0, item 4): in a here-document
+  whose tag is not quoted, `EO\` and `F` on two lines were two lines of the body, which
+  never ended; a backslash-newline joins them before the tag is looked for, as in Bash.
+  A `$(` that nothing ends in a here-document was printed as written; the expansion
+  fails, status 1, and the script goes on, as in Bash.

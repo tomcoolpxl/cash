@@ -1379,7 +1379,7 @@ peg::parser! {
             legacy_arithmetic_expansion() /
             current_shell_command_substitution() /
             command_substitution() /
-            parameter_expansion() /
+            !("$(" !"(") p:parameter_expansion() { p } /
             heredoc_line_continuation() /
             heredoc_escape_sequence() /
             heredoc_literal_text()
@@ -1393,8 +1393,10 @@ peg::parser! {
         rule heredoc_escape_sequence() -> WordPiece =
             s:$("\\" ['$' | '`' | '\\']) { WordPiece::EscapeSequence(s.to_owned()) }
 
+        // A `$(` that nothing ends is no text: the body does not parse, an error of the
+        // expansion, as in Bash. It was printed as written.
         rule heredoc_literal_text() -> WordPiece =
-            s:$((!heredoc_line_continuation() !heredoc_escape_sequence() !dollar_sign_word_piece() [^'`'])+) {
+            s:$((!heredoc_line_continuation() !heredoc_escape_sequence() !dollar_sign_word_piece() !("$(" !"(") [^'`'])+) {
                 WordPiece::Text(s.to_owned())
             }
 
