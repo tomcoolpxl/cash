@@ -11,7 +11,7 @@ see: test if case ((
 
     [[ -f FILE ]]           FILE is a file (-d a directory, -e there at all)
     [[ STR == PATTERN ]]    STR matches the wildcard PATTERN (!= does not)
-    [[ STR =~ REGEX ]]      STR holds a match of REGEX, its groups in BASH_REMATCH
+    [[ STR =~ REGEX ]]      REGEX matches in STR; groups in BASH_REMATCH
     [[ A -lt B ]]           numbers compared (-eq -ne -le -gt -ge)
     [[ -z STR ]]            STR is empty (-n not empty)
     [[ E1 && E2 ]]          both (|| either, ! not, ( ) to group)
