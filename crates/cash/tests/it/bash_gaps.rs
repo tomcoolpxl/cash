@@ -3293,3 +3293,14 @@ fn the_history_list_is_there_with_history_off_and_takes_ranges() {
         (0, "l 0\n    1  foo\n    1  a\n    2  d\nd 1\np 1\nw 0")
     );
 }
+
+#[test]
+fn declare_keeps_a_readonly_function_one() {
+    // `declare -f +r f` printed the function, status 0; Bash refuses, status 1, and for a
+    // function that is not read-only does nothing.
+    let (status, stdout) = output(
+        "f() { :; }; declare -fr f; declare -f +r f 2>/dev/null; echo \"s $?\"; \
+         g() { :; }; declare -f +r g; echo \"g $?\"",
+    );
+    assert_eq!((status, stdout.as_str()), (0, "s 1\ng 0"));
+}

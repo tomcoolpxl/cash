@@ -344,6 +344,15 @@ impl DeclareCommand {
 
         if matches!(verb, DeclareVerb::Readonly) || self.make_readonly.to_bool() == Some(true) {
             func.set_readonly();
+        } else if self.make_readonly.to_bool() == Some(false) && func.is_readonly() {
+            // A read-only function stays one, as in Bash: `declare -f +r f` says so, status
+            // 1. It printed the function.
+            writeln!(
+                context.error_stream(),
+                "{}: {declaration}: readonly function",
+                context.command_name
+            )?;
+            return Ok(false);
         }
 
         match self.make_exported.to_bool() {
@@ -578,7 +587,7 @@ impl DeclareCommand {
         if (self.function_names_or_defs_only || self.function_names_only)
             && (self.make_traced.to_bool().is_some()
                 || self.make_exported.to_bool().is_some()
-                || self.make_readonly.to_bool() == Some(true)
+                || self.make_readonly.to_bool().is_some()
                 || matches!(verb, DeclareVerb::Readonly))
         {
             return self.apply_function_attributes(context, declaration, verb);
