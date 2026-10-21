@@ -116,6 +116,14 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         if !is_special {
             return Ok(false);
         }
+        // One that is read-only refuses it, as in Bash: `SHELLOPTS=x` was taken in silence.
+        if self
+            .env
+            .assignment_target(&resolved)
+            .is_some_and(crate::variables::ShellVariable::is_readonly)
+        {
+            return Err(error::ErrorKind::ReadonlyVariable(resolved).into());
+        }
         let ShellValueLiteral::Scalar(value) = value else {
             return Ok(true);
         };

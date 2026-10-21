@@ -171,6 +171,129 @@ impl CommandLineArgs {
     }
 }
 
+/// The `set` letters a shell takes as options, and the `set -o` names they stand for.
+const SET_LETTERS: [(char, &str); 19] = [
+    ('a', "allexport"),
+    ('b', "notify"),
+    ('e', "errexit"),
+    ('f', "noglob"),
+    ('h', "hashall"),
+    ('k', "keyword"),
+    ('m', "monitor"),
+    ('n', "noexec"),
+    ('p', "privileged"),
+    ('t', "onecmd"),
+    ('u', "nounset"),
+    ('v', "verbose"),
+    ('x', "xtrace"),
+    ('B', "braceexpand"),
+    ('C', "noclobber"),
+    ('E', "errtrace"),
+    ('H', "histexpand"),
+    ('P', "physical"),
+    ('T', "functrace"),
+];
+
+/// The command line with the shell's own options as Bash takes them, made into what clap
+/// reads: a `set` letter in a `-` cluster that clap has no flag for becomes `-o NAME`,
+/// each letter of a `+` cluster `+o NAME`, and `+o` and `+O` clap's `--+o` and `--+O`.
+/// Only the options before the first word that is none: `+O` was taken anywhere, a
+/// script's operand too, and `-B`, `+B` and `+o NAME` were refused.
+fn bash_style_options(args: &[String]) -> Vec<String> {
+    let name_of = |letter: char| {
+        SET_LETTERS
+            .iter()
+            .find(|(known, _)| *known == letter)
+            .map(|(_, name)| *name)
+    };
+    let mut out: Vec<String> = args.iter().take(1).cloned().collect();
+    let mut words = args.iter().skip(1);
+    while let Some(word) = words.next() {
+        match word.as_str() {
+            "-o" | "-O" | "--rcfile" | "--init-file" | "+o" | "+O" => {
+                let spelled = if word.starts_with('+') {
+                    format!("--{word}")
+                } else {
+                    word.clone()
+                };
+                out.push(spelled);
+                out.extend(words.next().cloned());
+                continue;
+            }
+            _ => {}
+        }
+        if let Some(letters) = word.strip_prefix('+')
+            && !letters.is_empty()
+            && let Some(names) = letters.chars().map(name_of).collect::<Option<Vec<_>>>()
+        {
+            for name in names {
+                out.extend(["--+o".to_owned(), name.to_owned()]);
+            }
+            continue;
+        }
+        if let Some(letters) = word.strip_prefix('-')
+            && !letters.is_empty()
+            && !letters.starts_with('-')
+        {
+            let own = CommandLineArgs::command();
+            let clap_flag =
+                |letter: char| own.get_arguments().any(|a| a.get_short() == Some(letter));
+            if letters
+                .chars()
+                .all(|letter| clap_flag(letter) || name_of(letter).is_some())
+            {
+                let kept: String = letters
+                    .chars()
+                    .filter(|&letter| clap_flag(letter))
+                    .collect();
+                for letter in letters.chars().filter(|&letter| !clap_flag(letter)) {
+                    out.extend([
+                        "-o".to_owned(),
+                        name_of(letter).unwrap_or_default().to_owned(),
+                    ]);
+                }
+                if !kept.is_empty() {
+                    out.push(format!("-{kept}"));
+                }
+                continue;
+            }
+        }
+        out.push(word.clone());
+        // The options end at `--`, `-`, and the first word that is none.
+        if word == "--" || word == "-" || !word.starts_with(['-', '+']) {
+            out.extend(words.cloned());
+            break;
+        }
+    }
+    out
+}
+
+/// Whether each name given to `-o`, `+o`, `-O` and `+O` is an option's, said as Bash says
+/// one that is not, `shell` being the shell's name.
+fn check_option_names(args: &CommandLineArgs, shell: &str) -> Result<(), String> {
+    use cash_core::namedoptions::{ShellOptionKind, options};
+
+    for name in args.enabled_options.iter().chain(&args.disabled_options) {
+        if options(ShellOptionKind::SetO).get(name.as_str()).is_none() {
+            return Err(format!(
+                "{shell}: line 0: {shell}: {name}: invalid option name"
+            ));
+        }
+    }
+    for name in args
+        .enabled_shopt_options
+        .iter()
+        .chain(&args.disabled_shopt_options)
+    {
+        if options(ShellOptionKind::Shopt).get(name.as_str()).is_none() {
+            return Err(format!(
+                "{shell}: line 0: {name}: invalid shell option name"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Main entry point for the `brush` shell.
 pub fn run() {
     run_with_args(std::env::args().collect());
@@ -178,7 +301,7 @@ pub fn run() {
 
 /// [`run`], with the command line given rather than taken from the process: how cash
 /// started under a linked tool's name (`ls.exe`, `cash --link-tools`) runs as that tool.
-pub fn run_with_args(mut args: Vec<String>) {
+pub fn run_with_args(args: Vec<String>) {
     //
     // Install the bundled-command registry so it's available both for
     // bundled dispatch (handled next) and for builtin shim registration
@@ -195,6 +318,8 @@ pub fn run_with_args(mut args: Vec<String>) {
     if let Some(code) = bundled::maybe_dispatch() {
         std::process::exit(code);
     }
+    // From here on this process is the shell, whatever its executable is named.
+    cash_win32::resolve::note_running_as_shell();
 
     //
     // Install panic handlers to clean up on panic.
@@ -204,14 +329,7 @@ pub fn run_with_args(mut args: Vec<String>) {
     //
     // Parse args.
     //
-    // Work around clap's limitations handling +O options.
-    for arg in &mut args {
-        if arg.starts_with("+O") {
-            arg.insert_str(0, "--");
-        }
-    }
-
-    let parsed_args = match CommandLineArgs::try_parse_from(args.iter().cloned()) {
+    let parsed_args = match CommandLineArgs::try_parse_from(bash_style_options(&args)) {
         Ok(parsed_args) => parsed_args,
         Err(e) => {
             let _ = e.print();
@@ -227,6 +345,16 @@ pub fn run_with_args(mut args: Vec<String>) {
             std::process::exit(exit_code);
         }
     };
+
+    // An option name `-o` or `-O` does not know ends the shell with status 2, said as Bash
+    // says it; it was passed over.
+    let shell_name = args
+        .first()
+        .map_or_else(|| "cash".to_owned(), |name| name.replace('\\', "/"));
+    if let Err(said) = check_option_names(&parsed_args, &shell_name) {
+        eprintln!("{said}");
+        std::process::exit(2);
+    }
 
     //
     // Run, on a thread with the stack shell code needs: the main thread has only what
@@ -450,6 +578,12 @@ async fn run_in_shell(
         cash_interactive::init_zsh_style_hooks(&mut *shell_ref.lock().await, &interactive_options)?;
     }
 
+    // `--pretty-print` prints the script and runs nothing, startup files neither, as in
+    // Bash; a `-c` string it does not print. It was refused.
+    if args.pretty_print {
+        return Ok(pretty_print(shell_ref, &args, read_commands_from_stdin).await);
+    }
+
     // Load profile and rc files as appropriate.
     initialize_shell(shell_ref, &args).await?;
 
@@ -470,6 +604,7 @@ async fn run_in_shell(
     // Otherwise a script path was given; run it.
     } else {
         let mut shell = shell_ref.lock().await;
+        let shell_name = shell.current_shell_name().map(|name| name.into_owned());
         let run = shell
             .run_script(
                 Path::new(&args.script_args[0]),
@@ -477,9 +612,22 @@ async fn run_in_shell(
             )
             .await;
         // A script that cannot be run exits with Bash's statuses: 127 when it does not
-        // exist, 126 when it cannot be read or looks binary.
+        // exist, 126 when it cannot be read or looks binary. It is said after the shell's
+        // name, as Bash says it; it was said after the script's, with `line 1`.
         if let Err(err) = run {
-            let _ = shell.display_error(&mut shell.stderr(), &err);
+            match (err.kind(), &shell_name) {
+                (
+                    cash_core::ErrorKind::FailedSourcingFile(..)
+                    | cash_core::ErrorKind::CannotExecuteBinaryFile(_),
+                    Some(name),
+                ) => {
+                    let mut stderr = shell.stderr();
+                    let _ = std::io::Write::write_fmt(&mut stderr, format_args!("{name}: {err}\n"));
+                }
+                _ => {
+                    let _ = shell.display_error(&mut shell.stderr(), &err);
+                }
+            }
             drop(shell);
             let status = match err.kind() {
                 cash_core::ErrorKind::FailedSourcingFile(_, io)
@@ -509,6 +657,53 @@ async fn run_in_shell(
     let result = shell_ref.lock().await.last_exit_status();
 
     Ok(result)
+}
+
+/// `--pretty-print`: the script, or standard input's, printed as cash reads it, and its
+/// status; nothing for a `-c` string. A script that cannot be read is said as running it
+/// says it, status 127.
+async fn pretty_print(
+    shell_ref: &cash_interactive::ShellRef<impl cash_core::ShellExtensions>,
+    args: &CommandLineArgs,
+    from_stdin: bool,
+) -> u8 {
+    use std::io::Read as _;
+
+    if args.command.is_some() {
+        return 0;
+    }
+    let shell_name = shell_ref
+        .lock()
+        .await
+        .current_shell_name()
+        .unwrap_or_default()
+        .into_owned();
+    let (text, source) = if from_stdin {
+        let mut text = Vec::new();
+        let _ = cash_win32::stdio::RawStdin.read_to_end(&mut text);
+        (text, shell_name)
+    } else {
+        let script = &args.script_args[0];
+        let path = shell_ref.lock().await.absolute_path(Path::new(script));
+        match std::fs::read(path) {
+            Ok(text) => (text, script.clone()),
+            Err(err) => {
+                let err = cash_core::Error::from(cash_core::ErrorKind::FailedSourcingFile(
+                    script.into(),
+                    err,
+                ));
+                let mut stderr = shell_ref.lock().await.stderr();
+                let _ =
+                    std::io::Write::write_fmt(&mut stderr, format_args!("{shell_name}: {err}\n"));
+                return 127;
+            }
+        }
+    };
+    let result = shell_ref
+        .lock()
+        .await
+        .pretty_print(&text, &cash_core::SourceInfo::from(source.as_str()));
+    u8::from(result.exit_code)
 }
 
 /// Initializes a shell by loading profile and rc files as appropriate.

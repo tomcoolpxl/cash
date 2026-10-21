@@ -150,6 +150,10 @@ pub struct CommandLineArgs {
     #[clap(long = "sh")]
     pub sh_mode: bool,
 
+    /// Print the script as cash reads it, and run nothing.
+    #[clap(long = "pretty-print", help_heading = HEADING_STANDARD_OPTIONS)]
+    pub pretty_print: bool,
+
     /// Run only one command and then exit.
     #[clap(short = 't', help_heading = HEADING_STANDARD_OPTIONS)]
     pub exit_after_one_command: bool,

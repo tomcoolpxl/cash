@@ -2998,3 +2998,20 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   whatever `exec` did to fd 0. It is read from the shell's fd 0 as it is then, a byte at
   a time, as in Bash: after `exec 0<file` the rest comes from the file, and a closed fd 0
   ends it. A `read` in such a script still takes the script's next line.
+- **Starting cash** (2026-10-21, the phase after 1.46.0, the user's second theme): the
+  `set` letters clap had no flag for (`-a`, `-B`, `-E`, ...) and every `+` letter
+  (`+B`, `+eu`) were refused, as was `+o NAME`; they are taken as in Bash, and only
+  before the first operand (`+O` was rewritten anywhere, a script's operand too). `-O`
+  and `-o` with a name they do not know were passed over; the shell ends with status 2,
+  said as Bash says it. SHELLOPTS and BASHOPTS handed down were dropped; they turn on
+  the options they name and are passed on, an unknown `set -o` name said; an imported
+  BASH_ARGV0 names `$0`. `SHELLOPTS=x` was taken in silence; a read-only special
+  variable refuses an assignment. A script operand not in the current directory was not
+  found; it is looked for on PATH, `$0` the name given, and one found nowhere is said
+  after the shell's name, not the script's with `line 1`. A cash renamed `bash.exe` sent
+  `#!/bin/sh` scripts to the `cash` on PATH; the shell runs them itself, whatever it is
+  named, a linked tool still handing them on. `--pretty-print` was refused; it writes
+  the script as Bash does, a line's commands joined by `; `, and runs nothing.
+  `exec -a name "$BASH"` was found to name `$0` already. Found on the way: `declare -f`
+  and `type` wrote a pipe `|cat` and a duplication `2>& 1`; they are `| cat`, `2>&1`,
+  `0<&3`, and a close `0>&-`, as Bash writes them.

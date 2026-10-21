@@ -3553,3 +3553,147 @@ fn a_here_document_closed_by_a_parenthesis_is_warned_of() {
         "{stderr}"
     );
 }
+
+/// Runs cash with `args` after `--noprofile --norc`, `env` added to its environment, in
+/// `directory` when one is given: its status, standard output trimmed, and standard error.
+fn start(args: &[&str], env: &[(&str, &str)], directory: Option<&Path>) -> (i32, String, String) {
+    let mut command = cash_command();
+    command
+        .args(["--noprofile", "--norc"])
+        .args(args)
+        .envs(env.iter().copied());
+    if let Some(directory) = directory {
+        command.current_dir(directory);
+    }
+    let result = command.output().unwrap();
+    let text = |bytes: Vec<u8>| String::from_utf8_lossy(&bytes).replace("\r\n", "\n");
+    (
+        result.status.code().unwrap_or(-1),
+        text(result.stdout).trim_end().to_owned(),
+        text(result.stderr),
+    )
+}
+
+#[test]
+fn starting_options_are_taken_as_bash_takes_them() {
+    // `+B`, `+o braceexpand` and the `set` letters clap had no flag for were refused; `-O`
+    // and `-o` with a name they do not know were passed over; `+O` was taken anywhere on
+    // the line, a script's operand too.
+    assert_eq!(start(&["+B", "-c", "echo {a,b}"], &[], None).1, "{a,b}");
+    assert_eq!(
+        start(&["+o", "braceexpand", "-c", "echo {a,b}"], &[], None).1,
+        "{a,b}"
+    );
+    assert_eq!(start(&["-aE", "-c", "echo $-"], &[], None).1, "ahBEc");
+    assert_eq!(start(&["+eu", "-c", "echo $-"], &[], None).1, "hBc");
+    assert_eq!(
+        start(&["-c", "echo \"$1\"", "x", "+Ofoo"], &[], None).1,
+        "+Ofoo"
+    );
+    let (status, stdout, stderr) = start(&["-O", "badopt", "-c", "echo ran"], &[], None);
+    assert_eq!((status, stdout.as_str()), (2, ""));
+    assert!(
+        stderr.contains("line 0: badopt: invalid shell option name"),
+        "{stderr}"
+    );
+    let (status, _, stderr) = start(&["-o", "nosuch", "-c", "echo ran"], &[], None);
+    assert_eq!(status, 2);
+    assert!(stderr.contains(": nosuch: invalid option name"), "{stderr}");
+}
+
+#[test]
+fn shellopts_bashopts_and_bash_argv0_are_taken_from_the_environment() {
+    // They were dropped: the options were not set, nor `$0` named; `SHELLOPTS=x` was taken
+    // in silence.
+    let (_, stdout, _) = start(
+        &[
+            "-c",
+            "echo *; env | grep -c ^SHELLOPTS=; shopt -q nullglob && echo null",
+        ],
+        &[("SHELLOPTS", "noglob"), ("BASHOPTS", "nullglob")],
+        None,
+    );
+    assert_eq!(stdout, "*\n1\nnull");
+    let (_, stdout, stderr) = start(&["-c", "echo *"], &[("SHELLOPTS", "nosuch:noglob")], None);
+    assert_eq!(stdout, "*");
+    assert!(
+        stderr.contains("line 0: nosuch: invalid option name"),
+        "{stderr}"
+    );
+    assert_eq!(
+        start(&["-c", "echo $0"], &[("BASH_ARGV0", "renamed")], None).1,
+        "renamed"
+    );
+    let (status, stdout, stderr) = start(&["-c", "SHELLOPTS=x; echo no"], &[], None);
+    assert_eq!((status, stdout.as_str()), (1, ""));
+    assert!(stderr.contains("SHELLOPTS: readonly variable"), "{stderr}");
+}
+
+#[test]
+fn a_script_operand_is_looked_for_on_path() {
+    // A script not in the current directory was not found; Bash looks for it on `PATH`,
+    // `$0` the name given. One found nowhere is said after the shell's name, not the
+    // script's with `line 1`.
+    let scratch = Scratch::new("script-on-path");
+    let bin = scratch.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    std::fs::write(bin.join("found.sh"), "echo \"found $0\"\n").unwrap();
+    let path = format!(
+        "{};{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let (status, stdout, _) = start(&["found.sh"], &[("PATH", &path)], Some(scratch.path()));
+    assert_eq!((status, stdout.as_str()), (0, "found found.sh"));
+    let (status, _, stderr) = start(&["nosuch.sh"], &[], Some(scratch.path()));
+    assert_eq!(status, 127);
+    assert!(
+        stderr.ends_with(": nosuch.sh: No such file or directory\n") && !stderr.contains("line"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_renamed_cash_runs_sh_scripts_itself() {
+    // A cash named `bash.exe` sent `#!/bin/sh` scripts to the `cash` on `PATH`.
+    let scratch = Scratch::new("renamed-cash");
+    let renamed = scratch.path().join("bash.exe");
+    if std::fs::hard_link(CASH, &renamed).is_err() {
+        std::fs::copy(CASH, &renamed).unwrap();
+    }
+    std::fs::write(scratch.path().join("s"), "#!/bin/sh\necho \"$BASH\"\n").unwrap();
+    let result = std::process::Command::new(&renamed)
+        .args(["--noprofile", "--norc", "-c", "./s"])
+        .env("CASH_NO_OFFER", "1")
+        .current_dir(scratch.path())
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    assert!(stdout.trim_end().ends_with("bash.exe"), "{stdout}");
+}
+
+#[test]
+fn pretty_print_writes_the_script_as_bash_does() {
+    // `--pretty-print` was refused. A pipe was written `|cat` and a duplication `2>& 1`,
+    // here and in `declare -f`.
+    let scratch = Scratch::new("pretty-print");
+    std::fs::write(
+        scratch.path().join("p.sh"),
+        "if true; then echo   hi; fi\nwhile false; do :; done; echo after\n\
+         echo a 2>&1 | cat <&3\ntrue & echo b\n",
+    )
+    .unwrap();
+    let (status, stdout, _) = start(&["--pretty-print", "p.sh"], &[], Some(scratch.path()));
+    assert_eq!(
+        (status, stdout.as_str()),
+        (
+            0,
+            "if true; then\n    echo hi;\nfi\nwhile false; do\n    :;\ndone; echo after\n\
+             echo a 2>&1 | cat 0<&3\ntrue & echo b"
+        )
+    );
+    assert_eq!(
+        start(&["--pretty-print", "-c", "echo hi"], &[], None),
+        (0, String::new(), String::new())
+    );
+}

@@ -162,11 +162,10 @@ path. The rest, by theme:
   `set -e`; a special builtin does not win over a function of its name.
 
 **Starting cash**
-- `+B`, `+o braceexpand`, `-O badopt`; exported SHELLOPTS and BASHOPTS not read, and not
-  read-only; `exec -a name "$BASH"` and an imported BASH_ARGV0 do not set `$0`; the
-  script operand is not looked for on PATH; `--pretty-print`.
-- A cash renamed (`bash.exe`) sends `#!/bin/sh` scripts to the `cash` on PATH, not to
-  itself (`resolve_named_interpreter` asks for the stem `cash`).
+- A second `-c` after a cluster holding one (`cash -ec -c cmd`) is refused (Bash takes
+  it); `-r` and `-D` are not taken.
+- `--pretty-print` writes a here-document before a `|` with the `;` after its next
+  command, and that command indented as in a body (Bash: `  cat`, no `;`).
 
 **Builtins, small**
 - `set -r` restricts nothing; history numbers restart after HISTSIZE, script lines not
@@ -176,7 +175,7 @@ path. The rest, by theme:
   option (Bash: the `help` text, status 2).
 - An assignment to a read-only variable is reported at line 1 of a script, whatever its
   line (bash-it's case, line 10 in Bash).
-- Printing: `declare -f`/`type` (`|cat`, `2>& 1`, `$( )`, `elif`), xtrace of a compound
+- Printing: `declare -f`/`type` (`$( )`, `elif`), xtrace of a compound
   assignment and inside traps, `shopt -o` column width, `complete -p` and `compgen -b`
   order changing between runs, associative arrays in sorted order (Bash: hash order).
 

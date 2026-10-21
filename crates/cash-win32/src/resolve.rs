@@ -354,6 +354,19 @@ pub fn read_shebang_line(path: &Path) -> Option<(String, String)> {
     Some((interpreter.to_string(), line.trim().to_string()))
 }
 
+/// Whether this process is the shell, whatever its executable is named.
+static RUNNING_AS_SHELL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Notes that this process runs as the shell.
+///
+/// A `#!/bin/sh` or `#!/bin/bash` script is run by it, whatever its executable is named (a
+/// cash renamed `bash.exe`). A linked tool
+/// (`ls.exe`, the same executable) is no shell, and hands them to the `cash` on `PATH`. A
+/// renamed cash handed them to the `cash` on `PATH` too.
+pub fn note_running_as_shell() {
+    RUNNING_AS_SHELL.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
 fn resolve_named_interpreter(
     name: &str,
     path_entries: &[PathBuf],
@@ -370,9 +383,10 @@ fn resolve_named_interpreter(
     // to whatever a user's variable of that name held (W32-18).
     if name.eq_ignore_ascii_case("sh") || name.eq_ignore_ascii_case("bash") {
         if let Ok(own) = std::env::current_exe() {
-            if own
-                .file_stem()
-                .is_some_and(|s| s.eq_ignore_ascii_case("cash"))
+            if RUNNING_AS_SHELL.load(std::sync::atomic::Ordering::Relaxed)
+                || own
+                    .file_stem()
+                    .is_some_and(|s| s.eq_ignore_ascii_case("cash"))
             {
                 return Some(Dispatch::Native(own));
             }

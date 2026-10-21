@@ -357,9 +357,14 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         self.name = Some(script_path.as_ref().to_string_lossy().into_owned());
 
         let params = self.default_exec_params();
+        let found = self.script_on_path(script_path.as_ref());
+        if found.is_some() {
+            // `$0` is the name given, as in Bash, the frame naming the file found.
+            self.renamed_zero.clone_from(&self.name);
+        }
         let result = self
             .parse_and_execute_script_file(
-                script_path.as_ref(),
+                found.as_deref().unwrap_or_else(|| script_path.as_ref()),
                 args,
                 &params,
                 callstack::ScriptCallType::Run,
@@ -368,6 +373,57 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
 
         // The on-exit tasks, the `EXIT` trap, ran inside the script's frame.
         Ok(result)
+    }
+
+    /// `--pretty-print`, as Bash has it: `text`, the script `source_info` names, written back
+    /// as cash prints commands, each complete command on lines of its own and an empty line
+    /// at the end, and nothing run. A syntax error is said as running the script says it,
+    /// status 1.
+    pub fn pretty_print(
+        &mut self,
+        text: &[u8],
+        source_info: &crate::SourceInfo,
+    ) -> ExecutionResult {
+        let params = self.default_exec_params();
+        match self.parse(text) {
+            Ok(program) => {
+                let mut stdout = params.stdout(self);
+                for command in &program.complete_commands {
+                    let _ = writeln!(stdout, "{}", cash_parser::ast::TopLevel(command));
+                }
+                let _ = writeln!(stdout);
+                ExecutionResult::success()
+            }
+            Err(err) => {
+                self.report_syntax_error(err, text, TextOrigin::Whole, source_info, &params, false);
+                ExecutionResult::general_error()
+            }
+        }
+    }
+
+    /// The file a script operand names that is not in the current directory and has no
+    /// directory in it, looked for in `$PATH` as Bash looks for it: the first readable one.
+    /// `$0` stays the name given, and `BASH_SOURCE` is the file found. It was not looked
+    /// for, and the script was not found.
+    fn script_on_path(&self, script: &Path) -> Option<std::path::PathBuf> {
+        use crate::sys::fs::PathExt as _;
+
+        let name = script.to_str()?;
+        if name.is_empty()
+            || script.is_absolute()
+            || crate::sys::fs::contains_path_separator(name)
+            || self.absolute_path(script).exists()
+        {
+            return None;
+        }
+        let search = self.env_str("PATH").unwrap_or_default();
+        let found = crate::sys::fs::split_paths_preserving_empty(search.as_ref())
+            .map(|directory| self.absolute_path(directory).join(name))
+            .find(|candidate| candidate.is_file() && candidate.as_path().readable())?;
+        let found = found.to_string_lossy();
+        Some(std::path::PathBuf::from(
+            crate::sys::fs::normalize_path_separators(found.as_ref()).as_ref(),
+        ))
     }
 
     /// Runs `text` as Bash runs a script, a sourced file, a `-c` string or `eval`'s, from

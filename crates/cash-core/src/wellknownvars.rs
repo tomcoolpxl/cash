@@ -93,12 +93,20 @@ pub(crate) fn init_well_known_vars(
         shell.update_last_arg_variable(Some(shell_name));
     }
 
-    // BASHOPTS
+    // BASHOPTS: one handed down turns on the options it names, as in Bash, and is passed on;
+    // a name it does not know is passed over. It was dropped.
+    let inherited_bashopts = shell.env_str("BASHOPTS").map(|names| names.to_string());
+    if let Some(names) = &inherited_bashopts {
+        import_options(shell, names, crate::namedoptions::ShellOptionKind::Shopt);
+    }
     let mut bashopts_var = ShellVariable::new(ShellValue::Dynamic {
         getter: |shell| shell.options().shopt_optstr().into(),
         setter: |_| (),
     });
     bashopts_var.set_readonly();
+    if inherited_bashopts.is_some() {
+        bashopts_var.export();
+    }
     shell.env_mut().set_global("BASHOPTS", bashopts_var)?;
 
     // BASHPID
@@ -152,7 +160,10 @@ pub(crate) fn init_well_known_vars(
         }),
     )?;
 
-    // BASH_ARGV0
+    // BASH_ARGV0: one handed down names `$0`, as in Bash; it was dropped.
+    if let Some(renamed) = shell.env_str("BASH_ARGV0").map(|name| name.to_string()) {
+        shell.renamed_zero = Some(renamed);
+    }
     shell.env_mut().set_global(
         "BASH_ARGV0",
         ShellVariable::new(ShellValue::Dynamic {
@@ -543,12 +554,19 @@ pub(crate) fn init_well_known_vars(
         }
     }
 
-    // SHELLOPTS
+    // SHELLOPTS: as BASHOPTS above, but a name it does not know is said, as in Bash.
+    let inherited_shellopts = shell.env_str("SHELLOPTS").map(|names| names.to_string());
+    if let Some(names) = &inherited_shellopts {
+        import_options(shell, names, crate::namedoptions::ShellOptionKind::SetO);
+    }
     let mut shellopts_var = ShellVariable::new(ShellValue::Dynamic {
         getter: |shell| shell.options().seto_optstr().into(),
         setter: |_| (),
     });
     shellopts_var.set_readonly();
+    if inherited_shellopts.is_some() {
+        shellopts_var.export();
+    }
     shell.env_mut().set_global("SHELLOPTS", shellopts_var)?;
 
     // SHLVL
@@ -611,6 +629,29 @@ pub(crate) fn init_well_known_vars(
 }
 
 /// Returns a list of the current user's group IDs, with the effective GID at the front.
+/// Turns on each option of `kind` that `names`, colon-separated as SHELLOPTS and BASHOPTS
+/// hold them, names. A `set -o` name it does not know is said, `line 0` as Bash says it.
+fn import_options(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    names: &str,
+    kind: crate::namedoptions::ShellOptionKind,
+) {
+    use std::io::Write as _;
+
+    let complain = matches!(kind, crate::namedoptions::ShellOptionKind::SetO);
+    for name in names.split(':').filter(|name| !name.is_empty()) {
+        if let Some(option) = crate::namedoptions::options(kind).get(name) {
+            option.set(shell.options_mut(), true);
+        } else if complain {
+            let _ = writeln!(
+                shell.stderr(),
+                "{}: line 0: {name}: invalid option name",
+                shell.name_for_errors()
+            );
+        }
+    }
+}
+
 fn get_current_user_gids() -> Vec<u32> {
     let mut groups = sys::users::get_user_group_ids().unwrap_or_default();
 

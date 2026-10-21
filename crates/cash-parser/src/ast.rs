@@ -141,6 +141,37 @@ impl Display for Program {
 /// Represents a complete shell command.
 pub type CompleteCommand = CompoundList;
 
+/// A complete command written as Bash writes one it read at the top level.
+///
+/// As `--pretty-print` writes it: its items on one line, after `; ` or `&`, the bodies of
+/// an item's here-documents on the lines after it, and the next item after a blank.
+pub struct TopLevel<'a>(pub &'a CompleteCommand);
+
+impl Display for TopLevel<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut previous: Option<&SeparatorOperator> = None;
+        let mut after_bodies = false;
+        for item in &self.0.0 {
+            match previous {
+                Some(SeparatorOperator::Sequence) if !after_bodies => write!(f, "; ")?,
+                Some(_) => write!(f, " ")?,
+                None => {}
+            }
+            let bodies = write_holding_here_documents(f, &item.0)?;
+            if matches!(item.1, SeparatorOperator::Async) {
+                write!(f, " &")?;
+            }
+            after_bodies = !bodies.is_empty();
+            if after_bodies {
+                writeln!(f)?;
+                write_here_document_bodies(f, &bodies)?;
+            }
+            previous = Some(&item.1);
+        }
+        Ok(())
+    }
+}
+
 /// Represents a complete shell command item.
 pub type CompleteCommandItem = CompoundListItem;
 
@@ -423,7 +454,10 @@ impl Display for Pipeline {
         for (i, command) in self.seq.iter().enumerate() {
             if i > 0 {
                 write!(f, " |")?;
-                if !bodies.is_empty() {
+                if bodies.is_empty() {
+                    // A blank after the `|`, as Bash writes it; it was `|cat`.
+                    write!(f, " ")?;
+                } else {
                     writeln!(f)?;
                     write_here_document_bodies(f, &std::mem::take(&mut bodies))?;
                 }
@@ -1807,16 +1841,31 @@ impl SourceLocation for IoRedirect {
 impl Display for IoRedirect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            // A duplication is written as Bash writes it: no blank before its target, the
+            // descriptor it applies to written when the target is a number or `-`, and a
+            // close as `>&-` (`0>&-` for `<&-`). It was `2>& 1`.
             Self::File(fd_num, kind, target) => {
-                if let Some(fd_num) = fd_num {
-                    write!(f, "{fd_num}")?;
+                let Some(input) = kind.duplicates_input() else {
+                    if let Some(fd_num) = fd_num {
+                        write!(f, "{fd_num}")?;
+                    }
+                    return write!(f, "{kind} {target}");
+                };
+                let literal = target.is_literal_descriptor();
+                match fd_num {
+                    Some(fd_num) => write!(f, "{fd_num}")?,
+                    None if literal => write!(f, "{}", if input { 0 } else { 1 })?,
+                    None => {}
                 }
-
-                write!(f, "{kind} {target}")?;
+                let closes =
+                    matches!(target, IoFileRedirectTarget::Duplicate(word) if word.value == "-");
+                let operator = if closes || !input { ">&" } else { "<&" };
+                write!(f, "{operator}{target}")?;
             }
-            Self::VariableFile(name, kind, target) => {
-                write!(f, "{{{name}}}{kind} {target}")?;
-            }
+            Self::VariableFile(name, kind, target) => match kind.duplicates_input() {
+                Some(_) => write!(f, "{{{name}}}{kind}{target}")?,
+                None => write!(f, "{{{name}}}{kind} {target}")?,
+            },
             Self::OutputAndError(target, append) => {
                 write!(f, "&>")?;
                 if *append {
@@ -1873,6 +1922,19 @@ pub enum IoFileRedirectKind {
     DuplicateOutput,
 }
 
+impl IoFileRedirectKind {
+    /// For a duplication, whether it duplicates input (`<&`) rather than output (`>&`);
+    /// `None` for any other redirection.
+    #[must_use]
+    pub const fn duplicates_input(&self) -> Option<bool> {
+        match self {
+            Self::DuplicateInput => Some(true),
+            Self::DuplicateOutput => Some(false),
+            _ => None,
+        }
+    }
+}
+
 impl Display for IoFileRedirectKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1905,6 +1967,22 @@ pub enum IoFileRedirectTarget {
     /// filename, a file descriptor, or a file descriptor and a "-" to indicate
     /// requested closure.
     Duplicate(Word),
+}
+
+impl IoFileRedirectTarget {
+    /// Whether a duplication's target is a descriptor written out, or a close: a number, a
+    /// number and `-`, or `-`, not a word to expand or a file's name.
+    #[must_use]
+    pub fn is_literal_descriptor(&self) -> bool {
+        match self {
+            Self::Fd(_) => true,
+            Self::Duplicate(word) => {
+                let digits = word.value.strip_suffix('-').unwrap_or(&word.value);
+                digits.chars().all(|c| c.is_ascii_digit())
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Display for IoFileRedirectTarget {
