@@ -2904,3 +2904,6 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   printed the function, status 0; Bash keeps a read-only function one and says so,
   `declare: f: readonly function`, status 1, and for a function that is not read-only
   does nothing.
+- **`compgen -k` in Bash's order** (2026-10-21, after 1.45.0, found in the phase before):
+  the reserved words came from a set, in an order that changed from run to run; they are
+  listed in the order of Bash's table, as Bash lists them.

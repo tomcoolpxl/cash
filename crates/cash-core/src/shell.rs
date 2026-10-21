@@ -663,11 +663,14 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
 
     /// Returns the keywords that are reserved by the shell.
     pub(crate) fn get_keywords(&self) -> impl IntoIterator<Item = &str> {
-        if self.options.sh_mode {
-            keywords::SH_MODE_KEYWORDS.iter().copied()
+        let set = if self.options.sh_mode {
+            &*keywords::SH_MODE_KEYWORDS
         } else {
-            keywords::KEYWORDS.iter().copied()
-        }
+            &*keywords::KEYWORDS
+        };
+        keywords::ORDER
+            .into_iter()
+            .filter(move |keyword| set.contains(keyword))
     }
 
     /// Checks if the given string is a keyword reserved in this shell.

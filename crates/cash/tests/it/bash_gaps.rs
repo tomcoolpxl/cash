@@ -3304,3 +3304,16 @@ fn declare_keeps_a_readonly_function_one() {
     );
     assert_eq!((status, stdout.as_str()), (0, "s 1\ng 0"));
 }
+
+#[test]
+fn compgen_k_lists_the_reserved_words_in_bashs_order() {
+    // They came from a set, in an order that changed from run to run.
+    let (status, stdout) = output("compgen -k | tr '\n' ' '");
+    assert_eq!(
+        (status, stdout.as_str()),
+        (
+            0,
+            "if then else elif fi case esac for select while until do done in function time { } ! [[ ]] coproc"
+        )
+    );
+}
