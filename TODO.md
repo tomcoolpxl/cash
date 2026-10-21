@@ -102,11 +102,6 @@ value ran), `history N` panicking, `#!/c/...` interpreters, `find -mmin` and its
 unquoted by `set`, `printf %q` and `declare -p`, and `**/**` giving the directory's own
 path. The rest, by theme:
 
-**Scripts that end or go on in silence**
-- A shell reading its script from standard input ignores `exec 0<file`: the script is
-  read ahead of the commands, from the input the shell started with (Bash reads it a
-  line at a time, from whatever fd 0 is then).
-
 **Scripts refused that Bash runs (parser)**
 - The end of a `$(...)` is found twice, by the tokenizer and again by the word parser,
   each with its own `case` scan; one scan shared by both would end the mismatches (none

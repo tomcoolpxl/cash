@@ -3487,6 +3487,54 @@ fn a_length_takes_its_parameter_as_bash_does() {
 }
 
 #[test]
+fn a_script_read_from_standard_input_follows_exec_of_fd_0() {
+    // The rest of a script read from standard input comes from the shell's fd 0 as it is
+    // then, as in Bash: after `exec 0<file` from the file, and a closed one ends it. It
+    // came from the input the shell started with.
+    use std::io::Write as _;
+
+    let scratch = Scratch::new("exec-stdin");
+    std::fs::write(
+        scratch.path().join("cmds.txt"),
+        "echo from-file\nread y\nthe-files-line\necho \"[$y]\"\n",
+    )
+    .unwrap();
+    for (script, expected) in [
+        ("read x\nhello\necho \"[$x]\"\n", "[hello]"),
+        (
+            "exec 0<cmds.txt\necho not-read\n",
+            "from-file\n[the-files-line]",
+        ),
+        ("echo one\nexec 0<&-\necho not-read\n", "one"),
+    ] {
+        let mut child = cash_command()
+            .args(["--noprofile", "--norc"])
+            .current_dir(scratch.path())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(script.as_bytes())
+            .unwrap();
+        let result = child.wait_with_output().unwrap();
+        let stdout = String::from_utf8(result.stdout)
+            .unwrap()
+            .replace("\r\n", "\n");
+        assert_eq!(
+            stdout.trim_end(),
+            expected,
+            "{script}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+}
+
+#[test]
 fn a_here_document_closed_by_a_parenthesis_is_warned_of() {
     // `$(cat <<EOF` ... `EOF)` was taken in silence; Bash warns that the here-document was
     // delimited by end-of-file, with the line of the `)` and the line it began on.

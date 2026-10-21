@@ -17,12 +17,29 @@ impl InputBackend for MinimalInputBackend {
     ) -> Result<ReadResult, ShellError> {
         let prompt = std::io::stdin().is_terminal().then_some(&prompt);
 
-        // A byte at a time, and never through `std::io::stdin()`: the lines after this
-        // program are the input of the commands in it (`read`, or a `cat` the script
-        // runs), and what a buffer took of them here they would not see.
-        let mut stdin = std::io::BufReader::with_capacity(1, cash_win32::stdio::RawStdin);
-
-        Self::read_program_from(shell_ref, prompt, &mut stdin, &mut std::io::stderr())
+        // From the shell's standard input as it is now, as Bash reads it: after `exec
+        // 0<file` the rest of the program is read from the file, and a closed one ends it.
+        // It was read from the input the shell started with whatever `exec` did.
+        let current = shell_ref.try_lock().ok().map(|shell| {
+            shell
+                .open_files()
+                .try_fd(cash_core::openfiles::OpenFiles::STDIN_FD)
+                .cloned()
+        });
+        match current {
+            Some(None) => Ok(ReadResult::Eof),
+            Some(Some(file)) if !matches!(file, cash_core::openfiles::OpenFile::Stdin(_)) => {
+                let mut input = std::io::BufReader::with_capacity(1, file);
+                Self::read_program_from(shell_ref, prompt, &mut input, &mut std::io::stderr())
+            }
+            // A byte at a time, and never through `std::io::stdin()`: the lines after this
+            // program are the input of the commands in it (`read`, or a `cat` the script
+            // runs), and what a buffer took of them here they would not see.
+            _ => {
+                let mut stdin = std::io::BufReader::with_capacity(1, cash_win32::stdio::RawStdin);
+                Self::read_program_from(shell_ref, prompt, &mut stdin, &mut std::io::stderr())
+            }
+        }
     }
 }
 

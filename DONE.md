@@ -2993,3 +2993,8 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   its command is read, with both lines. The tokenizer notes each one it closes so; a
   text where one may be is read a command at a time, as Bash reads it, and a cheap look
   for a `<<TAG` with a line `TAG)` keeps the rest from being read twice.
+- **`exec 0<file` in a script read from standard input** (2026-10-21, the phase after
+  1.46.0, leftovers): the script was read from the input the shell started with,
+  whatever `exec` did to fd 0. It is read from the shell's fd 0 as it is then, a byte at
+  a time, as in Bash: after `exec 0<file` the rest comes from the file, and a closed fd 0
+  ends it. A `read` in such a script still takes the script's next line.
