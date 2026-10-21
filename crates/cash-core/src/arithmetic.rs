@@ -107,8 +107,13 @@ pub(crate) async fn expand_and_eval(
             tilde_expand: false,
             ..Default::default()
         };
+        // The expression is expanded as if it were in double quotes, as Bash expands it: a
+        // single quote stays, and is an error of the expression (`$(( '1' ))`), but in an
+        // associative array's subscript, which takes it away (`A['k']`). Quotes were
+        // removed, so `'1'` was 1.
+        let quoted = format!("\"{expr}\"");
         Cow::Owned(
-            expansion::basic_expand_word_with_options(shell, params, expr, &options)
+            expansion::basic_expand_word_with_options(shell, params, &quoted, &options)
                 .await
                 .map_err(|_e| EvalError::FailedToExpandExpression(expr.to_owned()))?,
         )
@@ -420,12 +425,27 @@ fn resolve_subscript(
         .get(name)
         .is_some_and(|(_, v)| v.is_associative(shell));
     if is_associative {
-        return expand_simple_references(shell, &subscript.text);
+        let key = expand_simple_references(shell, &subscript.text)?;
+        // A key in single quotes is the text inside, as in Bash (`(( A['k']++ ))`).
+        return Ok(
+            match key.strip_prefix('\'').and_then(|k| k.strip_suffix('\'')) {
+                Some(inside) if !inside.contains('\'') => inside.to_owned(),
+                _ => key,
+            },
+        );
     }
     match &subscript.expr {
         Some(expr) => Ok(eval_expr_impl(expr, shell, depth)?.to_string()),
         // A blank subscript is 0, as in Bash: `$((a[ ]))` is `a[0]`.
         None if subscript.text.trim().is_empty() => Ok("0".to_owned()),
+        // `$d` in it, from a variable's value read as an expression (`v='b[$d]'; $(( v
+        // ))`), is expanded first, as in Bash; it was a syntax error.
+        None if subscript.text.contains('$') => {
+            let expanded = expand_simple_references(shell, &subscript.text)?;
+            let expr = cash_parser::arithmetic::parse(&expanded)
+                .map_err(|e| syntax_error(&expanded, e.arithmetic_offset()))?;
+            Ok(eval_expr_impl(&expr, shell, depth)?.to_string())
+        }
         None => Err(syntax_error(&subscript.text, None)),
     }
 }

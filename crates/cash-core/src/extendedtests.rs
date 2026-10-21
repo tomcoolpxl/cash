@@ -47,6 +47,32 @@ async fn apply_unary_predicate(
     shell: &mut Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
 ) -> Result<bool, error::Error> {
+    // `-v A[$k]` of an associative array takes the key as `$k` expands, whatever it holds,
+    // as Bash parses the subscript before it expands it: a key holding `]` was cut at it.
+    if matches!(op, ast::UnaryPredicate::ShellVariableIsSetAndAssigned)
+        && let Some((name, subscript)) = operand
+            .value
+            .strip_suffix(']')
+            .and_then(|word| word.split_once('['))
+        && env::valid_variable_name(name)
+        && shell
+            .env()
+            .get(name)
+            .is_some_and(|(_, var)| var.is_associative(shell))
+    {
+        let key = expansion::basic_expand_word(shell, params, subscript).await?;
+        if shell.options().print_commands_and_arguments {
+            let shown = key.replace(']', "\\]");
+            shell
+                .trace_command(params, std::format!("[[ {op} {name}[{shown}] ]]"))
+                .await;
+        }
+        let Some((_, variable)) = shell.env().get(name) else {
+            return Ok(false);
+        };
+        return Ok(variable.value().get_at(&key, shell)?.is_some());
+    }
+
     let expanded_operand = expansion::basic_expand_word(shell, params, operand).await?;
 
     if shell.options().print_commands_and_arguments {

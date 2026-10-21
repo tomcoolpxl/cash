@@ -3373,3 +3373,21 @@ fn declarations_and_options_left_from_the_arrays_phase_match_bash() {
         )
     );
 }
+
+#[test]
+fn arithmetic_reads_assignment_and_quotes_as_bash_does() {
+    // An assignment was an operand of `?:`; a single quote was removed before the
+    // expression was read; a variable holding `b[$d]` was not expanded; `-v A[$k]` cut a
+    // key holding `]`.
+    let (status, stdout) = output(
+        "x=1; (( 1 ? 20 : x+=2 )) 2>/dev/null; echo \"s $? x $x\"; (( 1 ? x=3 : 4 )); \
+         echo \"x $x\"; ( echo $(( '1' + 2 )) ) 2>/dev/null; echo \"q $?\"; declare -A A; \
+         (( A['k']=1 )); echo \"k ${A[k]}\"; b=(5 6 7 8 9); d=3; v=\"b[\\$d]\"; \
+         echo \"v $(( v ))\"; k='a]b'; A[$k]=1; [[ -v A[$k] ]] && echo set; \
+         [[ -v A[a] ]] || echo unset",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (0, "s 1 x 1\nx 3\nq 1\nk 1\nv 8\nset\nunset")
+    );
+}

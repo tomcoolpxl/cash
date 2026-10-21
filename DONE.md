@@ -2955,3 +2955,11 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   of the variable it hides, as `local -I` does. `set -k` did nothing; an assignment
   anywhere among a command's words is the command's, a declaration's too, as in Bash.
   `set -a` with `declare` and `localvar_unset` were found to be as Bash has them.
+- **Arithmetic as Bash reads it** (2026-10-21, the phase after 1.46.0, leftovers): an
+  assignment was an operand anywhere (`1 ? 20 : x+=2` was 20, `0 && x=2` set nothing
+  but was taken); it binds loosest but for `,`, as in Bash's grammar, and those are
+  errors. A single quote was removed before the expression was read (`$(( '1' + 2 ))`
+  was 3); the expression is expanded as in double quotes, so it is a syntax error, as
+  in Bash, but in an associative array's subscript (`A['k']`), where the quotes go. A
+  variable holding `b[$d]` was not expanded in its subscript; it is. `[[ -v A[$k] ]]`
+  cut a key holding `]` at it; the subscript is split off before it is expanded.

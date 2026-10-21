@@ -124,8 +124,8 @@ path. The rest, by theme:
 **Assignments, declarations, readonly**
 - `[i]+=v` in a compound assignment is taken as a word (`a+=([0]+=z)`; Bash appends to
   element 0).
-- Associative arrays: a key holding `]` is not found by `[[ -v A[$k] ]]`; `(( A[\$k]++
-  ))` expands `$k`; a key that is no name for `read` and `printf -v` is said otherwise.
+- Associative arrays: `(( A[\$k]++ ))` expands `$k`; a key that is no name for `read`
+  and `printf -v` is said otherwise.
 - Namerefs: a reference named as its target in a function warns once (Bash: again when
   used); a reference to an element with an arithmetic subscript (`X[i+1]`) used by
   `read` writes element 0.
@@ -134,11 +134,6 @@ path. The rest, by theme:
 - POSIX mode's literal single quotes in a double-quoted `${v-word}`; an unquoted
   `${v-$@}` with `IFS=:` is three words (Bash: one, joined with spaces).
 - `${#/}` is taken (Bash: bad substitution); `${!n[@]@Q}` is said otherwise.
-- Arithmetic: assignment binds tighter than `?:`, `&&`, `||` (`1 ? 20 : x+=2` is 20;
-  Bash: an assignment to a non-variable); a single quote is removed before the
-  expression is read (`$(( 'foo' ))` is 0, `a['1']` element 1; Bash: a syntax error, but
-  in an associative array's subscript, where it is removed later); a variable holding
-  `b[$d]` not expanded.
 - `${x@P}`: `\v` is cash's version, `\s` the script's name (by design).
 - Bytes that are not UTF-8 become U+FFFD (`$'\xff'`, `read`, `%q`), and `$'\U'` above
   U+10FFFF.
