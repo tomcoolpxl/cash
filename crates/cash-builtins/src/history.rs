@@ -50,7 +50,14 @@ pub(crate) struct HistoryCommand {
 }
 
 struct HistoryConfig {
-    default_history_file_path: Option<PathBuf>,
+    /// The file each of `-a`, `-n`, `-r` and `-w` names, or `HISTFILE`, resolved as the
+    /// shell resolves a path (`$HOME/x` in its Unix spelling, a relative one from the
+    /// shell's directory); none for `/dev/null`. They were opened as written, which a
+    /// script's `history -w "$HOME/.hist"` missed.
+    append_file: Option<PathBuf>,
+    read_new_file: Option<PathBuf>,
+    read_file: Option<PathBuf>,
+    write_file: Option<PathBuf>,
     time_format: Option<String>,
     /// The zone `TZ` names, which the times are shown in.
     zone: cash_core::timefmt::Zone,
@@ -86,8 +93,18 @@ impl builtins::Command for HistoryCommand {
         }
 
         // Retrieve the shell's history config while we still can.
+        let default_file = context.shell.history_file_path();
+        let file = |option: &Option<Option<String>>| {
+            option.as_ref().and_then(|given| {
+                get_effective_history_file_path(default_file.as_deref(), given.as_deref())
+                    .map(|path| context.shell.absolute_path(path))
+            })
+        };
         let config = HistoryConfig {
-            default_history_file_path: context.shell.history_file_path(),
+            append_file: file(&self.append_session_to_file),
+            read_new_file: file(&self.append_rest_of_file_to_session),
+            read_file: file(&self.append_file_to_session),
+            write_file: file(&self.write_session_to_file),
             time_format: context.shell.history_time_format(),
             zone: cash_core::timefmt::Zone::of_shell(context.shell),
         };
@@ -133,11 +150,8 @@ impl HistoryCommand {
             return Ok(ExecutionResult::success());
         }
 
-        if let Some(append_option) = &self.append_session_to_file {
-            if let Some(file_path) = get_effective_history_file_path(
-                config.default_history_file_path.as_deref(),
-                append_option.as_deref(),
-            ) {
+        if self.append_session_to_file.is_some() {
+            if let Some(file_path) = &config.append_file {
                 history.flush(
                     file_path,
                     true,                         /* append? */
@@ -149,31 +163,22 @@ impl HistoryCommand {
             return Ok(ExecutionResult::success());
         }
 
-        if let Some(file_option) = &self.append_rest_of_file_to_session {
-            if let Some(file_path) = get_effective_history_file_path(
-                config.default_history_file_path.as_deref(),
-                file_option.as_deref(),
-            ) {
+        if self.append_rest_of_file_to_session.is_some() {
+            if let Some(file_path) = &config.read_new_file {
                 history.read_file(file_path, true)?;
             }
             return Ok(ExecutionResult::success());
         }
 
-        if let Some(file_option) = &self.append_file_to_session {
-            if let Some(file_path) = get_effective_history_file_path(
-                config.default_history_file_path.as_deref(),
-                file_option.as_deref(),
-            ) {
+        if self.append_file_to_session.is_some() {
+            if let Some(file_path) = &config.read_file {
                 history.read_file(file_path, false)?;
             }
             return Ok(ExecutionResult::success());
         }
 
-        if let Some(write_option) = &self.write_session_to_file {
-            if let Some(file_path) = get_effective_history_file_path(
-                config.default_history_file_path.as_deref(),
-                write_option.as_deref(),
-            ) {
+        if self.write_session_to_file.is_some() {
+            if let Some(file_path) = &config.write_file {
                 history.flush(
                     file_path,
                     false,                        /* append? */
