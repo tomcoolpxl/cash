@@ -31,10 +31,8 @@ The user's pick from the themes below (decisions.md, "The phase after 1.42.0"), 
 order. Done, in DONE.md: 1, loop control (`break`, `continue`, `return`, `exit`); 2,
 `read` with a mixed IFS and escapes, and `mapfile -d ''`; 3, `exec` and the redirection
 state, but for `exec 0<file` in a script read from standard input (below); 4, `fc -0`, and
-a script's history written as it ends.
+a script's history written as it ends; 5, the parser's cheapest subset.
 
-5. The parser's cheapest subset: `! time`, `time --`, reserved words in `$(case ...)`, a
-   here-document in `$(...)` ended by `EOF)`, `<<-'<TAB>END'`.
 6. Readonly and prefix assignments, `declare -g`.
 7. `printf`.
 8. Expansion edge cases.
@@ -74,11 +72,12 @@ path. The rest, by theme:
 - `read -n -1` is refused as an option, status 2 (Bash: "invalid number", status 1).
 
 **Scripts refused that Bash runs (parser)**
-- `! time cmd`, `time` after `!` or `time`, `time --`.
-- `$(case x in in|esac) ...;; esac)`: the end of `$(` is found wrong around reserved words
-  in patterns; a syntax error inside `$(...)` is found only when it runs.
-- A here-document in `$(...)` ended by `EOF)`; `<<-'<TAB>END'`; the delimiter checked
-  before backslash-newline is joined (`EO\`+`F`); an unterminated `$(` in a here-document.
+- The end of a `$(...)` is found twice, by the tokenizer and again by the word parser,
+  each with its own `case` scan; one scan shared by both would end the mismatches. A
+  syntax error inside `$(...)` is found only when it runs.
+- A here-document's delimiter is checked before backslash-newline is joined (`EO\`+`F`);
+  an unterminated `$(` in a here-document passes; a here-document in `$(...)` ended by
+  `EOF)` gives no warning (Bash: "delimited by end-of-file").
 - A trailing backslash at the end of input is dropped; backslash-newline inside
   backquotes is kept.
 - A syntax error in a compound array assignment ends the script; text after its `)`

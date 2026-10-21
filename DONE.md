@@ -2777,3 +2777,15 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   history` appended each line to `HISTFILE` as it went, to every `HISTFILE` it set on the
   way; Bash writes the script's history once, as it ends, after its `EXIT` trap, to the
   `HISTFILE` of then, and a `-c` string keeps none.
+- **The parser's cheapest subset** (2026-10-21, the phase after 1.42.0, item 5): only one
+  `time`, first, was taken before a pipeline, so `! time cmd` and `time time cmd` ran a
+  program named `time` and `time --` one named `--`; any run of `!` and `time [-p] [--]`
+  now leads a pipeline, as Bash's grammar has it, `--` giving POSIX's output as `-p` does.
+  `$(case x in in|esac) ...;; esac)` ended at the pattern's `esac`, in both scans for the
+  end of `$(`: the tokenizer's takes only an `esac` that begins a pattern list as the
+  case's end, and only the `in` after `case WORD` (not a `for`'s) as the start of
+  patterns; the word parser's takes no `esac` after a `|`. A here-document in `$(...)`
+  ended by a line of `EOF)` was read to the end of the input; the line ends it and the
+  `)` the substitution. `<<-'<TAB>END'` never ended: the tag loses its leading tabs as
+  its lines do. Found on the way: a run of tabs before an `esac` reached the scan as a
+  word of its own (git-prompt's case, which caught it).

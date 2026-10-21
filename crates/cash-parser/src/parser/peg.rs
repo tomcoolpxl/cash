@@ -44,17 +44,37 @@ peg::parser! {
             specific_operator("&&") { ast::AndOr::And } /
             specific_operator("||") { ast::AndOr::Or }
 
+        // As Bash's `pipeline_command`: any run of `!` and `time` before the pipeline. Only
+        // one `time` first was taken, so `! time cmd` ran a program named `time`.
         rule pipeline() -> ast::Pipeline =
-            timed:pipeline_timed()? bang:bang()* seq:pipe_sequence() {?
-                if timed.is_none() && bang.is_empty() && seq.is_empty() {
+            prefixes:pipeline_prefix()* seq:pipe_sequence() {?
+                let bangs = prefixes.iter().filter(|prefix| prefix.is_none()).count();
+                let timed = prefixes.into_iter().flatten().next();
+                if timed.is_none() && bangs == 0 && seq.is_empty() {
                     Err("empty pipeline")
                 } else {
-                    let invert = bang.len() % 2 == 1;
-                    Ok(ast::Pipeline { timed, bang: invert, seq })
+                    Ok(ast::Pipeline { timed, bang: bangs % 2 == 1, seq })
                 }
             }
 
+        // `time`, or `!` (none).
+        rule pipeline_prefix() -> Option<ast::PipelineTimed> =
+            t:pipeline_timed() { Some(t) } /
+            bang() { None }
+
+        // `time`, `time -p`, and either with `--` after it, which gives POSIX's output as
+        // `-p` does, as Bash's grammar has it (`TIME TIMEIGN`).
         rule pipeline_timed() -> ast::PipelineTimed =
+            t:pipeline_timed_word() ignore:specific_word("--")? {
+                match (t, ignore) {
+                    (ast::PipelineTimed::Timed(start), Some(end)) => {
+                        ast::PipelineTimed::TimedWithPosixOutput(SourceSpan::within(&start, end.location()))
+                    }
+                    (t, _) => t,
+                }
+            }
+
+        rule pipeline_timed_word() -> ast::PipelineTimed =
             non_posix_extensions_enabled() s:specific_word("time") posix_output:specific_word("-p")? {
                 let start = s.location();
                 if let Some(end) = posix_output {

@@ -2902,6 +2902,23 @@ fn set_a_exports_what_every_kind_of_assignment_sets_but_no_array() {
 }
 
 #[test]
+fn the_parser_takes_what_bash_takes_of_time_case_and_here_documents() {
+    // `! time` ran a program named `time` and `time --` one named `--`; the `esac` of a
+    // pattern ended a `case` inside `$(...)`; a here-document there ended by `EOF)` was
+    // read to the end of the input; and `<<-'<TAB>END'` never ended.
+    let script = "! time true 2>/dev/null; echo \"bang $?\"\n\
+                  TIMEFORMAT=; time time true; time -- true 2>/dev/null; echo \"time $?\"\n\
+                  echo $(case x in in|esac) echo no;; x) echo yes;; esac)\n\
+                  echo $(case a in a) for i in 1 2; do echo $i; done;; esac)\n\
+                  v=$(cat <<EOF\nhi\nEOF)\necho \"[$v]\"\n\
+                  cat <<-'\tEND'\n\tbody\n\tEND\necho after";
+    assert_eq!(
+        output(script),
+        (0, "bang 1\ntime 0\nyes\n1 2\n[hi]\nbody\nafter".into())
+    );
+}
+
+#[test]
 fn a_script_s_history_is_written_as_it_ends_to_the_last_histfile() {
     // It was appended line by line to every HISTFILE the script set; Bash writes it once,
     // at the end, to the HISTFILE of then. And `fc -0` and `fc -s -0` ran the last

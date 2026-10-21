@@ -1255,7 +1255,18 @@ peg::parser! {
             !esac_keyword() [_] {}
 
         rule case_keyword() = prev_is_word_break() "case" &word_break()
-        rule esac_keyword() = prev_is_word_break() "esac" &word_break()
+        // An `esac` after a `|` is a pattern (`case x in in|esac)`), not the case's end: it
+        // ended the scan there.
+        rule esac_keyword() = prev_is_word_break() !prev_is_pattern_bar() "esac" &word_break()
+
+        rule prev_is_pattern_bar() = #{|input, pos| {
+            let before = input.get(..pos).unwrap_or_default().trim_end_matches([' ', '\t']);
+            if before.ends_with('|') && !before.ends_with("||") {
+                peg::RuleResult::Matched(pos, ())
+            } else {
+                peg::RuleResult::Failed
+            }
+        }}
 
         // `esac` only ends a case construct when it stands alone as a word; a variable
         // called `xesac` must not terminate anything.
