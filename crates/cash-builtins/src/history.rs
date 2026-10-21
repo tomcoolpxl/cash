@@ -213,8 +213,14 @@ impl HistoryCommand {
             writeln!(stderr, "history: too many arguments")?;
             return Ok(ExecutionExitCode::InvalidUsage.into());
         }
+        // A count that is no number is said as Bash says it, status 2; Rust's parse error
+        // was said, status 1.
         let max_entries: Option<usize> = if let Some(arg) = self.args.first() {
-            Some(cash_core::int_utils::parse(arg.as_str(), 10)?)
+            let Ok(count) = arg.trim().parse::<usize>() else {
+                writeln!(stderr, "history: {arg}: numeric argument required")?;
+                return Ok(ExecutionExitCode::InvalidUsage.into());
+            };
+            Some(count)
         } else {
             None
         };

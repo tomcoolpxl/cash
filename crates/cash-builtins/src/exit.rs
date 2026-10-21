@@ -24,7 +24,12 @@ impl builtins::Command for ExitCommand {
                 .shell
                 .status_before_exit_trap()
                 .unwrap_or_else(|| context.shell.last_exit_status()),
-            Err(ended) => return Ok(ended),
+            // A word that is no number is a usage error, status 2, and the shell goes on,
+            // as in Bash 5.3, but in POSIX mode, where a special builtin's error ends it.
+            Err(status) if !context.shell.options().posix_mode => {
+                return Ok(ExecutionResult::new(status));
+            }
+            Err(status) => status,
         };
 
         // The `EXIT` trap runs here, where `exit` was called, as in Bash.

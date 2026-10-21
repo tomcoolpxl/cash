@@ -16,6 +16,10 @@ pub(crate) struct PushdCommand {
     /// Directory to push, or `+N`/`-N` to rotate the stack instead.
     #[arg(allow_hyphen_values = true)]
     dir: Option<String>,
+
+    /// Operands after the first: too many, as Bash says, status 1.
+    #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
+    extra: Vec<String>,
 }
 
 impl builtins::Command for PushdCommand {
@@ -25,6 +29,15 @@ impl builtins::Command for PushdCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
+        if !self.extra.is_empty() {
+            writeln!(
+                context.error_stream(),
+                "{}: too many arguments",
+                context.command_name
+            )?;
+            return Ok(ExecutionResult::general_error());
+        }
+
         // cash: `+N` used to reach the filesystem — `pushd +1` tried to enter a directory
         // literally named `+1` and reported that it could not be found. A wrong answer to
         // a spelling bash has always rotated the stack with.

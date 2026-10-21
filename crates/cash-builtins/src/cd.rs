@@ -26,7 +26,16 @@ pub(crate) struct CdCommand {
 
     /// By default it is the value of the HOME shell variable. If `TARGET_DIR` is "-", it is
     /// converted to $OLDPWD.
+    // An empty one is taken, to be refused as Bash refuses it; clap refused it in its words.
+    #[arg(value_parser = clap::builder::TypedValueParser::map(
+        clap::builder::OsStringValueParser::new(),
+        PathBuf::from
+    ))]
     target_dir: Option<PathBuf>,
+
+    /// Operands after the first: too many, as Bash says, status 2.
+    #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
+    extra: Vec<String>,
 }
 
 impl builtins::Command for CdCommand {
@@ -37,6 +46,18 @@ impl builtins::Command for CdCommand {
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         let mut should_print = false;
+        if !self.extra.is_empty() {
+            writeln!(context.error_stream(), "cd: too many arguments")?;
+            return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
+        }
+        if self
+            .target_dir
+            .as_ref()
+            .is_some_and(|dir| dir.as_os_str().is_empty())
+        {
+            writeln!(context.error_stream(), "cd: null directory")?;
+            return Ok(ExecutionResult::general_error());
+        }
         let mut target_dir = if let Some(target_dir) = &self.target_dir {
             // `cd -', equivalent to `cd $OLDPWD'
             if target_dir.as_os_str() == "-" {

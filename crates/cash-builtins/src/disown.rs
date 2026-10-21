@@ -48,6 +48,18 @@ enum Target {
 impl builtins::Command for DisownCommand {
     type Error = cash_core::Error;
 
+    /// A letter in the leading options that is not `-h`, `-a` or `-r` is an invalid
+    /// option, status 2, as in Bash (`--long` named `--`); it was taken for a job spec.
+    /// Only the leading words are options: `disown %1 -h` names a job `-h`.
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let args: Vec<String> = args.into_iter().collect();
+        crate::check_option_letters(&args, "ahr")?;
+        builtins::parse_args(args)
+    }
+
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,

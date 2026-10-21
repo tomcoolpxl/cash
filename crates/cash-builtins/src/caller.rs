@@ -7,6 +7,10 @@ use std::io::Write;
 pub(crate) struct CallerCommand {
     /// The number of call frames to go back.
     expr: Option<usize>,
+
+    /// Operands after the first, which Bash ignores; they were refused as invalid options.
+    #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
+    _ignored: Vec<String>,
 }
 
 impl builtins::Command for CallerCommand {

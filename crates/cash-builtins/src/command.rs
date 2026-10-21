@@ -163,30 +163,22 @@ impl CommandCommand {
 impl builtins::Command for CommandCommand {
     type Error = cash_core::Error;
 
+    /// A letter in the leading options that is not `-p`, `-v` or `-V` is an invalid
+    /// option, status 2, as in Bash (`--long` named `--`); `command -z` ran `-z`. After
+    /// `--` a word is the command, whatever it looks like: `command -- -z` runs `-z`.
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let args: Vec<String> = args.into_iter().collect();
+        crate::check_option_letters(&args, "pvV")?;
+        builtins::parse_args(args)
+    }
+
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        // An option it does not know is said, as in Bash; `command -z` ran `-z`.
-        if let Some(first) = self.command_and_args.first()
-            && first.len() > 1
-            && first.starts_with('-')
-            && first != "--"
-        {
-            let option = first.get(..2).unwrap_or(first);
-            writeln!(
-                context.error_stream(),
-                "{}: {option}: invalid option",
-                context.command_name
-            )?;
-            writeln!(
-                context.error_stream(),
-                "{}: usage: command [-pVv] command [arg ...]",
-                context.command_name
-            )?;
-            return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
-        }
-
         if self.print_description || self.print_verbose_description {
             return self.describe_names(&mut context);
         }

@@ -164,6 +164,30 @@ impl builtins::Command for DeclareCommand {
             return Ok(ExecutionResult::general_error());
         }
 
+        // A function takes no array, integer or reference attribute: with names, `-f` or
+        // `-F` with `-n`, `-i`, `-A` or `-a` is an invalid option, the first of them in
+        // that order, as in Bash, but for `-p` and `readonly`. `declare -f -a f` printed `f`.
+        if (self.function_names_or_defs_only || self.function_names_only)
+            && !self.declarations.is_empty()
+            && !self.print
+            && !matches!(verb, DeclareVerb::Readonly)
+            && let Some(option) = [
+                (self.make_nameref.to_bool(), "-n"),
+                (self.make_integer.to_bool(), "-i"),
+                (self.make_associative_array.to_bool(), "-A"),
+                (self.make_indexed_array.to_bool(), "-a"),
+            ]
+            .into_iter()
+            .find_map(|(on, option)| (on == Some(true)).then_some(option))
+        {
+            writeln!(
+                context.error_stream(),
+                "{}: {option}: invalid option",
+                context.command_name
+            )?;
+            return Ok(ExecutionResult::general_error());
+        }
+
         let mut result = ExecutionResult::success();
         if !self.declarations.is_empty() {
             for declaration in &self.declarations {

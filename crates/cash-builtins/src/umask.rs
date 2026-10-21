@@ -15,6 +15,10 @@ pub(crate) struct UmaskCommand {
 
     /// Mode mask.
     mode: Option<String>,
+
+    /// Operands after the first, which Bash ignores; they were refused as invalid options.
+    #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
+    _ignored: Vec<String>,
 }
 
 impl builtins::Command for UmaskCommand {

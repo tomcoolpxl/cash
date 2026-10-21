@@ -785,8 +785,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     ) -> Result<(ExecutionResult, Option<usize>), error::Error> {
         match crate::interp::execute_program(program, self, params, Some(parsed_as)).await {
             Ok(ran) => Ok(ran),
-            // An interrupt a program passes on is for the program that runs it to act on.
-            Err(err) if err.is_silent_interrupt() => Err(err),
+            // An interrupt a program passes on is for the program that runs it to act on, as
+            // is `break 1 2`, which leaves every `eval` and sourced file.
+            Err(err) if err.is_silent_interrupt() || err.unwinds_strings() => Err(err),
             Err(err) => {
                 let _ = self.display_error(&mut params.stderr(self), &err);
                 let result = err.into_result(self);
@@ -815,8 +816,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // Report any errors.
         match result {
             Ok(result) => Ok(result),
-            // An interrupt a program passes on is for the program that runs it to act on.
-            Err(err) if err.is_silent_interrupt() => Err(err),
+            // An interrupt a program passes on is for the program that runs it to act on, as
+            // is `break 1 2`, which leaves every `eval` and sourced file.
+            Err(err) if err.is_silent_interrupt() || err.unwinds_strings() => Err(err),
             Err(err) => {
                 let _ = self.display_error(&mut params.stderr(self), &err);
 

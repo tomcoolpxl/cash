@@ -6,8 +6,9 @@ use cash_core::{ExecutionControlFlow, builtins};
 #[derive(Parser)]
 pub(crate) struct ContinueCommand {
     /// If specified, indicates which nested loop to continue to the next iteration of.
-    #[arg(allow_hyphen_values = true)]
-    which_loop: Option<String>,
+    /// A second is too many.
+    #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+    which_loop: Vec<String>,
 }
 
 impl builtins::Command for ContinueCommand {
@@ -17,7 +18,7 @@ impl builtins::Command for ContinueCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        crate::leave_loops(&context, self.which_loop.as_deref(), |levels| {
+        crate::leave_loops(&context, &self.which_loop, |levels| {
             ExecutionControlFlow::ContinueLoop { levels }
         })
     }

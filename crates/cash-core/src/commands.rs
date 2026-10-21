@@ -2342,10 +2342,19 @@ async fn run_substitution_command(
     // taking back.
     let _nested = shell.enter_nested_text();
 
-    // Handle the parse result using default shell behavior.
-    let result = shell
+    // Handle the parse result using default shell behavior. `break 1 2` and its kin end
+    // the substitution, status 1, as Bash's child process ends; it abandoned the command
+    // the substitution was in.
+    let result = match shell
         .run_parsed_result(parse_result, &source_info, &params)
-        .await?;
+        .await
+    {
+        Err(error) if error.unwinds_strings() => {
+            let _ = shell.display_error(&mut params.stderr(&shell), &error);
+            ExecutionResult::general_error()
+        }
+        result => result?,
+    };
     // Its own EXIT trap runs as it ends, into the output taken, as in Bash.
     let status = shell.end_subshell(result.exit_code.into(), &params).await;
     Ok(ExecutionResult {

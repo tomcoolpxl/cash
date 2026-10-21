@@ -3250,7 +3250,7 @@ fn a_read_only_variable_stays_as_it_is() {
 fn return_and_exit_read_their_status_as_bash_does() {
     // `return -1` was refused as an option and `return abc` went on with the function;
     // Bash's statuses are taken modulo 256, a word that is no number is 2, and a second
-    // word ends the script with status 1.
+    // word ends a `-c` string with status 1 (a script goes on at its next line, below).
     let (status, stdout, stderr) = run_all(
         "f() { return -1; }; f; echo \"$?\"; g() { return abc; echo no; }; g; echo \"$?\"; \
          h() { return -- 300; }; h; echo \"$?\"; k() { return 2 3; }; k; echo no",
@@ -3409,6 +3409,66 @@ fn a_list_element_with_plus_equals_appends_to_its_element() {
             "xz y\nxy w\n6 8\nvw\n[0]+=q\npq\n    local -a l=(p [0]+=q);"
         )
     );
+}
+
+#[test]
+fn too_many_arguments_abandons_the_command_as_bash_53_does() {
+    // `break 1 2`, `continue`, `shift`, `return` and `exit` with a second operand were
+    // usage errors, or ended the script; Bash 5.3 leaves every `eval` and sourced file,
+    // abandons the top-level command, and goes on at the next line with status 2. A
+    // subshell ends with 2, a command substitution with 1; `exit x` goes on.
+    let (stdout, stderr) = script_output(
+        "too-many-arguments",
+        "for i in 1 2; do shift 1 2; echo no; done; echo no\necho \"a $?\"\n\
+         f() { for i in 1; do continue 1 2; done; echo no; }; f; echo no\necho \"b $?\"\n\
+         eval 'shift 1 2'; echo no\necho \"c $?\"\n\
+         x=$(exit 1 2; echo no); echo \"d $? [$x]\"\n( return 1 2 ); echo \"e $?\"\n\
+         exit x; echo \"f $?\"\n",
+    );
+    assert_eq!(stdout, "a 2\nb 2\nc 2\nd 1 []\ne 2\nf 2");
+    assert!(
+        stderr.contains("line 1: shift: too many arguments")
+            && stderr.contains("line 3: continue: too many arguments")
+            && stderr.contains("line 9: exit: x: numeric argument required"),
+        "{stderr}"
+    );
+    // A `-c` string ends there, status 1.
+    assert_eq!(output("shift 1 2; echo no\necho next"), (1, String::new()));
+}
+
+#[test]
+fn builtins_refuse_options_and_operands_as_bash_does() {
+    // `set -Z x` set `$1` to `-Z`; `set -o nosuch` said nothing; `eval -Z` and
+    // `command -- -Z` swapped which word was an option; `disown -Z` took it for a job;
+    // `mapfile` took any name; `umask` refused the operands Bash ignores; `cd ''`, `cd a
+    // b`, `pushd a b` and `history x` were said in clap's or Rust's words; `declare -f -a`
+    // printed the function.
+    let (status, stdout, stderr) = run_all(
+        "set -Z x 2>/dev/null; echo \"d $? [$1]\"; set -o nosuch; echo \"e $?\"; \
+         eval -Z 2>/dev/null; echo \"f $?\"; command -- -Z 2>/dev/null; echo \"g $?\"; \
+         disown -Z 2>/dev/null; echo \"h $?\"; mapfile -- -Z </dev/null; echo \"i $?\"; \
+         mapfile '' </dev/null; echo \"j $?\"; umask 077 2 3; echo \"k $? $(umask)\"; \
+         cd ''; echo \"l $?\"; cd a b; echo \"m $?\"; pushd a b 2>/dev/null; echo \"n $?\"; \
+         history x; echo \"o $?\"; g() { :; }; declare -f -a g; echo \"p $?\"",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (
+            0,
+            "d 2 []\ne 2\nf 2\ng 127\nh 2\ni 1\nj 2\nk 0 0077\nl 1\nm 2\nn 1\no 2\np 1"
+        )
+    );
+    for said in [
+        "set: nosuch: invalid option name",
+        "mapfile: `-Z': not a valid identifier",
+        "mapfile: empty array variable name",
+        "cd: null directory",
+        "cd: too many arguments",
+        "history: x: numeric argument required",
+        "declare: -a: invalid option",
+    ] {
+        assert!(stderr.contains(said), "{said}: {stderr}");
+    }
 }
 
 #[test]

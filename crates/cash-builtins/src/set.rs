@@ -167,6 +167,22 @@ impl builtins::Command for SetCommand {
                 now_parsing_positional_args = true;
             }
 
+            // A letter `set` does not know is an invalid option, said with its sign, status
+            // 2, as in Bash: `set -Z x` made `-Z` the first positional parameter, and `set
+            // +Z` did nothing, both with status 0.
+            if i > 0
+                && !now_parsing_positional_args
+                && arg.starts_with(['-', '+'])
+                && arg != "--help"
+                && let Some(sign) = arg.chars().next()
+                && let Some(letter) = arg
+                    .chars()
+                    .skip(1)
+                    .find(|&c| !"abefhkmnoptuvxBCEHPT".contains(c))
+            {
+                return Err(crate::invalid_option(&format!("{sign}{letter}")));
+            }
+
             if let Some(plus_options) = arg.strip_prefix("+") {
                 next_arg_is_option_value = plus_options.ends_with('o');
                 for c in plus_options.chars() {
@@ -366,6 +382,12 @@ impl builtins::Command for SetCommand {
             {
                 option_def.set(context.shell.options_mut(), value);
             } else {
+                // Said, as in Bash; the status alone was 2.
+                writeln!(
+                    context.error_stream(),
+                    "{}: {option_name}: invalid option name",
+                    context.command_name
+                )?;
                 result = ExecutionExitCode::InvalidUsage.into();
             }
         }

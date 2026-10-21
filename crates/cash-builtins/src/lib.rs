@@ -299,16 +299,17 @@ pub use builder::ShellBuilderExt;
 pub use carried::{carries_program, is_bash_builtin};
 pub use factory::{BuiltinSet, default_builtins, is_default_builtin};
 
-/// What `break` or `continue` does with its count, `word`, as Bash's builtins take it:
-/// outside a loop nothing (it says so, but in POSIX mode); a count past the loops there
-/// are leaves them all; a count below 1 is out of range, leaves every loop, and is status
-/// 1; a word that is no number ends a script with status 2. `flow` makes the control flow
+/// What `break` or `continue` does with its count, the first of `words`, as Bash's
+/// builtins take it: outside a loop nothing (it says so, but in POSIX mode); a count past
+/// the loops there are leaves them all; a count below 1 is out of range, leaves every loop,
+/// and is status 1; a word that is no number ends a script with status 2; a second word is
+/// too many, the error that abandons the top-level command. `flow` makes the control flow
 /// that leaves that many loops but the last. Outside a loop they ended the script without a
 /// word, and `break 2` in one loop did too.
 #[cfg(any(feature = "builtin.break", feature = "builtin.continue"))]
 fn leave_loops<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
-    word: Option<&str>,
+    words: &[String],
     flow: fn(usize) -> cash_core::ExecutionControlFlow,
 ) -> Result<cash_core::ExecutionResult, cash_core::Error> {
     use cash_core::{ExecutionControlFlow, ExecutionResult};
@@ -325,6 +326,11 @@ fn leave_loops<SE: cash_core::ShellExtensions>(
         }
         return Ok(ExecutionResult::success());
     }
+    let words = match words.split_first() {
+        Some((first, rest)) if first == "--" => rest,
+        _ => words,
+    };
+    let word = words.first().map(String::as_str);
     let count = match word {
         None => 1,
         Some(word) => {
@@ -340,6 +346,9 @@ fn leave_loops<SE: cash_core::ShellExtensions>(
                 }
                 return Ok(result);
             };
+            if words.len() > 1 {
+                return Err(cash_core::ErrorKind::TooManyArguments.into());
+            }
             if count < 1 {
                 writeln!(
                     context.error_stream(),
@@ -359,16 +368,55 @@ fn leave_loops<SE: cash_core::ShellExtensions>(
     Ok(result)
 }
 
+/// The error that the builtins say as Bash's `-x: invalid option` and usage, status 2, for
+/// the option word `word`: its first letter, or `--` for a long option.
+#[cfg(any(
+    feature = "builtin.command",
+    feature = "builtin.disown",
+    feature = "builtin.eval",
+    feature = "builtin.set"
+))]
+fn invalid_option(word: &str) -> clap::Error {
+    use clap::error::{ContextKind, ContextValue, ErrorKind};
+
+    let mut chars = word.chars();
+    let sign = chars.next().unwrap_or('-');
+    let named = match chars.next() {
+        Some('-') | None => "--".to_owned(),
+        Some(letter) => format!("{sign}{letter}"),
+    };
+    let mut error = clap::Error::new(ErrorKind::UnknownArgument);
+    error.insert(ContextKind::InvalidArg, ContextValue::String(named));
+    error
+}
+
+/// Refuses a letter not in `letters` among the leading options of `args` (the command's
+/// name first), as Bash's `internal_getopt` does; options end at `--` or the first word
+/// that is not one.
+#[cfg(any(feature = "builtin.command", feature = "builtin.disown"))]
+fn check_option_letters(args: &[String], letters: &str) -> Result<(), clap::Error> {
+    for word in args.iter().skip(1) {
+        if word == "--" || word.len() < 2 || !word.starts_with('-') {
+            break;
+        }
+        if let Some(letter) = word.chars().skip(1).find(|&c| !letters.contains(c)) {
+            return Err(invalid_option(&format!("-{letter}")));
+        }
+    }
+    Ok(())
+}
+
 /// The status `return` or `exit` is given in `words`, as Bash's `get_exitstat` reads them:
 /// a first `--` passed over; none, `None`; a number, its low eight bits (`return -1` is
-/// 255); a word that is no number is said, and 2. A second word is too many: the result
-/// that ends a script with status 1 comes back as the error. Clap refused `-1` as an
-/// option and `abc`, and the function went on.
+/// 255); a word that is no number is said, and `Err(2)`. A second word after a number is
+/// too many, the error that abandons the top-level command, status 2, as in Bash 5.3; it
+/// ended the script with 1. Clap refused `-1` as an option and `abc`, and the function
+/// went on.
 #[cfg(any(feature = "builtin.return", feature = "builtin.exit"))]
 fn exit_status_word<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     words: &[String],
-) -> Result<Result<Option<u8>, cash_core::ExecutionResult>, cash_core::Error> {
+) -> Result<Result<Option<u8>, u8>, cash_core::Error> {
     use std::io::Write as _;
 
     let words = match words.split_first() {
@@ -378,26 +426,17 @@ fn exit_status_word<SE: cash_core::ShellExtensions>(
     let Some((word, rest)) = words.split_first() else {
         return Ok(Ok(None));
     };
-    if !rest.is_empty() {
-        writeln!(
-            context.error_stream(),
-            "{}: too many arguments",
-            context.command_name
-        )?;
-        let mut result = cash_core::ExecutionResult::general_error();
-        if !context.shell.options().interactive {
-            result.next_control_flow = cash_core::ExecutionControlFlow::ExitShell;
-        }
-        return Ok(Err(result));
-    }
     let Ok(number) = word.trim().parse::<i64>() else {
         writeln!(
             context.error_stream(),
             "{}: {word}: numeric argument required",
             context.command_name
         )?;
-        return Ok(Ok(Some(2)));
+        return Ok(Err(2));
     };
+    if !rest.is_empty() {
+        return Err(cash_core::ErrorKind::TooManyArguments.into());
+    }
     Ok(Ok(Some(
         u8::try_from(number.rem_euclid(256)).unwrap_or_default(),
     )))

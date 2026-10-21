@@ -42,6 +42,11 @@ pub enum ErrorKind {
     #[error("`{0}': not a valid identifier")]
     NotValidIdentifier(String),
 
+    /// A second operand to `break`, `continue`, `shift`, `return` or `exit`: the whole
+    /// top-level command is abandoned, status 2, as Bash's `no_args` does.
+    #[error("too many arguments")]
+    TooManyArguments,
+
     /// A word without a subscript in a list given to an associative array beside words
     /// with one: the array, where the caller knows it ([`Error::of_variable`]), and the word.
     #[error("{}{}: must use subscript when assigning associative array", named(.0), .1)]
@@ -444,26 +449,47 @@ pub trait BuiltinError: std::error::Error + ConvertibleToExitCode + Send + Sync 
         true
     }
 
-    /// Whether this is an error of the assignment a declaration builtin makes, which
-    /// abandons the command line as an assignment's error does ([`Error::jumps_to_top_level`]).
-    fn is_assignment_error(&self) -> bool {
+    /// Whether this error abandons the whole top-level command, as an assignment's error
+    /// a declaration builtin makes does, or `break 1 2` ([`Error::jumps_to_top_level`]).
+    fn abandons_top_level_command(&self) -> bool {
+        false
+    }
+
+    /// Whether this error, before it abandons the top-level command, leaves every `eval`,
+    /// sourced file and `-c` string it is in, as Bash's `top_level_cleanup` does for `break
+    /// 1 2` ([`Error::unwinds_strings`]).
+    fn unwinds_every_string(&self) -> bool {
         false
     }
 }
 
 impl BuiltinError for Error {
-    fn is_assignment_error(&self) -> bool {
-        matches!(self.kind, ErrorKind::AssignmentError(_))
+    fn abandons_top_level_command(&self) -> bool {
+        match &self.kind {
+            ErrorKind::AssignmentError(_) | ErrorKind::TooManyArguments => true,
+            ErrorKind::BuiltinError(inner, _) => inner.abandons_top_level_command(),
+            _ => false,
+        }
+    }
+
+    fn unwinds_every_string(&self) -> bool {
+        match &self.kind {
+            ErrorKind::TooManyArguments => true,
+            ErrorKind::BuiltinError(inner, _) => inner.unwinds_every_string(),
+            _ => false,
+        }
     }
 
     fn names_its_builtin(&self) -> bool {
         // A command that `command` runs and cannot find is named alone, as Bash's
-        // executor names it: `x: command not found`, not `command: x: ...`.
+        // executor names it: `x: command not found`, not `command: x: ...`. An error of
+        // another builtin, coming out of `eval` or `.`, is named already.
         !matches!(
             self.kind,
             ErrorKind::FailedSourcingFile(..)
                 | ErrorKind::AssignmentError(_)
                 | ErrorKind::CommandNotFound(_)
+                | ErrorKind::BuiltinError(..)
         )
     }
 
@@ -508,7 +534,7 @@ impl From<&ErrorKind> for results::ExecutionExitCode {
         match value {
             ErrorKind::CommandNotFound(..) => Self::NotFound,
             ErrorKind::Unimplemented(..) => Self::Unimplemented,
-            ErrorKind::ParseError(..) => Self::InvalidUsage,
+            ErrorKind::ParseError(..) | ErrorKind::TooManyArguments => Self::InvalidUsage,
             ErrorKind::FunctionParseError(..) => Self::InvalidUsage,
             ErrorKind::TestCommandParseError(..) => Self::InvalidUsage,
             ErrorKind::FailedToExecuteCommand(..) | ErrorKind::CannotExecuteBinaryFile(..) => {
@@ -584,7 +610,8 @@ impl Error {
     /// an arithmetic error in an expansion, and a call past the function nesting limit. A
     /// command that a function's error came out of went on with status 1 (`f; echo same`
     /// echoed); the nesting limit's error left 0. A builtin's own failure, as `read` into
-    /// a read-only variable, is not one; the assignment a declaration builtin makes is.
+    /// a read-only variable, is not one; the assignment a declaration builtin makes is, and
+    /// a second operand to `break`, `continue`, `shift`, `return` or `exit`.
     pub fn jumps_to_top_level(&self) -> bool {
         match &self.kind {
             ErrorKind::ReadonlyVariable(_)
@@ -594,9 +621,16 @@ impl Error {
             | ErrorKind::CircularNameReference(_)
             | ErrorKind::EvalError(_)
             | ErrorKind::MaxFunctionCallDepthExceeded(..) => true,
-            ErrorKind::BuiltinError(inner, _) => inner.is_assignment_error(),
+            ErrorKind::BuiltinError(inner, _) => inner.abandons_top_level_command(),
             _ => false,
         }
+    }
+
+    /// Whether this error leaves every `eval`, sourced file and `-c` string it is in before
+    /// it abandons the top-level command, as Bash's `top_level_cleanup` does: `break 1 2`.
+    /// A script goes on at its next command, status 2; a `-c` string ends, status 1.
+    pub fn unwinds_strings(&self) -> bool {
+        BuiltinError::unwinds_every_string(self)
     }
 
     /// Whether this is an interrupt that abandons the line with nothing to report: the

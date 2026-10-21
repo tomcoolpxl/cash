@@ -176,10 +176,11 @@ path. The rest, by theme:
   itself (`resolve_named_interpreter` asks for the stem `cash`).
 
 **Builtins, small**
-- `hash -p` ignored; `declare -f -a`; `set -r` restricts nothing; history numbers
-  restart after HISTSIZE, script lines not history-expanded under `set -H`; `find
-  /dev/null` (modernish's find check); about two dozen missing usage errors (seven
-  done in the phase after 1.44.0).
+- `set -r` restricts nothing; history numbers restart after HISTSIZE, script lines not
+  history-expanded under `set -H`; `find /dev/null` (modernish's find check).
+- `eval 'break 1 2'` and its kin inside a subshell end it with 2 where the text was
+  sourced or `eval`ed (Bash: 1); a builtin's `--help` is clap's text, or an invalid
+  option (Bash: the `help` text, status 2).
 - An assignment to a read-only variable is reported at line 1 of a script, whatever its
   line (bash-it's case, line 10 in Bash).
 - Printing: `declare -f`/`type` (`|cat`, `2>& 1`, `$( )`, `elif`), xtrace of a compound

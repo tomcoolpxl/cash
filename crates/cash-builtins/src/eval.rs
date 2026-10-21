@@ -12,6 +12,25 @@ pub(crate) struct EvalCommand {
 impl builtins::Command for EvalCommand {
     type Error = cash_core::Error;
 
+    /// `eval` takes no option, as Bash's `no_options` has it: a first word that is one
+    /// is invalid, its first letter named (`--long` as `--`), status 2; `--` is passed
+    /// over. `eval -x` ran `-x`.
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let args: Vec<String> = args.into_iter().collect();
+        if let Some(first) = args.get(1)
+            && first.len() > 1
+            && first.starts_with('-')
+            && first != "--"
+            && first != "--help"
+        {
+            return Err(crate::invalid_option(first));
+        }
+        builtins::parse_args(args)
+    }
+
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,

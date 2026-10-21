@@ -2972,3 +2972,18 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `${#/}`, `${#%}`, `${#=}`, `${#+}`, and `${#` before `^`, `,` or `~`, were `$#` with the
   operator; they are bad substitutions, as in Bash. `${##x}`, `${###}` and `${#@Q}` were
   refused, a length followed by more; they are `$#` with the operator, as in Bash.
+- **The small builtins left** (2026-10-21, the phase after 1.46.0, leftovers):
+  `declare -f` or `-F` with `-n`, `-i`, `-A` or `-a` and a name printed the function; it
+  is an invalid option, as in Bash, but for `-p` and `readonly`. `hash -p` was found to
+  work. `break`, `continue`, `shift`, `return` and `exit` with a second operand were
+  usage errors, or ended the script with 1; as in Bash 5.3 they leave every `eval` and
+  sourced file, abandon the top-level command, and the script goes on at its next line
+  with status 2 (a `-c` string ends with 1, a subshell with 2, a command substitution
+  with 1). `exit x` ended the script; it goes on with 2, but in POSIX mode. `set -Z x`
+  made `-Z` the first positional parameter and `set +Z` did nothing; both are invalid
+  options, status 2. `set -o nosuch` said nothing. `eval -Z` ran `-Z`, and `command --
+  -Z` was an invalid option; the other way round now. `disown -Z` took `-Z` for a job.
+  `mapfile` took any name; an empty one and one that is no identifier are refused.
+  `umask`, `caller` and `mapfile` refused operands Bash ignores. `cd ''` and `cd a b`,
+  `pushd a b`, `shift x` and `history x` were said in clap's or Rust's words; they are
+  Bash's (`null directory`, `too many arguments`, `numeric argument required`).

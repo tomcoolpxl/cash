@@ -42,6 +42,10 @@ pub(crate) struct MapFileCommand {
     /// Name of array to read into.
     #[arg(default_value = "MAPFILE")]
     array_var_name: String,
+
+    /// Operands after the first, which Bash ignores; they were refused as invalid options.
+    #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
+    _ignored: Vec<String>,
 }
 
 impl builtins::Command for MapFileCommand {
@@ -60,6 +64,26 @@ impl builtins::Command for MapFileCommand {
                 )?;
                 return Ok(ExecutionExitCode::GeneralError.into());
             }
+        }
+
+        // The array's name is checked, as in Bash: an empty one is a usage error, a word
+        // that is no name not a valid identifier. Lines went into a variable named so.
+        if self.array_var_name.is_empty() {
+            writeln!(
+                context.error_stream(),
+                "{}: empty array variable name",
+                context.command_name
+            )?;
+            return Ok(ExecutionExitCode::InvalidUsage.into());
+        }
+        if !cash_core::env::valid_variable_name(&self.array_var_name) {
+            writeln!(
+                context.error_stream(),
+                "{}: `{}': not a valid identifier",
+                context.command_name,
+                self.array_var_name
+            )?;
+            return Ok(ExecutionExitCode::GeneralError.into());
         }
 
         if let Some((_, var)) = context.shell.env().get(&self.array_var_name) {

@@ -480,7 +480,10 @@ pub(crate) async fn execute_program(
                 // the outermost program ends there: a script or a `-c` string ends the
                 // shell with status 130, and at the prompt the line is abandoned.
                 let interrupted = err.is_silent_interrupt();
-                if interrupted && part_of_another {
+                // `break 1 2` and its kin leave every `eval` and sourced file too, as Bash's
+                // `top_level_cleanup` does; the outermost program says it.
+                let unwinds = err.unwinds_strings();
+                if (interrupted || unwinds) && part_of_another {
                     return Err(err);
                 }
 
@@ -498,6 +501,13 @@ pub(crate) async fn execute_program(
                     .current_frame()
                     .is_some_and(|frame| frame.frame_type.is_command_string());
                 if interrupted || (discards_line && in_command_string) {
+                    shell.set_last_exit_status(result.exit_code.into());
+                    break;
+                }
+                // A `-c` string ends there with status 1, as Bash's `run_one_command` ends
+                // it after `top_level_cleanup`; a script goes on at its next command.
+                if unwinds && in_command_string {
+                    result = ExecutionResult::general_error();
                     shell.set_last_exit_status(result.exit_code.into());
                     break;
                 }
