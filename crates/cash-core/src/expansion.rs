@@ -621,6 +621,7 @@ pub(crate) async fn basic_expand_heredoc_word(
 ) -> Result<String, error::Error> {
     let mut expander = WordExpander::new(shell, params);
     expander.literal_quotes = Some(LiteralQuotes::Heredoc);
+    expander.heredoc = true;
     expander.disable_brace_expansion = true;
     expander.basic_expand_to_str(word_str.as_ref()).await
 }
@@ -936,6 +937,9 @@ struct WordExpander<'a, SE: extensions::ShellExtensions> {
     /// Whether the top level of the word is read with quotes as literal characters,
     /// and by which rules. `None` for an ordinary word.
     literal_quotes: Option<LiteralQuotes>,
+    /// Whether the word is a here-document's body, whose `${v-word}` words are read as
+    /// inside double quotes, but for `$'...'`.
+    heredoc: bool,
 }
 
 /// The top-level syntaxes in which `"` and `'` are literal characters.
@@ -961,6 +965,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             unquoted_backslash_handling: UnquotedBackslashHandling::Strip,
             in_double_quotes: false,
             literal_quotes: None,
+            heredoc: false,
         }
     }
 
@@ -986,6 +991,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             unquoted_backslash_handling: options.unquoted_backslash_handling,
             in_double_quotes: false,
             literal_quotes: None,
+            heredoc: false,
         }
     }
 
@@ -1187,22 +1193,35 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     /// (except those escaped in ways valid in double-quotes) but still expand parameters,
     /// command substitutions, and arithmetic.
     async fn expand_parameter_word(&mut self, word: &str) -> Result<Expansion, error::Error> {
-        let mut expansion = if self.in_double_quotes {
-            // When inside double-quotes, we need to parse the word with double-quote semantics.
-            // A word that is double-quoted itself is expanded as it is, with them: its single
-            // quotes and tildes are text, as in Bash (`"${v-"'x'"}"` is `'x'`). It was taken
-            // out of its quotes and expanded as unquoted text, which removed them.
-            if word.len() > 1 && word.starts_with('"') && word.ends_with('"') {
-                self.basic_expand(word).await?
-            } else {
-                // Not double-quoted - wrap in double-quotes to get double-quote parsing
-                // semantics; a `\}` is a `}` there, as in Bash, where it is the end's escape.
-                let wrapped = std::format!("\"{}\"", unescape_closing_brace(word));
-                self.basic_expand(&wrapped).await?
+        let mut expansion = if self.in_double_quotes || self.heredoc {
+            // Inside double quotes, and in a here-document, the word is double-quoted text
+            // in which `'` and `~` are characters and a `"` opens a nested quoted part, as in
+            // Bash (`"${v-"'x'"}"` is `'x'`, `"${v-'"'x}"` is `''x`); a `\}` is a `}`.
+            let pieces = cash_parser::word::parse_quoted_parameter_word(
+                &unescape_closing_brace(word),
+                &self.parser_options,
+                self.heredoc,
+            )?;
+            let mut expansion = self
+                .expand_word_piece(cash_parser::word::WordPiece::DoubleQuotedSequence(pieces))
+                .await?;
+            // A `"$@"` of no parameters in the word leaves the quoted empty string, as in
+            // Bash: `"${foo:-$@}"` is one word, empty.
+            if expansion.fields.is_empty() {
+                expansion
+                    .fields
+                    .push(WordField::from(ExpansionPiece::Unsplittable(String::new())));
             }
+            expansion
         } else {
-            // When not inside double-quotes, perform normal expansion with quote removal
-            self.basic_expand(word).await?
+            // When not inside double-quotes, perform normal expansion with quote removal; a
+            // tilde after a `=` or `:` is a character there, as in Bash (`${A:=PATH=~/bin}`).
+            let options = self.parser_options.clone();
+            self.parser_options.tilde_expansion_in_assignment_words = false;
+            self.parser_options.tilde_expansion_after_colon = false;
+            let expansion = self.basic_expand(word).await;
+            self.parser_options = options;
+            expansion?
         };
 
         // The word becomes part of the parameter expansion's result, which bash
@@ -1642,6 +1661,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     ) -> Result<Vec<WordField>, error::Error> {
         let mut fields: Vec<WordField> = vec![];
         let concatenation_joiner = self.shell.ifs_joiner();
+        let mut empty_list = false;
 
         for piece in pieces {
             let Expansion {
@@ -1649,6 +1669,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 concatenate,
                 ..
             } = self.expand_word_piece(piece.piece).await?;
+            empty_list |= !concatenate && this_fields.is_empty();
 
             let fields_to_append = if concatenate {
                 #[expect(unstable_name_collisions)]
@@ -1693,6 +1714,16 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
 
                 fields.push(WordField(next_pieces));
             }
+        }
+
+        // A `"$@"` or `"${a[@]}"` of no elements takes away the quoted empty string of the
+        // text beside it in the same quotes when that is empty too, as in Bash: `"$x$@"` is
+        // no word, `"$x""$@"` one.
+        if empty_list
+            && let [WordField(pieces)] = fields.as_slice()
+            && pieces.iter().all(|piece| piece.as_str().is_empty())
+        {
+            fields.clear();
         }
 
         Ok(fields)

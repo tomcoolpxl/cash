@@ -33,9 +33,8 @@ order. Done, in DONE.md: 1, loop control (`break`, `continue`, `return`, `exit`)
 state, but for `exec 0<file` in a script read from standard input (below); 4, `fc -0`, and
 a script's history written as it ends; 5, the parser's cheapest subset; 6, readonly and
 prefix assignments, `declare -g`; 7, `printf` but for a `TZ` with daylight-saving rules
-(below).
+(below); 8, expansion edge cases, but for the few below.
 
-8. Expansion edge cases.
 9. Arrays and namerefs.
 
 ## The phase before (2026-10-20, done, released as 1.42.0)
@@ -109,17 +108,14 @@ path. The rest, by theme:
   a reference named as its target in a function; `${ref=X}`.
 
 **Expansion and quoting**
-- Quotes inside a double-quoted `${v-word}`: `"${v-'"'x}"` fails to parse (Bash:
-  `''x`), `${A:=PATH=~/bin}` expands the tilde (Bash keeps it); POSIX mode's literal
-  single quotes; `$'...'` inside `${...}` in double quotes is kept (Bash expands it), and
-  in a here-document expanded (Bash keeps it).
-- `"${foo:-$@}"` with no parameters is no word (Bash: one); `"$x$@"` and `"${@}$x"` with
-  no parameters and `x` empty are one (Bash: none); an unquoted `${v-$@}` with `IFS=:` is
-  three words (Bash: one, joined with spaces).
+- POSIX mode's literal single quotes in a double-quoted `${v-word}`; an unquoted
+  `${v-$@}` with `IFS=:` is three words (Bash: one, joined with spaces).
 - `${#/}` is taken (Bash: bad substitution); `${!n[@]@Q}` is said otherwise.
 - Arithmetic: assignment binds tighter than `?:`, `&&`, `||` (`1 ? 20 : x+=2` is 20;
-  Bash: an assignment to a non-variable); `$(( 'foo' ))` is 0 (Bash: a syntax error); a
-  variable holding `b[$d]` not expanded.
+  Bash: an assignment to a non-variable); a single quote is removed before the
+  expression is read (`$(( 'foo' ))` is 0, `a['1']` element 1; Bash: a syntax error, but
+  in an associative array's subscript, where it is removed later); a variable holding
+  `b[$d]` not expanded.
 - `${x@P}`: `\v` is cash's version, `\s` the script's name (by design).
 - Bytes that are not UTF-8 become U+FFFD (`$'\xff'`, `read`, `%q`), and `$'\U'` above
   U+10FFFF.

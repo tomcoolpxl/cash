@@ -843,6 +843,29 @@ pub fn parse_prompt_word(
         .map_err(|err| error::WordParseError::Word(word.to_owned(), err.into()))
 }
 
+/// Parse the word of a `${v-word}` inside double quotes or a here-document.
+///
+/// Bash reads it so: `'` is a character there, a `"` opens a nested double-quoted part,
+/// and outside a here-document `$'...'` is ANSI-C quoting.
+///
+/// # Arguments
+///
+/// * `word` - The word, between the operator and the closing brace.
+/// * `options` - The parser options to use.
+/// * `heredoc` - Whether the expansion is in a here-document's body.
+pub fn parse_quoted_parameter_word(
+    word: &str,
+    options: &ParserOptions,
+    heredoc: bool,
+) -> Result<Vec<WordPieceWithSource>, error::WordParseError> {
+    if heredoc {
+        expansion_parser::unexpanded_heredoc_parameter_word(word, options)
+    } else {
+        expansion_parser::unexpanded_quoted_parameter_word(word, options)
+    }
+    .map_err(|err| error::WordParseError::Word(word.to_owned(), err.into()))
+}
+
 /// Parse the given word into a parameter expression.
 ///
 /// # Arguments
@@ -1405,6 +1428,40 @@ peg::parser! {
             s:$((!prompt_escape_sequence() !dollar_sign_word_piece() [^'`'])+) {
                 WordPiece::Text(s.to_owned())
             }
+
+        // The word of a `${v-word}` inside double quotes, or in a here-document, as Bash
+        // reads it: double-quoted text in which `'` is a character, a `"` opens a nested
+        // double-quoted part (one left open runs to the end), and, but in a here-document,
+        // `$'...'` is ANSI-C quoting.
+        pub(crate) rule unexpanded_quoted_parameter_word() -> Vec<WordPieceWithSource> =
+            traced(<quoted_parameter_word(true)>)
+
+        pub(crate) rule unexpanded_heredoc_parameter_word() -> Vec<WordPieceWithSource> =
+            traced(<quoted_parameter_word(false)>)
+
+        rule quoted_parameter_word(ansi_c: bool) -> Vec<WordPieceWithSource> =
+            parts:quoted_parameter_word_part(ansi_c)* { parts.into_iter().flatten().collect() }
+
+        rule quoted_parameter_word_part(ansi_c: bool) -> Vec<WordPieceWithSource> =
+            "\"" inner:double_quoted_sequence_inner()* ("\"" / ![_]) { inner } /
+            start_index:position!() piece:quoted_parameter_word_piece(ansi_c) end_index:position!() {
+                vec![WordPieceWithSource { piece, start_index, end_index }]
+            }
+
+        rule quoted_parameter_word_piece(ansi_c: bool) -> WordPiece =
+            is_true(ansi_c) s:ansi_c_quoted_text() { WordPiece::AnsiCQuotedText(s.to_owned()) } /
+            arithmetic_expansion() /
+            legacy_arithmetic_expansion() /
+            current_shell_command_substitution() /
+            double_quoted_backquoted_substitution() /
+            command_substitution() /
+            parameter_expansion() /
+            double_quoted_escape_sequence() /
+            s:$((!double_quoted_escape_sequence() !dollar_sign_word_piece() !(is_true(ansi_c) "$'") [^'\"'])+) {
+                WordPiece::Text(s.to_owned())
+            } /
+            // A `$` before a quote that opens no ANSI-C quoting is a character.
+            s:$("$") { WordPiece::Text(s.to_owned()) }
 
         rule normal_escape_sequence() -> WordPiece =
             s:$("\\" [c]) { WordPiece::EscapeSequence(s.to_owned()) }

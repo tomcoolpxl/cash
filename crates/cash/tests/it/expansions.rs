@@ -331,6 +331,30 @@ fn parameter_expansion_edge_cases_match_bash() {
         (r#"unset dbg; w "${dbg-"'hey'"}""#, "1:<'hey'>"),
         (r#"w "${IFS+a{{\}b}""#, "1:<a{{}b>"),
         (r#"w "${v:-"~"}" "${v:-~}""#, "2:<~><~>"),
+        // `"$@"` of no parameters: with empty text in the same quotes it is no word, in a
+        // parameter's word one.
+        (
+            r#"set --; w "$x$@"; w "${@}$x"; a=(); w "$x${a[@]}"; w "$x""$@"; w "a$@""#,
+            "0:<>\n0:<>\n0:<>\n1:<>\n1:<a>",
+        ),
+        (
+            r#"set --; w "${foo:-$@}"; w "${foo-"$@"}"; foo=1; w "${foo:+$@}"; w ${foo+"$@"}"#,
+            "1:<>\n1:<>\n1:<>\n0:<>",
+        ),
+        // In a double-quoted `${v-word}`, `'` is a character and `$'...'` ANSI-C quoting.
+        (
+            r#"unset v; w "${v-'"'x}" "${v-'a b'}" "${v-$'a\tb'}""#,
+            "3:<''x><'a b'><a\tb>",
+        ),
+        (
+            r"HOME=/h; unset A; echo ${A:=PATH=~/bin} ${B:-a:~/x}",
+            "PATH=~/bin a:~/x",
+        ),
+        // In a here-document too, but for `$'...'`.
+        (
+            "unset v; cat <<E\n${v-\"x\"} ${v-'x'} ${v-$'x'} ${v-~}\nE",
+            "x 'x' $'x' ~",
+        ),
     ];
     for &(script, expected) in cases {
         let script = format!("{w}{script}");

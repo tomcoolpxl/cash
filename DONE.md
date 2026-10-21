@@ -2819,4 +2819,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   at the `:` of its `?:`, `++7` and `--7` were refused as an increment of no variable,
   `${!9:-d}` with `$9` unset was a bad substitution, and `${@@A}` printed the values, not
   `set -- 'a' ...`. Inside a double-quoted `${v-word}`, a double-quoted part keeps
-  what it quotes (`"${dbg-"'hey'"}"`, `"${v:-"~"}"`) and `\}` is a brace.
+  what it quotes (`"${dbg-"'hey'"}"`, `"${v:-"~"}"`) and `\}` is a brace. Then the
+  word itself: inside double quotes, and in a here-document, it is read as Bash reads
+  it, `'` a character, a `"` opening a nested quoted part (`"${v-'"'x}"` failed to parse),
+  and `$'...'` ANSI-C quoting but in a here-document (it was the other way round); a
+  tilde after `=` or `:` in an unquoted word is a character (`${A:=PATH=~/bin}`). `"$@"`
+  of no parameters: `"$x$@"` and `"$x${a[@]}"` were one empty word, as Bash none, and
+  `"${foo:-$@}"` none, as Bash one.
