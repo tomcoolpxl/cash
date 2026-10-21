@@ -44,6 +44,27 @@ impl builtins::Command for FcCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // An option it does not know is said, as in Bash, before anything else: `fc -z`
+        // was taken for a history specification.
+        if let Some(first) = self.first.as_deref()
+            && let Some(rest) = first.strip_prefix('-')
+            && !rest.is_empty()
+            && rest.parse::<i64>().is_err()
+        {
+            let option = first.get(..2).unwrap_or(first);
+            writeln!(
+                context.error_stream(),
+                "{}: {option}: invalid option",
+                context.command_name
+            )?;
+            writeln!(
+                context.error_stream(),
+                "{}: usage: fc [-e ename] [-lnr] [first] [last] or fc -s [pat=rep] [command]",
+                context.command_name
+            )?;
+            return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
+        }
+
         // `-0` names no command but in a listing, as Bash's `fc_gethnum` has it: it was
         // taken for `0`, the last command, which `fc -s -0` ran again and `fc -0` edited
         // and ran.

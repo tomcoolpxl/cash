@@ -26,22 +26,8 @@ impl builtins::Command for PopdCommand {
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         let listing = dirs::listing(context.shell);
 
-        // The listing always holds the current directory, so a stack worth popping has
-        // at least two entries. bash's wording, which cash reported as "directory stack
-        // is empty".
-        if listing.len() < 2 {
-            writeln!(
-                context.error_stream(),
-                "{}: directory stack empty",
-                context.command_name
-            )?;
-            return Ok(ExecutionResult::general_error());
-        }
-
-        // cash: `+N` was rejected by the parser as an unexpected argument, so the way to
-        // drop one entry from the middle of the stack — the reason `dirs -v` prints
-        // indices at all — was not available.
-        let index = match self.selector.as_deref() {
+        // A bad selector is said before an empty stack, as in Bash (`popd -z`).
+        let selector = match self.selector.as_deref() {
             Some(arg) => {
                 let Some(selector) = dirs::Selector::parse(arg) else {
                     let complaint = if arg.starts_with(['+', '-']) {
@@ -61,7 +47,28 @@ impl builtins::Command for PopdCommand {
                     )?;
                     return Ok(ExecutionExitCode::InvalidUsage.into());
                 };
+                Some((arg, selector))
+            }
+            None => None,
+        };
 
+        // The listing always holds the current directory, so a stack worth popping has
+        // at least two entries. bash's wording, which cash reported as "directory stack
+        // is empty".
+        if listing.len() < 2 {
+            writeln!(
+                context.error_stream(),
+                "{}: directory stack empty",
+                context.command_name
+            )?;
+            return Ok(ExecutionResult::general_error());
+        }
+
+        // cash: `+N` was rejected by the parser as an unexpected argument, so the way to
+        // drop one entry from the middle of the stack — the reason `dirs -v` prints
+        // indices at all — was not available.
+        let index = match selector {
+            Some((arg, selector)) => {
                 let Some(index) = selector.index_in(listing.len()) else {
                     return dirs::report_bad_index(&context, listing.len(), arg);
                 };

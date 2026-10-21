@@ -62,6 +62,28 @@ impl builtins::Command for HistoryCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // An option it does not know is said, as in Bash, history or not: `history -z`
+        // did nothing, status 0.
+        if let Some(first) = self.args.first()
+            && first.len() > 1
+            && first.starts_with('-')
+            && first != "--"
+        {
+            let option = first.get(..2).unwrap_or(first);
+            writeln!(
+                context.error_stream(),
+                "{}: {option}: invalid option",
+                context.command_name
+            )?;
+            writeln!(
+                context.error_stream(),
+                "{}: usage: history [-c] [-d offset] [n] or history -anrw [filename] or \
+                 history -ps arg [arg...]",
+                context.command_name
+            )?;
+            return Ok(ExecutionExitCode::InvalidUsage.into());
+        }
+
         // Retrieve the shell's history config while we still can.
         let config = HistoryConfig {
             default_history_file_path: context.shell.history_file_path(),

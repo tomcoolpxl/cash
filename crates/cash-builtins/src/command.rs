@@ -167,6 +167,26 @@ impl builtins::Command for CommandCommand {
         &self,
         mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // An option it does not know is said, as in Bash; `command -z` ran `-z`.
+        if let Some(first) = self.command_and_args.first()
+            && first.len() > 1
+            && first.starts_with('-')
+            && first != "--"
+        {
+            let option = first.get(..2).unwrap_or(first);
+            writeln!(
+                context.error_stream(),
+                "{}: {option}: invalid option",
+                context.command_name
+            )?;
+            writeln!(
+                context.error_stream(),
+                "{}: usage: command [-pVv] command [arg ...]",
+                context.command_name
+            )?;
+            return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
+        }
+
         if self.print_description || self.print_verbose_description {
             return self.describe_names(&mut context);
         }

@@ -23,6 +23,16 @@ impl builtins::Command for UnaliasCommand {
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         let mut exit_code = ExecutionResult::success();
 
+        // No name is a usage error, as in Bash; it did nothing, status 0.
+        if !self.remove_all && self.aliases.is_empty() {
+            writeln!(
+                context.stderr(),
+                "{}: usage: unalias [-a] name [name ...]",
+                context.command_name
+            )?;
+            return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
+        }
+
         if self.remove_all {
             context.shell.aliases_mut().clear();
         } else {

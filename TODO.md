@@ -30,10 +30,8 @@ for working through it. What is done, phases and findings, is in DONE.md.
 Taken as recommended while the user was away, as the user asked (decisions.md, "The phase
 after 1.44.0"); the user may change it. The small builtins, each against Git Bash 5.3, in
 this order. Done, in DONE.md: 1, `help` of the reserved words, and a plain word as a
-prefix; 2, `complete -p`'s `!` and `compgen -V`'s name.
+prefix; 2, `complete -p`'s `!` and `compgen -V`'s name; 3, the usage errors.
 
-3. Usage errors Bash gives and cash does not: `unalias` with no name, `pushd -z`,
-   `command -z`, `builtin -z`, `history -z`, `fc -z`.
 4. `history -s` while history is off adds nothing (Bash adds it); `history -d 1-2`
    refused; `history -p '!!:z'` succeeds (Bash: expansion failed, 1).
 5. `declare -f +r f` of a read-only function prints it, status 0 (Bash: readonly

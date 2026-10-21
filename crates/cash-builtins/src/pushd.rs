@@ -47,6 +47,25 @@ impl builtins::Command for PushdCommand {
             return print_stack(context).await;
         }
 
+        // A `+` or `-` before what is no number is a bad count, as in Bash; it was looked
+        // for as a directory.
+        if let Some(arg) = self.dir.as_deref()
+            && arg.len() > 1
+            && arg.starts_with(['+', '-'])
+        {
+            writeln!(
+                context.error_stream(),
+                "{}: {arg}: invalid number",
+                context.command_name
+            )?;
+            writeln!(
+                context.error_stream(),
+                "{}: usage: pushd [-n] [+N | -N | dir]",
+                context.command_name
+            )?;
+            return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
+        }
+
         if let Some(dir) = self.dir.as_deref() {
             if self.no_directory_change {
                 // bash records the directory as typed and does not check it — it is the

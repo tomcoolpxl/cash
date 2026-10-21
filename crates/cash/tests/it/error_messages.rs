@@ -553,3 +553,45 @@ fn a_directory_redirected_or_sourced_is_a_directory() {
         out.stderr
     );
 }
+
+#[test]
+fn a_builtin_says_an_option_it_does_not_know_with_its_usage() {
+    // Each as Git Bash 5.3 says it, status 2. `unalias` did nothing, `pushd -z` looked for
+    // a directory, `popd -z` found the stack empty first, `command -z` ran `-z`,
+    // `builtin -z` looked for a builtin of that name, `history -z` did nothing and `fc -z`
+    // found no history first.
+    let cases = [
+        ("unalias", "unalias: usage: unalias [-a] name [name ...]"),
+        (
+            "pushd -z",
+            "pushd: -z: invalid number\npushd: usage: pushd [-n] [+N | -N | dir]",
+        ),
+        (
+            "popd -z",
+            "popd: -z: invalid number\npopd: usage: popd [-n] [+N | -N]",
+        ),
+        (
+            "command -z",
+            "command: -z: invalid option\ncommand: usage: command [-pVv] command [arg ...]",
+        ),
+        (
+            "builtin -z",
+            "builtin: -z: invalid option\nbuiltin: usage: builtin [shell-builtin [arg ...]]",
+        ),
+        (
+            "history -z",
+            "history: -z: invalid option\nhistory: usage: history [-c] [-d offset] [n] or history -anrw [filename] or history -ps arg [arg...]",
+        ),
+        (
+            "fc -z",
+            "fc: -z: invalid option\nfc: usage: fc [-e ename] [-lnr] [first] [last] or fc -s [pat=rep] [command]",
+        ),
+    ];
+    for (script, expected) in cases {
+        let out = run(script);
+        assert_eq!(out.code, 2, "{script}: {}", out.stderr);
+        assert!(out.stderr.ends_with(expected), "{script}: {:?}", out.stderr);
+    }
+    let out = run("times x >/dev/null; echo \"s $?\"");
+    assert_eq!(out.stdout, "s 0", "{}", out.stderr);
+}

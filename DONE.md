@@ -2881,3 +2881,8 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `complete -p` dropped the `!` of `-X '!*.txt'`, a pattern that keeps what it matches,
   so the spec it printed did not read back; it is printed with it, as Bash does.
   `compgen -V 1bad` was status 1 in silence; it is not a valid identifier, status 2.
+- **Usage errors** (2026-10-21, the phase after 1.44.0, item 3): `unalias` with no name
+  did nothing, `pushd -z` looked for a directory, `popd -z` said the stack was empty
+  first, `command -z` ran `-z`, `builtin -z` looked for a builtin of that name, `history
+  -z` did nothing and `fc -z` said there was no history; each says the option and its
+  usage, status 2, as in Bash. `times x` was an error; Bash does not read the word.

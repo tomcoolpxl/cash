@@ -5,7 +5,11 @@ use cash_core::{ExecutionResult, builtins, timing};
 
 /// Report on usage time.
 #[derive(Parser)]
-pub(crate) struct TimesCommand {}
+pub(crate) struct TimesCommand {
+    /// Words after it, which it does not read, as Bash does not; they were an error.
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true, hide = true)]
+    _operands: Vec<String>,
+}
 
 impl builtins::Command for TimesCommand {
     type Error = cash_core::Error;
