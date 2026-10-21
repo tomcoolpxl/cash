@@ -2845,3 +2845,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   matched no `b`). A quoted part is literal text in the regex, as in Bash. `[[ -t X ]]`
   was false in silence; it is `[[: X: integer expected`, status 2, the line going on, and
   `test -t X` as `-eq` has it.
+- **Globbing** (2026-10-21, the phase after 1.43.0, item 2): whether a word globs was asked
+  of each of its pieces alone, so a bracket expression holding a quoted character was
+  none (`a[\;]b`, `a["b"]c`) and the word stood as written; the pieces are read together.
+  A last `**/` left out a link to a directory, which Bash lists without going into it.
+  Collating symbols and equivalence classes of one character (`[[.a.]]`, `[[=a=]]`,
+  `[a[.-.]z]`) were read as the characters written. A `/` inside brackets made a pattern
+  of `d[/]ir`, which nullglob took away; it is the word, as in Bash. `{Z..a}` failed to
+  parse the backquote it holds; a range's quote, `$` and backquote are characters and
+  its backslash goes, as in Bash. An extended group whose alternative begins with a dot
+  (`@(.foo)`, `*(.f*)`) matched no dot file; `!(...)` still matches none. With dotglob
+  and globskipdots off, `*` and `[.]*` gave `.` and `..`, which only a written dot gives.

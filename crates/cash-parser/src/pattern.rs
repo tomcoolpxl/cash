@@ -54,6 +54,15 @@ fn pattern_to_regex_str_unremembered(
     Ok(regex_str)
 }
 
+/// `c` as a member of a regex character class, escaped where the class would read it.
+fn class_member(c: char) -> String {
+    if matches!(c, '[' | ']' | '^' | '-' | '\\') {
+        std::format!("\\{c}")
+    } else {
+        c.to_string()
+    }
+}
+
 /// Formats a range between two bracket expression members, returning `None` if the
 /// range is reversed (and therefore matches nothing).
 fn bracket_range(from: (String, char), to: (String, char)) -> Option<String> {
@@ -133,6 +142,7 @@ peg::parser! {
 
         rule bracket_member() -> Option<String> =
             e:char_class_expression() { Some(e) } /
+            c:collating_element() { Some(c) } /
             r:char_range() { r } /
             m:single_char_bracket_member() {
                 let (char_str, _) = m;
@@ -144,6 +154,12 @@ peg::parser! {
 
         rule char_class() =
             "alnum" / "alpha" / "blank" / "cntrl" / "digit" / "graph" / "lower" / "print" / "punct" / "space" / "upper"/ "xdigit"
+
+        // A collating symbol, `[.a.]`, or an equivalence class, `[=a=]`, of one character:
+        // that character, as in Bash's locales. They were read as the characters written.
+        rule collating_element() -> String =
+            "[." c:[_] ".]" { class_member(c) } /
+            "[=" c:[_] "=]" { class_member(c) }
 
         rule char_range() -> Option<String> =
             from:single_char_bracket_member() "-" to:single_char_bracket_member() {

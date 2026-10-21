@@ -211,6 +211,11 @@ fn read_bracket(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Bracket
                 first = false;
                 continue;
             }
+            // A collating symbol or an equivalence class, `[.a.]` or `[=a=]`, is the
+            // parser's to read.
+            if rest.starts_with("[.") || rest.starts_with("[=") {
+                return BracketRead::LeftToRegex;
+            }
         }
         let from = match single(&mut it, first) {
             Some(Ok(c)) => c,
@@ -364,6 +369,7 @@ fn is_globstar_component(component: &PatternWord) -> bool {
 fn expand_globstar_paths(
     roots: Vec<PathBuf>,
     include_files: bool,
+    links_too: bool,
     skip_hidden: bool,
     options: &FilenameExpansionOptions,
 ) -> Vec<PathBuf> {
@@ -398,6 +404,10 @@ fn expand_globstar_paths(
             }
             if file_type.is_dir() && !file_type.is_symlink() {
                 pending.push_back(path);
+            } else if links_too && file_type.is_symlink() && options.on_disk(&path).is_dir() {
+                // A last `**/` lists a link to a directory too, as `*/` does, without going
+                // into it, as in Bash.
+                matches.push(path);
             }
         }
     }
@@ -591,10 +601,7 @@ impl Pattern {
 
     /// Whether the pattern has something to match with, so that expanding it globs.
     pub(crate) fn globs(&self) -> bool {
-        self.pieces.iter().any(|piece| {
-            matches!(piece, PatternPiece::Pattern(_))
-                && requires_expansion(piece.as_str(), self.enable_extended_globbing)
-        })
+        pieces_glob(&self.pieces, self.enable_extended_globbing)
     }
 
     /// Placeholder function that always returns true.
@@ -628,22 +635,9 @@ impl Pattern {
 
         // Similarly, if we're *confident* the pattern doesn't require expansion, then we
         // know there's a single expansion (before filtering).
-        } else if !self.pieces.iter().any(|piece| {
-            matches!(piece, PatternPiece::Pattern(_))
-                && requires_expansion(piece.as_str(), self.enable_extended_globbing)
-        }) {
+        } else if !pieces_glob(&self.pieces, self.enable_extended_globbing) {
             let concatenated: String = self.pieces.iter().map(|piece| piece.as_str()).collect();
-
-            if let Some(filter) = path_filter
-                && !filter(Path::new(&concatenated))
-            {
-                // No globs, but the literal was filtered out. Return NoGlob
-                // (not Expanded) so that callers don't mistake this for a
-                // failed glob match (which would trigger failglob).
-                return Ok(PatternExpansionResult::NoGlob);
-            }
-
-            return Ok(PatternExpansionResult::Expanded(vec![concatenated]));
+            return Ok(literal_expansion(concatenated, path_filter));
         }
 
         tracing::debug!(target: trace_categories::PATTERN, "expanding pattern: {self:?}");
@@ -674,17 +668,22 @@ impl Pattern {
             }
         }
 
+        // A pattern only a `/` inside brackets made one is none, as in Bash: `d[/]ir` is
+        // the word as it is, with nullglob too, which took it away.
+        if !components
+            .iter()
+            .any(|component| pieces_glob(component, self.enable_extended_globbing))
+        {
+            let concatenated: String = self.pieces.iter().map(|piece| piece.as_str()).collect();
+            return Ok(literal_expansion(concatenated, path_filter));
+        }
+
         // cash (D3): a fixed start spelled as only cash reads it, `/c/src`, `/tmp/x`,
         // `//server/share` or `\\server\share`, is read as `cd` reads it; the matches come
         // out in cash's `C:/` (or `//server/share`) spelling, as `~/x/*` does.
         let literal_count = components
             .iter()
-            .take_while(|component| {
-                !component.iter().any(|piece| {
-                    matches!(piece, PatternPiece::Pattern(_))
-                        && requires_expansion(piece.as_str(), self.enable_extended_globbing)
-                })
-            })
+            .take_while(|component| !pieces_glob(component, self.enable_extended_globbing))
             .count();
         let spelled_root = (literal_count >= 2)
             .then(|| {
@@ -741,6 +740,10 @@ impl Pattern {
         };
 
         let component_count = components.len();
+        // Whether the pattern ends in `/`, its last component empty.
+        let ends_in_slash = components
+            .last()
+            .is_some_and(|component| component.iter().all(|piece| piece.as_str().is_empty()));
         let starts_at_a_root = prefix_to_remove.is_none();
         // Whether the directories reached so far were written out, not found by a pattern.
         let mut written_out = true;
@@ -762,6 +765,7 @@ impl Pattern {
                 paths_so_far = expand_globstar_paths(
                     paths_so_far,
                     include_files,
+                    ends_in_slash && component_index + 2 == component_count,
                     options.require_dot_in_pattern_to_match_dot_files,
                     options,
                 );
@@ -776,10 +780,7 @@ impl Pattern {
                 continue;
             }
 
-            if !component.iter().any(|piece| {
-                matches!(piece, PatternPiece::Pattern(_))
-                    && requires_expansion(piece.as_str(), self.enable_extended_globbing)
-            }) {
+            if !pieces_glob(&component, self.enable_extended_globbing) {
                 let flattened = component
                     .iter()
                     .map(|piece| piece.as_str())
@@ -810,10 +811,10 @@ impl Pattern {
                 .set_extended_globbing(self.enable_extended_globbing)
                 .set_globstar(self.enable_globstar)
                 .set_case_insensitive(self.case_insensitive);
-            let subpattern_starts_with_dot = subpattern
-                .pieces
-                .first()
-                .is_some_and(|piece| piece.as_str().starts_with('.'));
+            let subpattern_text = subpattern.glob_text();
+            let subpattern_starts_with_dot =
+                starts_with_dot(&subpattern_text, self.enable_extended_globbing);
+            let dot_written = subpattern_text.starts_with('.');
             let allow_dot_files =
                 !options.require_dot_in_pattern_to_match_dot_files || subpattern_starts_with_dot;
             let regex = subpattern.matcher()?;
@@ -828,7 +829,9 @@ impl Pattern {
                     }
                 }
 
-                if options.include_dot_and_dotdot && allow_dot_files {
+                // `.` and `..` only for a pattern that begins with a written `.`, as in Bash:
+                // with dotglob, `*` gave them too.
+                if options.include_dot_and_dotdot && dot_written {
                     for name in [".", ".."] {
                         if regex.is_match(name).unwrap_or(false) {
                             paths_so_far.push(current_path.join(name));
@@ -959,21 +962,7 @@ impl Pattern {
     /// The pattern as glob text: its pieces, a literal one with each special character
     /// escaped.
     fn glob_text(&self) -> String {
-        let mut text = String::new();
-        for piece in &self.pieces {
-            match piece {
-                PatternPiece::Pattern(s) => text.push_str(s),
-                PatternPiece::Literal(s) => {
-                    for c in s.chars() {
-                        if crate::regex::regex_char_is_special(c) {
-                            text.push('\\');
-                        }
-                        text.push(c);
-                    }
-                }
-            }
-        }
-        text
+        glob_text_of(&self.pieces)
     }
 
     /// The backtracking matcher, if the pattern holds a `!(…)` (with extended globbing).
@@ -1065,6 +1054,88 @@ impl Pattern {
 /// the single source of truth for what constitutes a glob metacharacter.
 fn requires_expansion(s: &str, enable_extended_globbing: bool) -> bool {
     cash_parser::pattern::pattern_has_glob_metacharacters(s, enable_extended_globbing)
+}
+
+/// Whether a component's glob text asks for names that begin with a dot: it begins with
+/// one, or with an extended group one of whose alternatives does, as in Bash (`@(.foo)`,
+/// `*(.f*|x)`), which matched no dot file.
+fn starts_with_dot(text: &str, enable_extended_globbing: bool) -> bool {
+    if text.starts_with('.') {
+        return true;
+    }
+    if !enable_extended_globbing {
+        return false;
+    }
+    let mut chars = text.chars();
+    let (Some(kind), Some('(')) = (chars.next(), chars.next()) else {
+        return false;
+    };
+    // `!(.foo)` matches no dot file, as in Bash.
+    if !matches!(kind, '@' | '*' | '+' | '?') {
+        return false;
+    }
+    // The alternatives of the group, to its `)` at the same depth.
+    let mut depth = 0;
+    let mut at_alternative = true;
+    for c in chars {
+        if at_alternative && depth == 0 && c == '.' {
+            return true;
+        }
+        at_alternative = false;
+        match c {
+            '(' => depth += 1,
+            ')' if depth == 0 => break,
+            ')' => depth -= 1,
+            '|' if depth == 0 => at_alternative = true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// The expansion of a pattern that globs nothing: its text, unless the filter takes it out.
+fn literal_expansion<PF>(text: String, path_filter: Option<&PF>) -> PatternExpansionResult
+where
+    PF: Fn(&Path) -> bool,
+{
+    if let Some(filter) = path_filter
+        && !filter(Path::new(&text))
+    {
+        // No globs, but the literal was filtered out. Return NoGlob (not Expanded) so that
+        // callers don't mistake this for a failed glob match (which would trigger
+        // failglob).
+        return PatternExpansionResult::NoGlob;
+    }
+    PatternExpansionResult::Expanded(vec![text])
+}
+
+/// Pieces as glob text: a literal one with each special character escaped.
+fn glob_text_of(pieces: &[PatternPiece]) -> String {
+    let mut text = String::new();
+    for piece in pieces {
+        match piece {
+            PatternPiece::Pattern(s) => text.push_str(s),
+            PatternPiece::Literal(s) => {
+                for c in s.chars() {
+                    if crate::regex::regex_char_is_special(c) {
+                        text.push('\\');
+                    }
+                    text.push(c);
+                }
+            }
+        }
+    }
+    text
+}
+
+/// Whether pieces glob, read together: a bracket expression may hold quoted characters,
+/// as in Bash (`a[\;]b`, `a["b"]c`); read a piece at a time, `a[` and `]b` were no
+/// pattern, and the word was taken as it was.
+fn pieces_glob(pieces: &[PatternPiece], enable_extended_globbing: bool) -> bool {
+    pieces
+        .iter()
+        .any(|piece| matches!(piece, PatternPiece::Pattern(_)))
+        && requires_expansion(&glob_text_of(pieces), enable_extended_globbing)
 }
 
 fn pattern_to_regex_str(

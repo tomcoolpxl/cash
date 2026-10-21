@@ -241,6 +241,49 @@ fn a_quoted_part_of_a_regular_expression_is_literal_text_in_it() {
 }
 
 #[test]
+fn globs_read_quotes_in_brackets_classes_links_and_dot_groups_as_bash_does() {
+    // Each output is Git Bash 5.3's. `a[\;]b` and `a["b"]c` were taken as words, read a
+    // piece at a time; `[[.a.]]` was the characters written; a last `**/` left out a link
+    // to a directory; `d[/]ir` went with nullglob; `{Z..a}` failed to parse its backquote;
+    // `@(.foo)` matched no dot file.
+    let scratch = crate::common::Scratch::new("glob-brackets");
+    std::fs::create_dir_all(scratch.join("dir/sub")).expect("mkdir");
+    let junction = std::process::Command::new("cmd")
+        .args(["/c", "mklink", "/J", "linkdir", "dir"])
+        .current_dir(scratch.path())
+        .output()
+        .expect("mklink");
+    assert!(junction.status.success(), "mklink /J failed");
+    for (script, expected) in [
+        (r#"touch 'a;b' abc; echo a[\;]b a["b"]c"#, "a;b abc"),
+        (
+            "case a in [[.a.]]) echo m;; esac; case - in [a[.-.]z]) echo m2;; esac",
+            "m\nm2",
+        ),
+        ("shopt -s nullglob; echo d[/]ir", "d[/]ir"),
+        (r#"printf "<%s>" {Z..a}"#, "<Z><[><><]><^><_><`><a>"),
+        (
+            "touch .foo foo; shopt -s extglob\necho @(.foo) !(.foo|[a-z]*)",
+            ".foo !(.foo|[a-z]*)",
+        ),
+        ("shopt -s globstar; echo **/", "dir/ dir/sub/ linkdir/"),
+        // `.` and `..` only for a written leading dot: with dotglob, `[.]*` gave them.
+        (
+            "shopt -u globskipdots; shopt -s dotglob; echo [.]*; echo .*",
+            ".foo\n. .. .foo",
+        ),
+    ] {
+        let out = crate::common::run_in(scratch.path(), script);
+        assert_eq!(
+            (out.stdout.as_str(), out.code),
+            (expected, 0),
+            "{script}: {}",
+            out.stderr
+        );
+    }
+}
+
+#[test]
 fn an_assignment_seeds_random_as_in_bash() {
     // It was dropped (LANG-23); the numbers are Git Bash 5.3's.
     check(&[

@@ -27,6 +27,18 @@ fn expand_brace_expr_or_text(
     }
 }
 
+/// A character of a range as word text: one that would begin a quote or an expansion
+/// when the word is read again is escaped, as in Bash, where it is a character
+/// (`{Z..a}` holds a backquote, which failed to parse).
+fn range_char(c: char) -> String {
+    match c {
+        '`' | '$' | '"' | '\'' => std::format!("\\{c}"),
+        // A backslash alone is taken away by quote removal, as in Bash: an empty word.
+        '\\' => String::from("''"),
+        c => c.to_string(),
+    }
+}
+
 #[expect(clippy::cast_possible_truncation)]
 fn expand_brace_expr_member(bem: word::BraceExpressionMember) -> Box<dyn Iterator<Item = String>> {
     match bem {
@@ -76,7 +88,7 @@ fn expand_brace_expr_member(bem: word::BraceExpressionMember) -> Box<dyn Iterato
             }
 
             if start <= end {
-                Box::new((start..=end).step_by(increment).map(|c| c.to_string()))
+                Box::new((start..=end).step_by(increment).map(range_char))
             } else {
                 // Iterate from start down to end by decrementing.
                 let increment = increment as u32;
@@ -85,7 +97,7 @@ fn expand_brace_expr_member(bem: word::BraceExpressionMember) -> Box<dyn Iterato
                         let next = char::from_u32(c as u32 - increment)?;
                         (next >= end).then_some(next)
                     })
-                    .map(|c| c.to_string()),
+                    .map(range_char),
                 )
             }
         }

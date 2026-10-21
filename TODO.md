@@ -29,11 +29,9 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 Taken as recommended while the user was away, as the user asked (decisions.md, "The phase
 after 1.43.0"); the user may change it. In this order. Done, in DONE.md: 1, conditionals
-(`=~` with a quoted part, `[[ -t X ]]`), but for `['a]']` (below).
+(`=~` with a quoted part, `[[ -t X ]]`), but for `['a]']` (below); 2, globbing, but for
+the few below.
 
-2. Globbing: quotes and backslashes inside a bracket expression (`a[\;]b`, `a["b"]c`);
-   `**/` through a link to a directory; collating symbols and equivalence classes; a `/`
-   inside brackets with nullglob; `{Z..a}`.
 3. `touch` stops at the first operand it cannot touch (`touch x 'a"b' y` leaves no `y`;
    GNU touch goes on to the rest, status 1).
 4. The last phase's small leftovers: `read -n -1`; `eval` and `source` holding their
@@ -94,7 +92,7 @@ path. The rest, by theme:
 - A trailing backslash at the end of input is dropped; backslash-newline inside
   backquotes is kept.
 - A syntax error in a compound array assignment ends the script; text after its `)`
-  (`let a=(4*3)/2`, `c=(x y)z`); a brace range across the backtick (`{Z..a}`).
+  (`let a=(4*3)/2`, `c=(x y)z`).
 - `case x in esac)` accepted; `for 1 in a b` and `select` run with names that are none.
 - `${ cmd; }`: `return`, `local`, `exit`, a function inside it, `}` after a newline or `)`.
 - Aliases: one followed by a redirection merges tokens (`foo>&2`); `eval` of a multi-line
@@ -130,13 +128,9 @@ path. The rest, by theme:
   U+10FFFF.
 
 **Globbing and conditionals**
-- Quotes and backslashes inside a glob pattern are not honoured (`a[\;]b`, `a["b"]c`,
-  `pat='ab\cd*'; echo $pat`).
-- `**/` leaves out a link to a directory, which `*/` lists.
-- Extglob with dot files (`@(.foo)`); `*` gives `.` and `..` with `globskipdots` off; a
-  malformed bracket inside a group.
-- Collating symbols and equivalence classes (`[[.a.]]`, `[[=a=]]`); invalid class names
-  match; GLOBIGNORE splits on `:` inside brackets; nullglob with `/` in brackets.
+- A malformed bracket inside an extended group; GLOBIGNORE splits on `:` inside
+  brackets (not tried here: a `:` is no character of a Windows name); a named collating
+  symbol (`[[.space.]]`).
 - `[[ a =~ ['a]'] ]]` matches (a quoted `]` in a bracket expression is escaped for Rust's
   regex engine, where `\]` is a `]`; in POSIX's a backslash there is a character); POSIX
   mode globs a redirection's word.
