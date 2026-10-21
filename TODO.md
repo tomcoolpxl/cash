@@ -109,16 +109,18 @@ path. The rest, by theme:
   a reference named as its target in a function; `${ref=X}`.
 
 **Expansion and quoting**
-- Quotes inside a double-quoted `${v-word}`: `"${v-"'x'"}"`, `"${v-'"'x}"` (fails),
-  `\}`, a tilde inside nested quotes, `${A:=PATH=~/bin}`; POSIX mode's literal single
-  quotes; `$'...'` inside `${...}` in double quotes, and in a here-document.
-- `"${foo:-$@}"` with no parameters is no word (Bash: one); `"$x$@"` is one (Bash: none);
-  `$*` in a pattern joins with a space, not IFS's first character; `${v-$@}` with `IFS=:`.
-- Pattern substitution: an empty pattern matches, `${e/#/x}`, `${a///a/}`; the offset
-  `${P:1 ? 4 : 2:1}`; `${!9:-d}`, `${!n[@]@Q}`, `${@@A}`; `${#/}` accepted.
-- Arithmetic: assignment binds tighter than `?:`, `&&`, `||`; `++7` and `--7` refused;
-  `$(( 'foo' ))` accepted; a variable holding `b[$d]` not expanded.
-- `${x@P}`: `\v` is cash's version, `\s` the script's name.
+- Quotes inside a double-quoted `${v-word}`: `"${v-'"'x}"` fails to parse (Bash:
+  `''x`), `${A:=PATH=~/bin}` expands the tilde (Bash keeps it); POSIX mode's literal
+  single quotes; `$'...'` inside `${...}` in double quotes is kept (Bash expands it), and
+  in a here-document expanded (Bash keeps it).
+- `"${foo:-$@}"` with no parameters is no word (Bash: one); `"$x$@"` and `"${@}$x"` with
+  no parameters and `x` empty are one (Bash: none); an unquoted `${v-$@}` with `IFS=:` is
+  three words (Bash: one, joined with spaces).
+- `${#/}` is taken (Bash: bad substitution); `${!n[@]@Q}` is said otherwise.
+- Arithmetic: assignment binds tighter than `?:`, `&&`, `||` (`1 ? 20 : x+=2` is 20;
+  Bash: an assignment to a non-variable); `$(( 'foo' ))` is 0 (Bash: a syntax error); a
+  variable holding `b[$d]` not expanded.
+- `${x@P}`: `\v` is cash's version, `\s` the script's name (by design).
 - Bytes that are not UTF-8 become U+FFFD (`$'\xff'`, `read`, `%q`), and `$'\U'` above
   U+10FFFF.
 

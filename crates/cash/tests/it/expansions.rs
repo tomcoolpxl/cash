@@ -300,3 +300,46 @@ fn a_brace_word_before_a_redirection_is_a_word_unless_it_names_a_variable() {
         );
     }
 }
+
+/// Edge cases of parameter expansion and arithmetic, each output Bash 5.3's. `w` shows
+/// the words it is given.
+#[test]
+fn parameter_expansion_edge_cases_match_bash() {
+    let w = r#"w() { printf '%s:' $#; printf '<%s>' "$@"; echo; }; "#;
+    let cases: &[(&str, &str)] = &[
+        // An unquoted `$*` in a pattern joins with IFS's first character, as a quoted one.
+        (
+            "set -- aa bb; IFS=-; case aa-bb in $*) echo match;; *) echo no;; esac",
+            "match",
+        ),
+        ("set -- aa bb; IFS=-; [[ aa-bb == $* ]] && echo yes", "yes"),
+        (r#"set -- aa bb; IFS=-; x=aa-bbz; echo "${x#$*}""#, "z"),
+        // An empty pattern matches nothing, except at an anchor.
+        (r#"xxx=endocrine; w "${xxx//$unset/*}""#, "1:<endocrine>"),
+        (
+            r#"e=; w "${e/#/x}"; f=ab; w "${f/#/x}" "${f/%/x}""#,
+            "1:<x>\n2:<xab><abx>",
+        ),
+        (r#"a=/a/b; w "${a///a/}""#, "1:</b>"),
+        // An offset is an arithmetic expression, `?:` and all.
+        (r#"P=abcdef; w "${P:1 ? 4 : 2:1}""#, "1:<e>"),
+        // An indirection through an unset name takes the default.
+        (r#"w "${!9:-default}""#, "1:<default>"),
+        (r#"set -- a "b c"; w "${@@A}""#, "4:<set><--><'a'><'b c'>"),
+        ("echo $(( ++7 )) $(( --7 )) $(( -+-7 ))", "7 7 7"),
+        // A double-quoted word inside `"${v-…}"` keeps what it quotes.
+        (r#"unset dbg; w "${dbg-"'hey'"}""#, "1:<'hey'>"),
+        (r#"w "${IFS+a{{\}b}""#, "1:<a{{}b>"),
+        (r#"w "${v:-"~"}" "${v:-~}""#, "2:<~><~>"),
+    ];
+    for &(script, expected) in cases {
+        let script = format!("{w}{script}");
+        let out = run(&script);
+        assert_eq!(
+            (out.stdout.as_str(), out.code),
+            (expected, 0),
+            "{script}: {}",
+            out.stderr
+        );
+    }
+}

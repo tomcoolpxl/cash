@@ -31,6 +31,53 @@ mod fieldsplit;
 const QUOTED_REPLACEMENT_AMPERSAND: char = '\u{F0000}';
 const QUOTED_REPLACEMENT_BACKSLASH: char = '\u{F0001}';
 
+/// `word`, the word of a `${...}` in double quotes, with each `\}` a `}`, as Bash reads it;
+/// another backslash is left for the double quotes to read.
+fn unescape_closing_brace(word: &str) -> Cow<'_, str> {
+    if !word.contains("\\}") {
+        return Cow::Borrowed(word);
+    }
+    let mut out = String::with_capacity(word.len());
+    let mut chars = word.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('}') => out.push('}'),
+                Some(next) => {
+                    out.push('\\');
+                    out.push(next);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    Cow::Owned(out)
+}
+
+/// A pattern replacement for the text `matched`, onto `output`. The replacement is shell
+/// data, not fancy-regex replacement syntax: `$1` remains literal. Bash's
+/// `patsub_replacement` (`expand_match`) substitutes only unescaped ampersands with the
+/// entire match.
+fn render_replacement(replacement: &str, matched: &str, expand_match: bool, output: &mut String) {
+    let mut chars = replacement.chars();
+    while let Some(ch) = chars.next() {
+        if ch == QUOTED_REPLACEMENT_AMPERSAND {
+            output.push('&');
+        } else if ch == QUOTED_REPLACEMENT_BACKSLASH {
+            output.push('\\');
+        } else if ch == '\\' && matches!(chars.clone().next(), Some('&')) {
+            chars.next();
+            output.push('&');
+        } else if ch == '&' && expand_match {
+            output.push_str(matched);
+        } else {
+            output.push(ch);
+        }
+    }
+}
+
 /// A pattern replacement's expanded text, with each quoted `&` and backslash marked:
 /// `"&"` and `"$r"` are literal, as `'&'` and `\&` are. Only the text's own quotes were
 /// seen, so `"$r"` with `r='&&'` put the match in (LANG-14).
@@ -969,16 +1016,22 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     /// unaffected. Without this, e.g. `x=${arr[*]}` under `IFS=:` would yield
     /// `a b c` instead of bash's `a:b:c`.
     fn fields_to_string(&self, expansion: Expansion) -> String {
-        let joiner = if expansion.concatenate {
-            self.shell.ifs_joiner()
-        } else {
-            String::from(' ')
-        };
+        let joiner = self.fields_joiner(&expansion);
         expansion
             .fields
             .into_iter()
             .map(String::from)
             .join(joiner.as_str())
+    }
+
+    /// What an [`Expansion`]'s fields are joined with where they are not split: the first
+    /// character of IFS for `$*`/`${a[*]}`, a space for `$@`/`${a[@]}`.
+    fn fields_joiner(&self, expansion: &Expansion) -> String {
+        if expansion.concatenate {
+            self.shell.ifs_joiner()
+        } else {
+            String::from(' ')
+        }
     }
 
     async fn basic_expand_opt_pattern(
@@ -1003,7 +1056,10 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     ) -> Result<patterns::Pattern, error::Error> {
         let expansion = self.basic_expand(word).await?;
 
-        // TODO(IFS): Use IFS instead for separator?
+        // Fields join as in a scalar context: `$*` with IFS's first character, `$@` with a
+        // space, as Bash joins them. `$*` joined with a space, so `case aa-bb in $*)` with
+        // `IFS=-` did not match.
+        let joiner = self.fields_joiner(&expansion);
         #[expect(unstable_name_collisions)]
         let pattern_pieces: Vec<_> = expansion
             .fields
@@ -1015,7 +1071,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     .map(patterns::PatternPiece::from)
                     .collect::<Vec<_>>()
             })
-            .intersperse(vec![patterns::PatternPiece::Literal(String::from(" "))])
+            .intersperse(vec![patterns::PatternPiece::Literal(joiner)])
             .flatten()
             .collect();
 
@@ -1030,7 +1086,8 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     ) -> Result<crate::regex::Regex, error::Error> {
         let expansion = self.basic_expand(word).await?;
 
-        // TODO(IFS): Use IFS instead for separator?
+        // Fields join as in a pattern ([`Self::fields_joiner`]).
+        let joiner = self.fields_joiner(&expansion);
         #[expect(unstable_name_collisions)]
         let regex_pieces: Vec<_> = expansion
             .fields
@@ -1042,7 +1099,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     .map(crate::regex::RegexPiece::from)
                     .collect::<Vec<_>>()
             })
-            .intersperse(vec![crate::regex::RegexPiece::Literal(String::from(" "))])
+            .intersperse(vec![crate::regex::RegexPiece::Literal(joiner)])
             .flatten()
             .collect();
 
@@ -1132,26 +1189,15 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     async fn expand_parameter_word(&mut self, word: &str) -> Result<Expansion, error::Error> {
         let mut expansion = if self.in_double_quotes {
             // When inside double-quotes, we need to parse the word with double-quote semantics.
-            // If the word already starts with a double-quote, we need to remove those quotes
-            // and expand what's inside with normal (non-double-quote) semantics.
-            if let Some(stripped) = word.strip_prefix('"')
-                && let Some(inner) = stripped.strip_suffix('"')
-            {
-                // Remove the surrounding double-quotes and expand the content normally
-                // This requires us to temporarily clear in_double_quotes so the inner
-                // content gets normal processing.
-                let previously_in_double_quotes = self.in_double_quotes;
-                self.in_double_quotes = false;
-
-                // Now perform the expansion and make sure to restore the previous state,
-                // even if the expansion fails.
-                let result = self.basic_expand(inner).await;
-                self.in_double_quotes = previously_in_double_quotes;
-
-                result?
+            // A word that is double-quoted itself is expanded as it is, with them: its single
+            // quotes and tildes are text, as in Bash (`"${v-"'x'"}"` is `'x'`). It was taken
+            // out of its quotes and expanded as unquoted text, which removed them.
+            if word.len() > 1 && word.starts_with('"') && word.ends_with('"') {
+                self.basic_expand(word).await?
             } else {
-                // Not double-quoted - wrap in double-quotes to get double-quote parsing semantics
-                let wrapped = std::format!("\"{word}\"");
+                // Not double-quoted - wrap in double-quotes to get double-quote parsing
+                // semantics; a `\}` is a `}` there, as in Bash, where it is the end's escape.
+                let wrapped = std::format!("\"{}\"", unescape_closing_brace(word));
                 self.basic_expand(&wrapped).await?
             }
         } else {
@@ -1975,6 +2021,37 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     Ok(String::new().into())
                 }
             }
+            // `${@@A}`: the positional parameters as the `set` that makes them, as Bash
+            // gives it: `set -- 'a' 'b c'`, a word each but for `${*@A}`. It was empty.
+            cash_parser::word::ParameterExpr::Transform {
+                parameter:
+                    cash_parser::word::Parameter::Special(
+                        cash_parser::word::SpecialParameter::AllPositionalParameters {
+                            concatenate,
+                        },
+                    ),
+                indirect: false,
+                op: ParameterTransformOp::ToAssignmentLogic,
+            } => {
+                let args = self.shell.current_shell_args();
+                let words = if args.is_empty() {
+                    vec![]
+                } else {
+                    ["set".to_owned(), "--".to_owned()]
+                        .into_iter()
+                        .chain(
+                            args.iter()
+                                .map(|arg| escape::single_quote(arg).into_owned()),
+                        )
+                        .collect()
+                };
+                Ok(Expansion {
+                    fields: list_element_fields(words, true),
+                    concatenate,
+                    kind: ExpansionKind::ElementList,
+                    undefined: false,
+                })
+            }
             cash_parser::word::ParameterExpr::Transform {
                 parameter,
                 indirect,
@@ -2247,6 +2324,23 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 let expanded_replacement = self.basic_expand_replacement(&replacement).await?;
                 let expand_match = self.shell.options().patsub_replacement;
 
+                // An empty pattern replaces nothing but at the ends, as Bash's `pat_subst`
+                // has it: `/#` puts the replacement first, `/%` last, an empty value too, and
+                // `/` and `//` leave the value as it is. `${x//$unset/*}` put `*` between
+                // every character, and `${e/#/x}` of an empty `e` gave nothing.
+                if expanded_pattern.is_empty() {
+                    let mut rendered = String::new();
+                    render_replacement(&expanded_replacement, "", expand_match, &mut rendered);
+                    return transform_expansion(expanded_parameter, async |s| {
+                        Ok(match match_kind {
+                            cash_parser::word::SubstringMatchKind::Prefix => rendered.clone() + &s,
+                            cash_parser::word::SubstringMatchKind::Suffix => s + &rendered,
+                            _ => s,
+                        })
+                    })
+                    .await;
+                }
+
                 let finder = expanded_pattern.finder(
                     matches!(match_kind, cash_parser::word::SubstringMatchKind::Prefix),
                     matches!(match_kind, cash_parser::word::SubstringMatchKind::Suffix),
@@ -2503,6 +2597,11 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             Ok(expansion)
         } else {
             let parameter_str: String = self.fields_to_string(expansion);
+            // An empty name names nothing set, as in Bash: `${!9:-d}` with `$9` unset is
+            // `d`. It failed to parse, and the line was abandoned.
+            if parameter_str.is_empty() {
+                return Ok(Expansion::undefined());
+            }
             let inner_parameter =
                 cash_parser::word::parse_parameter(parameter_str.as_str(), &self.parser_options)?;
 
@@ -2826,25 +2925,8 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         match_kind: &SubstringMatchKind,
         expand_match: bool,
     ) -> Result<String, error::Error> {
-        // The replacement is shell data, not fancy-regex replacement syntax: `$1`
-        // must remain literal. Bash's patsub_replacement option substitutes only
-        // unescaped ampersands with the entire match.
         let render = |matched: &str, output: &mut String| {
-            let mut chars = replacement.chars();
-            while let Some(ch) = chars.next() {
-                if ch == QUOTED_REPLACEMENT_AMPERSAND {
-                    output.push('&');
-                } else if ch == QUOTED_REPLACEMENT_BACKSLASH {
-                    output.push('\\');
-                } else if ch == '\\' && matches!(chars.clone().next(), Some('&')) {
-                    chars.next();
-                    output.push('&');
-                } else if ch == '&' && expand_match {
-                    output.push_str(matched);
-                } else {
-                    output.push(ch);
-                }
-            }
+            render_replacement(replacement, matched, expand_match, output);
         };
         let every = matches!(match_kind, cash_parser::word::SubstringMatchKind::Anywhere);
         let to_end = matches!(match_kind, cash_parser::word::SubstringMatchKind::Suffix);

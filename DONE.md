@@ -2810,3 +2810,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   rendered by cash, in characters, a `*` read from the arguments. `%(...)T` ended at its
   first `)`. A conversion that is none lost the text before it, and `-v` got nothing; the
   text is written, or assigned, and Bash's words follow, status 1.
+- **Expansion edge cases** (2026-10-21, the phase after 1.42.0, item 8): an unquoted `$*`
+  in a pattern (`case`, `[[ == ]]`, `${x#$*}`, substitution and `=~`) joined its words
+  with a space, not IFS's first character as a quoted one does. An empty pattern in
+  `${x//$unset/r}` matched everywhere; it matches nothing, but at the `#` and `%` anchors,
+  where the replacement goes before or after (`${e/#/x}` of an empty value is `x`).
+  `${a///a/}` took the third `/` for the separator. The offset `${P:1 ? 4 : 2:1}` stopped
+  at the `:` of its `?:`, `++7` and `--7` were refused as an increment of no variable,
+  `${!9:-d}` with `$9` unset was a bad substitution, and `${@@A}` printed the values, not
+  `set -- 'a' ...`. Inside a double-quoted `${v-word}`, a double-quoted part keeps
+  what it quotes (`"${dbg-"'hey'"}"`, `"${v:-"~"}"`) and `\}` is a brace.

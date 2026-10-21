@@ -1124,15 +1124,27 @@ peg::parser! {
             // This branch handles the case where we have an array element name with square brackets,
             // which may (legitimately) contain the stop condition.
             array_element_name() {} /
+            // A `?` with the true branch of its `?:`, and that branch's `:`, which is not the
+            // stop condition: in `${P:1 ? 4 : 2:1}` the offset ran to the first `:`.
+            "?" ternary_true_branch() ":" {} /
+            // A `?` without its `:` is the arithmetic's to refuse.
+            "?" {} /
             // This branch matches any standard piece of a word, stopping as soon as we reach
-            // either the overall stop condition *OR* an opening parenthesis. We add this latter
-            // condition to ensure that *we* handle matching parentheses.
-            !"(" word_piece(<param_rule_or_open_paren(<stop_condition()>)>, false /*in_command*/) {}
+            // either the overall stop condition *OR* an opening parenthesis or a `?`. We add
+            // these latter conditions to ensure that *we* handle matching parentheses and `?:`.
+            !"(" !"?" word_piece(<param_rule_or_open_paren(<stop_condition()>)>, false /*in_command*/) {}
 
-        // This is a helper rule that matches either the provided stop condition or an opening parenthesis.
+        // The true branch of a `?:`, up to its `:`. A rule of its own, not generic, so that a
+        // `?:` nested in it does not make another instance of the arithmetic word's rules.
+        rule ternary_true_branch() =
+            arithmetic_word(<[':']>)
+
+        // This is a helper rule that matches either the provided stop condition, an opening
+        // parenthesis or a `?`.
         rule param_rule_or_open_paren<T>(stop_condition: rule<T>) -> () =
             stop_condition() {} /
-            "(" {}
+            "(" {} /
+            "?" {}
 
         // This rule matches an arithmetic word followed by a right parenthesis. It must consume the right parenthesis.
         rule arithmetic_word_plus_right_paren() =
@@ -1556,10 +1568,10 @@ peg::parser! {
             indirect:parameter_indirection() parameter:parameter() "/%" pattern:parameter_search_pattern() replacement:parameter_replacement_str()? {
                 ParameterExpr::ReplaceSubstring { parameter, indirect, pattern, replacement, match_kind: SubstringMatchKind::Suffix }
             } /
-            indirect:parameter_indirection() parameter:parameter() "//" pattern:parameter_search_pattern() replacement:parameter_replacement_str()? {
+            indirect:parameter_indirection() parameter:parameter() "//" pattern:parameter_search_pattern_from_slash() replacement:parameter_replacement_str()? {
                 ParameterExpr::ReplaceSubstring { parameter, indirect, pattern, replacement, match_kind: SubstringMatchKind::Anywhere }
             } /
-            indirect:parameter_indirection() parameter:parameter() "/" pattern:parameter_search_pattern() replacement:parameter_replacement_str()? {
+            indirect:parameter_indirection() parameter:parameter() "/" pattern:parameter_search_pattern_from_slash() replacement:parameter_replacement_str()? {
                 ParameterExpr::ReplaceSubstring { parameter, indirect, pattern, replacement, match_kind: SubstringMatchKind::FirstOccurrence }
             } /
             indirect:parameter_indirection() parameter:parameter() "^^" pattern:parameter_expression_word()? {
@@ -1742,6 +1754,12 @@ peg::parser! {
 
         rule parameter_search_pattern() -> String =
             s:$(word(<['}' | '/']>)) { s.to_owned() }
+
+        // The pattern of `/` and `//`, which may begin with a `/`, as Bash skips one there
+        // when it looks for the replacement: `${a///a/}` replaces `/a`. It took the `/` for
+        // the end of an empty pattern.
+        rule parameter_search_pattern_from_slash() -> String =
+            s:$("/"? word(<['}' | '/']>)) { s.to_owned() }
 
         rule parameter_expression_word() -> String =
             s:$(word(<['}']>)) { s.to_owned() }
