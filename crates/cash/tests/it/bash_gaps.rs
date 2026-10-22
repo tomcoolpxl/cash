@@ -3847,3 +3847,87 @@ fn declare_f_prints_words_substitutions_and_elif_as_bash_does() {
         )
     );
 }
+
+#[test]
+fn a_subscript_expanded_already_is_not_expanded_again() {
+    // `(( A[\$k]++ ))` counted the key `x`; Bash counts `$k`, as the expression was
+    // expanded once already. `let` and a variable's value expand it.
+    let (status, stdout) = output(
+        "declare -A A=([x]=7); k=x; echo $(( A[\\$k] )) $(( A[$k] )); (( A[\\$k]++ )); \
+         echo \"${A[\\$k]}\"; let 'A[$k]=8'; echo \"${A[x]}\"; v='A[$k]'; echo $(( v ))",
+    );
+    assert_eq!((status, stdout.as_str()), (0, "0 7\n1\n8\n8"));
+}
+
+#[test]
+fn a_reference_to_an_element_with_an_arithmetic_subscript_takes_read() {
+    // `read r` with `r` naming `X[i+1]` wrote element 0; `read -a r` and `mapfile r`
+    // through it replaced the array or did nothing, where Bash refuses them.
+    let (status, stdout, stderr) = run_all(
+        "X=(a b c); i=0; declare -n r='X[i+1]'; read r <<< new; printf -v r %s two; \
+         declare -n e='X[-1]'; read e <<< last; declare -p X; read -a r <<< 'p q'; \
+         echo \"s $?\"; mapfile r <<< p; echo \"s $?\"; declare -p X",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (
+            0,
+            "declare -a X=([0]=\"a\" [1]=\"two\" [2]=\"last\")\ns 1\ns 1\n\
+             declare -a X=([0]=\"a\" [1]=\"two\" [2]=\"last\")"
+        )
+    );
+    assert!(
+        stderr.contains("read: `X[i+1]': not a valid identifier")
+            && stderr.contains("mapfile: `X[i+1]': not a valid identifier"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn history_numbers_keep_counting_and_set_h_expands_script_lines() {
+    // History numbers began again at 1 once HISTSIZE dropped the oldest; Bash's keep
+    // counting. `set -H` left `!!` in a script's lines; Bash expands them, says the
+    // expanded line on standard error, and drops a line whose event is not found.
+    let (stdout, stderr) = script_output(
+        "history-numbers",
+        "HISTFILE=/dev/null\nset -o history\nHISTSIZE=3\necho a > /dev/null\n\
+         echo b > /dev/null\necho c > /dev/null\nhistory\necho \"HISTCMD=$HISTCMD\"\n\
+         set -H\necho x\necho !ech; echo z\necho !nosuch; echo same\necho next\n",
+    );
+    assert_eq!(
+        stdout,
+        "    3  echo b > /dev/null\n    4  echo c > /dev/null\n    5  history\nHISTCMD=6\n\
+         x\necho x\nz\nnext"
+    );
+    assert!(
+        stderr.contains("echo echo x; echo z")
+            && stderr.contains("line 12: !nosuch: event not found"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn dash_c_takes_no_word_of_its_own() {
+    // `-c -ex cmd` was refused, and `-ec -c cmd` ran `-c` as the command: Bash's `-c`
+    // takes no word, the command is the first word after the options.
+    assert_eq!(start(&["-c", "-ex", "echo $-"], &[], None).1, "ehxBc");
+    assert_eq!(start(&["-ec", "-c", "echo $-"], &[], None).1, "ehBc");
+}
+
+#[test]
+fn compound_assignments_trace_and_shopt_o_lists_as_bash_does() {
+    // A list was traced as the values it took, and a declaration's as `c='(q x y)'`;
+    // Bash traces a list as written, and a declaration's on a line of its own before the
+    // command. `shopt -o` listed the names 20 wide; Bash lists them 15 wide.
+    let (_, stdout, stderr) = run_all(
+        "v=q; set -x; a=($v \"$v\" [2]=$v); declare -a c=($v 'x y'); declare -A A=([k]=v); \
+         set +x; shopt -o | head -1",
+    );
+    assert_eq!(stdout, "allexport      \toff");
+    assert!(
+        stderr.contains("+ a=($v \"$v\" [2]=$v)\n")
+            && stderr.contains("+ c=('q' 'x y')\n+ declare -a c\n")
+            && stderr.contains("+ A=(['k']='v')\n+ declare -A A\n"),
+        "{stderr}"
+    );
+}

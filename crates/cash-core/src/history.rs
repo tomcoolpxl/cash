@@ -26,6 +26,11 @@ pub struct History {
     items: std::sync::Arc<Vec<ItemId>>,
     id_map: rpds::HashTrieMapSync<ItemId, Item>,
     next_id: ItemId,
+    /// How many items `HISTSIZE` took from the front since the history was last cleared,
+    /// Bash's `history_base`: an item's number is this and its position, so the numbers
+    /// of the others stay as they were ([`Self::number`]). They started again at 1.
+    #[cfg_attr(feature = "serde", serde(default))]
+    base: usize,
     /// Last byte read from each history file. Bash uses this bookkeeping for
     /// `history -n`, which imports only lines appended since the file was last read.
     #[cfg_attr(feature = "serde", serde(default))]
@@ -218,6 +223,21 @@ impl History {
             self.id_map.remove_mut(id);
         }
         std::sync::Arc::make_mut(&mut self.items).drain(..excess);
+        self.base += excess;
+    }
+
+    /// The number of the item at 0-based `position`, as `history` and `fc` show it.
+    #[must_use]
+    pub const fn number(&self, position: usize) -> usize {
+        self.base + position + 1
+    }
+
+    /// The 0-based position of the item numbered `number`, if it is one there is.
+    #[must_use]
+    pub fn position(&self, number: usize) -> Option<usize> {
+        number
+            .checked_sub(self.base + 1)
+            .filter(|position| *position < self.items.len())
     }
 
     /// Removes the nth item from the history. Returns the removed item, or `None` if no such item
@@ -282,6 +302,7 @@ impl History {
         self.items = std::sync::Arc::default();
         self.unsaved = 0;
         self.lines = None;
+        self.base = 0;
         Ok(())
     }
 

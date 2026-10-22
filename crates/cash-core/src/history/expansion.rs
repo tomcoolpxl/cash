@@ -285,11 +285,9 @@ fn resolve_event_text(
         EventSpec::Absolute(n) => {
             let hist =
                 history.ok_or_else(|| HistoryExpansionError::EventNotFound(format!("!{n}")))?;
-            if *n == 0 || *n > hist.count() {
-                return Err(HistoryExpansionError::EventNotFound(format!("!{n}")));
-            }
             let item = hist
-                .get(*n - 1)
+                .position(*n)
+                .and_then(|position| hist.get(position))
                 .ok_or_else(|| HistoryExpansionError::EventNotFound(format!("!{n}")))?;
             Ok(item.command_line.clone())
         }
@@ -474,6 +472,8 @@ pub fn expand_history(
             } else if next_ch == ':' {
                 event_spec = EventSpec::Previous(None);
             } else {
+                // The string ends at a blank, a `:`, a quote, or one of Bash's search
+                // delimiters `;&()|<>`: `!ech; echo z` looks for `ech`. It looked for `ech;`.
                 let mut prefix = String::new();
                 while i < len
                     && chars[i] != ':'
@@ -481,6 +481,7 @@ pub fn expand_history(
                     && chars[i] != '\t'
                     && chars[i] != '\n'
                     && chars[i] != '"'
+                    && !";&()|<>".contains(chars[i])
                 {
                     prefix.push(chars[i]);
                     i += 1;

@@ -76,6 +76,21 @@ impl builtins::Command for MapFileCommand {
             )?;
             return Ok(ExecutionExitCode::InvalidUsage.into());
         }
+        // A reference to an element names no array to fill, as in Bash; it did nothing.
+        let refused = context
+            .shell
+            .env()
+            .resolved_name(&self.array_var_name)
+            .filter(|target| target.ends_with(']'))
+            .map(std::borrow::Cow::into_owned);
+        if let Some(target) = refused {
+            writeln!(
+                context.error_stream(),
+                "{}: `{target}': not a valid identifier",
+                context.command_name
+            )?;
+            return Ok(ExecutionExitCode::GeneralError.into());
+        }
         if !cash_core::env::valid_variable_name(&self.array_var_name) {
             writeln!(
                 context.error_stream(),

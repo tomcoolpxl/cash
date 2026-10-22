@@ -136,7 +136,7 @@ impl HistoryCommand {
             // position outside the history and what is no number are said, status 1. A
             // range was refused, and an offset of 0 was a usage error.
             let count = history.count();
-            let (start, end) = match delete_range(spec, count) {
+            let (start, end) = match delete_range(spec, count, history.number(0) - 1) {
                 Ok(range) => range,
                 Err(message) => {
                     writeln!(stderr, "history: {message}")?;
@@ -256,7 +256,7 @@ fn display_history(
         std::writeln!(
             stdout,
             "{:>5}  {formatted_timestamp}{}",
-            skip_count + i + 1,
+            history.number(skip_count + i),
             item.command_line
         )?;
     }
@@ -264,10 +264,10 @@ fn display_history(
     Ok(())
 }
 
-/// The entries `history -d` deletes, 0-based and inclusive, of `count`: one offset or
-/// `START-END`, a negative offset counting back from the end (`-1` is the last), or what
-/// Bash says of the spec.
-fn delete_range(spec: &str, count: usize) -> Result<(usize, usize), String> {
+/// The entries `history -d` deletes, 0-based and inclusive, of `count` numbered from
+/// `base` + 1: one offset or `START-END`, a negative offset counting back from the end
+/// (`-1` is the last), or what Bash says of the spec.
+fn delete_range(spec: &str, count: usize, base: usize) -> Result<(usize, usize), String> {
     let position = |text: &str| -> Result<usize, String> {
         let number: i64 = text
             .trim()
@@ -277,7 +277,7 @@ fn delete_range(spec: &str, count: usize) -> Result<(usize, usize), String> {
         let one_based = if number < 0 {
             count + 1 + number
         } else {
-            number
+            number - i64::try_from(base).unwrap_or(i64::MAX)
         };
         if (1..=count).contains(&one_based) {
             usize::try_from(one_based - 1).map_err(|_| format!("{text}: invalid number"))

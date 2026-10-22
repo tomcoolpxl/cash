@@ -384,9 +384,10 @@ pub(crate) fn init_well_known_vars(
     // HISTCMD
     let mut histcmd_var = ShellVariable::new(ShellValue::Dynamic {
         getter: |shell| {
-            shell
-                .history()
-                .map_or_else(|| "0".into(), |h| h.count().to_string().into())
+            shell.history().map_or_else(
+                || "0".into(),
+                |h| h.number(h.count()).saturating_sub(1).to_string().into(),
+            )
         },
         setter: |_| (),
     });

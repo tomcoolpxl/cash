@@ -208,6 +208,7 @@ fn bash_style_options(args: &[String]) -> Vec<String> {
     };
     let mut out: Vec<String> = args.iter().take(1).cloned().collect();
     let mut words = args.iter().skip(1);
+    let mut seen_c = false;
     while let Some(word) = words.next() {
         match word.as_str() {
             "-o" | "-O" | "--rcfile" | "--init-file" | "+o" | "+O" => {
@@ -242,10 +243,14 @@ fn bash_style_options(args: &[String]) -> Vec<String> {
                 .chars()
                 .all(|letter| clap_flag(letter) || name_of(letter).is_some())
             {
+                // `c` takes no word of its own in Bash: the command is the first word after
+                // the options. It goes last, once, for clap, which gives `-c` the next word:
+                // `-c -ex cmd` was refused and `-ec -c cmd` ran `-c` as the command.
                 let kept: String = letters
                     .chars()
-                    .filter(|&letter| clap_flag(letter))
+                    .filter(|&letter| clap_flag(letter) && letter != 'c')
                     .collect();
+                seen_c |= letters.contains('c');
                 for letter in letters.chars().filter(|&letter| !clap_flag(letter)) {
                     out.extend([
                         "-o".to_owned(),
@@ -258,12 +263,19 @@ fn bash_style_options(args: &[String]) -> Vec<String> {
                 continue;
             }
         }
-        out.push(word.clone());
         // The options end at `--`, `-`, and the first word that is none.
         if word == "--" || word == "-" || !word.starts_with(['-', '+']) {
+            if std::mem::take(&mut seen_c) {
+                out.push("-c".to_owned());
+            }
+            out.push(word.clone());
             out.extend(words.cloned());
             break;
         }
+        out.push(word.clone());
+    }
+    if seen_c {
+        out.push("-c".to_owned());
     }
     out
 }

@@ -96,9 +96,10 @@ fn format_prompt_piece(
         cash_parser::prompt::PromptPiece::CurrentCommandNumber => {
             (shell.commands_read() + 1).to_string()
         }
-        cash_parser::prompt::PromptPiece::CurrentHistoryNumber => {
-            (shell.history().map_or(0, |h| h.count()) + 1).to_string()
-        }
+        cash_parser::prompt::PromptPiece::CurrentHistoryNumber => shell
+            .history()
+            .map_or(1, |h| h.number(h.count()))
+            .to_string(),
         cash_parser::prompt::PromptPiece::CurrentUser => users::get_current_username()?,
         cash_parser::prompt::PromptPiece::CurrentWorkingDirectory {
             tilde_replaced,

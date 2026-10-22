@@ -2869,13 +2869,7 @@ async fn execute_command<T: Into<String>>(
         .extend(guard.shell().take_word_substitution_ends());
 
     if guard.shell().options().print_commands_and_arguments {
-        guard
-            .shell()
-            .trace_command(
-                &params,
-                args.iter().map(|arg| arg.quote_for_tracing()).join(" "),
-            )
-            .await;
+        trace_simple_command(guard.shell(), &params, args).await;
     }
 
     guard.detach();
@@ -3120,8 +3114,14 @@ async fn apply_assignment(
 
     if shell.options().print_commands_and_arguments {
         let op = if assignment.append { "+=" } else { "=" };
+        // A list is traced as it is written, as Bash traces it (`+ a=($v "$v")`); it was
+        // the values it took.
+        let traced = match &assignment.value {
+            ast::AssignmentValue::Array(_) => assignment.value.to_string(),
+            ast::AssignmentValue::Scalar(_) => new_value.to_string(),
+        };
         shell
-            .trace_command(params, std::format!("{}{op}{new_value}", assignment.name))
+            .trace_command(params, std::format!("{}{op}{traced}", assignment.name))
             .await;
     }
 
@@ -3258,6 +3258,47 @@ async fn apply_assignment(
     }
 
     shell.env_mut().add(variable_name, new_var, creation_scope)
+}
+
+/// Traces a simple command, `args` its words, as Bash traces one: a declaration's list
+/// first, on a line of its own, each key and value single-quoted, and the command with the
+/// name alone (`+ c=('q' 'x y')` and `+ declare -a c`). It was `+ declare -a c='(q x y)'`.
+async fn trace_simple_command(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    args: &[CommandArg],
+) {
+    for arg in args {
+        if let CommandArg::Assignment(assignment) = arg
+            && let ast::AssignmentValue::Array(elements) = &assignment.value
+        {
+            let items = elements
+                .iter()
+                .map(|(key, value)| match key {
+                    Some((key, append)) => format!(
+                        "[{}]{}={}",
+                        crate::escape::single_quote(&key.value),
+                        if *append { "+" } else { "" },
+                        crate::escape::single_quote(&value.value)
+                    ),
+                    None => crate::escape::single_quote(&value.value).into_owned(),
+                })
+                .join(" ");
+            let op = if assignment.append { "+=" } else { "=" };
+            shell
+                .trace_command(params, format!("{}{op}({items})", assignment.name))
+                .await;
+        }
+    }
+    let mut words = args.iter().map(|arg| match arg {
+        CommandArg::Assignment(assignment)
+            if matches!(assignment.value, ast::AssignmentValue::Array(_)) =>
+        {
+            std::borrow::Cow::Owned(assignment.name.to_string())
+        }
+        arg => arg.quote_for_tracing(),
+    });
+    shell.trace_command(params, words.join(" ")).await;
 }
 
 #[expect(clippy::too_many_lines)]

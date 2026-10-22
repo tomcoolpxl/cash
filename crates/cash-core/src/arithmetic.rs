@@ -139,9 +139,20 @@ pub(crate) async fn expand_and_eval(
     let expr = cash_parser::arithmetic::parse_shared(&expanded_self)
         .map_err(|e| syntax_error(&expanded_self, e.arithmetic_offset()))?;
 
-    // Now evaluate.
-    expr.eval(shell)
-        .map_err(|error| error.in_expression(&expanded_self))
+    // Now evaluate, its subscripts as they are: expanded once already ([`EXPRESSION_EXPANDED`]).
+    let was = EXPRESSION_EXPANDED.replace(true);
+    let value = expr.eval(shell);
+    EXPRESSION_EXPANDED.set(was);
+    value.map_err(|error| error.in_expression(&expanded_self))
+}
+
+thread_local! {
+    /// Whether the expression being evaluated was expanded already, as `((...))`,
+    /// `$((...))`, `for ((...))` and a subscript's are ([`expand_and_eval`]): its subscripts
+    /// are then taken as they are, as Bash takes them (`(( A[\$k]++ ))` counts the key `$k`,
+    /// `a[\$i]` is a syntax error). `let`'s words, and a variable's value read as an
+    /// expression, have their subscripts' `$name` expanded. They were expanded everywhere.
+    static EXPRESSION_EXPANDED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 impl EvalError {
@@ -424,8 +435,15 @@ fn resolve_subscript(
         .env()
         .get(name)
         .is_some_and(|(_, v)| v.is_associative(shell));
+    // Its `$name` is expanded in `let`'s words and in a variable's value read as an
+    // expression, not in text expanded already ([`EXPRESSION_EXPANDED`]).
+    let expand = depth > 0 || !EXPRESSION_EXPANDED.get();
     if is_associative {
-        let key = expand_simple_references(shell, &subscript.text)?;
+        let key = if expand {
+            expand_simple_references(shell, &subscript.text)?
+        } else {
+            subscript.text.clone()
+        };
         // A key in single quotes is the text inside, as in Bash (`(( A['k']++ ))`).
         return Ok(
             match key.strip_prefix('\'').and_then(|k| k.strip_suffix('\'')) {
@@ -440,7 +458,7 @@ fn resolve_subscript(
         None if subscript.text.trim().is_empty() => Ok("0".to_owned()),
         // `$d` in it, from a variable's value read as an expression (`v='b[$d]'; $(( v
         // ))`), is expanded first, as in Bash; it was a syntax error.
-        None if subscript.text.contains('$') => {
+        None if expand && subscript.text.contains('$') => {
             let expanded = expand_simple_references(shell, &subscript.text)?;
             let expr = cash_parser::arithmetic::parse(&expanded)
                 .map_err(|e| syntax_error(&expanded, e.arithmetic_offset()))?;

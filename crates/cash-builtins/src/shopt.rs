@@ -85,7 +85,14 @@ impl builtins::Command for ShoptCommand {
                     }
                 } else {
                     let option_value_str = if option_value { "on" } else { "off" };
-                    writeln!(context.stdout(), "{:20}\t{option_value_str}", option.name)?;
+                    // The `set -o` options listed whole are 15 wide, as `set -o` lists them
+                    // and Bash's `shopt -o` does; it was the 20 of `shopt`'s own.
+                    let width = if self.set_o_names_only { 15 } else { 20 };
+                    writeln!(
+                        context.stdout(),
+                        "{:width$}\t{option_value_str}",
+                        option.name
+                    )?;
                 }
             }
 

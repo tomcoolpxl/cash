@@ -214,7 +214,12 @@ impl FcCommand {
                     writeln!(context.stdout(), "\t {}", item.command_line)?;
                 } else {
                     // Match bash's fc format: number, tab, command
-                    writeln!(context.stdout(), "{}\t {}", idx + 1, item.command_line)?;
+                    writeln!(
+                        context.stdout(),
+                        "{}\t {}",
+                        history.number(idx),
+                        item.command_line
+                    )?;
                 }
             }
         }
@@ -361,13 +366,11 @@ impl FcCommand {
                 effective_count.saturating_sub(1)
             }
             std::cmp::Ordering::Greater => {
-                // Positive: 1-based index
-                let idx = (num - 1) as usize;
-                if idx < effective_count {
-                    idx
-                } else {
+                // Positive: a number, counted from the history's base.
+                match history.position(num as usize) {
+                    Some(idx) if idx < effective_count => idx,
                     // Out of range - use 0 (first item)
-                    0
+                    _ => 0,
                 }
             }
             std::cmp::Ordering::Less => {

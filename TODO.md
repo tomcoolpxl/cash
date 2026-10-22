@@ -124,14 +124,13 @@ path. The rest, by theme:
   the text Bash pushes back into its input, not worth copying).
 
 **Assignments, declarations, readonly**
-- Associative arrays: `(( A[\$k]++ ))` expands `$k`; a key that is no name for `read`
-  and `printf -v` is said otherwise.
-- Namerefs: a reference named as its target in a function warns once (Bash: again when
-  used); a reference to an element with an arithmetic subscript (`X[i+1]`) used by
-  `read` writes element 0.
+- Namerefs: a reference named as its target in a function warns once (Bash: twice more
+  each time it is used; only the count of warnings differs).
 
 **Expansion and quoting**
-- An unquoted `${v-$@}` with `IFS=:` is three words (Bash: one, joined with spaces).
+- An unquoted `${v-$@}` is split as `$@` is (Bash, 2026-10-22: one word joined with
+  spaces under `IFS=:`, the words kept whole under `IFS=': '`, a leading space under
+  `IFS=x`; no one rule found). A quoted `"${v-$@}"` is as Bash has it.
 - `${x@P}`: `\v` is cash's version, `\s` the script's name (by design).
 - Bytes that are not UTF-8 become U+FFFD (`$'\xff'`, `read`, `%q`), and `$'\U'` above
   U+10FFFF.
@@ -166,21 +165,17 @@ path. The rest, by theme:
   the substitution's text rewritten as it is parsed, much work for a rare case.
 
 **Starting cash**
-- A second `-c` after a cluster holding one (`cash -ec -c cmd`) is refused (Bash takes
-  it); `-r` and `-D` are not taken.
+- `-r` and `-D` are not taken.
 - `--pretty-print` writes a here-document before a `|` with the `;` after its next
   command, and that command indented as in a body (Bash: `  cat`, no `;`).
 
 **Builtins, small**
-- `set -r` restricts nothing; history numbers restart after HISTSIZE, script lines not
-  history-expanded under `set -H`; `find /dev/null` (modernish's find check).
+- `set -r` restricts nothing; `find /dev/null` (modernish's find check).
 - `eval 'break 1 2'` and its kin inside a subshell end it with 2 where the text was
   sourced or `eval`ed (Bash: 1); a builtin's `--help` is clap's text, or an invalid
   option (Bash: the `help` text, status 2).
-- An assignment to a read-only variable is reported at line 1 of a script, whatever its
-  line (bash-it's case, line 10 in Bash).
-- Printing: xtrace of a compound assignment and inside traps, `shopt -o` column width, `complete -p` and `compgen -b`
-  order changing between runs, associative arrays in sorted order (Bash: hash order).
+- Printing: `complete -p` and `compgen -b` order changing between runs, associative
+  arrays in sorted order (Bash: hash order).
 
 ## The phase before (2026-10-20, done)
 

@@ -496,6 +496,78 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         }
     }
 
+    /// A here-document still open at the end of the text (`parsed`) is closed there, with
+    /// Bash's warning, and the command runs with what it holds, as in Bash; cash refused it.
+    /// `pending` is the command's text, its first line line `first`, `lines` lines long.
+    /// The command parsed again, or `None` when no here-document was open.
+    fn close_open_here_documents(
+        &self,
+        parsed: &Prefix,
+        pending: &mut Vec<u8>,
+        first: usize,
+        lines: usize,
+        params: &ExecutionParameters,
+    ) -> Option<Prefix> {
+        let Prefix::NeedsMore(Err(cash_parser::ParseError::Tokenizing {
+            inner: cash_parser::TokenizerError::UnterminatedHereDocuments(tags, positions),
+            ..
+        })) = parsed
+        else {
+            return None;
+        };
+        let tags: Vec<String> = tags
+            .split(", ")
+            .map(|tag| tag.replace(['\'', '"', '\\'], ""))
+            .collect();
+        let tag_line = positions
+            .split(',')
+            .next()
+            .and_then(|line| line.trim().parse::<usize>().ok())
+            .unwrap_or(1);
+        let opened = here_document_opened(pending, tag_line, &tags);
+        let warning = format!(
+            "{}: line {}: warning: here-document at line {} delimited by end-of-file \
+             (wanted `{}')\n",
+            self.name_for_errors(),
+            first + lines - 1,
+            first + opened - 1,
+            tags.first().map_or("", String::as_str),
+        );
+        let _ = params.stderr(self).write_all(warning.as_bytes());
+        for tag in &tags {
+            pending.extend_from_slice(tag.as_bytes());
+            pending.push(b'\n');
+        }
+        Some(self.parse_prefix(pending))
+    }
+
+    /// A script's `line`, line `number`, with its history expanded, as Bash expands it with
+    /// `set -H` and history on: `None` when that is off, the line as it was when nothing
+    /// was expanded, and an expanded line said on standard error. `Err` when an event is
+    /// not found, said with the line's number. `!!` was a word of the script.
+    fn expand_script_history(&self, line: &[u8], number: usize) -> Option<Result<String, ()>> {
+        if !self.options.enable_bang_style_history_substitution || !self.reads_into_history() {
+            return None;
+        }
+        let text = String::from_utf8_lossy(line);
+        let mut stderr = self.stderr();
+        match self.expand_history(&text) {
+            Ok(expanded) if expanded.changed => {
+                let _ = writeln!(stderr, "{}", expanded.line.trim_end_matches('\n'));
+                let mut line = expanded.line;
+                if text.ends_with('\n') && !line.ends_with('\n') {
+                    line.push('\n');
+                }
+                Some(Ok(line))
+            }
+            Ok(_) => Some(Ok(text.into_owned())),
+            Err(error) => {
+                let _ = writeln!(stderr, "{}: line {number}: {error}", self.name_for_errors());
+                Some(Err(()))
+            }
+        }
+    }
+
     /// A here-document of `command`, whose first line is line `first`, that a `)` closes
     /// (`$(cat <<EOF` ... `EOF)`) is taken with Bash's warning, said as the command is read;
     /// it was taken in silence.
@@ -610,41 +682,32 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             .skip(lines_run)
             .peekable();
         while let Some(line) = lines.next() {
-            pending.extend_from_slice(line);
             pending_lines += 1;
-            let mut parsed = self.parse_prefix(&pending);
-            // A here-document still open at the end is closed there, with Bash's warning,
-            // and the command runs with what it holds, as in Bash; cash refused it.
-            if lines.peek().is_none()
-                && let Prefix::NeedsMore(Err(cash_parser::ParseError::Tokenizing {
-                    inner: cash_parser::TokenizerError::UnterminatedHereDocuments(tags, positions),
-                    ..
-                })) = &parsed
+            match self
+                .expand_script_history(line, first_line(origin) + lines_before + pending_lines - 1)
             {
-                let tags: Vec<String> = tags
-                    .split(", ")
-                    .map(|tag| tag.replace(['\'', '"', '\\'], ""))
-                    .collect();
-                let tag_line = positions
-                    .split(',')
-                    .next()
-                    .and_then(|line| line.trim().parse::<usize>().ok())
-                    .unwrap_or(1);
-                let opened = here_document_opened(&pending, tag_line, &tags);
-                let warning = format!(
-                    "{}: line {}: warning: here-document at line {} delimited by end-of-file \
-                     (wanted `{}')\n",
-                    self.name_for_errors(),
-                    first_line(origin) + lines_before + pending_lines - 1,
-                    first_line(origin) + lines_before + opened - 1,
-                    tags.first().map_or("", String::as_str),
-                );
-                let _ = params.stderr(self).write_all(warning.as_bytes());
-                for tag in &tags {
-                    pending.extend_from_slice(tag.as_bytes());
-                    pending.push(b'\n');
+                Some(Ok(expanded)) => pending.extend_from_slice(expanded.as_bytes()),
+                None => pending.extend_from_slice(line),
+                // An event not found drops the command, as in Bash, and the next is read.
+                Some(Err(())) => {
+                    lines_before += pending_lines;
+                    pending_lines = 0;
+                    pending.clear();
+                    continue;
                 }
-                parsed = self.parse_prefix(&pending);
+            }
+            let mut parsed = self.parse_prefix(&pending);
+            if lines.peek().is_none() {
+                let first = first_line(origin) + lines_before;
+                if let Some(closed) = self.close_open_here_documents(
+                    &parsed,
+                    &mut pending,
+                    first,
+                    pending_lines,
+                    params,
+                ) {
+                    parsed = closed;
+                }
             }
             // A command substitution's text that does not parse is an error of the line,
             // found as it is read, as Bash finds it: the line does not run, and a script

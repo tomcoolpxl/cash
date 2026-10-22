@@ -3039,3 +3039,23 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   ))`, an `if` inside over lines, in `declare -f`, `type`, `$BASH_COMMAND` and
   `--pretty-print`, but not where a word is made text for other ends. `elif` was written
   `elif`; Bash writes it as an `if` inside the `else` before it, and so does cash.
+- **The small leftovers, second part** (2026-10-22, the phase after 1.47.0): a subscript
+  was expanded again in text expanded once already; in `((...))`, `$((...))`, `for
+  ((...))` and `[[ ... -eq ... ]]` it is taken as it is, as in Bash (`(( A[\$k]++ ))`
+  counts the key `$k`, `a[\$i]` is a syntax error), `let`'s words and a variable's value
+  still expanding it. `read` and `printf -v` into a reference to `X[i+1]` wrote element
+  0; the subscript is evaluated. `read -a` and `mapfile` through such a reference
+  replaced the array or did nothing; they are refused, as in Bash. History numbers
+  began again at 1 once HISTSIZE dropped the oldest; they keep counting, as Bash's
+  history base does (`history`, `fc`, `history -d`, `!N`, HISTCMD, `\!`), until
+  `history -c`. With `set -H` and history on, a script's lines were not history-expanded;
+  they are, the expanded line said on standard error and a line whose event is not
+  found dropped, as in Bash. `!string` ran on past `;&()|<>` (`!ech; echo z` looked for
+  `ech;`); it ends there, as in Bash, at the prompt too. `-c -ex cmd` was refused and
+  `-ec -c cmd` ran `-c` as the command; `-c` takes no word, as in Bash. A read-only
+  assignment reported at line 1 of a script (bash-it) was found to be reported at its
+  line now. `set -x` traced a list as the values it took, and a declaration's as
+  `c='(q x y)'`; a list is traced as written, and a declaration's on a line of its own,
+  each key and value single-quoted, before the command with the name alone, as Bash
+  traces them. `shopt -o` listed its names 20 wide; 15, as `set -o` and Bash's `shopt -o`
+  list them. A trace inside a trap was found to be as Bash has it.

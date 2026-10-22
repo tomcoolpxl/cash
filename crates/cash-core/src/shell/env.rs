@@ -199,6 +199,32 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         use crate::env::{EnvironmentLookup, EnvironmentScope};
         use crate::variables::ShellValueLiteral;
 
+        // A reference to an element of an indexed array has its subscript evaluated, as in
+        // Bash: `declare -n r='X[i+1]'; read r` writes element 1. It was element 0, the
+        // subscript read as a number.
+        if index.is_none()
+            && let Some(target) = self
+                .env
+                .resolved_name(name)
+                .map(std::borrow::Cow::into_owned)
+            && target != name
+            && let Some((base, subscript)) =
+                target.strip_suffix(']').and_then(|t| t.split_once('['))
+            && crate::env::valid_variable_name(base)
+            && !self
+                .env
+                .get(base)
+                .is_some_and(|(_, var)| var.is_associative(self))
+        {
+            // A list is no element's value: `read -a r` is refused, as in Bash; it replaced
+            // the whole array.
+            if matches!(value, ShellValueLiteral::Array(_)) {
+                return Err(error::ErrorKind::NotValidIdentifier(target).into());
+            }
+            let key = crate::arithmetic::evaluate_str(self, subscript)?.to_string();
+            return self.assign_variable(base, Some(key), value);
+        }
+
         let value = self.value_for_assignment(name, value)?;
         if self.assign_special(name, index.as_deref(), &value, false)? {
             return Ok(());
