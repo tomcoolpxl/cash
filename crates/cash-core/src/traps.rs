@@ -74,7 +74,7 @@ pub(crate) fn default_ends_shell(signal: sys::signal::Signal, at_prompt: bool) -
             || at_prompt && matches!(name, "INT" | "TERM"))
 }
 
-/// Waits until a copy of the shell has sent it a signal ([`send_to_shell`]).
+/// Waits until a copy of the shell has sent it a signal ([`crate::Shell::send_to_shell`]).
 pub async fn signal_sent_to_shell() {
     while !signals_sent_to_shell() {
         SENT_NOTICE.notified().await;

@@ -80,7 +80,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     ///
     /// A trapped signal runs its trap and the shell goes on: so does one Windows cannot
     /// send a program, `USR1` and the rest. Otherwise the signal's default
-    /// ([`Self::default_signal_action`]).
+    /// (`default_signal_action`).
     ///
     /// # Errors
     ///
@@ -125,7 +125,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     }
 
     /// Acts on the signals copies of the shell sent its process id (`( kill -USR1 $$ ) &`,
-    /// [`crate::traps::send_to_shell`]), oldest first, in the shell itself: after the
+    /// [`Self::send_to_shell`]), oldest first, in the shell itself: after the
     /// pipeline it ran, and in `wait`, which they end. A copy takes none.
     ///
     /// `None` where none was for the shell to act on, as an ignored one is not; otherwise
