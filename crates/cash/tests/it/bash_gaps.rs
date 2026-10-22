@@ -3825,3 +3825,25 @@ fn cash_started_as_sh_and_a_substitution_under_set_e_are_posix() {
         (1, String::new(), String::new())
     );
 }
+
+#[test]
+fn declare_f_prints_words_substitutions_and_elif_as_bash_does() {
+    // A word's second line was indented, so `x="a<newline>b"` read back held the indent and
+    // a here-document in `$(...)` never ended; a process substitution was `<(( z ))`;
+    // `$( echo  hi )` was printed as written; `elif` was `elif` (Bash: `else` and `if`).
+    let (status, stdout) = output(
+        "f() {\n  x=\"a\nb\"\n  y=$(cat <<EOF\nbody\nEOF\n)\n  printf '[%s][%s]' \"$x\" \"$y\"\n}\n\
+         eval \"$(declare -f f)\"; f; echo\n\
+         g() { a=$( echo  hi ); b=$( (echo n) ); cat <(z); \
+         if p; then q; elif r; then s; else t; fi; }; declare -f g",
+    );
+    assert_eq!(
+        (status, stdout.as_str()),
+        (
+            0,
+            "[a\nb][body]\ng () \n{ \n    a=$(echo hi);\n    b=$( ( echo n ));\n    cat <(z);\n    \
+             if p; then\n        q;\n    else\n        if r; then\n            s;\n        else\n            \
+             t;\n        fi;\n    fi\n}"
+        )
+    );
+}

@@ -3029,3 +3029,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   in POSIX mode too. A special builtin winning over a function of its name, a reserved
   word after an alias ending in a blank, and quotes in a double-quoted `${v-'w'}` were
   found to be as Bash has them.
+- **Printing commands as Bash prints them** (2026-10-22, the phase after 1.47.0, the
+  small leftovers): `declare -f` indented a word's lines after its first, so a function
+  with `x="a<newline>b"` read back (`eval "$(declare -f f)"`, `export -f`) held the
+  indent in its value, and one with a here-document in `$(...)` did not read back at all;
+  a word's later lines are written as they are, as Bash writes them. A process
+  substitution was written `<(( z ))`; it is `<(z)`. `$( echo  hi )` was written as
+  typed; a command substitution is written from its parse, `$(echo hi)`, `$( ( echo n
+  ))`, an `if` inside over lines, in `declare -f`, `type`, `$BASH_COMMAND` and
+  `--pretty-print`, but not where a word is made text for other ends. `elif` was written
+  `elif`; Bash writes it as an `if` inside the `else` before it, and so does cash.

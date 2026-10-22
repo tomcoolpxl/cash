@@ -1014,6 +1014,81 @@ fn parse_array_elements<'a>(
         .collect()
 }
 
+/// `word` with each `$(...)` in it written from its parse, as Bash prints commands
+/// (`declare -f`, `$BASH_COMMAND`): `$(echo hi)` for `$( echo  hi )`, `$( ( echo n ))` for
+/// `$( (echo n) )`, the commands on a line of the text joined by `; `. One that does not
+/// parse is left as written, as is one in single quotes, and a `$((`.
+pub(crate) fn printed_command_substitutions(word: &str) -> std::borrow::Cow<'_, str> {
+    if !word.contains("$(") {
+        return std::borrow::Cow::Borrowed(word);
+    }
+    let options = ParserOptions::default();
+    let mut printed = String::with_capacity(word.len());
+    let mut copied = 0;
+    let mut quote = None;
+    let mut index = 0;
+    let bytes = word.as_bytes();
+    while index < bytes.len() {
+        match (quote, bytes[index]) {
+            (Some(b'\''), b'\'') => quote = None,
+            (Some(b'\''), _) => {}
+            (Some(b'$'), b'\\') => index += 1,
+            (Some(b'$'), b'\'') => quote = None,
+            (Some(b'$'), _) => {}
+            (_, b'\\') => index += 1,
+            (None, b'"') => quote = Some(b'"'),
+            (Some(b'"'), b'"') => quote = None,
+            (None, b'\'') => quote = Some(b'\''),
+            (None, b'$') if bytes.get(index + 1) == Some(&b'\'') => {
+                quote = Some(b'$');
+                index += 1;
+            }
+            (_, b'$') => {
+                let rest = word.get(index..).unwrap_or_default();
+                if rest.starts_with("$(")
+                    && !rest.starts_with("$((")
+                    && let Ok((body, end)) =
+                        expansion_parser::command_substitution_at(rest, &options)
+                    && let Some(body) = printed_commands(body, &options)
+                {
+                    printed.push_str(word.get(copied..index).unwrap_or_default());
+                    printed.push_str("$(");
+                    if body.starts_with('(') {
+                        printed.push(' ');
+                    }
+                    printed.push_str(&body);
+                    printed.push(')');
+                    index += end;
+                    copied = index;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    if copied == 0 {
+        return std::borrow::Cow::Borrowed(word);
+    }
+    printed.push_str(word.get(copied..).unwrap_or_default());
+    std::borrow::Cow::Owned(printed)
+}
+
+/// `text`'s commands as Bash prints a command substitution's: each line's commands joined
+/// as at the top level ([`crate::ast::TopLevel`]), the lines one after the other.
+fn printed_commands(text: &str, options: &ParserOptions) -> Option<String> {
+    let tokens = crate::tokenize_str_with_options(text, &options.tokenizer_options()).ok()?;
+    let program = crate::parse_tokens(&tokens, options).ok()?;
+    Some(
+        program
+            .complete_commands
+            .iter()
+            .map(|command| crate::ast::TopLevel(command).to_string())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
 /// `$!`, the parameter.
 const fn last_background() -> Parameter {
     Parameter::Special(SpecialParameter::LastBackgroundProcessId)
@@ -1706,6 +1781,10 @@ peg::parser! {
 
         rule variable_name() -> &'input str =
             $(!['0'..='9'] ['_' | '0'..='9' | 'a'..='z' | 'A'..='Z']+)
+
+        // A `$(...)` at the start of the text, and where it ends.
+        pub(crate) rule command_substitution_at() -> (&'input str, usize) =
+            "$(" !"(" c:command() ")" end:position!() [_]* { (c, end) }
 
         pub(crate) rule command_substitution() -> WordPiece =
             "$(" c:command() ")" { WordPiece::CommandSubstitution(c.to_owned()) } /

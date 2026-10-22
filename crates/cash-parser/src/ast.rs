@@ -8,10 +8,18 @@ use crate::{SourceSpan, tokenizer};
 const DISPLAY_INDENT: &str = "    ";
 
 thread_local! {
-    /// Whether a here-document's body and its end are being written: their lines are
-    /// written as they are, never indented, or the end would no longer be found
-    /// (`eval "$(declare -f g)"` of a function with a here-document failed, PI-01).
+    /// Whether lines are being written as they are, never indented: a here-document's
+    /// body and its end, or the end would no longer be found (`eval "$(declare -f g)"` of
+    /// a function with a here-document failed, PI-01), and a word's lines after its first
+    /// (a quoted newline, a `$(...)` over lines), whose text would change: `x="a<newline>b"`
+    /// read back held the indent.
     static WRITING_HERE_DOCUMENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+
+    /// Whether commands are being printed as Bash prints them: a function's definition,
+    /// `$BASH_COMMAND`, `--pretty-print`. A command substitution in a word is then written
+    /// from its parse (`$(echo hi)` for `$( echo  hi )`); a word printed for other ends,
+    /// an assignment's value made text again, keeps its text.
+    static PRINTING_COMMANDS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 
     /// The bodies of the here-documents of the command being written, held for after it,
     /// where Bash writes them (`print_deferred_heredocs`): a list writes them after its item,
@@ -20,6 +28,14 @@ thread_local! {
     /// list a body follows its `<<END`, as it did.
     static HELD_HERE_DOCUMENTS: std::cell::RefCell<Vec<Vec<String>>> =
         const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Runs `write` with commands printed as Bash prints them ([`PRINTING_COMMANDS`]).
+fn printing_commands<T>(write: impl FnOnce() -> T) -> T {
+    let was = PRINTING_COMMANDS.replace(true);
+    let written = write();
+    PRINTING_COMMANDS.set(was);
+    written
 }
 
 /// Writes `node` with the bodies of its here-documents held ([`HELD_HERE_DOCUMENTS`]), and
@@ -149,6 +165,12 @@ pub struct TopLevel<'a>(pub &'a CompleteCommand);
 
 impl Display for TopLevel<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        printing_commands(|| self.write(f))
+    }
+}
+
+impl TopLevel<'_> {
+    fn write(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut previous: Option<&SeparatorOperator> = None;
         let mut after_bodies = false;
         for item in &self.0.0 {
@@ -1048,19 +1070,41 @@ fn condition_separator(condition: &impl Display) -> &'static str {
 
 impl Display for IfClauseCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let separator = condition_separator(&self.condition);
-        writeln!(f, "if {}{separator}then", self.condition)?;
-        write!(indented(f), "{}", self.then.terminated())?;
-        if let Some(elses) = &self.elses {
-            for else_clause in elses {
-                write!(f, "{else_clause}")?;
-            }
-        }
+        let elses = self.elses.as_deref().unwrap_or_default();
+        write_if(f, &self.condition, &self.then, elses, false)
+    }
+}
 
+/// An `if` written as Bash writes one: each `elif` an `if` inside the `else` before it,
+/// ended `fi;` as an item of that `else`'s list (`terminated`). It was `elif`.
+fn write_if(
+    f: &mut std::fmt::Formatter<'_>,
+    condition: &CompoundList,
+    then: &CompoundList,
+    elses: &[ElseClause],
+    terminated: bool,
+) -> std::fmt::Result {
+    let separator = condition_separator(condition);
+    writeln!(f, "if {condition}{separator}then")?;
+    write!(indented(f), "{}", then.terminated())?;
+    if let Some((first, rest)) = elses.split_first() {
         writeln!(f)?;
-        write!(f, "fi")?;
+        writeln!(f, "else")?;
+        match &first.condition {
+            Some(condition) => write!(indented(f), "{}", NestedIf(condition, &first.body, rest))?,
+            None => write!(indented(f), "{}", first.body.terminated())?,
+        }
+    }
+    writeln!(f)?;
+    write!(f, "fi{}", if terminated { ";" } else { "" })
+}
 
-        Ok(())
+/// An `elif` and the `else` clauses after it, written as the `if` Bash makes of them.
+struct NestedIf<'a>(&'a CompoundList, &'a CompoundList, &'a [ElseClause]);
+
+impl Display for NestedIf<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write_if(f, self.0, self.1, self.2, true)
     }
 }
 
@@ -1267,7 +1311,7 @@ impl Display for FunctionDefinition {
         }
         writeln!(f, "{} () ", self.fname.value)?;
         FUNCTIONS_BEING_WRITTEN.set(FUNCTIONS_BEING_WRITTEN.get() + 1);
-        let written = write!(f, "{}", self.body);
+        let written = printing_commands(|| write!(f, "{}", self.body));
         FUNCTIONS_BEING_WRITTEN.set(FUNCTIONS_BEING_WRITTEN.get().saturating_sub(1));
         written
     }
@@ -1423,7 +1467,7 @@ impl SimpleCommand {
         std::sync::Arc::clone(
             self.printed
                 .0
-                .get_or_init(|| std::sync::Arc::from(self.to_string())),
+                .get_or_init(|| std::sync::Arc::from(printing_commands(|| self.to_string()))),
         )
     }
 }
@@ -1633,8 +1677,10 @@ impl Display for CommandPrefixOrSuffixItem {
             Self::IoRedirect(io_redirect) => write!(f, "{io_redirect}"),
             Self::Word(word) => write!(f, "{word}"),
             Self::AssignmentWord(_assignment, word) => write!(f, "{word}"),
+            // `<(z)`, as Bash writes it: it was `<(( z ))`, the subshell's own parentheses
+            // inside the substitution's.
             Self::ProcessSubstitution(kind, subshell_command) => {
-                write!(f, "{kind}({subshell_command})")
+                write!(f, "{kind}({})", TopLevel(&subshell_command.list))
             }
         }
     }
@@ -1991,7 +2037,7 @@ impl Display for IoFileRedirectTarget {
             Self::Filename(word) => write!(f, "{word}"),
             Self::Fd(fd) => write!(f, "{fd}"),
             Self::ProcessSubstitution(kind, subshell_command) => {
-                write!(f, "{kind}{subshell_command}")
+                write!(f, "{kind}({})", TopLevel(&subshell_command.list))
             }
             Self::Duplicate(word) => write!(f, "{word}"),
         }
@@ -2356,7 +2402,20 @@ impl SourceLocation for Word {
 
 impl Display for Word {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+        let value = if PRINTING_COMMANDS.get() {
+            crate::word::printed_command_substitutions(&self.value)
+        } else {
+            std::borrow::Cow::Borrowed(self.value.as_str())
+        };
+        // Its lines after the first as they are, as Bash writes a word ([`WRITING_HERE_DOCUMENT`]).
+        let Some((first, rest)) = value.split_once('\n') else {
+            return f.write_str(&value);
+        };
+        f.write_str(first)?;
+        let was = WRITING_HERE_DOCUMENT.replace(true);
+        let written = f.write_str("\n").and_then(|()| f.write_str(rest));
+        WRITING_HERE_DOCUMENT.set(was);
+        written
     }
 }
 

@@ -1003,6 +1003,9 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
 - **The phase after 1.46.0** (the user, 2026-10-21, from a pick list): the leftovers of the
   themes done (recommended), starting cash, and POSIX mode, which was turned down before
   and is now picked. Not picked: traps and jobs.
+- **The phase after 1.47.0** (the user, 2026-10-22, from a pick list): the small
+  leftovers (recommended). Not picked: traps, signals and jobs; another corpus round;
+  time zones and raw bytes.
 - **`#!/bin/sh` and `sh` run in POSIX mode, as in Git Bash** (the user, 2026-10-21, from a
   pick list, recommended): a cash started under the name `sh`, which `#!/bin/sh` and
   `sh -c` are, is in POSIX mode, as Git Bash's `sh` is Bash in POSIX mode; `#!/bin/bash`

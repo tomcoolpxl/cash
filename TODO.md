@@ -25,6 +25,14 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
+## Picked by the user (the current phase, after 1.47.0, 2026-10-22)
+
+The small leftovers (decisions.md, "The phase after 1.47.0"), each checked against Git
+Bash 5.3 first: `(( A[\$k]++ ))` expanding `$k`, the two nameref cases, an unquoted
+`${v-$@}` with `IFS=:`, a read-only assignment reported at line 1 of a script,
+`declare -f` of `$( )` and `elif`, history numbers after HISTSIZE, `-ec -c`; the other
+small items below under their themes as they come.
+
 ## The phase before (2026-10-21, done, released as 1.47.0)
 
 Three themes (decisions.md, "The phase after 1.46.0"), in this order, each item checked
@@ -171,8 +179,7 @@ path. The rest, by theme:
   option (Bash: the `help` text, status 2).
 - An assignment to a read-only variable is reported at line 1 of a script, whatever its
   line (bash-it's case, line 10 in Bash).
-- Printing: `declare -f`/`type` (`$( )`, `elif`), xtrace of a compound
-  assignment and inside traps, `shopt -o` column width, `complete -p` and `compgen -b`
+- Printing: xtrace of a compound assignment and inside traps, `shopt -o` column width, `complete -p` and `compgen -b`
   order changing between runs, associative arrays in sorted order (Bash: hash order).
 
 ## The phase before (2026-10-20, done)
