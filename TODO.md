@@ -25,13 +25,15 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the current phase, after 1.47.0, 2026-10-22)
+## The phase before (2026-10-22, done, released as 1.48.0)
 
 The small leftovers (decisions.md, "The phase after 1.47.0"), each checked against Git
 Bash 5.3 first: `(( A[\$k]++ ))` expanding `$k`, the two nameref cases, an unquoted
 `${v-$@}` with `IFS=:`, a read-only assignment reported at line 1 of a script,
-`declare -f` of `$( )` and `elif`, history numbers after HISTSIZE, `-ec -c`; the other
-small items below under their themes as they come.
+`declare -f` of `$( )` and `elif`, history numbers after HISTSIZE, `-ec -c`. Done, in
+DONE.md, with `declare -f` words over lines, `set -H` in scripts, traces of lists,
+`shopt -o`'s width and stable listing orders found on the way; left, below: the
+nameref warning's count and `${v-$@}` under odd IFS values.
 
 ## The phase before (2026-10-21, done, released as 1.47.0)
 
