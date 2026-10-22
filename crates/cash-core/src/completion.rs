@@ -582,12 +582,16 @@ impl Spec {
                         }
                     }
                 }
+                // In byte order, Bash's table order (`. : [ alias bg`); it changed from run
+                // to run, a hash map's order.
                 CompleteAction::Builtin => {
-                    for name in shell.builtins().keys() {
-                        if name.starts_with(token) {
-                            candidates.push(name.to_owned());
-                        }
-                    }
+                    let mut names: Vec<&String> = shell
+                        .builtins()
+                        .keys()
+                        .filter(|name| name.starts_with(token))
+                        .collect();
+                    names.sort_unstable();
+                    candidates.extend(names.into_iter().cloned());
                 }
                 CompleteAction::Command => {
                     let command_completions =

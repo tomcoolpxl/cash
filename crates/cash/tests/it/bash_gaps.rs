@@ -3931,3 +3931,18 @@ fn compound_assignments_trace_and_shopt_o_lists_as_bash_does() {
         "{stderr}"
     );
 }
+
+#[test]
+fn compgen_b_and_complete_p_list_in_the_same_order_every_run() {
+    // Both listed in a hash map's order, which changed from run to run.
+    let (_, builtins) = output("compgen -b");
+    let names: Vec<&str> = builtins.lines().collect();
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    assert_eq!(names, sorted);
+    assert_eq!(names.first().copied(), Some("."));
+    assert_eq!(
+        output("complete -W z c; complete -W x a; complete -W y b; complete -p").1,
+        "complete -W 'x' a\ncomplete -W 'y' b\ncomplete -W 'z' c"
+    );
+}

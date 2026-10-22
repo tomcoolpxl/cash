@@ -263,7 +263,11 @@ impl CompleteCommand {
                     return error::unimp("special spec not found");
                 }
             } else {
-                for (command_name, spec) in context.shell.completion_config().iter() {
+                // By name, the same every run: a hash map's order changed from run to run
+                // (Bash's is its own hash table's).
+                let mut specs: Vec<_> = context.shell.completion_config().iter().collect();
+                specs.sort_unstable_by_key(|(command_name, _)| *command_name);
+                for (command_name, spec) in specs {
                     Self::display_spec(context, None, Some(command_name.as_str()), spec)?;
                 }
             }

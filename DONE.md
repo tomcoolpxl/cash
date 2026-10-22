@@ -3059,3 +3059,7 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   each key and value single-quoted, before the command with the name alone, as Bash
   traces them. `shopt -o` listed its names 20 wide; 15, as `set -o` and Bash's `shopt -o`
   list them. A trace inside a trap was found to be as Bash has it.
+- **`compgen -b` and `complete -p` in the same order every run** (2026-10-22, the
+  phase after 1.47.0): both listed in a hash map's order, which changed from run to run.
+  `compgen -b` lists in byte order, Bash's table order (`. : [ alias bg`), and
+  `complete -p` by name.

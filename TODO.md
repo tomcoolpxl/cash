@@ -174,8 +174,8 @@ path. The rest, by theme:
 - `eval 'break 1 2'` and its kin inside a subshell end it with 2 where the text was
   sourced or `eval`ed (Bash: 1); a builtin's `--help` is clap's text, or an invalid
   option (Bash: the `help` text, status 2).
-- Printing: `complete -p` and `compgen -b` order changing between runs, associative
-  arrays in sorted order (Bash: hash order).
+- Printing: associative arrays in sorted order, and `complete -p` by name (Bash: hash
+  order for both).
 
 ## The phase before (2026-10-20, done)
 
