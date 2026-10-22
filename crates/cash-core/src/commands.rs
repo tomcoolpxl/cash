@@ -228,14 +228,15 @@ impl StopToken {
         }
     }
 
-    /// Whether the builtin is to stop now.
+    /// Whether the builtin is to stop now: a Ctrl-C, or a job's signal that ends the shell
+    /// (`kill $$` with no trap), in the foreground; `kill` of its job in the background.
     pub fn requested(&self) -> bool {
         if self.background {
             self.job_cancel
                 .as_ref()
                 .is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::SeqCst) != 0)
         } else {
-            cash_win32::console::interrupt_pending()
+            cash_win32::console::interrupt_pending() || crate::traps::fatal_signal_pending()
         }
     }
 
@@ -1370,6 +1371,17 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
             self.use_functions = false;
         }
 
+        // A command word that starts with `%` names a job, before any function or program
+        // of that name, as in Bash: `%1` is `fg %1` (and `%1 &` is `bg %1`, sent here as
+        // that), so a script without `set -m` is told there is no job control.
+        if self.command_name.starts_with('%')
+            && let Some(fg) = self.shell.builtins().get("fg").cloned()
+        {
+            self.args.insert(0, CommandArg::String("fg".into()));
+            self.command_name = "fg".into();
+            return self.execute_via_builtin(fg).await;
+        }
+
         // First see if it's the name of a builtin.
         let builtin = self.shell.builtins().get(&self.command_name).cloned();
 
@@ -2227,8 +2239,15 @@ pub(crate) async fn invoke_shell_function(
     };
 
     // The RETURN trap runs in the function's own context, before its frame is popped, and
-    // sees the caller-visible `$?`.
-    if result.is_ok() {
+    // sees the caller-visible `$?`. A body that ran to its end leaves `LINENO` at its `{`,
+    // as Bash's does; a `return` leaves it at the `return`.
+    if let Ok(done) = &result {
+        if !matches!(
+            done.next_control_flow,
+            ExecutionControlFlow::ReturnFromFunctionOrScript
+        ) {
+            context.shell.set_current_cmd(body);
+        }
         run_return_trap(context.shell, &context.params).await;
     } else {
         context.shell.take_status_before_return();

@@ -1,6 +1,14 @@
 //! Trap handling for the shell.
 
+use std::io::Write as _;
+
 use crate::{ExecutionParameters, ExecutionResult, ProcessGroupPolicy, error, traps::TrapSignal};
+
+/// The status of a process a signal ended: 128 + its number.
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+const fn signal_status(signal: crate::sys::signal::Signal) -> u8 {
+    (128 + signal as i32) as u8
+}
 
 impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// Runs any exit steps for the shell.
@@ -64,6 +72,132 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             return None;
         }
         Some(self.invoke_trap_handler(signal, params).await)
+    }
+
+    /// A signal the shell sends itself, `kill -TERM $$`: handled inside the shell, as Bash
+    /// handles it, rather than delivered through the OS. Delivered, `INT` and `TERM` ended
+    /// cash at once, trap or no trap.
+    ///
+    /// A trapped signal runs its trap and the shell goes on: so does one Windows cannot
+    /// send a program, `USR1` and the rest. Otherwise the signal's default
+    /// ([`Self::default_signal_action`]).
+    ///
+    /// # Errors
+    ///
+    /// The trap's error, or the interrupt an `INT` with no trap is at the prompt.
+    pub async fn take_signal(
+        &mut self,
+        signal: TrapSignal,
+        params: &ExecutionParameters,
+    ) -> Result<ExecutionResult, error::Error> {
+        let TrapSignal::Signal(raw) = signal else {
+            return Ok(ExecutionResult::success());
+        };
+        if signal.as_str() != "KILL"
+            && let Some(result) = self.raise_signal_trap(signal, params).await
+        {
+            // What the handler does to the commands around it is done there, as in Bash:
+            // `break` leaves the loop the shell is in, `exit` ends it, `return` returns
+            // from the function. It was dropped, and the loop went on.
+            let trap = result?;
+            return Ok(if trap.is_normal_flow() {
+                ExecutionResult::success()
+            } else {
+                trap
+            });
+        }
+        Ok(self
+            .default_signal_action(raw, params)?
+            .unwrap_or_else(ExecutionResult::success))
+    }
+
+    /// Sends `signal` to the shell this is a copy of (a job, a subshell, a substitution),
+    /// which runs in the same process: `kill -USR1 $$` from a copy. The shell takes it after
+    /// the pipeline it runs, and in `wait` ([`Self::take_signals_sent`]); one that ends it,
+    /// by the traps the copy was given, ends its wait for a foreground command at once.
+    /// Whether it is at a prompt the copy knows from its own `interactive`, or from running
+    /// as a job of a shell with job control, whose copies are not interactive.
+    pub fn send_to_shell(&self, signal: crate::sys::signal::Signal, params: &ExecutionParameters) {
+        let at_prompt = self.options().interactive || params.background;
+        let ends_it = !self.traps.handles(TrapSignal::Signal(signal))
+            && crate::traps::default_ends_shell(signal, at_prompt);
+        crate::traps::send_to_shell(signal, ends_it);
+    }
+
+    /// Acts on the signals copies of the shell sent its process id (`( kill -USR1 $$ ) &`,
+    /// [`crate::traps::send_to_shell`]), oldest first, in the shell itself: after the
+    /// pipeline it ran, and in `wait`, which they end. A copy takes none.
+    ///
+    /// `None` where none was for the shell to act on, as an ignored one is not; otherwise
+    /// 128 + the signal's number once its trap has run, which `wait` returns, or what the
+    /// trap or the signal's default did to the commands around, such as an `exit`.
+    ///
+    /// # Errors
+    ///
+    /// A trap's error, or the interrupt an `INT` with no trap is at the prompt.
+    pub async fn take_signals_sent(
+        &mut self,
+        params: &ExecutionParameters,
+    ) -> Result<Option<ExecutionResult>, error::Error> {
+        if self.is_subshell() || !crate::traps::signals_sent_to_shell() {
+            return Ok(None);
+        }
+        let mut outcome = None;
+        for raw in crate::traps::take_signals_sent_to_shell() {
+            let signal = TrapSignal::Signal(raw);
+            let ignored = self
+                .traps
+                .get_handler(signal)
+                .is_some_and(|handler| handler.command.is_empty());
+            if ignored {
+                continue;
+            }
+            if signal.as_str() != "KILL"
+                && let Some(result) = self.raise_signal_trap(signal, params).await
+            {
+                let trap = result?;
+                if !trap.is_normal_flow() {
+                    return Ok(Some(trap));
+                }
+                outcome = Some(ExecutionResult::new(signal_status(raw)));
+            } else if let Some(result) = self.default_signal_action(raw, params)? {
+                return Ok(Some(result));
+            }
+        }
+        Ok(outcome)
+    }
+
+    /// What a signal no trap takes does to the shell that was sent it: `None` where it
+    /// leaves the shell running. `KILL` ends the shell. A script ends with 128 + the
+    /// signal's number; an interactive shell ignores `TERM`, abandons the line on `INT` as
+    /// Ctrl-C does, and exits on the others. `QUIT` (which Bash ignores in all cases),
+    /// those that stop a process and those POSIX ignores (`CHLD`, `CONT`, `URG`, `WINCH`)
+    /// leave it running.
+    fn default_signal_action(
+        &self,
+        raw: crate::sys::signal::Signal,
+        params: &ExecutionParameters,
+    ) -> Result<Option<ExecutionResult>, error::Error> {
+        let exit = ExecutionResult {
+            exit_code: crate::ExecutionExitCode::from(signal_status(raw)),
+            next_control_flow: crate::ExecutionControlFlow::ExitShell,
+        };
+        let name = TrapSignal::Signal(raw).as_str();
+        if name == "KILL" {
+            return Ok(Some(exit));
+        }
+        if raw.leaves_the_shell_running() || name == "QUIT" {
+            return Ok(None);
+        }
+        match name {
+            _ if !self.options().interactive => Ok(Some(exit)),
+            "INT" => {
+                writeln!(params.stderr(self))?;
+                Err(error::ErrorKind::Interrupted.into())
+            }
+            "TERM" => Ok(None),
+            _ => Ok(Some(exit)),
+        }
     }
 
     /// What the keyboard's interrupt does to the shell, once the shell has decided that

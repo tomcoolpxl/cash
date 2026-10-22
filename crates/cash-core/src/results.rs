@@ -274,8 +274,20 @@ impl ExecutionSpawnResult {
         let result = match self {
             Self::StartedProcess(mut child) => {
                 // Wait for the process to exit or for a relevant signal, whichever happens
-                // first.
-                match child.wait_or_stop(ctrl_z).await? {
+                // first. A job's signal that ends the shell (`kill $$` with no trap) ends
+                // the wait, and the program goes on, as Bash, which such a signal ends at
+                // once, leaves it; the shell ends after the pipeline.
+                let waited = tokio::select! {
+                    waited = child.wait_or_stop(ctrl_z) => Some(waited?),
+                    () = crate::traps::fatal_signal_sent() => None,
+                };
+                let Some(waited) = waited else {
+                    return Ok((
+                        ExecutionWaitResult::Completed(ExecutionResult::general_error()),
+                        Interrupt::None,
+                    ));
+                };
+                match waited {
                     processes::ProcessWaitResult::Completed(output) => {
                         let interrupt = Interrupt::of(&output, child.saw_ctrl_c());
                         (

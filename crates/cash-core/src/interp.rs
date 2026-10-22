@@ -547,7 +547,10 @@ impl Execute for ast::CompoundList {
         for ast::CompoundListItem(ao_list, sep) in &self.0 {
             let run_async = matches!(sep, ast::SeparatorOperator::Async);
 
-            if run_async {
+            if run_async && let Some(bg) = job_spec_sent_to_background(ao_list) {
+                result = bg.execute(shell, params).await?;
+                shell.set_last_exit_status(result.exit_code.into());
+            } else if run_async {
                 if let Some(job) = spawn_async_ao_list_in_task(ao_list, shell, params).await {
                     let job_formatted = job.to_pid_style_string();
 
@@ -577,6 +580,38 @@ impl Execute for ast::CompoundList {
 
         Ok(result)
     }
+}
+
+/// `%1 &` as `bg %1`, which the shell runs itself, as Bash does, and not as a job of its
+/// own: a lone simple command whose name, as written, starts with `%`.
+fn job_spec_sent_to_background(ao_list: &ast::AndOrList) -> Option<ast::AndOrList> {
+    if !ao_list.additional.is_empty() || ao_list.first.bang || ao_list.first.timed.is_some() {
+        return None;
+    }
+    let [ast::Command::Simple(simple)] = ao_list.first.seq.as_slice() else {
+        return None;
+    };
+    let spec = simple
+        .word_or_name
+        .as_ref()
+        .filter(|word| word.value.starts_with('%'))?;
+    let mut simple = simple.clone();
+    let mut words = vec![ast::CommandPrefixOrSuffixItem::Word(spec.clone())];
+    words.extend(
+        simple
+            .suffix
+            .take()
+            .map(|suffix| suffix.0)
+            .unwrap_or_default(),
+    );
+    simple.word_or_name = Some(match &spec.loc {
+        Some(loc) => ast::Word::with_location("bg", loc),
+        None => ast::Word::new("bg"),
+    });
+    simple.suffix = Some(ast::CommandSuffix(words));
+    let mut list = ao_list.clone();
+    list.first.seq = vec![ast::Command::Simple(simple)];
+    Some(list)
 }
 
 async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
@@ -674,6 +709,7 @@ where
     // Clone the inputs.
     let mut cloned_shell = shell.clone();
     let mut cloned_params = params;
+    let job_number = cloned_shell.own_pid();
 
     // cash (D13): at the prompt, a background job is out of the keyboard's reach. Scripts
     // keep sharing the console's group, as they always have.
@@ -750,8 +786,8 @@ where
     let mut job = jobs::Job::new([task], command_line, jobs::JobState::Running)
         .with_spawned_pids(pid_sink)
         .with_cancel(cancel);
-    if !started_a_program {
-        job = job.with_own_pid();
+    if !started_a_program && let Some(number) = job_number {
+        job = job.with_own_pid(number);
     }
 
     Some(shell.jobs_mut().add_as_current(job))
@@ -819,8 +855,9 @@ impl Execute for ast::AndOrList {
 /// the shell that starts it, and a function's start.
 ///
 /// `$BASH_COMMAND` becomes `text` (a simple command names itself beforehand, and `None`
-/// leaves it), made only when a DEBUG or ERR trap can read it, and `$LINENO` the line of
-/// `at`. What the command is to do then is the [`DebugTrap`].
+/// leaves it), made only when a trap can read it (an `EXIT` trap after a `[[ ]]` that
+/// `set -e` ended on sees the `[[ ]]`, as in Bash), and `$LINENO` the line of `at`. What
+/// the command is to do then is the [`DebugTrap`].
 pub(crate) async fn run_debug_trap(
     shell: &mut Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
@@ -828,7 +865,7 @@ pub(crate) async fn run_debug_trap(
     at: &(impl ast::Node + Sync),
 ) -> Result<DebugTrap, error::Error> {
     let debug = shell.traps().handles(crate::traps::TrapSignal::Debug);
-    if !debug && !shell.traps().handles(crate::traps::TrapSignal::Err) {
+    if !shell.traps().any() {
         return Ok(DebugTrap::Run);
     }
     if let Some(text) = text() {
@@ -1389,6 +1426,14 @@ async fn wait_for_pipeline_processes_and_update_status(
         if !trap_result.is_normal_flow() {
             return Ok(trap_result);
         }
+    }
+
+    // A signal a job or a subshell sent the shell (`( kill -USR1 $$ ) &`) is taken now that
+    // the pipeline is done, as Bash takes one a child sent it while it ran.
+    if let Some(taken) = shell.take_signals_sent(params).await?
+        && !taken.is_normal_flow()
+    {
+        return Ok(taken);
     }
 
     Ok(result)
@@ -2584,7 +2629,7 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                         pipe: takes_substitution_pipes(&context.shell, args.first()),
                     };
                     let (arg_path, end) = setup_process_substitution_path(
-                        &context.shell,
+                        &mut context.shell,
                         &params,
                         kind,
                         subshell_command,
@@ -3838,11 +3883,13 @@ async fn expand_command_word<SE: extensions::ShellExtensions>(
 
 /// Runs a process substitution's commands on a thread of their own, on the shell's
 /// runtime: each built one of its own (XC-19), which it still does under a
-/// current-thread runtime, whose handle no other thread can drive.
+/// current-thread runtime, whose handle no other thread can drive. Their status goes to
+/// `status` as they end, for `wait $!`.
 fn spawn_substitution(
     mut subshell: Shell<impl extensions::ShellExtensions>,
     params: ExecutionParameters,
     subshell_cmd: &ast::SubshellCommand,
+    status: tokio::sync::watch::Sender<Option<u8>>,
 ) -> std::io::Result<std::thread::JoinHandle<()>> {
     let subshell_cmd = subshell_cmd.to_owned();
     let handle = crate::runtime::shareable_handle();
@@ -3851,17 +3898,34 @@ fn spawn_substitution(
         .stack_size(crate::SHELL_THREAD_STACK_SIZE)
         .spawn(move || {
             let _lowered = params.lower_if_asynchronous();
-            let _ = crate::runtime::block_on_this_thread(handle.as_ref(), || {
+            let result = crate::runtime::block_on_this_thread(handle.as_ref(), || {
                 subshell_cmd.list.execute(&mut subshell, &params)
             });
+            drop(params);
+            status.send_replace(Some(substitution_status(result)));
         })
 }
 
-/// The shell and parameters a process substitution's commands run with.
+/// The status of a process substitution's commands, which `wait $!` returns: 1 for one
+/// that could not run.
+fn substitution_status(result: std::io::Result<Result<ExecutionResult, error::Error>>) -> u8 {
+    match result {
+        Ok(Ok(result)) => result.exit_code.into(),
+        _ => 1,
+    }
+}
+
+/// The shell and parameters a process substitution's commands run with, and where their
+/// status goes: the substitution is `$!` from now ([`jobs::JobManager::start_substitution`]).
 fn substitution_shell<SE: extensions::ShellExtensions>(
-    shell: &Shell<SE>,
+    shell: &mut Shell<SE>,
     params: &ExecutionParameters,
-) -> (Shell<SE>, ExecutionParameters) {
+) -> (
+    Shell<SE>,
+    ExecutionParameters,
+    tokio::sync::watch::Sender<Option<u8>>,
+) {
+    let status = shell.jobs_mut().start_substitution();
     let mut child_params = params.clone();
     child_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
     // What ends the input of the command's other substitutions is not this one's to hold.
@@ -3869,7 +3933,7 @@ fn substitution_shell<SE: extensions::ShellExtensions>(
     let mut subshell = shell.clone();
     subshell.enter_subshell_level();
     subshell.enter_substitution();
-    (subshell, child_params)
+    (subshell, child_params, status)
 }
 
 /// Sets up a process substitution that is a redirection's target (`< <(cmd)`,
@@ -3878,12 +3942,12 @@ fn substitution_shell<SE: extensions::ShellExtensions>(
 /// cash (D17): an anonymous pipe connects the substitution to the command, in the shell's
 /// own process.
 fn setup_redirected_process_substitution(
-    shell: &Shell<impl extensions::ShellExtensions>,
+    shell: &mut Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
     kind: &ast::ProcessSubstitutionKind,
     subshell_cmd: &ast::SubshellCommand,
 ) -> Result<OpenFile, error::Error> {
-    let (subshell, mut child_params) = substitution_shell(shell, params);
+    let (subshell, mut child_params, status) = substitution_shell(shell, params);
     let (reader, writer) = std::io::pipe()?;
     let target_file = match kind {
         ast::ProcessSubstitutionKind::Read => {
@@ -3900,7 +3964,7 @@ fn setup_redirected_process_substitution(
         }
     };
 
-    let thread = spawn_substitution(subshell, child_params, subshell_cmd)?;
+    let thread = spawn_substitution(subshell, child_params, subshell_cmd, status)?;
     if matches!(kind, ast::ProcessSubstitutionKind::Write) {
         keep_output_substitution(thread, None);
     }
@@ -3916,13 +3980,13 @@ fn setup_redirected_process_substitution(
 /// program opens as it opens a file, and through which the data streams, or a temp file
 /// where the command could not use that ([`SubstitutionPath`]).
 async fn setup_process_substitution_path(
-    shell: &Shell<impl extensions::ShellExtensions>,
+    shell: &mut Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
     kind: &ast::ProcessSubstitutionKind,
     subshell_cmd: &ast::SubshellCommand,
     handed: SubstitutionPath,
 ) -> Result<(String, Option<SubstitutionEnd>), error::Error> {
-    let (mut subshell, mut child_params) = substitution_shell(shell, params);
+    let (mut subshell, mut child_params, status) = substitution_shell(shell, params);
 
     match kind {
         // The Windows CRT's `_stat()` cannot stat a named pipe, and a pipe cannot be
@@ -3933,11 +3997,12 @@ async fn setup_process_substitution_path(
                 OpenFiles::STDOUT_FD,
                 OpenFile::from(std::fs::File::create(&path)?),
             );
-            let _ = subshell_cmd
+            let result = subshell_cmd
                 .list
                 .execute(&mut subshell, &child_params)
                 .await;
             drop(child_params);
+            status.send_replace(Some(substitution_status(Ok(result))));
 
             // The spelling Windows' own tools take, as the pipe's is: `findstr` and
             // `more` read `C:/Users/…` as a switch `/Users`.
@@ -3949,7 +4014,7 @@ async fn setup_process_substitution_path(
             child_params
                 .open_files
                 .set_fd(OpenFiles::STDOUT_FD, sub.writer.into());
-            spawn_substitution(subshell, child_params, subshell_cmd)?;
+            spawn_substitution(subshell, child_params, subshell_cmd, status)?;
             Ok((sub.path.clone(), Some(SubstitutionEnd::ReadPipe(sub.path))))
         }
         ast::ProcessSubstitutionKind::Write if handed.pipe => {
@@ -3957,7 +4022,7 @@ async fn setup_process_substitution_path(
             child_params
                 .open_files
                 .set_fd(OpenFiles::STDIN_FD, sub.reader.into());
-            let thread = spawn_substitution(subshell, child_params, subshell_cmd)?;
+            let thread = spawn_substitution(subshell, child_params, subshell_cmd, status)?;
             keep_output_substitution(thread, Some(sub.path.clone()));
             Ok((sub.path.clone(), Some(SubstitutionEnd::Pipe(sub.path))))
         }
@@ -3967,7 +4032,7 @@ async fn setup_process_substitution_path(
             child_params
                 .open_files
                 .set_fd(OpenFiles::STDIN_FD, followed.reader.into());
-            let thread = spawn_substitution(subshell, child_params, subshell_cmd)?;
+            let thread = spawn_substitution(subshell, child_params, subshell_cmd, status)?;
             keep_output_substitution(thread, None);
 
             let rendered = cash_win32::path::to_backslash(&path);

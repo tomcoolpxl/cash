@@ -109,9 +109,13 @@ pub(crate) fn init_well_known_vars(
     }
     shell.env_mut().set_global("BASHOPTS", bashopts_var)?;
 
-    // BASHPID
+    // BASHPID: a copy of the shell's own number, as a subshell's own pid is Bash's;
+    // assigned, it stays, as in Bash.
     let pid = std::process::id().to_string();
-    let mut bashpid_var = ShellVariable::new(ShellValue::String(pid.clone()));
+    let mut bashpid_var = ShellVariable::new(ShellValue::Dynamic {
+        getter: |shell| shell.bashpid().to_string().into(),
+        setter: |_| (),
+    });
     bashpid_var.treat_as_integer();
     shell.env_mut().set_global("BASHPID", bashpid_var)?;
 

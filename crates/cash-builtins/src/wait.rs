@@ -42,13 +42,29 @@ impl builtins::Command for WaitCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let waiting = cash_core::ExecutionContext {
-            shell: &mut *context.shell,
-            command_name: context.command_name.clone(),
-            params: context.params.clone(),
-        };
         let mut notices = Vec::new();
-        let result = self.wait(waiting, &mut notices).await;
+        // A signal a job sends the shell ends the wait, once its trap has run, with 128 +
+        // its number, as in Bash; an ignored one does not.
+        let top = !context.shell.is_subshell();
+        let result = loop {
+            let waiting = cash_core::ExecutionContext {
+                shell: &mut *context.shell,
+                command_name: context.command_name.clone(),
+                params: context.params.clone(),
+            };
+            let waited = tokio::select! {
+                result = self.wait(waiting, &mut notices) => Some(result),
+                () = cash_core::traps::signal_sent_to_shell(), if top => None,
+            };
+            match waited {
+                Some(result) => break result,
+                None => {
+                    if let Some(taken) = context.shell.take_signals_sent(&context.params).await? {
+                        break Ok(taken);
+                    }
+                }
+            }
+        };
         // A script tells here of the jobs it waited for that a signal ended, as Bash's
         // `wait` does: `script: line 3: 145010 Hangup  sleep 5`.
         context.shell.print_signal_notices(notices, &context.params);
@@ -71,14 +87,22 @@ impl WaitCommand {
         let forget = context.shell.options().posix_mode;
 
         if self.ids.is_empty() {
-            // Wait for all jobs.
+            // Wait for all jobs, and for the process substitution `$!` names, if it does,
+            // as Bash 5.3 does.
             let jobs = context.shell.jobs_mut().wait_all().await?;
+            let last = context.shell.jobs().last_background_pid();
+            if let Some(substitution) = last.and_then(|pid| context.shell.jobs().substitution(pid))
+            {
+                substitution.wait().await;
+            }
             context.shell.jobs_mut().collect_signal_notices();
             notices.extend(context.shell.jobs_mut().take_signal_notices());
             // A CHLD trap runs for the children reaped, inside `wait`, as in Bash.
             context.shell.run_pending_chld_traps(&context.params).await;
 
-            if context.shell.options().enable_job_control {
+            // At the prompt the jobs the wait collected are reported; a script with
+            // `set -m` reports none, as Bash's does.
+            if context.shell.options().enable_job_control && context.shell.options().interactive {
                 let posix = context.shell.options().posix_mode;
                 for job in jobs {
                     writeln!(context.stdout(), "{}", job.line(posix))?;
@@ -129,6 +153,9 @@ impl WaitCommand {
                 } else if let Some(status) = context.shell.jobs_mut().collect_saved_pid(pid, forget)
                 {
                     result = ExecutionResult::new(status);
+                } else if let Some(substitution) = context.shell.jobs().substitution(pid) {
+                    // A process substitution's number, from `$!`: its status, as Bash's.
+                    result = ExecutionResult::new(substitution.wait().await);
                 } else {
                     // bash's wording and its exit code: 127 specifically, which
                     // scripts test for to tell "already finished" from "never mine".

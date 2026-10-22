@@ -136,6 +136,13 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Clone depth from the original ancestor shell.
     depth: usize,
 
+    /// A copy's number of its own (`$BASHPID`), as a job that is no program has one for
+    /// `$!` (D70): a copy runs inside the shell's process, where Bash's subshell is a
+    /// process of its own. `None` for the shell itself, whose `$BASHPID` is `$$`. It was
+    /// `$$` in a copy too, so `[[ $BASHPID != $$ ]]` never found a subshell, and `kill
+    /// $BASHPID` in one could not be told from `kill $$`.
+    own_pid: Option<crate::sys::process::ProcessId>,
+
     /// `$BASH_SUBSHELL`: how many subshells deep this shell is, as Bash counts them:
     /// `( … )`, command and process substitutions, compound and function pipeline stages
     /// and background jobs, not a simple command in a pipeline, which Bash forks without
@@ -323,6 +330,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             unspecial_call: false,
             posix_seen: self.posix_seen,
             depth: self.depth + 1,
+            own_pid: Some(crate::jobs::own_number()),
             subshell_level: self.subshell_level,
             trace_level: self.trace_level,
             catches_fatal_errors: self.catches_fatal_errors,
@@ -492,6 +500,11 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         &mut self,
     ) -> Vec<std::sync::Arc<crate::interp::SubstitutionEnd>> {
         std::mem::take(&mut self.word_substitution_ends)
+    }
+
+    /// A copy's number of its own, its `$BASHPID` (`own_pid`); `None` for the shell itself.
+    pub const fn own_pid(&self) -> Option<crate::sys::process::ProcessId> {
+        self.own_pid
     }
 
     /// Counts this shell as a subshell one level deeper (`$BASH_SUBSHELL`), as a
@@ -879,6 +892,12 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     /// Returns whether or not this shell is a subshell.
     pub fn is_subshell(&self) -> bool {
         self.depth > 0
+    }
+
+    /// `$BASHPID`: the process id, or a copy's number of its own (`own_pid`).
+    pub fn bashpid(&self) -> i64 {
+        self.own_pid
+            .map_or_else(|| i64::from(std::process::id()), i64::from)
     }
 
     /// Returns the last "SECONDS" captured time.

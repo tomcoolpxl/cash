@@ -245,9 +245,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             self.traps.restore_handler(TrapSignal::Debug, handler);
         }
 
-        if matches!(call_type, callstack::ScriptCallType::Source) && result.is_ok() {
-            crate::commands::run_return_trap(self, params).await;
-        } else {
+        let return_trap = matches!(call_type, callstack::ScriptCallType::Source) && result.is_ok();
+        if !return_trap {
             self.take_status_before_return();
         }
 
@@ -277,6 +276,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         {
             self.mark_current_shell_args_set();
             *self.current_shell_args_mut() = frame.args;
+        }
+
+        // The `RETURN` trap of a sourced file runs once the file's frame is gone, as in
+        // Bash: `LINENO` is the line of the `.`, and `caller` names the frame that ran it.
+        if return_trap {
+            crate::commands::run_return_trap(self, params).await;
         }
 
         result

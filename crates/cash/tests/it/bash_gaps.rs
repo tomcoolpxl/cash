@@ -3946,3 +3946,126 @@ fn compgen_b_and_complete_p_list_in_the_same_order_every_run() {
         "complete -W 'x' a\ncomplete -W 'y' b\ncomplete -W 'z' c"
     );
 }
+
+#[test]
+fn return_traps_and_caller_see_the_lines_and_frames_bash_shows() {
+    // A function's body that ran to its end leaves LINENO at its `{` (it was the last
+    // command's line); a `.` runs its RETURN trap once the file's frame is gone, on the
+    // line of the `.` (it saw the file's last line and the frame). `caller` with a frame
+    // and no caller prints `0 NULL` (it printed nothing and failed).
+    let (stdout, _) = script_output(
+        "return-traps",
+        "trap 'echo \"RETURN $LINENO ${FUNCNAME[0]:-$(caller)}\"' RETURN\n\
+         set -o functrace\n\
+         f() {\n    echo one\n}\n\
+         f\n\
+         k() { echo k; return; }\n\
+         k\n\
+         d=$(mktemp -d); printf 'echo sourced\\n' > \"$d/src.sh\"\n\
+         . \"$d/src.sh\"; rm -r \"$d\"\n\
+         trap - RETURN\n\
+         caller\n\
+         echo \"caller $?\"\n",
+    );
+    assert_eq!(
+        stdout,
+        "one\nRETURN 3 f\nk\nRETURN 7 k\nsourced\nRETURN 10 0 NULL\n0 NULL\ncaller 0"
+    );
+    assert_eq!(output("f() { caller; }; f; caller; echo $?").1, "1 NULL\n1");
+    // A trap sees `[[ ]]` as the command last run, as a DEBUG trap did already.
+    assert_eq!(
+        output("trap 'echo \"$BASH_COMMAND\"' EXIT; g() { [[ a == a ]]; }; g").1,
+        "[[ a == a ]]"
+    );
+}
+
+#[test]
+fn job_specs_run_as_commands_and_bg_resumes_as_bash_does() {
+    // `%1` and `%name` were "command not found", `fg %name` "no such job", and `bg` of a
+    // running job "not yet implemented"; `bg` named no job it resumed.
+    let (stdout, stderr) = script_output(
+        "job-specs",
+        "%1\n\
+         echo \"without job control $?\"\n\
+         set -m\n\
+         sleep 0.2 &\n%1\n\
+         sleep 0.2 &\n%sleep\n\
+         sleep 0.2 &\nfg %?0.2\n\
+         sleep 2 &\n\
+         bg\n\
+         %1 &\n\
+         kill -STOP %1\n\
+         sleep 0.1\n\
+         bg %1\n\
+         kill %1\n\
+         wait\n\
+         echo end\n",
+    );
+    assert_eq!(
+        stdout,
+        "without job control 1\nsleep 0.2\nsleep 0.2\nsleep 0.2\n[1]+ sleep 2 &\nend"
+    );
+    assert!(stderr.contains("line 1: fg: no job control"), "{stderr}");
+    assert!(
+        stderr.contains("line 11: bg: job 1 already in background"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("line 12: bg: job 1 already in background"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_process_substitution_is_bang_and_wait_waits_for_it() {
+    // `$!` was left as it was, so `exec 3> >(tee log); ...; wait $!` could not wait for the
+    // substitution to write its last.
+    let scratch = Scratch::new("procsub-bang");
+    let (_, stdout) = output_in(
+        scratch.path(),
+        ": <(exit 3); p=$!; wait $p; echo \"status $?\"; [ \"$p\" = \"$!\" ] && echo same\n\
+         exec 3> >(sleep 0.3; cat > out.txt); echo hi >&3; exec 3>&-; wait $!; cat out.txt",
+    );
+    assert_eq!(stdout, "status 3\nsame\nhi");
+}
+
+#[test]
+fn a_signal_a_job_sends_the_shell_is_the_shells() {
+    // A job runs inside the shell's process, and its `kill $$` ran the trap in the job:
+    // what the trap set was lost, `wait` went on, and a watchdog's `kill -TERM $$` ended
+    // the job, not the script.
+    let started = std::time::Instant::now();
+    let (status, stdout) = output(
+        "trap 'got=$((got+1))' USR1; got=0\n\
+         ( kill -USR1 $$ ) &\n\
+         wait; s=$?\n\
+         echo \"got=$got wait=$((s > 128))\"\n\
+         ( kill -USR1 $$ ); echo \"got=$got\"\n\
+         trap - USR1\n\
+         ( sleep 0.3; kill -TERM $$ ) &\n\
+         sleep 20\n\
+         echo not reached",
+    );
+    assert_eq!(stdout, "got=1 wait=1\ngot=2");
+    assert_eq!(status, 143);
+    assert!(started.elapsed() < std::time::Duration::from_secs(15));
+}
+
+#[test]
+fn a_copy_of_the_shell_has_a_bashpid_of_its_own() {
+    // A subshell, a substitution and a job run inside the shell's process, and their
+    // `$BASHPID` was `$$`: `[[ $BASHPID != $$ ]]` found no subshell, and `kill $BASHPID`
+    // in one could not be told from `kill $$`. A job's is its `$!`, as in Bash.
+    let (_, stdout) = output(
+        "[[ $BASHPID == $$ ]] && echo top; ( [[ $BASHPID != $$ ]] && echo sub )\n\
+         echo \"$([[ $BASHPID != $$ ]] && echo substitution)\"\n\
+         { echo \"$BASHPID\"; } & wait; echo \"$!\"",
+    );
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(
+        lines.get(..3),
+        Some(&["top", "sub", "substitution"][..]),
+        "{stdout}"
+    );
+    assert_eq!(lines.get(3), lines.get(4), "{stdout}");
+}

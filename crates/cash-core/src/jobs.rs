@@ -47,6 +47,39 @@ pub struct JobManager {
     /// Notices of jobs that left the table before a script printed them
     /// (`Job::take_signal_notice`).
     signal_notices: Vec<String>,
+
+    /// The process substitutions started last, newest last, which `$!` and `wait` name.
+    substitutions: Vec<Substitution>,
+}
+
+/// A number for `$!` that no Windows process has, as Windows' pids are multiples of 4: a
+/// job that is no program has one (D70), and so has a process substitution.
+pub(crate) fn own_number() -> sys::process::ProcessId {
+    static NEXT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(25_000);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    n.saturating_mul(4).saturating_add(1)
+}
+
+/// How many process substitutions [`JobManager`] keeps, so that a loop starting them keeps
+/// few.
+const MAX_SUBSTITUTIONS: usize = 64;
+
+/// A process substitution as `$!` names it: by a number of its own (Bash's is its process),
+/// and with its status once its commands have ended.
+#[derive(Clone)]
+pub struct Substitution {
+    pid: sys::process::ProcessId,
+    status: tokio::sync::watch::Receiver<Option<u8>>,
+}
+
+impl Substitution {
+    /// Waits until the substitution's commands have ended, and returns their status.
+    pub async fn wait(mut self) -> u8 {
+        self.status
+            .wait_for(Option::is_some)
+            .await
+            .map_or(1, |status| status.unwrap_or(1))
+    }
 }
 
 /// How many finished jobs' statuses are kept; the oldest go first. Bash keeps as many
@@ -531,7 +564,31 @@ impl JobManager {
             saved: VecDeque::new(),
             last_started_pid,
             signal_notices: Vec::new(),
+            substitutions: Vec::new(),
         }
+    }
+
+    /// Files a process substitution being started, as Bash does: `$!` names it from now,
+    /// and `wait` with its number waits for it. Returns where its status goes once its
+    /// commands have ended.
+    pub fn start_substitution(&mut self) -> tokio::sync::watch::Sender<Option<u8>> {
+        let (sender, status) = tokio::sync::watch::channel(None);
+        if self.substitutions.len() >= MAX_SUBSTITUTIONS {
+            self.substitutions.remove(0);
+        }
+        let pid = own_number();
+        self.substitutions.push(Substitution { pid, status });
+        self.last_started_pid = Some(pid);
+        sender
+    }
+
+    /// The process substitution `pid` names, if it is one this shell started.
+    #[must_use]
+    pub fn substitution(&self, pid: sys::process::ProcessId) -> Option<Substitution> {
+        self.substitutions
+            .iter()
+            .find(|substitution| substitution.pid == pid)
+            .cloned()
     }
 
     /// Snapshot the jobs this manager owns, for handing to a subshell.
@@ -780,15 +837,24 @@ impl JobManager {
         let remainder = job_spec.strip_prefix('%')?;
 
         match remainder {
-            "%" | "+" => self.current_job_mut(),
+            "" | "%" | "+" => self.current_job_mut(),
             "-" => self.prev_job_mut(),
             s if s.chars().all(char::is_numeric) => {
                 let id = s.parse::<usize>().ok()?;
                 self.jobs.iter_mut().find(|j| j.id == id)
             }
+            // `%?text` is the job whose command contains `text`, `%text` the one whose
+            // command starts with it. Two such jobs are none: Bash refuses the spec.
             _ => {
-                tracing::warn!(target: trace_categories::UNIMPLEMENTED, "unimplemented: job spec naming command: '{job_spec}'");
-                None
+                let mut matching =
+                    self.jobs
+                        .iter_mut()
+                        .filter(|job| match remainder.strip_prefix('?') {
+                            Some(text) => job.command_line.contains(text),
+                            None => job.command_line.starts_with(remainder),
+                        });
+                let found = matching.next()?;
+                matching.next().is_none().then_some(found)
             }
         }
     }
@@ -1093,12 +1159,11 @@ impl Job {
         }
     }
 
-    /// Gives the job a number of its own for `$!` (`own_pid`, D70).
+    /// Gives the job a number of its own for `$!` (`own_pid`, D70): `pid`, the
+    /// `$BASHPID` of the copy of the shell it runs in, as Bash's `$!` is its subshell's pid.
     #[must_use]
-    pub(crate) fn with_own_pid(mut self) -> Self {
-        static NEXT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(25_000);
-        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.own_pid = Some(n.saturating_mul(4).saturating_add(1));
+    pub(crate) const fn with_own_pid(mut self, pid: sys::process::ProcessId) -> Self {
+        self.own_pid = Some(pid);
         self
     }
 

@@ -25,6 +25,16 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
+## Picked by the user (the current phase, after 1.48.0, 2026-10-23)
+
+From "Found by the corpus round after 1.41.0" below (decisions.md, "The phase after
+1.48.0"), each checked against Git Bash 5.3 first: **Traps, signals and jobs** whole;
+the small items of **Scripts refused that Bash runs**, **Globbing and conditionals**,
+**Starting cash** and **Builtins, small** (`[[ =~ ]]` with a quoted `]`, a malformed
+bracket in an extended group, a collating symbol, a redirection's word globbed in POSIX
+mode, `-r` and `-D`, `--pretty-print` of a here-document before `|`, a builtin's
+`--help`); and the restricted shell (`set -r`, `cash -r`).
+
 ## The phase before (2026-10-22, done, released as 1.48.0)
 
 The small leftovers (decisions.md, "The phase after 1.47.0"), each checked against Git
@@ -145,14 +155,12 @@ path. The rest, by theme:
   regex engine, where `\]` is a `]`; in POSIX's a backslash there is a character); POSIX
   mode globs a redirection's word.
 
-**Traps, signals and jobs**
-- `kill -SIG $$` from a background job runs the trap in the job, not the shell.
-- `return` in a trap does not return from the function it interrupted.
-- `$!` is not set by a process substitution.
-- RETURN and DEBUG traps see the wrong LINENO and a `source` frame; `caller` at the top
-  prints nothing; BASH_COMMAND after a function ending in `[[ ]]`.
-- `fg` with monitor off, `%1` as a command, `fg %name`, `bg`; `[N]+ Done` printed by a
-  script with `set -m`.
+**Traps, signals and jobs** (done in the phase after 1.48.0, DONE.md; left:)
+- A `.` of a file that cannot be opened runs no RETURN trap (Bash runs it, on the line of
+  the `.`).
+- With `set -m` a script's job that ended before a plain `wait` is gone after it (Bash
+  keeps it until `jobs` shows it as `Done`); one `fg` or `wait` collected leaves silently
+  in both.
 
 **printf, and times**
 - A POSIX `TZ` with daylight-saving rules (`EST5EDT,M3.2.0/2,M11.1.0/2`) keeps standard

@@ -3063,3 +3063,28 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   phase after 1.47.0): both listed in a hash map's order, which changed from run to run.
   `compgen -b` lists in byte order, Bash's table order (`. : [ alias bg`), and
   `complete -p` by name.
+- **Traps, signals and jobs** (2026-10-23, the phase after 1.48.0): a job, a subshell or
+  a substitution runs inside the shell's process, and its `kill -USR1 $$` ran the trap in
+  itself: what the trap set was lost, `wait` went on, and a watchdog's `( sleep 9; kill
+  $$ ) &` ended the job, not the script. The signal is the shell's: taken after the
+  pipeline it runs, and in `wait`, which it ends with 128 + its number once the trap has
+  run; one no trap takes that ends the shell stops a builtin at once and ends the wait
+  for a program, which goes on, as Bash leaves it. A copy's `$BASHPID` was `$$`, so
+  `[[ $BASHPID != $$ ]]` found no subshell; a copy has a number of its own, a job's its
+  `$!`, and `kill $BASHPID` in it is its own. `$!` was not set by a process
+  substitution; it is, to a number of the substitution's own, which `wait` takes, and a
+  plain `wait` waits for it too, as in Bash 5.3. A function's body that ran to its end
+  left the RETURN trap's LINENO at its last command; it is at the body's `{`. A `.` ran
+  its RETURN trap in the sourced file's frame; it runs once the frame is gone, on the
+  line of the `.`. `caller` with a frame but no caller printed nothing and failed; it
+  prints `0 NULL` at a script's top, `1 NULL` in a function called from `-c`. A trap
+  read the command before a `[[ ]]`, `(( ))`, `for` or `case` in `$BASH_COMMAND` unless
+  a DEBUG or ERR trap was set; any trap sees it. `%1` and `%name` as commands were "not
+  found"; they are `fg` (`bg` with `&`), "no job control" without `set -m`. `fg %name`
+  and `%?text` named no job; they name the one job whose command starts with or
+  contains the text. `bg` of a running job was "not yet implemented"; it says the job is
+  in the background already, status 0, and `bg` names the job it resumes, `[1]+ sleep 9
+  &`. A job `fg` collected stayed in the table and was reported `Done` later; it leaves,
+  and a plain `wait` in a script with `set -m` reports nothing, as in Bash. `return` in a
+  trap was found to return from the function it interrupted already; the leftovers are
+  in TODO.md.

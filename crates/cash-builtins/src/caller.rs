@@ -34,6 +34,18 @@ impl builtins::Command for CallerCommand {
 
         // Look for the last-known location in the parent of frame N.
         let Some(calling_frame) = frames.get(expr + 1) else {
+            // Without a number, Bash prints `${BASH_LINENO[0]} ${BASH_SOURCE[1]}` whenever
+            // there is a frame at all, `NULL` for what is missing: `0 NULL` at a script's
+            // top, `1 NULL` in a function called from `-c` or a file sourced there.
+            if self.expr.is_none() && !frames.is_empty() {
+                let line = context.shell.env_str("BASH_LINENO");
+                writeln!(
+                    context.stdout(),
+                    "{} NULL",
+                    line.as_deref().unwrap_or("NULL")
+                )?;
+                return Ok(ExecutionResult::success());
+            }
             return Ok(ExecutionResult::general_error());
         };
 

@@ -15,6 +15,9 @@ pub trait ShellState {
     /// Returns whether or not this shell is a subshell.
     fn is_subshell(&self) -> bool;
 
+    /// `$BASHPID`: the process id, or a copy's number of its own (`Shell::own_pid`).
+    fn bashpid(&self) -> i64;
+
     /// Returns the last "SECONDS" captured time.
     fn last_stopwatch_time(&self) -> std::time::SystemTime;
 

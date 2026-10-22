@@ -178,6 +178,17 @@ async fn signal_target<SE: cash_core::ShellExtensions>(
         )?;
         return Ok(ExecutionResult::general_error());
     };
+    // `kill $BASHPID` in a copy of the shell, a subshell or a job, is the copy's, as a
+    // subshell's own pid is in Bash; `kill $$` there is the shell's (`signal_self`).
+    if context.shell.own_pid() == Some(pid) {
+        if signal_zero {
+            return Ok(ExecutionResult::success());
+        }
+        return context
+            .shell
+            .take_signal(trap_signal, &context.params)
+            .await;
+    }
     if let Some(result) = signal_job_known_as(context, pid, signal_zero, trap_signal)? {
         return Ok(result);
     }
@@ -191,62 +202,22 @@ async fn signal_target<SE: cash_core::ShellExtensions>(
     signal_pid(context, pid, signal_zero, trap_signal)
 }
 
-/// A signal the shell sends itself, `kill -TERM $$`: handled inside the shell, as Bash
-/// handles it, rather than delivered through the OS. Delivered, `INT` and `TERM` ended
-/// cash at once, trap or no trap.
-///
-/// `KILL` ends the shell. A trapped signal runs its trap and the shell goes on: so does
-/// one Windows cannot send a program, `USR1` and the rest. Otherwise the signal's
-/// default: a script ends with 128 + the signal's number; an interactive shell ignores
-/// `TERM`, abandons the line on `INT` as Ctrl-C does, and exits on the others. `QUIT`
-/// (which Bash ignores in all cases), those that stop a process and those POSIX ignores
-/// (`CHLD`, `CONT`, `URG`, `WINCH`) are ignored.
+/// A signal the shell sends itself, `kill -TERM $$`: taken by the shell
+/// ([`cash_core::Shell::take_signal`]). A copy of the shell, a job, a subshell or a
+/// substitution, runs inside the shell's process, so one it sends is the shell's, left for
+/// it to take after the pipeline it runs and in `wait`, as Bash takes one a child sent it;
+/// the copy goes on.
 async fn signal_self<SE: cash_core::ShellExtensions>(
     context: &mut cash_core::ExecutionContext<'_, SE>,
     signal: TrapSignal,
 ) -> Result<ExecutionResult, cash_core::Error> {
-    let TrapSignal::Signal(raw) = signal else {
-        return Ok(ExecutionResult::success());
-    };
-    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let status = (128 + raw as i32) as u8;
-    let exit = |status: u8| ExecutionResult {
-        exit_code: ExecutionExitCode::from(status),
-        next_control_flow: cash_core::ExecutionControlFlow::ExitShell,
-    };
-
-    let name = signal.as_str();
-    if name == "KILL" {
-        return Ok(exit(status));
-    }
-    if let Some(result) = context
-        .shell
-        .raise_signal_trap(signal, &context.params)
-        .await
-    {
-        // What the handler does to the commands around it is done there, as in Bash:
-        // `break` leaves the loop the shell is in, `exit` ends it, `return` returns from
-        // the function. It was dropped, and the loop went on.
-        let trap = result?;
-        return Ok(if trap.is_normal_flow() {
-            ExecutionResult::success()
-        } else {
-            trap
-        });
-    }
-    // Bash ignores QUIT in all cases, scripts included.
-    if raw.leaves_the_shell_running() || name == "QUIT" {
-        return Ok(ExecutionResult::success());
-    }
-    match name {
-        _ if !context.shell.options().interactive => Ok(exit(status)),
-        "INT" => {
-            writeln!(context.error_stream())?;
-            Err(cash_core::ErrorKind::Interrupted.into())
+    if context.shell.is_subshell() {
+        if let TrapSignal::Signal(raw) = signal {
+            context.shell.send_to_shell(raw, &context.params);
         }
-        "TERM" => Ok(ExecutionResult::success()),
-        _ => Ok(exit(status)),
+        return Ok(ExecutionResult::success());
     }
+    context.shell.take_signal(signal, &context.params).await
 }
 
 /// Signal one process id, reporting failure the way bash reports it.

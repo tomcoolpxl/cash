@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::io::Write;
 
-use cash_core::{ExecutionResult, builtins};
+use cash_core::{ExecutionResult, builtins, jobs};
 
 /// Moves a job to run in the background.
 #[derive(Parser)]
@@ -29,34 +29,51 @@ impl builtins::Command for BgCommand {
         }
 
         let mut exit_code = ExecutionResult::success();
+        let mut stdout = context.stdout();
+        let mut stderr = context.error_stream();
+        let name = context.command_name.as_str();
 
         if !self.job_specs.is_empty() {
             for job_spec in &self.job_specs {
                 if let Some(job) = context.shell.jobs_mut().resolve_job_spec(job_spec) {
-                    job.move_to_background()?;
+                    resume(job, name, &mut stdout, &mut stderr)?;
                 } else {
-                    writeln!(
-                        context.error_stream(),
-                        "{}: {}: no such job",
-                        context.command_name,
-                        job_spec
-                    )?;
+                    writeln!(stderr, "{name}: {job_spec}: no such job")?;
                     exit_code = ExecutionResult::general_error();
                 }
             }
         } else {
             if let Some(job) = context.shell.jobs_mut().current_job_mut() {
-                job.move_to_background()?;
+                resume(job, name, &mut stdout, &mut stderr)?;
             } else {
-                writeln!(
-                    context.error_stream(),
-                    "{}: no current job",
-                    context.command_name
-                )?;
+                writeln!(stderr, "{name}: no current job")?;
                 exit_code = ExecutionResult::general_error();
             }
         }
 
         Ok(exit_code)
     }
+}
+
+/// Resumes a stopped job in the background and names it, `[1]+ sleep 9 &`, as Bash does;
+/// one already running is only said to be, and that is no failure.
+fn resume(
+    job: &mut jobs::Job,
+    name: &str,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+) -> Result<(), cash_core::Error> {
+    if matches!(job.state, jobs::JobState::Running) {
+        writeln!(stderr, "{name}: job {} already in background", job.id)?;
+        return Ok(());
+    }
+    job.move_to_background()?;
+    writeln!(
+        stdout,
+        "[{}]{:1} {} &",
+        job.id,
+        job.annotation().to_string(),
+        job.command_line
+    )?;
+    Ok(())
 }
