@@ -2,6 +2,9 @@
 # desc: a report tool of one bash script on a repository of three authors and fixed dates in three time zones: detailed stats overall and by branch, changelogs, contributors, commits per author, day, month, year, weekday and hour, with authors and time zones, the branch tree and branches by date, reviewers to suggest, without colour; the reports that count back from today are left out
 # timeout: 60
 export GIT_CONFIG_NOSYSTEM=1 HOME="$PWD/home" _MENU_THEME=none
+# "Now" for git's relative dates (`1 year, 9 months ago`), fixed at the day the output was
+# frozen, 2026-10-20: the branch tree's dates moved on with the calendar.
+export GIT_TEST_DATE_NOW=1792497600
 mkdir home
 git config --global init.defaultBranch main
 git config --global core.autocrlf false
