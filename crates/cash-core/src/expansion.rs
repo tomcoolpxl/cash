@@ -685,6 +685,20 @@ pub(crate) async fn full_expand_and_split_word(
     expander.full_expand_with_splitting(word_str.as_ref()).await
 }
 
+/// [`full_expand_and_split_word`] for the file a redirection names: without pathname
+/// expansion in POSIX mode when the shell is not interactive, as Bash's (`echo x > *.txt`
+/// writes `*.txt`). It wrote the one file the pattern matched.
+pub(crate) async fn full_expand_redirection_target(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    word_str: impl AsRef<str>,
+) -> Result<Vec<String>, error::Error> {
+    let unglobbed = shell.options().posix_mode && !shell.options().interactive;
+    let mut expander = WordExpander::new(shell, params);
+    expander.disable_pathname_expansion |= unglobbed;
+    expander.full_expand_with_splitting(word_str.as_ref()).await
+}
+
 /// [`full_expand_and_split_word`] for a word of a command, a `for` list or a `case`: one
 /// shaped like an assignment (`prefix=~/x`) gets tilde expansion after its `=` and its
 /// `:`s, as in Bash outside POSIX mode (LANG-24). An array literal's elements do not.

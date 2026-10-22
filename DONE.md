@@ -3088,3 +3088,19 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   and a plain `wait` in a script with `set -m` reports nothing, as in Bash. `return` in a
   trap was found to return from the function it interrupted already; the leftovers are
   in TODO.md.
+- **Brackets, POSIX redirections and the small start items** (2026-10-23, the phase
+  after 1.48.0): a quoted `]` in a regex's bracket expression was escaped for the
+  engine, where `\]` is a member, so `[[ a =~ ['a]'] ]]` matched; a quoted piece inside
+  brackets is taken as written, as Bash takes it (`[a]]`). `[[.space.]]` and the other
+  names of POSIX's portable character set named nothing; they name their character. A
+  `[` with no `]` inside an extended group was a character and the group ended at its
+  `)`; the bracket runs on, as Bash's does, and the pattern is taken as written
+  (`@([a)` matches `@([a)`). In POSIX mode a script's redirection word was globbed; it
+  is not, as in Bash (a name with `*` or `?` Windows cannot make). `-D`,
+  `--dump-strings` and `--dump-po-strings` were refused; they print a script's `$"..."`
+  strings, in double quotes or as a PO file's entries, and run nothing. `--pretty-print`
+  and `declare -f` wrote the command after a here-document's body and a `|` at the
+  body's indent, with the `;` after it; it goes two blanks in, without it, as Bash
+  writes it (Bash's own top level drops the `;` between two commands; cash keeps it). A
+  Bash builtin's `--help` printed clap's text; it prints what `help NAME` prints, status
+  2, as Bash's does.

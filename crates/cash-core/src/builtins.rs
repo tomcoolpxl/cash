@@ -764,10 +764,34 @@ async fn exec_builtin_impl<T: Command + Send + Sync, SE: extensions::ShellExtens
     let result = T::new(plain_args);
     let command = match result {
         Ok(command) => command,
-        Err(e) => return Ok(report_parse_error(&mut context, &e)),
+        Err(e) => return report_help_or_parse_error(&mut context, &e).await,
     };
 
     call_builtin(command, context).await
+}
+
+/// [`report_parse_error`], but a Bash builtin's `--help` prints what `help NAME` prints, as
+/// Bash's does, with its status 2. It printed clap's text.
+async fn report_help_or_parse_error(
+    context: &mut commands::ExecutionContext<'_, impl extensions::ShellExtensions>,
+    error: &clap::Error,
+) -> Result<results::ExecutionResult, error::Error> {
+    if matches!(error.kind(), clap::error::ErrorKind::DisplayHelp)
+        && crate::bash_synopses::synopsis(&context.command_name).is_some()
+        && let Some(help) = context.shell.builtins().get("help").cloned()
+        && !help.disabled
+    {
+        let name = context.command_name.clone();
+        let help_context = commands::ExecutionContext {
+            shell: &mut *context.shell,
+            command_name: "help".into(),
+            params: context.params.clone(),
+        };
+        let words = vec![CommandArg::String("help".into()), CommandArg::String(name)];
+        (help.execute_func)(help_context, words).await?;
+        return Ok(results::ExecutionExitCode::InvalidUsage.into());
+    }
+    Ok(report_parse_error(context, error))
 }
 
 fn exec_declaration_builtin<
@@ -813,7 +837,7 @@ async fn exec_declaration_builtin_impl<
     let result = T::new(options);
     let mut command = match result {
         Ok(command) => command,
-        Err(e) => return Ok(report_parse_error(&mut context, &e)),
+        Err(e) => return report_help_or_parse_error(&mut context, &e).await,
     };
 
     command.set_declarations(declarations);

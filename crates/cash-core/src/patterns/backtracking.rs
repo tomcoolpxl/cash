@@ -296,6 +296,11 @@ impl Parser<'_> {
                 }
             } else if c == '[' {
                 let end = self.bracket_end();
+                // A bracket with no end inside an extended pattern runs on past its `)` in
+                // Bash, which leaves the pattern open (`!([a)` is taken as written).
+                if inside && end == self.pos + 1 {
+                    return Ok(None);
+                }
                 plain.extend(self.chars.get(self.pos..end).unwrap_or_default());
                 self.pos = end;
             } else if matches!(c, '?' | '*' | '+' | '@' | '!')

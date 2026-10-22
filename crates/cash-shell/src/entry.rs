@@ -606,6 +606,9 @@ async fn run_in_shell(
     if args.pretty_print {
         return Ok(pretty_print(shell_ref, &args, read_commands_from_stdin).await);
     }
+    if args.dump_strings || args.dump_po_strings {
+        return Ok(dump_strings(shell_ref, &args, read_commands_from_stdin).await);
+    }
 
     // Load profile and rc files as appropriate.
     initialize_shell(shell_ref, &args).await?;
@@ -690,11 +693,118 @@ async fn pretty_print(
     args: &CommandLineArgs,
     from_stdin: bool,
 ) -> u8 {
-    use std::io::Read as _;
-
     if args.command.is_some() {
         return 0;
     }
+    let (text, source) = match script_text(shell_ref, args, from_stdin).await {
+        Ok(read) => read,
+        Err(status) => return status,
+    };
+    let result = shell_ref
+        .lock()
+        .await
+        .pretty_print(&text, &cash_core::SourceInfo::from(source.as_str()));
+    u8::from(result.exit_code)
+}
+
+/// `-D`, `--dump-strings` and `--dump-po-strings`: the `$"..."` strings of the script, of a
+/// `-c` string or of standard input, as Bash prints them for translation, in double quotes
+/// or as a PO file's entries, `#: file:line`; nothing is run. They were refused.
+async fn dump_strings(
+    shell_ref: &cash_interactive::ShellRef<impl cash_core::ShellExtensions>,
+    args: &CommandLineArgs,
+    from_stdin: bool,
+) -> u8 {
+    use std::io::Write as _;
+
+    let (text, source) = match &args.command {
+        Some(command) => (command.clone().into_bytes(), "-c".to_owned()),
+        None => match script_text(shell_ref, args, from_stdin).await {
+            Ok(read) => read,
+            Err(status) => return status,
+        },
+    };
+    let text = String::from_utf8_lossy(&text);
+    let Ok(tokens) = cash_core::parser::tokenize_str(&text) else {
+        return 2;
+    };
+    let mut stdout = shell_ref.lock().await.stdout();
+    // A here-document's body, the word after its tag, holds none.
+    let mut skip = 0;
+    for token in &tokens {
+        match token {
+            cash_core::parser::Token::Operator(operator, _)
+                if matches!(operator.as_str(), "<<" | "<<-") =>
+            {
+                skip = 3;
+            }
+            cash_core::parser::Token::Word(_, _) if skip > 0 => skip -= 1,
+            cash_core::parser::Token::Word(word, span) => {
+                for string in locale_strings(word) {
+                    let _ = if args.dump_po_strings {
+                        let escaped = string
+                            .replace('\\', r"\\")
+                            .replace('"', "\\\"")
+                            .replace('\n', r"\n");
+                        writeln!(
+                            stdout,
+                            "#: {source}:{}\nmsgid \"{escaped}\"\nmsgstr \"\"",
+                            span.start.line
+                        )
+                    } else {
+                        writeln!(stdout, "\"{string}\"")
+                    };
+                }
+            }
+            cash_core::parser::Token::Operator(..) => {}
+        }
+    }
+    0
+}
+
+/// The `$"..."` strings of a word, outside quotes, as written between their quotes.
+fn locale_strings(word: &str) -> Vec<&str> {
+    let bytes = word.as_bytes();
+    // Where the quote that closes the one before `at` is; with `escapes`, a `\` takes the
+    // character after it.
+    let closing = |mut at: usize, quote: u8, escapes: bool| {
+        while let Some(&b) = bytes.get(at) {
+            match b {
+                b'\\' if escapes => at += 2,
+                _ if b == quote => break,
+                _ => at += 1,
+            }
+        }
+        at
+    };
+    let mut strings = Vec::new();
+    let mut at = 0;
+    while let Some(&b) = bytes.get(at) {
+        at = match (b, bytes.get(at + 1)) {
+            (b'\\', _) => at + 2,
+            (b'\'', _) => closing(at + 1, b'\'', false) + 1,
+            (b'"', _) => closing(at + 1, b'"', true) + 1,
+            (b'$', Some(b'\'')) => closing(at + 2, b'\'', true) + 1,
+            (b'$', Some(b'"')) => {
+                let end = closing(at + 2, b'"', true);
+                strings.extend(word.get(at + 2..end));
+                end + 1
+            }
+            _ => at + 1,
+        };
+    }
+    strings
+}
+
+/// The text of the script to print, or standard input's, and the name to say it by; the
+/// status, said as running it says it, when it cannot be read.
+async fn script_text(
+    shell_ref: &cash_interactive::ShellRef<impl cash_core::ShellExtensions>,
+    args: &CommandLineArgs,
+    from_stdin: bool,
+) -> Result<(Vec<u8>, String), u8> {
+    use std::io::Read as _;
+
     let shell_name = shell_ref
         .lock()
         .await
@@ -718,15 +828,11 @@ async fn pretty_print(
                 let mut stderr = shell_ref.lock().await.stderr();
                 let _ =
                     std::io::Write::write_fmt(&mut stderr, format_args!("{shell_name}: {err}\n"));
-                return 127;
+                return Err(127);
             }
         }
     };
-    let result = shell_ref
-        .lock()
-        .await
-        .pretty_print(&text, &cash_core::SourceInfo::from(source.as_str()));
-    u8::from(result.exit_code)
+    Ok((text, source))
 }
 
 /// Initializes a shell by loading profile and rc files as appropriate.

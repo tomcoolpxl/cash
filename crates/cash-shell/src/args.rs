@@ -154,6 +154,14 @@ pub struct CommandLineArgs {
     #[clap(long = "pretty-print", help_heading = HEADING_STANDARD_OPTIONS)]
     pub pretty_print: bool,
 
+    /// Print the `$"..."` strings of the script, each in double quotes, and run nothing.
+    #[clap(short = 'D', long = "dump-strings", help_heading = HEADING_STANDARD_OPTIONS)]
+    pub dump_strings: bool,
+
+    /// Print the `$"..."` strings of the script as a PO file's entries, and run nothing.
+    #[clap(long = "dump-po-strings", help_heading = HEADING_STANDARD_OPTIONS)]
+    pub dump_po_strings: bool,
+
     /// Run only one command and then exit.
     #[clap(short = 't', help_heading = HEADING_STANDARD_OPTIONS)]
     pub exit_after_one_command: bool,

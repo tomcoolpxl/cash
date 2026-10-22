@@ -40,15 +40,6 @@ pub(crate) enum RegexPiece {
     Literal(String),
 }
 
-impl RegexPiece {
-    fn to_regex_str(&self) -> Cow<'_, str> {
-        match self {
-            Self::Pattern(s) => Cow::Borrowed(s.as_str()),
-            Self::Literal(s) => escape_literal_regex_piece(s.as_str()),
-        }
-    }
-}
-
 type RegexWord = Vec<RegexPiece>;
 
 /// Encapsulates a regular expression usable in the shell.
@@ -98,11 +89,7 @@ impl Regex {
     ///
     /// * `value` - The string to check for a match.
     pub fn matches(&self, value: &str) -> Result<Option<Vec<Option<String>>>, error::Error> {
-        let regex_pattern: String = self
-            .pieces
-            .iter()
-            .map(|piece| piece.to_regex_str())
-            .collect();
+        let regex_pattern = joined(&self.pieces);
 
         let re = compile_regex(regex_pattern.clone(), self.case_insensitive, self.multiline)?;
         let collect = |captures: fancy_regex::Captures<'_, str>| -> Vec<Option<String>> {
@@ -143,6 +130,64 @@ impl Regex {
 
         Ok(Some(collect(captures)))
     }
+}
+
+/// The pieces as one regular expression. A quoted piece inside a bracket expression is
+/// taken as it is, as Bash takes it, its quotes only removed: `['a]']` is `[a]]`, an `a`
+/// and then a `]`. Escaped for the engine, where `\]` is a member, it matched `a` alone. A
+/// backslash is escaped, as the engine has none plain inside brackets.
+fn joined(pieces: &[RegexPiece]) -> String {
+    let mut regex = String::new();
+    for piece in pieces {
+        match piece {
+            RegexPiece::Pattern(text) => regex.push_str(text),
+            RegexPiece::Literal(text) => {
+                for c in text.chars() {
+                    if !bracket_open(&regex) {
+                        if regex_char_is_special(c) {
+                            regex.push('\\');
+                        }
+                        regex.push(c);
+                    } else if c == '\\' {
+                        regex.push_str(r"\\");
+                    } else {
+                        regex.push(c);
+                    }
+                }
+            }
+        }
+    }
+    regex
+}
+
+/// Whether a bracket expression is open at the end of `regex`, as the engine reads it:
+/// a `]` first in it (after any `^`) is a member, and so is a `[:class:]`.
+fn bracket_open(regex: &str) -> bool {
+    let mut chars = regex.chars().peekable();
+    let mut open = false;
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => {
+                chars.next();
+            }
+            '[' if !open => {
+                open = true;
+                let _ = chars.next_if_eq(&'^');
+                let _ = chars.next_if_eq(&']');
+            }
+            '[' if matches!(chars.peek(), Some(':' | '.' | '=')) => {
+                let kind = chars.next();
+                while let Some(c) = chars.next() {
+                    if Some(c) == kind && chars.next_if_eq(&']').is_some() {
+                        break;
+                    }
+                }
+            }
+            ']' if open => open = false,
+            _ => {}
+        }
+    }
+    open
 }
 
 /// The end of the longest match of `pattern` that starts at `start`, by a lazy DFA that
@@ -349,22 +394,6 @@ fn add_missing_escape_chars_to_regex(s: &str) -> Cow<'_, str> {
     }
 
     updated.into()
-}
-
-fn escape_literal_regex_piece(s: &str) -> Cow<'_, str> {
-    let mut result = String::new();
-
-    for c in s.chars() {
-        match c {
-            c if regex_char_is_special(c) => {
-                result.push('\\');
-                result.push(c);
-            }
-            c => result.push(c),
-        }
-    }
-
-    result.into()
 }
 
 pub(crate) const fn regex_char_is_special(c: char) -> bool {

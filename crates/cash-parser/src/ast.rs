@@ -28,6 +28,11 @@ thread_local! {
     /// list a body follows its `<<END`, as it did.
     static HELD_HERE_DOCUMENTS: std::cell::RefCell<Vec<Vec<String>>> =
         const { std::cell::RefCell::new(Vec::new()) };
+
+    /// Whether a pipeline just written wrote here-document bodies after a `|`: in a list
+    /// written over lines, they take the place of the `;` after it, as Bash's
+    /// `was_heredoc` does (`  sort` and no `;` after it).
+    static PIPED_HERE_DOCUMENTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Runs `write` with commands printed as Bash prints them ([`PRINTING_COMMANDS`]).
@@ -480,8 +485,12 @@ impl Display for Pipeline {
                     // A blank after the `|`, as Bash writes it; it was `|cat`.
                     write!(f, " ")?;
                 } else {
+                    // The command after the bodies goes two blanks in, at any depth, as
+                    // Bash writes it; it was at the body's indent, or at none.
                     writeln!(f)?;
                     write_here_document_bodies(f, &std::mem::take(&mut bodies))?;
+                    write_here_document_bodies(f, &["  ".to_owned()])?;
+                    PIPED_HERE_DOCUMENTS.set(true);
                 }
             }
             if i < last {
@@ -957,7 +966,9 @@ impl CompoundList {
 
             // Write the and-or list, and then the bodies of its here-documents, a newline in
             // place of its `;`; an `&` stays, before them.
+            PIPED_HERE_DOCUMENTS.set(false);
             let bodies = write_holding_here_documents(f, &item.0)?;
+            let piped = PIPED_HERE_DOCUMENTS.replace(false);
             if !bodies.is_empty() {
                 if matches!(item.1, SeparatorOperator::Async) {
                     write!(f, "{}", item.1)?;
@@ -975,9 +986,11 @@ impl CompoundList {
 
             // Write the separator... unless we're on the last list item and it's a ';'
             // that the enclosing construct doesn't want.
-            if keep_trailing_separator
-                || i < self.0.len() - 1
-                || !matches!(item.1, SeparatorOperator::Sequence)
+            let piped_sequence = piped && matches!(item.1, SeparatorOperator::Sequence);
+            if !piped_sequence
+                && (keep_trailing_separator
+                    || i < self.0.len() - 1
+                    || !matches!(item.1, SeparatorOperator::Sequence))
             {
                 write!(f, "{}", item.1)?;
             }

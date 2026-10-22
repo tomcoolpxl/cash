@@ -153,14 +153,14 @@ fn source_takes_options_only_before_the_script() {
         ". ./args.sh --help -x; . ./args.sh -- a; source ./args.sh -p q; . -p . args.sh one; \
          . 2>/dev/null; echo \"st $?\"; . 2>&1 | grep -c ': filename argument required$'; \
          . 2>&1 | grep -x '.: usage: . \\[-p path\\] filename \\[arguments\\]'; \
-         . --help | sed -n 3p",
+         . --help | head -1",
     );
     assert_eq!(code, 0);
     assert_eq!(
         stdout,
         "args: --help -x\nargs: -- a\nargs: -p q\nargs: one\nst 2\n1\n\
          .: usage: . [-p path] filename [arguments]\n\
-         Usage: . [OPTIONS] <SCRIPT_PATH [ARGUMENTS]>..."
+         . - Run a file's commands in the current shell (the same as source)."
     );
 }
 
@@ -2966,7 +2966,10 @@ fn getopts_reads_h_and_help_after_its_name_as_the_script_s_options() {
             "set -- -h -v; while getopts hv opt \"$@\"; do echo \"opt=$opt\"; done; \
              getopts --help | head -1"
         ),
-        (0, "opt=h\nopt=v\nParse command options".into())
+        (
+            0,
+            "opt=h\nopt=v\ngetopts - Read a script's options, one at a time.".into()
+        )
     );
 }
 
@@ -4068,4 +4071,84 @@ fn a_copy_of_the_shell_has_a_bashpid_of_its_own() {
         "{stdout}"
     );
     assert_eq!(lines.get(3), lines.get(4), "{stdout}");
+}
+
+#[test]
+fn brackets_match_as_bash_has_them_quoted_named_and_unended() {
+    // A quoted `]` in a regex's bracket expression was escaped for the engine, where `\]`
+    // is a member, so `['a]']` matched `a`; Bash takes it as `[a]]`, `a` and then `]`.
+    // `[[.space.]]` named no character, and a `[` with no `]` in an extended group was a
+    // character and its `)` the group's end (`@([a)` matched `[a`).
+    let (_, stdout) = output(
+        "t() { [[ $1 =~ $2 ]] && echo y || echo n; }\n\
+         [[ a =~ ['a]'] ]] && echo y || echo n\n\
+         [[ 'a]' =~ ['a]'] ]] && echo y || echo n\n\
+         [[ b =~ [\\]b] ]] && echo y || echo n\n\
+         [[ ' ' == [[.space.]] ]] && echo y || echo n\n\
+         [[ - == [[.hyphen.]] ]] && echo y || echo n\n\
+         shopt -s extglob\n\
+         [[ '[a' == @([a) ]] && echo y || echo n\n\
+         [[ '@([a)' == @([a) ]] && echo y || echo n\n\
+         [[ a == !([a) ]] && echo y || echo n\n\
+         [[ ']' == @(a|[]]) ]] && echo y || echo n",
+    );
+    assert_eq!(stdout, "n\ny\ny\ny\ny\nn\ny\nn\ny");
+}
+
+#[test]
+fn posix_mode_leaves_a_redirection_word_unglobbed() {
+    // In POSIX mode a script's redirection names the file as written, as Bash's does; the
+    // one file the pattern matched was written.
+    let scratch = Scratch::new("posix-redirection");
+    let (_, stdout) = output_in(
+        scratch.path(),
+        "touch on.txt; echo a > [o]n.txt; set -o posix; echo b > [o]n.txt\n\
+         ls; cat on.txt '[o]n.txt'",
+    );
+    assert_eq!(stdout, "[o]n.txt\non.txt\na\nb");
+}
+
+#[test]
+fn dash_d_dumps_locale_strings_and_runs_nothing() {
+    // `-D`, `--dump-strings` and `--dump-po-strings` were refused.
+    let script = "echo $\"hello\"; x=$(echo $\"sub\"); echo \"$\"no\"\" '$\"no\"'\n\
+                  cat <<EOF\n$\"in body\"\nEOF\necho $\"a\\\"b\" # $\"comment\"";
+    let run = |flag: &str| {
+        let result = cash_command()
+            .args(["--noprofile", "--norc", flag, "-c", script])
+            .output()
+            .unwrap();
+        String::from_utf8(result.stdout)
+            .unwrap()
+            .replace("\r\n", "\n")
+    };
+    assert_eq!(run("-D"), "\"hello\"\n\"sub\"\n\"a\\\"b\"\n");
+    assert_eq!(run("--dump-strings"), run("-D"));
+    assert_eq!(
+        run("--dump-po-strings"),
+        "#: -c:1\nmsgid \"hello\"\nmsgstr \"\"\n#: -c:1\nmsgid \"sub\"\nmsgstr \"\"\n\
+         #: -c:5\nmsgid \"a\\\\\\\"b\"\nmsgstr \"\"\n"
+    );
+}
+
+#[test]
+fn a_here_document_before_a_pipe_prints_as_bash_prints_it() {
+    // The command after the body was at the body's indent, or at none, and the `;` after
+    // the pipeline stayed; Bash writes it two blanks in, with no `;`.
+    assert_eq!(
+        output("f() { cat <<X | sort\nb\nX\necho in; }; declare -f f").1,
+        "f () \n{ \n    cat <<X |\nb\nX\n  sort\n    echo in\n}"
+    );
+}
+
+#[test]
+fn a_bash_builtins_help_option_prints_its_help_page() {
+    // `cd --help` printed clap's text; Bash prints what `help cd` does, status 2. A tool
+    // Bash does not have keeps its own `--help`, status 0.
+    let (status, stdout) = output("cd --help");
+    assert_eq!(status, 2);
+    assert_eq!(stdout, output("help cd").1);
+    let (status, stdout) = output("ls --help");
+    assert_eq!(status, 0);
+    assert!(stdout.starts_with("Usage: ls"), "{stdout}");
 }

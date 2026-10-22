@@ -147,13 +147,9 @@ path. The rest, by theme:
 - Bytes that are not UTF-8 become U+FFFD (`$'\xff'`, `read`, `%q`), and `$'\U'` above
   U+10FFFF.
 
-**Globbing and conditionals**
-- A malformed bracket inside an extended group; GLOBIGNORE splits on `:` inside
-  brackets (not tried here: a `:` is no character of a Windows name); a named collating
-  symbol (`[[.space.]]`).
-- `[[ a =~ ['a]'] ]]` matches (a quoted `]` in a bracket expression is escaped for Rust's
-  regex engine, where `\]` is a `]`; in POSIX's a backslash there is a character); POSIX
-  mode globs a redirection's word.
+**Globbing and conditionals** (the rest done in the phase after 1.48.0, DONE.md)
+- GLOBIGNORE splits on `:` inside brackets (not tried here: a `:` is no character of a
+  Windows name).
 
 **Traps, signals and jobs** (done in the phase after 1.48.0, DONE.md; left:)
 - A `.` of a file that cannot be opened runs no RETURN trap (Bash runs it, on the line of
@@ -175,15 +171,14 @@ path. The rest, by theme:
   the substitution's text rewritten as it is parsed, much work for a rare case.
 
 **Starting cash**
-- `-r` and `-D` are not taken.
-- `--pretty-print` writes a here-document before a `|` with the `;` after its next
-  command, and that command indented as in a body (Bash: `  cat`, no `;`).
+- `-r` is not taken (the restricted shell, this phase); `-D` and `--pretty-print` of a
+  here-document before a `|` are done (DONE.md).
 
 **Builtins, small**
-- `set -r` restricts nothing; `find /dev/null` (modernish's find check).
+- `set -r` restricts nothing (this phase); `find /dev/null` says there is no such file
+  (Bash: `/dev/null`, a character device to `-type c`; modernish's find check).
 - `eval 'break 1 2'` and its kin inside a subshell end it with 2 where the text was
-  sourced or `eval`ed (Bash: 1); a builtin's `--help` is clap's text, or an invalid
-  option (Bash: the `help` text, status 2).
+  sourced or `eval`ed (Bash: 1).
 - Printing: associative arrays in sorted order, and `complete -p` by name (Bash: hash
   order for both).
 

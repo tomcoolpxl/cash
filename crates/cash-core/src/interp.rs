@@ -3355,7 +3355,7 @@ pub(crate) async fn setup_redirect(
     match redirect {
         ast::IoRedirect::OutputAndError(f, append) => {
             let mut expanded_fields =
-                expansion::full_expand_and_split_word(shell, params, f).await?;
+                expansion::full_expand_redirection_target(shell, params, f).await?;
             if expanded_fields.len() != 1 {
                 return Err(error::ErrorKind::InvalidRedirection.into());
             }
@@ -3370,7 +3370,7 @@ pub(crate) async fn setup_redirect(
                     let mut options = std::fs::File::options();
 
                     let mut expanded_fields =
-                        expansion::full_expand_and_split_word(shell, params, f).await?;
+                        expansion::full_expand_redirection_target(shell, params, f).await?;
 
                     if expanded_fields.len() != 1 {
                         return Err(error::ErrorKind::InvalidRedirection.into());

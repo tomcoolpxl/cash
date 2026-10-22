@@ -63,6 +63,102 @@ fn class_member(c: char) -> String {
     }
 }
 
+/// The character a collating symbol names, `[.space.]`, by the names of POSIX's portable
+/// character set, which Bash's matcher takes.
+fn collating_symbol(name: &str) -> Option<char> {
+    const CONTROLS: [&str; 32] = [
+        "NUL",
+        "SOH",
+        "STX",
+        "ETX",
+        "EOT",
+        "ENQ",
+        "ACK",
+        "alert",
+        "backspace",
+        "tab",
+        "newline",
+        "vertical-tab",
+        "form-feed",
+        "carriage-return",
+        "SO",
+        "SI",
+        "DLE",
+        "DC1",
+        "DC2",
+        "DC3",
+        "DC4",
+        "NAK",
+        "SYN",
+        "ETB",
+        "CAN",
+        "EM",
+        "SUB",
+        "ESC",
+        "IS4",
+        "IS3",
+        "IS2",
+        "IS1",
+    ];
+    const DIGITS: [&str; 10] = [
+        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+    ];
+    if let Some(code) = CONTROLS.iter().position(|control| *control == name) {
+        return u8::try_from(code).ok().map(char::from);
+    }
+    if let Some(digit) = DIGITS.iter().position(|digit| *digit == name) {
+        return char::from_digit(u32::try_from(digit).ok()?, 10);
+    }
+    Some(match name {
+        "BEL" => '\x07',
+        "BS" => '\x08',
+        "HT" => '\t',
+        "LF" => '\n',
+        "VT" => '\x0b',
+        "FF" => '\x0c',
+        "CR" => '\r',
+        "FS" => '\x1c',
+        "GS" => '\x1d',
+        "RS" => '\x1e',
+        "US" => '\x1f',
+        "space" => ' ',
+        "exclamation-mark" => '!',
+        "quotation-mark" => '"',
+        "number-sign" => '#',
+        "dollar-sign" => '$',
+        "percent-sign" => '%',
+        "ampersand" => '&',
+        "apostrophe" => '\'',
+        "left-parenthesis" => '(',
+        "right-parenthesis" => ')',
+        "asterisk" => '*',
+        "plus-sign" => '+',
+        "comma" => ',',
+        "hyphen" | "hyphen-minus" => '-',
+        "period" | "full-stop" => '.',
+        "slash" | "solidus" => '/',
+        "colon" => ':',
+        "semicolon" => ';',
+        "less-than-sign" => '<',
+        "equals-sign" => '=',
+        "greater-than-sign" => '>',
+        "question-mark" => '?',
+        "commercial-at" => '@',
+        "left-square-bracket" => '[',
+        "backslash" | "reverse-solidus" => '\\',
+        "right-square-bracket" => ']',
+        "circumflex" | "circumflex-accent" => '^',
+        "underscore" | "low-line" => '_',
+        "grave-accent" => '`',
+        "left-brace" | "left-curly-bracket" => '{',
+        "vertical-line" => '|',
+        "right-brace" | "right-curly-bracket" => '}',
+        "tilde" => '~',
+        "DEL" => '\x7f',
+        _ => return None,
+    })
+}
+
 /// Formats a range between two bracket expression members, returning `None` if the
 /// range is reversed (and therefore matches nothing).
 fn bracket_range(from: (String, char), to: (String, char)) -> Option<String> {
@@ -157,8 +253,12 @@ peg::parser! {
 
         // A collating symbol, `[.a.]`, or an equivalence class, `[=a=]`, of one character:
         // that character, as in Bash's locales. They were read as the characters written.
+        // A symbol may name its character, `[.space.]`, by POSIX's names, as Bash's do.
         rule collating_element() -> String =
             "[." c:[_] ".]" { class_member(c) } /
+            "[." name:$((!".]" [_])+) ".]" {?
+                collating_symbol(name).map(class_member).ok_or("collating symbol")
+            } /
             "[=" c:[_] "=]" { class_member(c) }
 
         rule char_range() -> Option<String> =
@@ -230,9 +330,16 @@ peg::parser! {
         rule extended_glob_branch() -> String =
             // Cover case of empty branch.
             &['|' | ')'] { String::new() } /
-            pieces:(!['|' | ')'] piece:pattern_piece() { piece })+ {
+            pieces:(!['|' | ')'] !unended_bracket() piece:pattern_piece() { piece })+ {
                 pieces.join("")
             }
+
+        // A `[` in a group whose bracket expression never ends: Bash's bracket runs on past
+        // `)` and `|` to the end of the pattern, so the group has no end, and the whole
+        // pattern is taken as it is written (`@([a)` matches `@([a)` alone). The `)`
+        // ended the group, and `@([a)` matched `[a`.
+        rule unended_bracket() =
+            "[" ['!' | '^']? "]"? (!"]" [_])* ![_]
 
         // A glob metacharacter construct: wildcard, bracket expression, or extglob.
         rule glob_piece() =

@@ -93,7 +93,7 @@ mod windows_programs;
 pub mod parser {
     pub use cash_parser::{
         BindingParseError, ParseError, SourcePosition, SourcePositionOffset, SourceSpan,
-        TestCommandParseError, WordParseError, ast,
+        TestCommandParseError, Token, WordParseError, ast, tokenize_str,
     };
 }
 
