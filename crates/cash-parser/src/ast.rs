@@ -2085,19 +2085,23 @@ impl Display for IoHereDocument {
         }
 
         // Inside a list, the body waits for the end of the command ([`HELD_HERE_DOCUMENTS`]).
+        // The body and its end are written as they are, a `$(...)` in the body too, as
+        // Bash writes them; made before the list is taken, as writing a word may take it.
+        let body = format!("{}{}\n", self.doc.value, self.here_end.value);
+        let mut body = Some(body);
         let held = HELD_HERE_DOCUMENTS.with_borrow_mut(|held| {
             held.last_mut()
-                .map(|bodies| bodies.push(format!("{}{}\n", self.doc, self.here_end)))
+                .map(|bodies| bodies.extend(body.take()))
                 .is_some()
         });
         if held {
-            return write!(f, "{}", self.here_end);
+            return f.write_str(&self.here_end.value);
         }
 
-        writeln!(f, "{}", self.here_end)?;
-        WRITING_HERE_DOCUMENT.set(true);
-        let written = write!(f, "{}", self.doc).and_then(|()| writeln!(f, "{}", self.here_end));
-        WRITING_HERE_DOCUMENT.set(false);
+        writeln!(f, "{}", self.here_end.value)?;
+        let was = WRITING_HERE_DOCUMENT.replace(true);
+        let written = f.write_str(body.as_deref().unwrap_or_default());
+        WRITING_HERE_DOCUMENT.set(was);
         written
     }
 }
