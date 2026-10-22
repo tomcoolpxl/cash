@@ -29,6 +29,9 @@ impl builtins::Command for PushdCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
+        if context.shell.restricted() {
+            return crate::restricted(&context, None);
+        }
         if !self.extra.is_empty() {
             writeln!(
                 context.error_stream(),

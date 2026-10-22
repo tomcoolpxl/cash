@@ -7,7 +7,7 @@ see: shopt declare unset trap
 
 ## Syntax
 
-    set [-abefhkmnptuvxBCHP] [-o OPTION] [--] [ARG]...
+    set [-abefhkmnprtuvxBCHP] [-o OPTION] [--] [ARG]...
     set [+abefhkmnptuvxBCHP] [+o OPTION] [--] [ARG]...
 
     set -e           stop the script at the first command that fails
@@ -87,6 +87,7 @@ that set them again.
     -h, -o hashall     Remember where commands were found.
     -o posix           Behave as POSIX says where Bash differs.
     -o vi, -o emacs    The line editor's keys.
+    -r                 Restrict the shell, for good (there is no +r).
     --                 The end of the options: the rest are $1 and on.
 
 Exit status: 0, or 1 or 2 for an option that is not one.
@@ -98,6 +99,16 @@ Exit status: 0, or 1 or 2 for an option that is not one.
 `set -e` does not stop a script for a command in an `if` or `while` test, before
 `&&` or `||`, after `!`, or in a function called from any of those: `f || true` runs
 `f` with `-e` off. Test what matters explicitly.
+
+### The restricted shell
+
+`set -r`, or a shell started with `-r` or as `rbash` (after its startup files), refuses
+`cd` and the other ways to change directory, a command named with a `/`, `.` of a
+path, `exec` of a command, writing a file with `>`, `>>`, `<>` or `&>`, `enable` of a
+builtin, `command -p`, and `hash -p` or `history` with a path; `SHELL`, `PATH`,
+`HISTFILE`, `ENV` and `BASH_ENV` are read only. cash's tools, `rm`, `cp` and the
+rest, are its own commands, not programs found in `PATH`, so a startup file that is to
+confine a user turns them off with `enable -n` before the limits begin.
 
 ### A script's own arguments, kept
 

@@ -45,6 +45,15 @@ impl builtins::Command for EnableCommand {
     ) -> Result<ExecutionResult, Self::Error> {
         let mut result = ExecutionResult::success();
 
+        // The restricted shell turns builtins off, not on, and loads none.
+        if context.shell.restricted()
+            && (self.shared_object_path.is_some()
+                || self.remove_loaded_builtin
+                || (!self.disable && !self.names.is_empty()))
+        {
+            return crate::restricted(&context, None);
+        }
+
         if self.shared_object_path.is_some() || self.remove_loaded_builtin {
             // Bash loadable builtins use Bash's private C ABI. A Bash-built DLL cannot
             // be safely loaded into cash's Rust builtin registry, and Git for Windows'

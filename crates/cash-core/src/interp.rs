@@ -2837,6 +2837,11 @@ async fn execute_command<T: Into<String>>(
     // set command-scoped variable assignments after doing so, and revert them before
     // returning.
     let cmd_name = cmd_name.into();
+    // The restricted shell runs no command named by a path, as Bash's. Checked here, on
+    // the word written: cash runs some of its own tools by its own path.
+    if context.shell.restricted() && sys::fs::contains_path_separator(&cmd_name) {
+        return Err(error::ErrorKind::RestrictedCommandName(cmd_name).into());
+    }
     let posix = context.shell.options().posix_mode;
     // In POSIX mode, what a special builtin is given before it stays (`y=5 eval :`), as
     // Bash has it; it went with the command.
@@ -3346,6 +3351,22 @@ async fn trace_simple_command(
     shell.trace_command(params, words.join(" ")).await;
 }
 
+/// The restricted shell writes no file by a redirection (`>`, `>>`, `<>`, `>|`, `&>`), as
+/// Bash's says: `out.txt: restricted: cannot redirect output`.
+fn refuse_restricted_output(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    path: &str,
+) -> Result<(), error::Error> {
+    if shell.restricted() {
+        return Err(error::ErrorKind::RedirectionFailure(
+            path.to_owned(),
+            "restricted: cannot redirect output".to_owned(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
 #[expect(clippy::too_many_lines)]
 pub(crate) async fn setup_redirect(
     shell: &mut Shell<impl extensions::ShellExtensions>,
@@ -3361,6 +3382,7 @@ pub(crate) async fn setup_redirect(
             }
 
             let expanded_file_path = expanded_fields.remove(0);
+            refuse_restricted_output(shell, &expanded_file_path)?;
             setup_redirect_output_and_error_to(shell, params, &expanded_file_path, *append)?;
         }
 
@@ -3377,6 +3399,16 @@ pub(crate) async fn setup_redirect(
                     }
 
                     let written_file_path = expanded_fields.remove(0);
+                    if matches!(
+                        kind,
+                        ast::IoFileRedirectKind::Write
+                            | ast::IoFileRedirectKind::Append
+                            | ast::IoFileRedirectKind::ReadAndWrite
+                            | ast::IoFileRedirectKind::Clobber
+                            | ast::IoFileRedirectKind::DuplicateOutput
+                    ) {
+                        refuse_restricted_output(shell, &written_file_path)?;
+                    }
                     let expanded_file_path: PathBuf =
                         shell.absolute_path(Path::new(written_file_path.as_str()));
 

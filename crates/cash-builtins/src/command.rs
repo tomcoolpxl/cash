@@ -138,6 +138,12 @@ impl CommandCommand {
         mut context: cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
         command_name: &str,
     ) -> Result<ExecutionResult, cash_core::Error> {
+        // The restricted shell runs no command named by a path, through `command` either.
+        if context.shell.restricted() && cash_core::sys::fs::contains_path_separator(command_name) {
+            return Err(
+                cash_core::ErrorKind::RestrictedCommandName(command_name.to_owned()).into(),
+            );
+        }
         command_name.clone_into(&mut context.command_name);
         let command_and_args = self
             .command_and_args
@@ -179,6 +185,10 @@ impl builtins::Command for CommandCommand {
         &self,
         mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // The restricted shell searches no default PATH of its own.
+        if self.use_default_path && context.shell.restricted() && self.command().is_some() {
+            return crate::restricted(&context, Some("-p"));
+        }
         if self.print_description || self.print_verbose_description {
             return self.describe_names(&mut context);
         }

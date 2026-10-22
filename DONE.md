@@ -3104,3 +3104,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   writes it (Bash's own top level drops the `;` between two commands; cash keeps it). A
   Bash builtin's `--help` printed clap's text; it prints what `help NAME` prints, status
   2, as Bash's does.
+- **The restricted shell** (2026-10-23, the phase after 1.48.0): `set -r` was an invalid
+  option, `cash -r` was refused, and nothing was ever restricted. `set -r`, `-r`,
+  `--restricted` and a start as `rbash` (after the startup files) turn on Bash's limits:
+  `cd`, `pushd`, `popd`, `z` and `cdh` refused, and Alt-← and Alt-→ move nowhere; a
+  command named with a `/` refused, through `command` too; `.` of a path, `exec` of a
+  command, `enable` of a builtin, `command -p`, and `hash -p` or `history` with a path
+  refused; `>`, `>>`, `<>`, `>|`, `>&` and `&>` to a file refused; `SHELL`, `PATH`,
+  `HISTFILE`, `ENV` and `BASH_ENV` read only. `set +r` is an invalid option, `$-` holds
+  `r`, and `shopt restricted_shell`, on for a shell started restricted, cannot be
+  changed. `set`'s page says that cash's own tools are no programs in `PATH`, so a
+  startup file that is to confine a user turns them off with `enable -n`.

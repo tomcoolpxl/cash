@@ -31,6 +31,7 @@ crate::minus_or_plus_flag_arg!(
 crate::minus_or_plus_flag_arg!(EnableJobControl, 'm', "Enable job control");
 crate::minus_or_plus_flag_arg!(DoNotExecuteCommands, 'n', "Do not execute commands");
 crate::minus_or_plus_flag_arg!(RealEffectiveUidMismatch, 'p', "Real effective UID mismatch");
+crate::minus_or_plus_flag_arg!(RestrictShell, 'r', "Restrict the shell, for good");
 crate::minus_or_plus_flag_arg!(ExitAfterOneCommand, 't', "Exit after one command");
 crate::minus_or_plus_flag_arg!(
     TreatUnsetVariablesAsError,
@@ -105,6 +106,8 @@ pub(crate) struct SetCommand {
     #[clap(flatten)]
     real_effective_uid_mismatch: RealEffectiveUidMismatch,
     #[clap(flatten)]
+    restrict_shell: RestrictShell,
+    #[clap(flatten)]
     exit_after_one_command: ExitAfterOneCommand,
     #[clap(flatten)]
     treat_unset_variables_as_error: TreatUnsetVariablesAsError,
@@ -169,7 +172,8 @@ impl builtins::Command for SetCommand {
 
             // A letter `set` does not know is an invalid option, said with its sign, status
             // 2, as in Bash: `set -Z x` made `-Z` the first positional parameter, and `set
-            // +Z` did nothing, both with status 0.
+            // +Z` did nothing, both with status 0. `-r` restricts the shell, and there is
+            // no `+r`, as in Bash.
             if i > 0
                 && !now_parsing_positional_args
                 && arg.starts_with(['-', '+'])
@@ -178,7 +182,7 @@ impl builtins::Command for SetCommand {
                 && let Some(letter) = arg
                     .chars()
                     .skip(1)
-                    .find(|&c| !"abefhkmnoptuvxBCEHPT".contains(c))
+                    .find(|&c| !("abefhkmnoptuvxBCEHPT".contains(c) || (sign == '-' && c == 'r')))
             {
                 return Err(crate::invalid_option(&format!("{sign}{letter}")));
             }
@@ -266,6 +270,11 @@ impl builtins::Command for SetCommand {
 
         if let Some(value) = self.real_effective_uid_mismatch.to_bool() {
             context.shell.options_mut().real_effective_uid_mismatch = value;
+            saw_option = true;
+        }
+
+        if self.restrict_shell.to_bool() == Some(true) {
+            context.shell.make_restricted();
             saw_option = true;
         }
 

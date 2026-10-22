@@ -205,6 +205,9 @@ fn go<SE: cash_core::ShellExtensions>(
     dir: &Path,
     name: &str,
 ) -> Result<ExecutionResult, cash_core::Error> {
+    if context.shell.restricted() {
+        return crate::restricted(context, None);
+    }
     match context.shell.set_working_dir(dir) {
         Ok(()) => Ok(ExecutionResult::success()),
         Err(error) => {

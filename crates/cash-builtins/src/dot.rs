@@ -32,6 +32,10 @@ impl builtins::Command for DotCommand {
         let Some((script, script_args)) = self.operands.split_first() else {
             return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
         };
+        // The restricted shell sources no file named by a path.
+        if context.shell.restricted() && cash_core::sys::fs::contains_path_separator(script) {
+            return crate::restricted(&context, Some(script));
+        }
         let script_path = resolve_source_path(context.shell, script, self.search_path.as_deref())
             .ok_or_else(|| {
             cash_core::Error::from(cash_core::ErrorKind::FailedSourcingFile(

@@ -70,6 +70,21 @@ impl builtins::Command for HistoryCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // The restricted shell reads and writes no history file named by a path.
+        if context.shell.restricted()
+            && let Some(file) = [
+                &self.append_session_to_file,
+                &self.append_rest_of_file_to_session,
+                &self.append_file_to_session,
+                &self.write_session_to_file,
+            ]
+            .into_iter()
+            .flatten()
+            .flatten()
+            .find(|file| cash_core::sys::fs::contains_path_separator(file))
+        {
+            return crate::restricted(&context, Some(file));
+        }
         // An option it does not know is said, as in Bash, history or not: `history -z`
         // did nothing, status 0.
         if let Some(first) = self.args.first()

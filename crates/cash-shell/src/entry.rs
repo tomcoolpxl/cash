@@ -370,6 +370,14 @@ pub fn run_with_args(args: Vec<String>) {
     {
         parsed_args.posix = true;
     }
+    // Started as `rbash` it is restricted, as Bash is.
+    if args
+        .first()
+        .and_then(|name| Path::new(name).file_stem())
+        .is_some_and(|stem| stem.eq_ignore_ascii_case("rbash"))
+    {
+        parsed_args.restricted = true;
+    }
 
     let shell_name = args
         .first()
@@ -612,6 +620,13 @@ async fn run_in_shell(
 
     // Load profile and rc files as appropriate.
     initialize_shell(shell_ref, &args).await?;
+
+    // A restricted shell's limits start once its startup files have run, as in Bash.
+    if args.restricted {
+        let mut shell = shell_ref.lock().await;
+        shell.make_restricted();
+        shell.options_mut().restricted_shell = true;
+    }
 
     // If a command was specified via -c, then run that command and then exit.
     if let Some(command) = args.command {

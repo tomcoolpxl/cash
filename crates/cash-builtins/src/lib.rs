@@ -390,6 +390,23 @@ fn invalid_option(word: &str) -> clap::Error {
     error
 }
 
+/// Refuses what the builtin was asked in the restricted shell (`set -r`), as Bash's
+/// `sh_restricted` does: `cd: restricted`, or with the word refused, `command: -p:
+/// restricted`; status 1.
+fn restricted<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    word: Option<&str>,
+) -> Result<cash_core::ExecutionResult, cash_core::Error> {
+    use std::io::Write as _;
+
+    let name = &context.command_name;
+    match word {
+        Some(word) => writeln!(context.error_stream(), "{name}: {word}: restricted")?,
+        None => writeln!(context.error_stream(), "{name}: restricted")?,
+    }
+    Ok(cash_core::ExecutionResult::general_error())
+}
+
 /// Refuses a letter not in `letters` among the leading options of `args` (the command's
 /// name first), as Bash's `internal_getopt` does; options end at `--` or the first word
 /// that is not one.

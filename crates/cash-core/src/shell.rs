@@ -502,6 +502,29 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         std::mem::take(&mut self.word_substitution_ends)
     }
 
+    /// Turns the restricted shell's limits on, for good (`set -r`, `cash -r`), as Bash's do:
+    /// `SHELL`, `PATH`, `HISTFILE`, `ENV` and `BASH_ENV` become read only, declared unset
+    /// where they are not set. What else is refused is said where it is tried.
+    pub fn make_restricted(&mut self) {
+        self.options.restricted = true;
+        for name in ["SHELL", "PATH", "HISTFILE", "ENV", "BASH_ENV"] {
+            if let Some((_, var)) = self.env.get_mut(name) {
+                var.set_readonly();
+            } else {
+                let mut var = crate::ShellVariable::new(crate::ShellValue::Unset(
+                    crate::variables::ShellValueUnsetType::Untyped,
+                ));
+                var.set_readonly();
+                let _ = self.env.set_global(name, var);
+            }
+        }
+    }
+
+    /// Whether the restricted shell's limits are on (`set -r`).
+    pub const fn restricted(&self) -> bool {
+        self.options.restricted
+    }
+
     /// A copy's number of its own, its `$BASHPID` (`own_pid`); `None` for the shell itself.
     pub const fn own_pid(&self) -> Option<crate::sys::process::ProcessId> {
         self.own_pid

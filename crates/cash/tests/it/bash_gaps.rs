@@ -4152,3 +4152,62 @@ fn a_bash_builtins_help_option_prints_its_help_page() {
     assert_eq!(status, 0);
     assert!(stdout.starts_with("Usage: ls"), "{stdout}");
 }
+
+#[test]
+fn the_restricted_shell_refuses_what_bashs_refuses() {
+    // `cash -r` and `set -r` restricted nothing.
+    let scratch = Scratch::new("restricted");
+    let result = cash_command()
+        .current_dir(scratch.path())
+        .args([
+            "--noprofile",
+            "--norc",
+            "-r",
+            "-c",
+            "cd /; echo \"cd $?\"\n\
+             unset SHELL; echo \"unset $?\"\n\
+             /bin/true; echo \"slash $?\"\n\
+             command /bin/true; echo \"command $?\"\n\
+             . ./x; echo \"dot $?\"\n\
+             echo hi > out.txt; echo \"write $?\"\n\
+             echo hi >> out.txt; echo \"append $?\"\n\
+             cat < /dev/null; echo \"read $?\"\n\
+             exec true; echo \"exec $?\"\n\
+             enable -n true; echo \"enable -n $?\"\n\
+             enable true; echo \"enable $?\"\n\
+             command -p true; echo \"command -p $?\"\n\
+             set +r; echo \"set +r $?\"\n\
+             shopt -u restricted_shell; shopt -q restricted_shell; echo \"shopt $?\"\n\
+             x=$(cd /; echo \"sub $?\"); echo \"$x\"\n\
+             [[ $- == *r* ]] && echo flag\n\
+             [ -e out.txt ]; echo \"no file $?\"",
+        ])
+        .output()
+        .unwrap();
+    let text = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap().replace("\r\n", "\n");
+    let (stdout, stderr) = (text(result.stdout), text(result.stderr));
+    assert_eq!(
+        stdout,
+        "cd 1\nunset 1\nslash 1\ncommand 1\ndot 1\nwrite 1\nappend 1\nread 0\nexec 1\n\
+         enable -n 0\nenable 1\ncommand -p 1\nset +r 2\nshopt 0\nsub 1\nflag\nno file 1\n",
+        "{stderr}"
+    );
+    for said in [
+        "cd: restricted",
+        "SHELL: cannot unset: readonly variable",
+        "/bin/true: restricted: cannot specify `/' in command names",
+        ".: ./x: restricted",
+        "out.txt: restricted: cannot redirect output",
+        "exec: restricted",
+        "enable: restricted",
+        "command: -p: restricted",
+        "set: +r: invalid option",
+    ] {
+        assert!(stderr.contains(said), "{said}: {stderr}");
+    }
+    // `set -r` restricts a shell started unrestricted, `restricted_shell` staying off.
+    assert_eq!(
+        output("set -r; cd /; echo \"cd $?\"; shopt -q restricted_shell; echo \"shopt $?\"").1,
+        "cd 1\nshopt 1"
+    );
+}

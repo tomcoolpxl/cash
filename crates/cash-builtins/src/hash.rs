@@ -29,13 +29,38 @@ pub(crate) struct HashCommand {
     names: Vec<String>,
 }
 
+impl HashCommand {
+    /// The path of `-p` the restricted shell refuses: it remembers no program by a path.
+    fn refused_path<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+    ) -> Option<&str> {
+        let path = self.path_to_use.as_ref()?.to_str()?;
+        (context.shell.restricted() && cash_core::sys::fs::contains_path_separator(path))
+            .then_some(path)
+    }
+}
+
 impl builtins::Command for HashCommand {
     type Error = cash_core::Error;
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
-        context: cash_core::ExecutionContext<'_, SE>,
+        mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
+        if let Some(path) = self.refused_path(&context) {
+            return crate::restricted(&context, Some(path));
+        }
+        self.hash(&mut context)
+    }
+}
+
+impl HashCommand {
+    /// What `hash` was asked: list, forget, remember or look up.
+    fn hash<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &mut cash_core::ExecutionContext<'_, SE>,
+    ) -> Result<cash_core::ExecutionResult, cash_core::Error> {
         let mut result = ExecutionResult::success();
         let cmd = &context.command_name;
 

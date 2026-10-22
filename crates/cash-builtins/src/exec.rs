@@ -60,6 +60,10 @@ impl builtins::Command for ExecCommand {
             context.make_own_redirections_permanent();
             return Ok(ExecutionResult::success());
         }
+        // The restricted shell runs no command in its place.
+        if context.shell.restricted() {
+            return crate::restricted(&context, None);
+        }
 
         // A subshell takes the same emulation below: the command runs, and the shell it
         // ends is the subshell, which is in this process. It ran the command through

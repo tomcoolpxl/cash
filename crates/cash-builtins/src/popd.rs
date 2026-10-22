@@ -63,6 +63,10 @@ impl builtins::Command for PopdCommand {
             )?;
             return Ok(ExecutionResult::general_error());
         }
+        // A pop that would change the directory, in the restricted shell; `-n` does not.
+        if context.shell.restricted() && !self.no_directory_change {
+            return crate::restricted(&context, None);
+        }
 
         // cash: `+N` was rejected by the parser as an unexpected argument, so the way to
         // drop one entry from the middle of the stack — the reason `dirs -v` prints

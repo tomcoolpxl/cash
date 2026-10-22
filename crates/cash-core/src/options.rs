@@ -173,8 +173,10 @@ pub struct RuntimeOptions {
     pub programmable_completion_alias: bool,
     /// 'promptvars'
     pub expand_prompt_strings: bool,
-    /// `restricted_shell`
+    /// `restricted_shell`: the shell was started restricted (`-r`, `rbash`); read only.
     pub restricted_shell: bool,
+    /// `set -r`: the restricted shell's limits are on, for good (`Shell::make_restricted`).
+    pub restricted: bool,
     /// `shift_verbose`
     pub shift_verbose: bool,
     /// `sourcepath`

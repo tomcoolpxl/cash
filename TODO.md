@@ -170,13 +170,9 @@ path. The rest, by theme:
   (Bash in POSIX mode: a function defined before the alias does not see it); it needs
   the substitution's text rewritten as it is parsed, much work for a rare case.
 
-**Starting cash**
-- `-r` is not taken (the restricted shell, this phase); `-D` and `--pretty-print` of a
-  here-document before a `|` are done (DONE.md).
-
 **Builtins, small**
-- `set -r` restricts nothing (this phase); `find /dev/null` says there is no such file
-  (Bash: `/dev/null`, a character device to `-type c`; modernish's find check).
+- `find /dev/null` says there is no such file (Bash: `/dev/null`, a character device to
+  `-type c`; modernish's find check).
 - `eval 'break 1 2'` and its kin inside a subshell end it with 2 where the text was
   sourced or `eval`ed (Bash: 1).
 - Printing: associative arrays in sorted order, and `complete -p` by name (Bash: hash

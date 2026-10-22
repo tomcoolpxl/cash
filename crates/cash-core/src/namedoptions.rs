@@ -246,6 +246,14 @@ static SET_OPTIONS: LazyLock<HashMap<&'static str, ShellOptionDef>> = LazyLock::
             ),
         ),
         (
+            "r",
+            ShellOptionDef::new(
+                |options| options.restricted,
+                // Once on, the limits stay (`set +r` is refused before it gets here).
+                |options, value| options.restricted |= value,
+            ),
+        ),
+        (
             "P",
             ShellOptionDef::new(
                 |options| options.do_not_resolve_symlinks_when_changing_dir,
@@ -851,7 +859,8 @@ static SHOPT_OPTIONS: LazyLock<HashMap<&'static str, ShellOptionDef>> = LazyLock
             "restricted_shell",
             ShellOptionDef::new(
                 |options| options.restricted_shell,
-                |options, value| options.restricted_shell = value,
+                // Read only, as in Bash: `shopt -u restricted_shell` changes nothing.
+                |_, _| {},
             ),
         ),
         (

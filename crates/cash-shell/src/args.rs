@@ -146,6 +146,10 @@ pub struct CommandLineArgs {
     #[clap(short = 's', help_heading = HEADING_STANDARD_OPTIONS)]
     pub read_commands_from_stdin: bool,
 
+    /// Run as a restricted shell, once the startup files have run (as `rbash`).
+    #[clap(short = 'r', long = "restricted", help_heading = HEADING_STANDARD_OPTIONS)]
+    pub restricted: bool,
+
     /// Run in `sh` compatibility mode, as if run as `/bin/sh`.
     #[clap(long = "sh")]
     pub sh_mode: bool,

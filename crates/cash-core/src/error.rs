@@ -158,6 +158,10 @@ pub enum ErrorKind {
     #[error("{0}: {1}")]
     RedirectionFailure(String, String),
 
+    /// The restricted shell refused a command named by a path, as Bash's says it.
+    #[error("{0}: restricted: cannot specify `/' in command names")]
+    RestrictedCommandName(String),
+
     /// An error occurred evaluating an arithmetic expression.
     #[error("{0}")]
     EvalError(#[from] crate::arithmetic::EvalError),

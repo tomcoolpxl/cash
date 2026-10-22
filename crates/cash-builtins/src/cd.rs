@@ -45,6 +45,9 @@ impl builtins::Command for CdCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        if context.shell.restricted() {
+            return crate::restricted(&context, None);
+        }
         let mut should_print = false;
         if !self.extra.is_empty() {
             writeln!(context.error_stream(), "cd: too many arguments")?;

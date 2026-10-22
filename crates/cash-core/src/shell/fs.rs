@@ -143,7 +143,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         &mut self,
         steps: isize,
     ) -> Result<Option<PathBuf>, error::Error> {
-        let Some(target) = self.directory_history.target(steps).map(Path::to_path_buf) else {
+        // The restricted shell changes no directory, by a key either.
+        let target = self.directory_history.target(steps).map(Path::to_path_buf);
+        let Some(target) = target.filter(|_| !self.restricted()) else {
             return Ok(None);
         };
         let history = self.directory_history.clone();
