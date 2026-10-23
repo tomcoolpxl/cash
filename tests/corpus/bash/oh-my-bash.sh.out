@@ -1,0 +1,32 @@
+loaded font: 1.0.0(0)-master (noarch)
+\[\e[0;37m\]\[\e[0;37m\]\[\e[30;1m\]\u@\h \[\e[36;1m\]\W \[\e[32;1m\]M-bM-^FM-^R \[\e[0m\]
+loaded minimal: 1.0.0(0)-master (noarch)
+\[\e[39m\] \[\e[0;36m\]\W\[\e[39m\] 
+loaded agnoster: 1.0.0(0)-master (noarch)
+\[\e[0m\]\[\e[0;40m\] USER@\h \[\e[30;44m\]M-nM-^BM-0\[\e[0;44;30m\] \w \[\e[0;34m\]M-nM-^BM-0 \[\e[0m\]
+loaded powerline-plain: 1.0.0(0)-master (noarch)
+\[^[[48;5;240m\] PWD \[\e[0m\]\[^[[38;5;240m\] \[\e[0m\] 
+loaded font: 1.0.0(0)-master (noarch)
+\[\e[0;37m\]\[\e[0;37m\]\[\e[30;1m\]\u@\h \[\e[36;1m\]\W M-BM-1\[^[[0;32m\]|mainM-bM-^\M-^T\[^[[0;32m\]|\[\e[32;1m\]M-bM-^FM-^R \[\e[0m\]
+loaded font: 1.0.0(0)-master (noarch)
+\[\e[0;37m\]\[\e[0;37m\]\[\e[30;1m\]\u@\h \[\e[36;1m\]\W M-BM-1\[^[[0;32m\]|main \[^[[0;31m\]M-bM-^\M-^W\[^[[0;32m\]|\[\e[32;1m\]M-bM-^FM-^R \[\e[0m\]
+loaded powerline-plain: 1.0.0(0)-master (noarch)
+\[^[[48;5;88m\] M-bM-^NM-^G  main ?:1 \[\e[0m\]\[^[[48;5;240m\] PWD \[\e[0m\]\[^[[38;5;240m\] \[\e[0m\] 
+loaded no theme: 1.0.0(0)-master (noarch)
+alias ll='ls -lAFh'
+alias la='ls -Al'
+alias l='ls -lathF'
+alias ..='cd ../'
+alias ...='cd ../../'
+alias gst='command git status'
+alias ga='command git add'
+alias gcmsg='command git commit --message'
+alias glog='command git log --oneline --decorate --graph'
+alias
+function
+function
+git is a command
+no-such-command is not
+PWD/repo
+PWD/repo
+export DIR_here="PWD/repo"
