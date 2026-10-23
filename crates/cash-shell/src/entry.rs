@@ -692,14 +692,22 @@ async fn run_in_shell(
     // A script's background jobs that run inside cash are waited for as it ends, so that
     // their work is done, as under Bash, where they outlive it; at the prompt `exit` ends
     // them, as Bash hangs them up.
+    // What the shell holds open beyond its standard streams is closed first, as a
+    // process's end closes it: a coprocess reading from the shell (`coproc cat`) sees the
+    // end of its input and ends, where the wait waited on it for ever.
     let interactive = shell_ref.lock().await.options().interactive;
     if !interactive {
-        shell_ref
-            .lock()
-            .await
-            .jobs_mut()
-            .wait_for_jobs_inside_the_shell()
-            .await;
+        let mut shell = shell_ref.lock().await;
+        let held: Vec<_> = shell
+            .open_files()
+            .iter_fds()
+            .map(|(fd, _)| fd)
+            .filter(|fd| *fd > 2)
+            .collect();
+        for fd in held {
+            shell.open_files_mut().remove_fd(fd);
+        }
+        shell.jobs_mut().wait_for_jobs_inside_the_shell().await;
     }
 
     // When a login shell exits, bash sources ~/.bash_logout if present.
