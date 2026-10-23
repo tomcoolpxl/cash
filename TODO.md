@@ -25,29 +25,6 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## The phase now (2026-10-23): `figlet`, toward 2.0.0
-
-The user's design, research/figlet-design.md, decided by pick lists on 2026-10-23
-(decisions.md D84). One `figlet` builtin doing what figlet 2.2.5 and toilet 0.3 do, with
-loose compatibility, 23 fonts built in, and extras. Released as **2.0.0** at the end, a
-milestone and not a breaking change; the steps below are not released one by one. The
-oracle is figlet and toilet in WSL's Arch (installed by the user, 2026-10-23).
-
-1. `cash-figlet` (new leaf crate): fonts (`.flf`, `.tlf`, Latin-1 or UTF-8, code tags,
-   colour escapes in glyphs), control files, the smusher copied from rs-figlet
-   (Apache-2.0), wrapping, justification, paragraphs, direction, the canvas, the `text`
-   export; rs-figlet's goldens.
-2. The `figlet` builtin: figlet's options, the 23 built-in fonts, font search (`-d`,
-   `FIGLET_FONTDIR`, `%LOCALAPPDATA%\cash\fonts`), zipped fonts, `-I`, help, man pages.
-3. Colour fonts, toilet's options and filters, the `utf8` and `ansi` exports, `--color`.
-4. The colour pack: gradients and palettes, lolcat rainbow, shadow and outline, Unicode
-   borders, letter spacing, line height, background.
-5. `figlist`, `showfigfonts`, and the font picker with a live preview.
-6. Pixel fonts drawn with sub-cell blocks, any installed Windows font, double-size lines.
-7. TheDraw `.tdf` fonts. (The sixel image mode was dropped by the user, 2026-10-23:
-   too big for what it gives, and nobody would use it.)
-8. The WSL oracle, the `cash doctor` shadow row, NOTICE and `upstreams.toml`.
-
 ## Next, straight after the figlet phase (the user, 2026-10-23)
 
 The F1 help screen (`crates/cash-builtins/src/helpdocs/f1.md`, its MORE section):
@@ -55,6 +32,13 @@ The F1 help screen (`crates/cash-builtins/src/helpdocs/f1.md`, its MORE section)
 - a line for `man` alone, the manual browser (a help browser), beside `man NAME`;
 - check how the F1 screen shows in a window too small for it (narrow and short), and
   make it fit or degrade cleanly.
+
+## The phase before (2026-10-23, done, released as 2.0.0)
+
+`figlet` (research/figlet-design.md, D84): figlet 2.2.5 and toilet 0.3 in one builtin
+on the new `cash-figlet` crate, with cash's colour pack, a font picker, pixel and Windows
+fonts, DEC double-size lines and TheDraw fonts; the sixel image mode dropped. In DONE.md.
+Released as 2.0.0, a milestone and not a breaking change.
 
 ## The phase before (2026-10-23, done, released as 1.50.0)
 

@@ -3143,3 +3143,18 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   their work is done under Bash, where they outlive it (D6 amended; one program alone is
   not waited for), so nb's commits are made. Written down in TODO.md: an interactive cash
   with no console keeps job control on.
+- **`figlet`, toward 2.0.0** (2026-10-23, the user's design, research/figlet-design.md,
+  D84): one `figlet` builtin doing what figlet 2.2.5 and toilet 0.3 do, on a new crate,
+  `cash-figlet`. It reads FIGfont 2.0 (`.flf`, toilet's UTF-8 `.tlf` with colour glyphs,
+  `.flc` control files, zipped or not) and lays text out as `figlet.c` does, ported over
+  cells; 61 cases match the real figlet in WSL byte for byte. 23 fonts are built in
+  (443 KB). toilet's options join figlet's: its nine filters (every one, and the `ansi`
+  export, the same bytes as WSL's toilet), the `utf8`, `ansi` and `text` exports, and
+  `--color`. cash's own: true-colour gradients with named palettes, lolcat's rainbow,
+  shadow, outline, frames in five styles, background, letter spacing, line gap, colour
+  depth; `figlist`, `showfigfonts` and `figlet --pick`, the fonts in cash's picker with a
+  live preview (cash-picker gained a previewed list); the built-in 8x8 pixel font and any
+  installed Windows font (GDI, in cash-win32) drawn with half blocks, quadrants, sextants,
+  Unicode 16 octants or Braille; DEC double-size lines; TheDraw fonts, checked against
+  tdfiglet in WSL. The sixel image mode was dropped (the user: too big, nobody would use
+  it). `cash doctor` lists `figlet` when another one is on PATH.
