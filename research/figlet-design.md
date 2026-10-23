@@ -138,13 +138,30 @@ Search order: `-f path` as given; `-d dir`; `FIGLET_FONTDIR`; a user font direct
 (`%LOCALAPPDATA%\cash\fonts`); the built-in set inside cash.exe. `.flf`, `.tlf` and
 `.flc` are all looked for, each possibly zipped.
 
+What the upstreams ship, all as files in a font directory, none inside the program
+(toilet's `term` is code, not a file):
+
 | Set | Files | Size as stored | Licence |
 | --- | --- | --- | --- |
-| figlet 2.2.5 fonts | 19 `.flf` (standard, big, slant, small, banner, block, bubble, digital, lean, mini, script, shadow ...) | 379 KB | BSD-3 |
+| figlet 2.2.5 fonts | 18 `.flf`: banner, big, block, bubble, digital, ivrit, lean, mini, mnemonic, script, shadow, slant, small, smscript, smshadow, smslant, standard, term | 379 KB | BSD-3 |
 | figlet control files | 30 `.flc` | 198 KB | BSD-3 |
 | toilet fonts | 26 `.tlf` (future, pagga, smblock, emboss, circle, letter, mono9/12, biggray ...) | 982 KB (10.5 MB unzipped) | WTFPL |
 
-All three together add about 1.5 MB to cash.exe as stored, less if stored compressed.
+What scripts use, from about 600 `figlet` and 140 `toilet` calls in GitHub code search
+(2026-10-23): 79 % of `figlet` calls name no font, so get `standard`; of those that do,
+about a third say `slant`, then `small`, `mini`, `big`, `standard`, `smslant`, `shadow`,
+`script`, all figlet's own. `toilet` calls mostly name one: `mono12` first, then figlet's
+`slant`, `big`, `standard`, `small`, the built-in `term`, and toilet's `future`,
+`smbraille`, `pagga`, `smblock`, `mono9`. A tail names fonts from add-on collections
+(`3d`, `ansishadow`, `doom`, `speed`) that neither tool ships. No script expects every
+font.
+
+**Built into cash.exe (decided 2026-10-23): 23 fonts, 443 KB as stored.** figlet's 17
+fonts without `mnemonic` (83 KB, unused in the sample; 296 KB) and toilet's six most used:
+`mono12`, `mono9`, `future`, `smbraille`, `pagga`, `smblock` (148 KB). No control file is
+built in: cash reads UTF-8 natively, so `utf8.flc` is not needed, and the national ones
+load from a font directory like every other font not built in. toilet's `term` is a few
+lines of code.
 
 ### 6.6 One name, and the `-E` clash
 
@@ -216,8 +233,11 @@ with TheDraw fonts. Not chosen: animation, PNG export.
 
 1. **Names: `figlet` only**, with toilet's options added; `-E` is export. Turned down:
    `figlet` and `toilet` both, and a new name with the old ones as aliases.
-2. **Fonts: all of figlet's and toilet's inside cash.exe** (19 `.flf`, 30 `.flc`,
-   26 `.tlf`, about 1.5 MB as stored). Turned down: a small set, figlet's only.
+2. **Fonts: 23 built into cash.exe, 443 KB** (section 6.5): figlet's 17 without
+   `mnemonic`, and toilet's `mono12`, `mono9`, `future`, `smbraille`, `pagga`, `smblock`;
+   the rest from a font directory. First answer "all of figlet's and toilet's" (1.5 MB),
+   changed the same day once the GitHub sample showed what scripts use. Turned down: the
+   same with `mnemonic` (527 KB), rs-figlet's nine (228 KB), everything.
 3. **Extras: all four groups** offered (colour pack; gallery and picker; Windows fonts and
    pixel modes; sixel image and TheDraw fonts). Not offered as choices and left out:
    animation, PNG export.
