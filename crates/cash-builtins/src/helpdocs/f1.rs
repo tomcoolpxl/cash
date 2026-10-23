@@ -32,6 +32,12 @@ const CLOSES: &str = "F1 or Esc closes";
 /// The screen is laid out for this many columns, and narrower when the window is.
 pub const WIDTH: usize = 80;
 
+/// Below this many columns a line is cut rather than wrapped: too narrow to read anyway.
+const NARROWEST: usize = 20;
+
+/// How far a note wrapped under its example or key is indented beyond it.
+const NOTE_INDENT: usize = 4;
+
 /// The styles the screen is drawn in; [`Palette::none`] draws plain text.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Palette {
@@ -61,19 +67,104 @@ pub fn render(version: &str, tools: usize, width: usize, palette: &Palette) -> V
     let tools = tools_phrase(tools);
     let mut lines = vec![title(version, width, palette), rule(width, palette)];
     let mut section = String::new();
-    for line in TEXT.lines() {
-        let line = line.replace(TOOLS, &tools);
-        // One column is the margin, and the line ends before the last column, as the
-        // title does.
-        let line = fit(&line, width - 2).trim_end();
-        lines.push(if let Some(heading) = line.strip_prefix("## ") {
+    // One column is the margin, and a line ends before the last column, as the title does.
+    let room = width - 2;
+    let text: Vec<String> = TEXT
+        .lines()
+        .map(|line| line.replace(TOOLS, &tools).trim_end().to_owned())
+        .collect();
+    // When one example or key does not fit beside its note, every one goes above its
+    // note, so that the screen keeps one shape.
+    let stacked = text.iter().any(|line| {
+        let indent_end = line.find(|c| c != ' ').unwrap_or(line.len());
+        let two_columns = columns(line.get(indent_end..).unwrap_or_default()).len() == 2;
+        two_columns && drawn_width(line) > room
+    });
+    for line in &text {
+        let line = line.as_str();
+        let two_columns = {
+            let indent_end = line.find(|c| c != ' ').unwrap_or(line.len());
+            columns(line.get(indent_end..).unwrap_or_default()).len() == 2
+        };
+        if let Some(heading) = line.strip_prefix("## ") {
             heading.trim().clone_into(&mut section);
-            format!(" {}", palette.accent.paint(section.as_str()))
+            lines.push(format!(" {}", palette.accent.paint(section.as_str())));
         } else if line.is_empty() {
-            String::new()
+            lines.push(String::new());
+        } else if drawn_width(line) <= room && !(stacked && two_columns && width >= NARROWEST) {
+            lines.push(body_line(line, &section, palette));
+        } else if width < NARROWEST {
+            lines.push(body_line(fit(line, room).trim_end(), &section, palette));
         } else {
-            body_line(line, &section, palette)
-        });
+            lines.extend(wrapped(line, &section, room, palette));
+        }
+    }
+    lines
+}
+
+/// The columns `text` takes once drawn: its backticks take none.
+fn drawn_width(text: &str) -> usize {
+    text.chars()
+        .filter(|&c| c != '`')
+        .map(|c| c.width().unwrap_or(0))
+        .sum()
+}
+
+/// A line too wide for `room` columns, over several: an example or key on its own line
+/// and its note under it, indented further; prose broken between words.
+fn wrapped(line: &str, section: &str, room: usize, palette: &Palette) -> Vec<String> {
+    let indent_end = line.find(|c| c != ' ').unwrap_or(line.len());
+    let (indent, text) = line.split_at(indent_end);
+    let pieces = columns(text);
+    let mut out = Vec::new();
+    if let [(item, _), (note, _)] = pieces.as_slice() {
+        let item_line = format!("{indent}{item}");
+        out.push(body_line(
+            fit(&item_line, room).trim_end(),
+            section,
+            palette,
+        ));
+        let note_indent = " ".repeat(indent.len() + NOTE_INDENT);
+        for part in words_within(note, room.saturating_sub(note_indent.len())) {
+            // Two spaces before the note would make it a column of its own.
+            out.push(format!(
+                " {note_indent}{}",
+                spans(&part, palette.note, palette.example)
+            ));
+        }
+    } else {
+        for part in words_within(text, room.saturating_sub(indent.len())) {
+            out.push(body_line(&format!("{indent}{part}"), section, palette));
+        }
+    }
+    out
+}
+
+/// `text` broken between words into lines of at most `room` columns; a word wider than
+/// that is cut.
+fn words_within(text: &str, room: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split(' ').filter(|w| !w.is_empty()) {
+        let wanted = if current.is_empty() {
+            drawn_width(word)
+        } else {
+            drawn_width(&current) + 1 + drawn_width(word)
+        };
+        if wanted > room && !current.is_empty() {
+            lines.push(std::mem::take(&mut current));
+        }
+        if !current.is_empty() {
+            current.push(' ');
+        }
+        current.push_str(word);
+        if drawn_width(&current) > room {
+            lines.push(fit(&current, room).to_owned());
+            current.clear();
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
     }
     lines
 }
@@ -92,7 +183,9 @@ fn tools_phrase(count: usize) -> String {
 /// `cash VERSION  ·  help`, with [`CLOSES`] ending one column before the right edge when
 /// there is room for it.
 fn title(version: &str, width: usize, palette: &Palette) -> String {
-    let left = format!("cash {version}  ·  help");
+    let whole = format!("cash {version}  ·  help");
+    // In a window too narrow even for the title, its start.
+    let left = fit(&whole, width.saturating_sub(2)).trim_end().to_owned();
     let mut line = format!(" {}", palette.accent.paint(left.as_str()));
     let room = width
         .saturating_sub(1)
@@ -450,23 +543,78 @@ mod tests {
         assert!(lines.join("\n").contains("find and more are built in."));
     }
 
+    /// Every word of the text, in order, whatever the width.
+    fn words(lines: &[String]) -> Vec<String> {
+        lines
+            .iter()
+            .skip(2)
+            .flat_map(|line| {
+                line.split_whitespace()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     #[test]
-    fn a_narrow_window_cuts_the_lines_and_drops_the_closing_hint() {
-        let lines = render("1.2.3", 208, 30, &Palette::none());
-        assert!(!lines[0].contains(CLOSES), "{}", lines[0]);
-        for line in &lines {
-            assert!(visible_width(line) < 30, "{line}");
+    fn a_narrow_window_wraps_and_loses_no_word() {
+        let full = words(&plain());
+        for width in [60, 44, 32, 24] {
+            let lines = render("1.2.3", 208, width, &Palette::none());
+            for line in &lines {
+                assert!(visible_width(line) < width, "{width}: {line}");
+            }
+            // The one exception at 24 columns: an example wider than the window is cut.
+            if width >= 32 {
+                assert_eq!(words(&lines), full, "{width} columns lose a word");
+            }
         }
-        assert!(lines.iter().any(|line| line == " PATHS"));
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.starts_with("   cash prints paths"))
-        );
-        // At forty columns the hint still fits.
+        // At forty columns the closing hint still fits; at thirty it goes.
         let lines = render("1.2.3", 208, 40, &Palette::none());
         assert!(lines[0].ends_with(CLOSES), "{}", lines[0]);
         assert_eq!(visible_width(&lines[0]), 39);
+        let lines = render("1.2.3", 208, 30, &Palette::none());
+        assert!(!lines[0].contains(CLOSES), "{}", lines[0]);
+    }
+
+    #[test]
+    fn when_one_note_does_not_fit_every_note_goes_under_its_example() {
+        let lines = render("1.2.3", 208, 60, &Palette::none());
+        let text = lines.join("\n");
+        assert!(
+            text.contains("\n   cd /c/Users/me\n       the /c/ form works too\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("\n   man\n       the manual browser: every command and topic\n"),
+            "{text}"
+        );
+        // Prose wraps between words, at the example's indent.
+        assert!(
+            text.contains(
+                "\n   cash prints paths as C:/Users/me, and every program\n   understands them.\n"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn below_twenty_columns_lines_are_cut() {
+        let lines = render("1.2.3", 208, 16, &Palette::none());
+        for line in &lines {
+            assert!(visible_width(line) < 16, "{line}");
+        }
+        assert!(lines.iter().any(|line| line.starts_with("   cd C:/Users/")));
+    }
+
+    #[test]
+    fn man_comes_before_help() {
+        let text = plain().join("\n");
+        let man = text.find("   man         ").unwrap();
+        let man_name = text.find("   man NAME").unwrap();
+        let help = text.find("   help        ").unwrap();
+        assert!(man < man_name && man_name < help, "{text}");
+        assert!(text.contains("the manual browser: every command and topic"));
     }
 
     #[test]

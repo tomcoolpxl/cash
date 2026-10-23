@@ -25,14 +25,6 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Next, straight after the figlet phase (the user, 2026-10-23)
-
-The F1 help screen (`crates/cash-builtins/src/helpdocs/f1.md`, its MORE section):
-- `man` above `help`;
-- a line for `man` alone, the manual browser (a help browser), beside `man NAME`;
-- check how the F1 screen shows in a window too small for it (narrow and short), and
-  make it fit or degrade cleanly.
-
 ## The phase before (2026-10-23, done, released as 2.0.0)
 
 `figlet` (research/figlet-design.md, D84): figlet 2.2.5 and toilet 0.3 in one builtin

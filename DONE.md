@@ -3158,3 +3158,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   Unicode 16 octants or Braille; DEC double-size lines; TheDraw fonts, checked against
   tdfiglet in WSL. The sixel image mode was dropped (the user: too big, nobody would use
   it). `cash doctor` lists `figlet` when another one is on PATH.
+- **2.0.1: the F1 screen, and figlet's shadow** (2026-10-23, the user's note after the
+  figlet phase, the F1 text approved by them): `man` before `help`, a line for `man` alone
+  (the manual browser), `man NAME` no longer said to open "in your browser"; a line too
+  wide for the window wraps, every note going under its example when one does not fit
+  beside it, and prose between words, so nothing is cut but in a window under twenty
+  columns. `--shadow` draws cfonts' box-line shadow, the same bytes as cfonts on its own
+  block letters.
