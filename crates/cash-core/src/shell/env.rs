@@ -202,12 +202,10 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // A reference to an element of an indexed array has its subscript evaluated, as in
         // Bash: `declare -n r='X[i+1]'; read r` writes element 1. It was element 0, the
         // subscript read as a number.
+        // The name comes back borrowed when it is itself, as nearly always: copying it
+        // first made a `String` on every assignment, each `i++` of a loop.
         if index.is_none()
-            && let Some(target) = self
-                .env
-                .resolved_name(name)
-                .map(std::borrow::Cow::into_owned)
-            && target != name
+            && let Some(std::borrow::Cow::Owned(target)) = self.env.resolved_name(name)
             && let Some((base, subscript)) =
                 target.strip_suffix(']').and_then(|t| t.split_once('['))
             && crate::env::valid_variable_name(base)

@@ -891,10 +891,23 @@ pub(crate) async fn run_debug_trap(
     text: impl FnOnce() -> Option<std::sync::Arc<str>> + Send,
     at: &(impl ast::Node + Sync),
 ) -> Result<DebugTrap, error::Error> {
-    let debug = shell.traps().handles(crate::traps::TrapSignal::Debug);
+    // Without a trap, the common case, nothing more is made: the rest, which can run a
+    // trap's commands, is boxed, so this future stays small. A loop called it three times
+    // a turn, each making the whole of it first (the slowdown after 1.39).
     if !shell.traps().any() {
         return Ok(DebugTrap::Run);
     }
+    Box::pin(run_debug_trap_set(shell, params, text, at)).await
+}
+
+/// [`run_debug_trap`] when a trap is set.
+async fn run_debug_trap_set(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    text: impl FnOnce() -> Option<std::sync::Arc<str>> + Send,
+    at: &(impl ast::Node + Sync),
+) -> Result<DebugTrap, error::Error> {
+    let debug = shell.traps().handles(crate::traps::TrapSignal::Debug);
     if let Some(text) = text() {
         shell.set_current_command(text);
     }
@@ -2599,24 +2612,27 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         // if expansion (e.g., command substitution) set an exit status.
         let status_change_count_before_expansion = context.shell.last_exit_status_change_count();
 
-        let requires_seekable_file = self.word_or_name.as_ref().map_or(false, |won| {
-            let s = won.flatten();
-            let base = std::path::Path::new(&s)
-                .file_stem()
-                .and_then(|stem| stem.to_str())
-                .unwrap_or(&s);
-            // A builtin of that name is cash's own, which reads a pipe: `fc` is Bash's
-            // history editor, and a file is written whole before the command starts.
-            let builtin = context
-                .shell
-                .builtins()
-                .get(s.as_str())
-                .is_some_and(|builtin| !builtin.disabled);
-            !builtin
-                && NEEDS_A_FILE
-                    .iter()
-                    .any(|name| base.eq_ignore_ascii_case(name))
-        });
+        // Asked only for a process substitution: it copied the command's name, looked it up
+        // and compared it with each name in the list for every command.
+        let requires_seekable_file = |shell: &Shell<_>| {
+            self.word_or_name.as_ref().map_or(false, |won| {
+                let s = won.flatten();
+                let base = std::path::Path::new(&s)
+                    .file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .unwrap_or(&s);
+                // A builtin of that name is cash's own, which reads a pipe: `fc` is Bash's
+                // history editor, and a file is written whole before the command starts.
+                let builtin = shell
+                    .builtins()
+                    .get(s.as_str())
+                    .is_some_and(|builtin| !builtin.disabled);
+                !builtin
+                    && NEEDS_A_FILE
+                        .iter()
+                        .any(|name| base.eq_ignore_ascii_case(name))
+            })
+        };
 
         // Only this command's own redirections count here (D26); anything an enclosing
         // compound command noted is not "on the command".
@@ -2653,7 +2669,7 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                 }
                 CommandPrefixOrSuffixItem::ProcessSubstitution(kind, subshell_command) => {
                     let handed = SubstitutionPath {
-                        seekable: requires_seekable_file,
+                        seekable: requires_seekable_file(&context.shell),
                         pipe: takes_substitution_pipes(&context.shell, args.first()),
                     };
                     let (arg_path, end) = setup_process_substitution_path(

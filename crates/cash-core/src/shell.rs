@@ -618,6 +618,10 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     /// to `y` and turned off unsets it. Bash does it as either changes; cash looks before
     /// each simple command, and at the start, where a `POSIXLY_CORRECT` handed down turns the
     /// mode on and the mode asked for sets it. Neither followed the other.
+    ///
+    /// While neither changed, the look is a flag the environment keeps
+    /// ([`env::ShellEnvironment::take_posixly_touched`]); it was two case-blind lookups
+    /// before every command, each making a folded copy of the name.
     pub(crate) fn follow_posixly_correct(&mut self) {
         let set = |shell: &Self| {
             shell
@@ -626,6 +630,9 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
                 .is_some_and(|(_, var)| var.value().is_set())
         };
         let (was_set, was_on) = self.posix_seen;
+        if !self.env.take_posixly_touched() && self.options.posix_mode == was_on {
+            return;
+        }
         let now_set = set(self);
         if now_set != was_set {
             if self.options.posix_mode != now_set {

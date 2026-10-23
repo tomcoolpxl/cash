@@ -387,6 +387,12 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **`((...))` is about 20% slower than at 1.39** (2026-10-23, after the interpreter fixes
+  that brought simple commands back): `i=0; while ((i<200000)); do ((i++)); done` takes
+  473 ms against 394 ms at 1.39 (`dist` builds, Git Bash steady as the control), about
+  0.4 us an evaluation; the loop rows of the benchmark are 6% over 1.39 by it. Not the
+  copy of the name on assignment (removed, no change). A rework of how `((...))` is
+  evaluated, not spot fixes; **yours** to pick.
 - **A CI run timed out on a TODO-only commit** (run 39966452795 on 783ec1db,
   2026-10-23): `corpus::the_ci_glue_script_matches_real_bash` (15 s) and two ConPTY
   tests (`a_program_that_breaks_the_console...`, `...took_the_mouse_gives_it_back`, 60 s)

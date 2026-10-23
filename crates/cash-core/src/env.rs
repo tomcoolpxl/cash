@@ -119,6 +119,9 @@ pub struct ShellEnvironment {
     /// The folded names a read finds in another case (D31): the variables inherited from
     /// Windows and those cash set as it started ([`ShellEnvironment::mark_started`]).
     foldable: std::collections::HashSet<String>,
+    /// A scope that held `POSIXLY_CORRECT` was popped ([`Self::take_posixly_touched`]).
+    #[cfg_attr(feature = "serde", serde(skip))]
+    posixly_popped: bool,
 }
 
 impl Default for ShellEnvironment {
@@ -136,6 +139,7 @@ impl ShellEnvironment {
             entry_count: 0,
             inherited: HashMap::new(),
             foldable: std::collections::HashSet::new(),
+            posixly_popped: false,
         }
     }
 
@@ -168,6 +172,19 @@ impl ShellEnvironment {
         let key = cash_win32::fold::name_key(name);
         self.foldable.insert(key.clone());
         self.inherited.insert(key, name.to_owned());
+    }
+
+    /// Whether `POSIXLY_CORRECT` may have changed since the last call, which clears it: set,
+    /// unset or handed out to change in any scope, in any spelling and through a name
+    /// reference, or gone with a scope. POSIX mode follows it before each command, and
+    /// this is all that costs while nothing changes: it was two case-blind lookups before
+    /// every command, each making a folded copy of the name.
+    pub(crate) fn take_posixly_touched(&mut self) -> bool {
+        let mut touched = std::mem::take(&mut self.posixly_popped);
+        for (_, map) in &mut self.scopes {
+            touched |= std::mem::take(&mut map.posixly_touched);
+        }
+        touched
     }
 
     /// Records the variables set now, as the shell starts, as those a read of a name not
@@ -222,7 +239,10 @@ impl ShellEnvironment {
     pub fn pop_scope(&mut self, expected_scope_type: EnvironmentScope) -> Result<(), error::Error> {
         // TODO(env): Should we panic instead on failure? It's effectively a broken invariant.
         match self.scopes.pop() {
-            Some((actual_scope_type, _)) if actual_scope_type == expected_scope_type => Ok(()),
+            Some((actual_scope_type, map)) if actual_scope_type == expected_scope_type => {
+                self.posixly_popped |= map.posixly_held;
+                Ok(())
+            }
             Some((actual_scope_type, _)) => Err(error::ErrorKind::UnexpectedScopeType {
                 expected: expected_scope_type,
                 actual: actual_scope_type,
@@ -858,6 +878,21 @@ pub struct ShellVariableMap {
     /// took ten times as long as in Bash (LANG-15).
     #[cfg_attr(feature = "serde", serde(skip))]
     by_folded_name: HashMap<String, Vec<String>, rustc_hash::FxBuildHasher>,
+    /// Whether `POSIXLY_CORRECT`, in any spelling, was set, unset or handed out to change
+    /// since [`Environment::take_posixly_touched`] last looked.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    posixly_touched: bool,
+    /// Whether `POSIXLY_CORRECT` was ever set here, so that popping this scope counts as
+    /// touching it: a `local` one goes away with its function.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    posixly_held: bool,
+}
+
+/// The variable POSIX mode follows ([`Environment::take_posixly_touched`]).
+const POSIXLY_CORRECT: &str = "POSIXLY_CORRECT";
+
+const fn is_posixly_correct(name: &str) -> bool {
+    name.len() == POSIXLY_CORRECT.len() && name.eq_ignore_ascii_case(POSIXLY_CORRECT)
 }
 
 /// What is serialized of a [`ShellVariableMap`]; its index is rebuilt.
@@ -918,6 +953,7 @@ impl ShellVariableMap {
     ///
     /// * `name` - The name of the variable to retrieve.
     pub fn get_mut(&mut self, name: &str) -> Option<&mut ShellVariable> {
+        self.posixly_touched |= is_posixly_correct(name);
         self.variables.get_mut(name)
     }
 
@@ -932,6 +968,7 @@ impl ShellVariableMap {
     ///
     /// * `name` - The name of the variable to unset.
     pub fn unset(&mut self, name: &str) -> Option<ShellVariable> {
+        self.posixly_touched |= is_posixly_correct(name);
         let removed = self.variables.remove(name)?;
         let folded = cash_win32::fold::name_key(name);
         if let Some(names) = self.by_folded_name.get_mut(&folded) {
@@ -951,6 +988,10 @@ impl ShellVariableMap {
     /// * `var` - The variable to set.
     pub fn set<N: Into<String>>(&mut self, name: N, var: ShellVariable) -> Option<ShellVariable> {
         let name = name.into();
+        if is_posixly_correct(&name) {
+            self.posixly_touched = true;
+            self.posixly_held = true;
+        }
         if !self.variables.contains_key(&name) {
             self.by_folded_name
                 .entry(cash_win32::fold::name_key(&name))

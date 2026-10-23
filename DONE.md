@@ -3192,3 +3192,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   "Scoop Apps" and its uninstall removes it and the Explorer entry; its notes name
   `cash --explorer-menu`. The installer tests use a key of their own for the classes, so
   no run touches the real menus. CI now compiles the setup script on every push.
+- **The interpreter slowdown after 1.39, mostly undone** (2026-10-23, the user asked to
+  bisect it; the shell-bench showed the empty loop, `echo` and `$(...)` slower than at
+  1.23.0): released builds side by side placed it between 1.39 and 1.49, about 23%. Every
+  simple command ran three costs it rarely needs: the DEBUG trap's check made its whole
+  future before seeing no trap was set (three times a turn in an arithmetic `for`);
+  `POSIXLY_CORRECT` was looked up twice, case-blind with a folded copy of the name, now a
+  flag the environment sets when the variable is touched (any scope, a name reference,
+  a scope popped), with the full lookup only then; the check whether a process
+  substitution needs a file ran for every command. Simple commands are back to 1.39
+  (200,000: 721 ms, now 634, 1.39 617). An assignment no longer copies the name to look
+  for an element reference. Left: `((...))`, in TODO.md.

@@ -3743,6 +3743,24 @@ fn posixly_correct_and_posix_mode_follow_each_other() {
         start(&["--posix", "-c", "echo \"$POSIXLY_CORRECT\""], &[], None).1,
         "y"
     );
+    // A `local` one goes with its function, and one written or unset through a name
+    // reference counts, as in Git Bash 5.3: cash now looks only when the variable was
+    // touched, rather than before every command.
+    assert_eq!(
+        start(
+            &[
+                "-c",
+                &format!(
+                    "f() {{ local POSIXLY_CORRECT=1; {mode}; }}; f; {mode}; \
+                     declare -n r=POSIXLY_CORRECT; r=1; {mode}; unset r; {mode}"
+                )
+            ],
+            &[],
+            None
+        )
+        .1,
+        "posixon\nposixoff\nposixon\nposixoff"
+    );
 }
 
 #[test]
