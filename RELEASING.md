@@ -69,6 +69,10 @@ A commit taken back by a later one before a release would still be listed; put i
 in [`.github/release-notes-skip.txt`](.github/release-notes-skip.txt), with `#` and why,
 and the notes leave it out.
 
+A release that needs a few words of its own before the commits (what it is about, as
+2.0.0 does) has them in `.github/release-notes/vX.Y.Z.md`; the notes open with that
+file when it is there.
+
 To preview the notes of the next release, before tagging:
 
 ```powershell

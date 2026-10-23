@@ -8,7 +8,8 @@
 # "**kill:** stop TERM from reaching the console"; a "!" before the colon also lists it
 # under "Breaking changes". Subjects without a known type go under "Other", so history
 # from before the convention still appears. A commit a later one took back is left out
-# when its hash is in .github/release-notes-skip.txt. See RELEASING.md, "Commit messages".
+# when its hash is in .github/release-notes-skip.txt. A release's own opening lines, when
+# it has any, are .github/release-notes/<tag>.md. See RELEASING.md, "Commit messages".
 
 param(
     [Parameter(Mandatory)][string]$Tag,
@@ -82,7 +83,16 @@ foreach ($line in $log) {
     }
 }
 
-$body = @($title, '')
+# A release may open with a few lines of its own, written by hand: what it is about,
+# before the commits. .github/release-notes/<tag>.md, when there is one.
+$body = @()
+$preface = Join-Path $PSScriptRoot '..' 'release-notes' "$Tag.md"
+if (Test-Path $preface) {
+    $body += Get-Content $preface -Encoding utf8
+    $body += ''
+}
+$body += @($title, '')
+$commitsFrom = $body.Count
 foreach ($name in $entries.Keys) {
     if ($entries[$name].Count -eq 0) { continue }
     $body += "### $name"
@@ -90,7 +100,7 @@ foreach ($name in $entries.Keys) {
     $body += $entries[$name]
     $body += ''
 }
-if ($body.Count -eq 2) { $body += @('- No changes recorded.', '') }
+if ($body.Count -eq $commitsFrom) { $body += @('- No changes recorded.', '') }
 
 # The three ways to install, under every release's notes.
 $version = $Tag -replace '^v', ''
