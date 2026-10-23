@@ -58,9 +58,9 @@ or one cash sets as it starts (`$seconds` reads `SECONDS`), is read in another c
 `TMOUT`, `FUNCNEST`, `GLOBSORT`, `BASH_ENV` (for scripts), `ENV` (for `sh`), `FCEDIT`
 and `EDITOR` (for `fc`), `VISUAL` and `EDITOR` (for `Ctrl-X Ctrl-E`), `TZ` (exported),
 `LS_COLORS` (for `ls`), `NO_COLOR` (no colour in errors and `top`), `IFS`, `OPTIND`,
-`OPTARG`, `REPLY`.
+`OPTARG`, `REPLY`, `INPUTRC` (the key bindings file, `~/.inputrc` if unset).
 
-Not read: `MSYSTEM`, `INPUTRC`, `MAIL`, `FIGNORE`, `EXECIGNORE`,
+Not read: `MSYSTEM`, `MAIL`, `FIGNORE`, `EXECIGNORE`,
 `PROMPT_DIRTRIM`, `BASH_COMPAT`.
 
 ## Windows', as cash reads them

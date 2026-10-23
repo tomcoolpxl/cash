@@ -98,10 +98,6 @@ pub(crate) enum BindError {
     #[error("unknown key binding function: {0}")]
     UnknownKeyBindingFunction(String),
 
-    /// Unimplemented functionality.
-    #[error("unimplemented: {0}")]
-    Unimplemented(&'static str),
-
     /// An I/O error occurred.
     #[error("I/O error occurred")]
     IoError(#[from] std::io::Error),
@@ -126,8 +122,22 @@ impl builtins::Command for BindCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        if let Some(key_bindings) = context.shell.key_bindings() {
-            Ok(self.execute_impl(key_bindings, &context).await?)
+        if let Some(key_bindings) = context.shell.key_bindings().cloned() {
+            // `-f FILE`: the lines of an inputrc, as cash reads `~/.inputrc` (`inputrc`).
+            if let Some(file) = &self.bindings_file {
+                let mut bindings = key_bindings.lock().await;
+                let read = crate::inputrc::read_file(context.shell, &mut *bindings, file);
+                drop(bindings);
+                if let Err(error) = read {
+                    writeln!(
+                        context.stderr(),
+                        "{}: {file}: cannot read: {error}",
+                        context.command_name
+                    )?;
+                    return Ok(ExecutionResult::general_error());
+                }
+            }
+            Ok(self.execute_impl(&key_bindings, &context).await?)
         } else {
             // The functions exist without an editor to bind them to: `bind -l` lists
             // them in a script, as Bash's does.
@@ -243,10 +253,6 @@ impl BindCommand {
             let _ = bindings.try_unbind(key_seq);
         }
 
-        if self.bindings_file.is_some() {
-            return Err(BindError::Unimplemented("bind -f"));
-        }
-
         if self.list_key_seq_bindings {
             for (seq, action) in &bindings.get_current() {
                 let KeyAction::ShellCommand(cmd) = action else {
@@ -320,12 +326,12 @@ fn parse_key_sequence_and_shell_command(
 
 #[derive(Debug)]
 #[allow(dead_code, reason = "not all variants implemented yet")]
-enum BindableReadlineTarget {
+pub(crate) enum BindableReadlineTarget {
     Function(interfaces::InputFunction),
     Macro(interfaces::KeySequence),
 }
 
-fn parse_key_sequence_and_readline_target(
+pub(crate) fn parse_key_sequence_and_readline_target(
     input: &str,
 ) -> Result<(interfaces::KeySequence, BindableReadlineTarget), BindError> {
     tracing::debug!(target: trace_categories::INPUT,
@@ -368,7 +374,7 @@ fn bind_key_sequence_to_shell_cmd(
     Ok(())
 }
 
-fn bind_key_sequence_to_readline_target(
+pub(crate) fn bind_key_sequence_to_readline_target(
     bindings: &mut dyn interfaces::KeyBindings,
     key_sequence: interfaces::KeySequence,
     target: BindableReadlineTarget,

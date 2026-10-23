@@ -147,6 +147,8 @@ mod iconv_builtin;
 mod identity_and_jobs;
 // D69: `cash --init-rc`, the starter ~/.bashrc Scoop writes for a user with none.
 mod init_rc;
+// Readline's init file, `~/.inputrc`, at startup and through `bind -f`.
+mod inputrc;
 // The `install it: winget install …, or scoop install …` line after `command not found`,
 // at an interactive prompt only, from the table of `help tools`.
 mod install_hint;

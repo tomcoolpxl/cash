@@ -238,6 +238,8 @@ mod getopts;
 mod hash;
 #[cfg(feature = "builtin.help")]
 mod help;
+#[cfg(feature = "builtin.bind")]
+mod inputrc;
 // cash: what `help` says, one entry for every builtin, with pages and topics. Public so
 // the tests can hold it against the builtins the shell registers.
 pub mod helpdocs;
@@ -302,6 +304,8 @@ mod unimp;
 pub use builder::ShellBuilderExt;
 pub use carried::{carries_program, is_bash_builtin};
 pub use factory::{BuiltinSet, default_builtins, is_default_builtin};
+#[cfg(feature = "builtin.bind")]
+pub use inputrc::read_startup_file as read_inputrc;
 
 /// What `break` or `continue` does with its count, the first of `words`, as Bash's
 /// builtins take it: outside a loop nothing (it says so, but in POSIX mode); a count past

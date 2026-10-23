@@ -3173,3 +3173,12 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   only, starts no process, prints nothing, runs no trap, and puts back `$?`, `$_` and every
   option, so `set -eux` and aliases do not reach it. Found on the way: every completion
   function reset `$?` to its own status (`echo $?` after a Tab said 0); Bash keeps it.
+- **`~/.inputrc` read, and `bind -f`** (2026-10-23, from the comparison with Git Bash's
+  own setup, picked by the user): an interactive shell takes `$INPUTRC`, or else
+  `~/.inputrc`, before the startup files, so a `bind` there still wins, as in Bash.
+  `bind -f FILE` reads the same lines; it said "unimplemented" while its page said it
+  worked. Key bindings in both forms (`"\C-t": kill-line`, `Control-t: kill-line`),
+  macros, `$if` (`mode=`, `term=`, `version`, `Bash`), `$else`, `$endif`, `$include`,
+  and `set editing-mode`, `keymap`, `mark-directories`, `mark-symlinked-directories`.
+  What cash's editor lacks, and bindings in a vi keymap, are passed over silently, so a
+  file written for readline never makes the start print anything.

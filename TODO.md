@@ -49,8 +49,7 @@ the Terminal profile and shell integration, and needs no winpty.
    `~/.bashrc` nor `~/.cashrc`, so someone with a `~/.bashrc` lands on `cash-2.0$ `, no
    title, no branch, no aliases. Also: the starter's branch shows no MERGING/REBASE state
    and no tag on a detached HEAD, which `__git_ps1` shows.
-3. **`~/.inputrc` is ignored** (`INPUTRC` too), so a Git Bash user's own bindings are lost
-   without a word; `bind -f` already reads the format.
+3. `~/.inputrc` read: done, in DONE.md.
 4. **No Start-menu entry and no "Open cash here"** on a directory in Explorer (Inno has no
    `[Icons]`); Git's installer offers both.
 5. **Small ones:** `~/bin` first on PATH and `~/bash_completion.d/*.bash` sourced (Git

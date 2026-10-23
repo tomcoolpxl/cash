@@ -57,3 +57,8 @@ Exit status: 0, or 1 for a name or a sequence it does not know.
 - The line editor is cash's own, not readline: the functions it has are the ones `bind
   -l` lists, and a key bound to another does nothing. `help keys` lists what the keys
   do.
+- `-f FILE`, and `$INPUTRC` or `~/.inputrc` read before the startup files, take the
+  key bindings, `$if`, `$else`, `$endif` and `$include` of readline's file, and of its
+  `set` lines `editing-mode`, `keymap`, `mark-directories` and
+  `mark-symlinked-directories`. A function, variable or key cash lacks, and a binding
+  in a vi keymap, are passed over without a word. `/etc/inputrc` is not read.

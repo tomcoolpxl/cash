@@ -618,6 +618,12 @@ async fn run_in_shell(
         return Ok(dump_strings(shell_ref, &args, read_commands_from_stdin).await);
     }
 
+    // Readline's `$INPUTRC` or `~/.inputrc`, before the startup files, so that a `bind` in
+    // them wins, as in Bash, where `bind` reads the file before it binds.
+    if read_commands_from_stdin {
+        cash_builtins::read_inputrc(&mut *shell_ref.lock().await).await;
+    }
+
     // Load profile and rc files as appropriate.
     initialize_shell(shell_ref, &args).await?;
 

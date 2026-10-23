@@ -30,6 +30,8 @@ option on the command line wins over the file, the file over the default.
 - An interactive shell reads `%ProgramData%\cash\cashrc` for every user, then
   `~/.bashrc`, then `~/.cashrc`, so cash-only lines can go in the last without breaking
   Git Bash. `--norc` reads none of them; `--rcfile FILE` reads FILE instead.
+- Before them, an interactive shell takes the key bindings of `$INPUTRC`, or else
+  `~/.inputrc`, as Git Bash's readline does; `help bind` says what of it cash follows.
 - A login shell (`cash -l`) reads `%ProgramData%\cash\profile`, then the first of
   `~/.bash_profile`, `~/.bash_login` and `~/.profile`; `--noprofile` skips them.
 - A script reads `$BASH_ENV` if it is set, as Bash does.
