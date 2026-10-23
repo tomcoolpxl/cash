@@ -283,7 +283,7 @@ impl<R: Read> Reader<R> {
     ///
     /// A read that fails.
     pub fn finish_record(&mut self, blocks: u64) -> io::Result<()> {
-        while blocks > 0 && self.block % blocks != 0 {
+        while blocks > 0 && !self.block.is_multiple_of(blocks) {
             if self.read_block()?.is_none() {
                 break;
             }
