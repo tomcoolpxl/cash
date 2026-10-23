@@ -25,6 +25,14 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
+## Picked by the user (the current phase, after 1.49.0, 2026-10-23)
+
+The small leftovers (decisions.md, "The phase after 1.49.0"), each checked against Git
+Bash 5.3 first: `find /dev/null`, a RETURN trap after a `.` that cannot open its file,
+`eval` of a multi-line alias that unaliases itself, GLOBIGNORE with `:` inside brackets.
+Then another corpus round: more real-world script suites run under cash and Git Bash,
+what differs written down here and fixed in turn.
+
 ## The phase before (2026-10-23, done, released as 1.49.0)
 
 From "Found by the corpus round after 1.41.0" below (decisions.md, "The phase after
@@ -131,9 +139,6 @@ path. The rest, by theme:
   `command substitution:` before it.
 - An unterminated `$(` in a here-document is said as "failed to parse word" (Bash:
   "unexpected EOF while looking for matching `)'").
-- Aliases: `eval` of a multi-line alias that unaliases itself says the alias is no
-  command (Bash runs the rest of its text, though after the next command: an artifact of
-  the text Bash pushes back into its input, not worth copying).
 
 **Assignments, declarations, readonly**
 - Namerefs: a reference named as its target in a function warns once (Bash: twice more
@@ -147,13 +152,7 @@ path. The rest, by theme:
 - Bytes that are not UTF-8 become U+FFFD (`$'\xff'`, `read`, `%q`), and `$'\U'` above
   U+10FFFF.
 
-**Globbing and conditionals** (the rest done in the phase after 1.48.0, DONE.md)
-- GLOBIGNORE splits on `:` inside brackets (not tried here: a `:` is no character of a
-  Windows name).
-
 **Traps, signals and jobs** (done in the phase after 1.48.0, DONE.md; left:)
-- A `.` of a file that cannot be opened runs no RETURN trap (Bash runs it, on the line of
-  the `.`).
 - With `set -m` a script's job that ended before a plain `wait` is gone after it (Bash
   keeps it until `jobs` shows it as `Done`); one `fg` or `wait` collected leaves silently
   in both.
@@ -171,8 +170,6 @@ path. The rest, by theme:
   the substitution's text rewritten as it is parsed, much work for a rare case.
 
 **Builtins, small**
-- `find /dev/null` says there is no such file (Bash: `/dev/null`, a character device to
-  `-type c`; modernish's find check).
 - `eval 'break 1 2'` and its kin inside a subshell end it with 2 where the text was
   sourced or `eval`ed (Bash: 1).
 - Printing: associative arrays in sorted order, and `complete -p` by name (Bash: hash

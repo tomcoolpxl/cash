@@ -1324,8 +1324,8 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             self.shell
                 .env_str("GLOBIGNORE")
                 .map(|value| {
-                    value
-                        .split(':')
+                    globignore_patterns(&value)
+                        .into_iter()
                         .filter(|pattern| !pattern.is_empty())
                         .map(|pattern| {
                             IgnoredNames::new(pattern, |part| {
@@ -3205,6 +3205,73 @@ fn may_contain_braces_to_expand(s: &str) -> bool {
     }
 
     saw_opening_brace && saw_closing_brace
+}
+
+/// `GLOBIGNORE`'s patterns, split at the `:`s between them as Bash splits them
+/// (`split_ignorespec`): not at one inside a bracket expression, an extended group, quotes
+/// or after a `\`. Every `:` split it, so `[[:alpha:]]1` was three patterns of nothing.
+fn globignore_patterns(value: &str) -> Vec<&str> {
+    let chars: Vec<(usize, char)> = value.char_indices().collect();
+    let mut patterns = Vec::new();
+    let (mut start, mut at, mut depth) = (0, 0, 0usize);
+    while let Some(&(offset, c)) = chars.get(at) {
+        match c {
+            '\\' => at += 1,
+            '\'' | '"' => {
+                at += 1;
+                while chars.get(at).is_some_and(|&(_, d)| d != c) {
+                    at += 1;
+                }
+            }
+            // A bracket with no end runs to the end of the value, as Bash's does.
+            '[' => at = bracket_end(&chars, at).unwrap_or(chars.len()),
+            '(' if at > 0
+                && matches!(chars.get(at - 1), Some((_, '?' | '*' | '+' | '@' | '!'))) =>
+            {
+                depth += 1;
+            }
+            ')' if depth > 0 => depth -= 1,
+            ':' if depth == 0 => {
+                patterns.extend(value.get(start..offset));
+                start = offset + 1;
+            }
+            _ => {}
+        }
+        at += 1;
+    }
+    patterns.extend(value.get(start..));
+    patterns
+}
+
+/// Where the bracket expression opened at `open` ends, its `]`: a `]` first (after any
+/// `!` or `^`) is a member, and so is a `[:class:]`. `None` when it has no end.
+fn bracket_end(chars: &[(usize, char)], open: usize) -> Option<usize> {
+    let mut at = open + 1;
+    if matches!(chars.get(at), Some((_, '!' | '^'))) {
+        at += 1;
+    }
+    if matches!(chars.get(at), Some((_, ']'))) {
+        at += 1;
+    }
+    while let Some(&(_, c)) = chars.get(at) {
+        match c {
+            ']' => return Some(at),
+            '[' if matches!(chars.get(at + 1), Some((_, ':' | '.' | '='))) => {
+                let kind = chars.get(at + 1).map(|&(_, kind)| kind);
+                at += 2;
+                while let Some(&(_, d)) = chars.get(at) {
+                    if Some(d) == kind && matches!(chars.get(at + 1), Some((_, ']'))) {
+                        at += 1;
+                        break;
+                    }
+                    at += 1;
+                }
+            }
+            _ => {}
+        }
+        at += 1;
+    }
+    None
 }
 
 /// One of `GLOBIGNORE`'s patterns, matched as Bash matches it against what a glob found: a

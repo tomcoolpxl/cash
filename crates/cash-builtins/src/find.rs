@@ -124,6 +124,7 @@ enum Kind {
     File,
     Directory,
     Symlink,
+    CharDevice,
 }
 
 /// How a numeric test compares: `-mtime 7`, `-mtime +7`, `-mtime -7`.
@@ -235,6 +236,8 @@ struct Visit<'a> {
     path: &'a Path,
     rendered: String,
     metadata: Option<std::fs::Metadata>,
+    /// A `/dev` device, `/dev/null` and its kin, which is no file Windows has (D7).
+    device: bool,
     prune: bool,
     quit: bool,
     failed: bool,
@@ -288,6 +291,28 @@ impl builtins::Command for FindCommand {
             // moving the process — so a start is resolved by the shell. Reading `.` from
             // the process's directory made `cd crates; find .` walk the repository root.
             let actual = context.shell.absolute_path(Path::new(start));
+            // `/dev/null` and its kin are visited as the character devices Git Bash's find
+            // sees (D7); they were no such file. A descriptor's name is left to the walk.
+            if cash_win32::devices::dev_name(&actual).is_some_and(|name| name.numbers().is_some()) {
+                if walk.min_depth > 0 {
+                    continue;
+                }
+                let mut visit = Visit {
+                    path: actual.as_path(),
+                    rendered: render(Path::new(start)),
+                    metadata: None,
+                    device: true,
+                    prune: false,
+                    quit: false,
+                    failed: false,
+                };
+                evaluate(&expr, &mut visit, &context, &mut batches).await?;
+                failed |= visit.failed;
+                if visit.quit {
+                    break 'walking;
+                }
+                continue;
+            }
             // `-depth` (or `-delete`) visits a directory after what is in it; `-mindepth`
             // goes on through what it does not show.
             let options = walker::WalkOptions {
@@ -338,6 +363,7 @@ impl builtins::Command for FindCommand {
                     path: entry.path.as_path(),
                     rendered: render(Path::new(&entry.shown)),
                     metadata: entry.metadata().ok(),
+                    device: false,
                     prune: false,
                     quit: false,
                     failed: false,
@@ -656,9 +682,10 @@ impl ExprParser<'_> {
                     "f" => Kind::File,
                     "d" => Kind::Directory,
                     "l" => Kind::Symlink,
+                    "c" => Kind::CharDevice,
                     other => {
                         return Err(std::format!(
-                            "unsupported `-type {other}'; cash knows f, d and l"
+                            "unsupported `-type {other}'; cash knows f, d, l and c"
                         ));
                     }
                 };
@@ -832,10 +859,12 @@ fn matches(test: &Test, visit: &Visit<'_>) -> bool {
             };
             pattern.exactly_matches(value.as_str()).unwrap_or(false)
         }
+        Test::Type(Kind::CharDevice) => visit.device,
         Test::Type(kind) => visit.metadata.as_ref().is_some_and(|m| match kind {
             Kind::File => m.is_file(),
             Kind::Directory => m.is_dir(),
             Kind::Symlink => m.is_symlink(),
+            Kind::CharDevice => false,
         }),
         Test::Size(compare, count, unit) => visit.metadata.as_ref().is_some_and(|m| {
             // `find` rounds up: a 1-byte file is one block, and `-size -1k` therefore

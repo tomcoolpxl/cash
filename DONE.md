@@ -3115,3 +3115,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `r`, and `shopt restricted_shell`, on for a shell started restricted, cannot be
   changed. `set`'s page says that cash's own tools are no programs in `PATH`, so a
   startup file that is to confine a user turns them off with `enable -n`.
+- **The small leftovers of 1.49.0** (2026-10-23, the phase after 1.49.0): `find
+  /dev/null` said there was no such file; `/dev/null`, `/dev/zero` and their kin are
+  visited as the character devices they are, which `-type c` takes. A `.` of a file
+  that could not be opened ran no RETURN trap; it says the file and runs it, as Bash
+  does. In `eval`, a sourced file or a `-c` string read whole, an alias over lines that
+  unaliases itself had the rest read again once it was gone, so its word was no command;
+  what was read on the line runs as read, as Bash reads a line whole. GLOBIGNORE was
+  split at every `:`, so `[[:alpha:]]1` held patterns of nothing and `[a:b]*` ignored
+  nothing; it is split as Bash splits it, past brackets, extended groups, quotes and a
+  `\:`.

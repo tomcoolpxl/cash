@@ -4211,3 +4211,60 @@ fn the_restricted_shell_refuses_what_bashs_refuses() {
         "cd 1\nshopt 1"
     );
 }
+
+#[test]
+fn find_visits_dev_null_as_the_character_device_it_is() {
+    // `find /dev/null` said there was no such file (modernish's find check).
+    assert_eq!(
+        output(
+            "find /dev/null; find /dev/null -type c; find /dev/null -type f; echo \"$?\"; \
+             find /dev/null -mindepth 1"
+        )
+        .1,
+        "/dev/null\n/dev/null\n0"
+    );
+}
+
+#[test]
+fn a_dot_that_cannot_open_its_file_runs_the_return_trap() {
+    // Bash says the file, then runs the RETURN trap; cash ran none.
+    let (_, stdout, stderr) = output_with_stderr(
+        "trap 'echo R' RETURN; . ./no/such/file.sh; echo \"after $?\"\n\
+         f() { . ./no/such/file.sh; }; f; echo \"in f $?\"",
+    );
+    assert_eq!(stdout, "R\nafter 1\nin f 1");
+    assert!(stderr.contains("No such file or directory"), "{stderr}");
+}
+
+#[test]
+fn an_aliass_later_lines_run_as_read_after_it_unaliases_itself() {
+    // In `eval`, a sourced file or a `-c` string read whole, the rest was read again once
+    // the alias was gone, and the alias's word was no command.
+    assert_eq!(
+        output(
+            "shopt -s expand_aliases\nalias w='unalias w\necho W1'\neval 'w\necho W2'\n\
+             alias y='unalias y\necho Y1'\neval 'y; echo Y2'"
+        )
+        .1,
+        "W1\nW2\nY1\nY2"
+    );
+}
+
+#[test]
+fn globignore_splits_its_patterns_as_bash_does() {
+    // Every `:` split GLOBIGNORE, inside brackets too: `[[:alpha:]]1` was patterns of
+    // nothing, and `[a:b]*` ignored nothing.
+    let scratch = Scratch::new("globignore-split");
+    for name in ["a1", "b1", "c1", "zz"] {
+        std::fs::write(scratch.join(name), "").unwrap();
+    }
+    assert_eq!(
+        output_in(
+            scratch.path(),
+            "GLOBIGNORE='[a:b]*'; echo *; GLOBIGNORE='[[:alpha:]]1'; echo *; \
+             GLOBIGNORE='x\\:y:a*'; echo *; GLOBIGNORE='z[:a1'; echo *"
+        )
+        .1,
+        "c1 zz\nzz\nb1 c1 zz\na1 b1 c1 zz"
+    );
+}

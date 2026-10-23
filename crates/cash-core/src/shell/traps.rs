@@ -124,6 +124,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         crate::traps::send_to_shell(signal, ends_it);
     }
 
+    /// Runs the `RETURN` trap as a `.` ends, where it is set and seen here: `.` runs it
+    /// after a file it could not open, as Bash does.
+    pub async fn run_return_trap(&mut self, params: &ExecutionParameters) {
+        crate::commands::run_return_trap(self, params).await;
+    }
+
     /// Acts on the signals copies of the shell sent its process id (`( kill -USR1 $$ ) &`,
     /// [`Self::send_to_shell`]), oldest first, in the shell itself: after the
     /// pipeline it ran, and in `wait`, which they end. A copy takes none.

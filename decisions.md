@@ -1003,6 +1003,9 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
 - **The phase after 1.46.0** (the user, 2026-10-21, from a pick list): the leftovers of the
   themes done (recommended), starting cash, and POSIX mode, which was turned down before
   and is now picked. Not picked: traps and jobs.
+- **The phase after 1.49.0** (the user, 2026-10-23, from a pick list): the small
+  leftovers (recommended) and another corpus round. Not picked: POSIX `TZ` rules, raw
+  bytes in place of U+FFFD.
 - **The phase after 1.48.0** (the user, 2026-10-23, from a pick list): traps, signals
   and jobs (recommended), the small parser, glob and start items, and the restricted
   shell. Not picked: POSIX `TZ` rules.

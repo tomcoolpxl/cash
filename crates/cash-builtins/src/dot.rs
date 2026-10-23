@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use cash_core::builtins;
 use cash_core::sys::fs::PathExt as _;
+use cash_core::traps::TrapSignal;
 use clap::Parser;
 
 /// Evaluate the provided script in the current shell environment.
@@ -36,18 +37,37 @@ impl builtins::Command for DotCommand {
         if context.shell.restricted() && cash_core::sys::fs::contains_path_separator(script) {
             return crate::restricted(&context, Some(script));
         }
-        let script_path = resolve_source_path(context.shell, script, self.search_path.as_deref())
-            .ok_or_else(|| {
-            cash_core::Error::from(cash_core::ErrorKind::FailedSourcingFile(
-                PathBuf::from(script),
-                std::io::Error::from(std::io::ErrorKind::NotFound),
-            ))
-        })?;
-
-        context
-            .shell
-            .source_script(&script_path, script_args.iter(), &context.params)
-            .await
+        let sourced = match resolve_source_path(context.shell, script, self.search_path.as_deref())
+        {
+            Some(script_path) => {
+                context
+                    .shell
+                    .source_script(&script_path, script_args.iter(), &context.params)
+                    .await
+            }
+            None => Err(cash_core::Error::from(
+                cash_core::ErrorKind::FailedSourcingFile(
+                    PathBuf::from(script),
+                    std::io::Error::from(std::io::ErrorKind::NotFound),
+                ),
+            )),
+        };
+        // A file that could not be opened is said, and then the RETURN trap runs, as in
+        // Bash; it ran none. Outside POSIX mode, where the error ends a script.
+        match sourced {
+            Err(error)
+                if matches!(error.kind(), cash_core::ErrorKind::FailedSourcingFile(..))
+                    && context.shell.traps().handles(TrapSignal::Return)
+                    && !context.shell.options().posix_mode =>
+            {
+                let error = error.located_at(context.shell.error_prefix());
+                let mut stderr = context.params.stderr(context.shell);
+                let _ = context.shell.display_error(&mut stderr, &error);
+                context.shell.run_return_trap(&context.params).await;
+                Ok(cash_core::ExecutionResult::general_error())
+            }
+            sourced => sourced,
+        }
     }
 }
 

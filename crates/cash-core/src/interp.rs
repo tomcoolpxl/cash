@@ -438,6 +438,16 @@ impl Execute for ast::Program {
 /// alias defined, extglob turned), and says which command that is: Bash reads a command
 /// after the one before it ran, so the rest is to be parsed again
 /// (`Shell::run_text`).
+/// Whether `next` starts on the line `command` ends on, so that it was read with it.
+fn read_on_the_same_line(command: &ast::CompleteCommand, next: &ast::CompleteCommand) -> bool {
+    use cash_parser::ast::SourceLocation as _;
+
+    match (command.location(), next.location()) {
+        (Some(command), Some(next)) => next.start.line <= command.end.line,
+        _ => false,
+    }
+}
+
 pub(crate) async fn execute_program(
     program: &ast::Program,
     shell: &mut Shell<impl extensions::ShellExtensions>,
@@ -523,10 +533,14 @@ pub(crate) async fn execute_program(
         }
 
         // The rest is read a command at a time once a command changed how it parses, and
-        // once a script turned history on, which keeps each command's lines as read.
+        // once a script turned history on, which keeps each command's lines as read. A
+        // command on the line this one ended on was read with it, as Bash reads a line
+        // whole: an alias's later lines (`alias x='unalias x<newline>echo one'`) run as
+        // parsed. Read again, `x` was read with no alias, and was no command.
         if let Some(parsed_as) = parsed_as
-            && index + 1 < program.complete_commands.len()
+            && let Some(next) = program.complete_commands.get(index + 1)
             && (shell.parser_options() != *parsed_as || shell.reads_into_history())
+            && !read_on_the_same_line(command, next)
         {
             return Ok((result, Some(index + 1)));
         }
