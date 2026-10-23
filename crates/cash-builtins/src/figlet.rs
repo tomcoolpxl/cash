@@ -26,7 +26,7 @@ use std::io::{BufRead, BufReader, Write};
 
 use cash_core::input::Dash;
 use cash_core::{ExecutionResult, builtins};
-use cash_figlet::export::{self, Format};
+use cash_figlet::export::{self, Depth, Format};
 use cash_figlet::filter::{self, Filter};
 use cash_figlet::render::{text_input, words_input};
 use cash_figlet::{Block, Controls, Direction, Font, Justify, Layout, Renderer, Settings, builtin};
@@ -67,6 +67,22 @@ const LONGS: &[Long<'static, char>] = &[
     Long::new("help", Arg::No, 'h'),
     Long::new("color", Arg::Optional, 'K'),
     Long::new("colour", Arg::Optional, 'K'),
+    // cash's own (D84): the colour pack.
+    Long::new("gradient", Arg::Required, 'J'),
+    Long::new("direction", Arg::Required, 'j'),
+    Long::new("lolcat", Arg::No, 'Y'),
+    Long::new("seed", Arg::Required, 'y'),
+    Long::new("spread", Arg::Required, 'z'),
+    Long::new("freq", Arg::Required, 'Z'),
+    Long::new("shadow", Arg::No, 'u'),
+    Long::new("outline", Arg::No, 'U'),
+    Long::new("border", Arg::Optional, 'b'),
+    Long::new("padding", Arg::Required, 'B'),
+    Long::new("background", Arg::Required, 'e'),
+    Long::new("letter-spacing", Arg::Required, 'P'),
+    Long::new("line-gap", Arg::Required, 'q'),
+    Long::new("colors", Arg::Required, 'O'),
+    Long::new("colours", Arg::Required, 'O'),
 ];
 
 /// When colour is written.
@@ -112,6 +128,20 @@ Colour and output:
       --metal           the metal filter
   -E, --export=FORMAT   utf8 (the default), ansi (code page 437) or text
       --color[=WHEN]    auto (a console, NO_COLOR unset), always or never
+      --colors=DEPTH    true (the default), 256 or 16 colours
+
+More colour and shape:
+      --gradient=SPEC   a true-colour gradient: a palette (--gradient=list) or
+                        colours, comma-separated (red,#ff8800,gold)
+      --direction=DIR   horizontal (the default), vertical or diagonal
+      --lolcat          lolcat's rainbow; --seed=N, --spread=F, --freq=F
+      --shadow          a shadow down and right
+      --outline         only the edges of solid letters
+      --border[=STYLE]  a frame: single, double, rounded, heavy or ascii
+      --padding=N       N blank columns inside the frame (half as many rows)
+      --background=COLOR  every cell on COLOR
+      --letter-spacing=N  N blank columns after every letter
+      --line-gap=N      N blank rows after every line of text
 
 Information:
   -I CODE, --infocode=CODE  0 version, 1 version number, 2 font directory,
@@ -134,7 +164,33 @@ struct Request {
     filters: Vec<Filter>,
     format: Option<Format>,
     color: Option<When>,
+    extras: Extras,
     message: Vec<String>,
+}
+
+/// The colour pack's settings, which apply to the filters wherever they were given.
+struct Extras {
+    direction: filter::Direction,
+    seed: Option<f64>,
+    spread: f64,
+    frequency: f64,
+    padding: usize,
+    line_gap: usize,
+    depth: Depth,
+}
+
+impl Default for Extras {
+    fn default() -> Self {
+        Self {
+            direction: filter::Direction::Horizontal,
+            seed: None,
+            spread: 3.0,
+            frequency: 0.1,
+            padding: 0,
+            line_gap: 0,
+            depth: Depth::True,
+        }
+    }
 }
 
 /// How a command line ends early: what to print on each stream, and the status.
@@ -237,12 +293,21 @@ impl builtins::Command for FigletCommand {
                 .try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD)
                 .is_some_and(|fd| context.shell.colours(&fd)),
         };
-        let out = |blocks: Vec<Block>| -> Vec<u8> {
+        // Rows printed so far, so lolcat's waves go on from one line of text to the next.
+        let mut rows_printed = 0;
+        let mut out = |blocks: Vec<Block>| -> Vec<u8> {
             let blocks: Vec<Block> = blocks
                 .iter()
-                .map(|block| filter::apply(&request.filters, block))
+                .map(|block| {
+                    let mut block = filter::apply(&request.filters, block, rows_printed);
+                    block
+                        .rows
+                        .extend(std::iter::repeat_with(Vec::new).take(request.extras.line_gap));
+                    rows_printed += block.rows.len();
+                    block
+                })
                 .collect();
-            export::write(&blocks, format, colour)
+            export::write(&blocks, format, colour, request.extras.depth)
         };
 
         let mut renderer = Renderer::new(&font, &controls, &settings);
@@ -279,6 +344,125 @@ fn list<'a>(title: &str, entries: impl Iterator<Item = (&'a str, &'a str)>) -> S
         text.push('\n');
     }
     text
+}
+
+/// The colour pack's options: whether `id` was one, and how it ends the command line
+/// when it does.
+fn extra_option(request: &mut Request, id: char, value: &str) -> Option<Result<(), Early>> {
+    let bad = |what: &str| {
+        Some(Err(Early::fail(format!(
+            "figlet: invalid {what}: '{value}'\nTry 'figlet --help' for more information.\n"
+        ))))
+    };
+    let number = |text: &str| text.trim().parse::<f64>().ok().filter(|n| n.is_finite());
+    let count = |text: &str| text.trim().parse::<usize>().ok();
+    let extras = &mut request.extras;
+    match id {
+        'J' if value == "list" => {
+            let mut names = String::new();
+            for (name, _) in cash_figlet::palette::PALETTES {
+                names.push_str(name);
+                names.push('\n');
+            }
+            return Some(Err(Early::print(names)));
+        }
+        'J' => match cash_figlet::palette::stops(value) {
+            Ok(stops) => request.filters.push(Filter::Gradient {
+                stops,
+                direction: extras.direction,
+            }),
+            Err(_) => return bad("gradient"),
+        },
+        'j' => {
+            extras.direction = match value {
+                "horizontal" | "h" => filter::Direction::Horizontal,
+                "vertical" | "v" => filter::Direction::Vertical,
+                "diagonal" | "d" => filter::Direction::Diagonal,
+                _ => return bad("direction"),
+            };
+        }
+        'Y' => request.filters.push(Filter::Lolcat {
+            seed: 0.0,
+            spread: 3.0,
+            frequency: 0.1,
+        }),
+        'y' => match number(value) {
+            Some(seed) => extras.seed = Some(seed),
+            None => return bad("seed"),
+        },
+        'z' => match number(value).filter(|n| *n > 0.0) {
+            Some(spread) => extras.spread = spread,
+            None => return bad("spread"),
+        },
+        'Z' => match number(value) {
+            Some(frequency) => extras.frequency = frequency,
+            None => return bad("frequency"),
+        },
+        'u' => request.filters.push(Filter::Shadow),
+        'U' => request.filters.push(Filter::Outline),
+        'b' => {
+            let name = if value.is_empty() { "single" } else { value };
+            match filter::FrameStyle::NAMES.iter().find(|(n, _)| *n == name) {
+                Some((_, style)) => request.filters.push(Filter::Frame {
+                    style: *style,
+                    padding: 0,
+                }),
+                None => return bad("border style"),
+            }
+        }
+        'B' => match count(value) {
+            Some(padding) => extras.padding = padding,
+            None => return bad("padding"),
+        },
+        'e' => match cash_figlet::Color::parse(value) {
+            Some(colour) => request.filters.push(Filter::Background(colour)),
+            None => return bad("colour"),
+        },
+        'P' => match count(value) {
+            Some(spacing) => request.settings.letter_spacing = spacing,
+            None => return bad("letter spacing"),
+        },
+        'q' => match count(value) {
+            Some(gap) => extras.line_gap = gap,
+            None => return bad("line gap"),
+        },
+        'O' => match Depth::NAMES.iter().find(|(n, _)| *n == value) {
+            Some((_, depth)) => extras.depth = *depth,
+            None => return bad("colour depth"),
+        },
+        _ => return None,
+    }
+    Some(Ok(()))
+}
+
+/// The colour pack's settings given anywhere on the command line, on the filters they
+/// belong to: the direction on gradients, lolcat's seed, spread and frequency, the
+/// padding on frames. Without `--seed`, lolcat starts somewhere new each time, as it
+/// does.
+fn finish_extras(request: &mut Request) {
+    let extras = &request.extras;
+    let seed = extras.seed.unwrap_or_else(|| {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.subsec_nanos());
+        f64::from(nanos % 256)
+    });
+    for filter in &mut request.filters {
+        match filter {
+            Filter::Gradient { direction, .. } => *direction = extras.direction,
+            Filter::Lolcat {
+                seed: s,
+                spread,
+                frequency,
+            } => {
+                *s = seed;
+                *spread = extras.spread;
+                *frequency = extras.frequency;
+            }
+            Filter::Frame { padding, .. } => *padding = extras.padding,
+            _ => {}
+        }
+    }
 }
 
 /// toilet's options, and `--color`: whether `id` was one, and how it ends the command
@@ -364,6 +548,7 @@ fn read_command_line<SE: cash_core::ShellExtensions>(
         filters: Vec::new(),
         format: None,
         color: None,
+        extras: Extras::default(),
         message: Vec::new(),
     };
     let shorts = optstring(OPTSTRING);
@@ -377,7 +562,9 @@ fn read_command_line<SE: cash_core::ShellExtensions>(
             }
         };
         let value = value.unwrap_or_default();
-        match toilet_option(&mut request, id, &value) {
+        match toilet_option(&mut request, id, &value)
+            .or_else(|| extra_option(&mut request, id, &value))
+        {
             Some(Ok(())) => continue,
             Some(Err(early)) => return Ok(Err(early)),
             None => {}
@@ -421,6 +608,7 @@ fn read_command_line<SE: cash_core::ShellExtensions>(
             _ => {}
         }
     }
+    finish_extras(&mut request);
     // `-I -1` and other codes below 0 are figlet's "normal operation".
     if request.info.is_some_and(|code| code < 0) {
         request.info = None;

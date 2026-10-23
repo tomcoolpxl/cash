@@ -1,17 +1,71 @@
-//! toilet's filters, applied to each block as it is printed: `crop`, `rainbow`, `metal`,
-//! `flip`, `flop`, `180` (`rotate`), `left`, `right` and `border`.
+//! Filters, applied to each block as it is printed.
 //!
-//! Written from toilet 0.3's `filter.c` and libcaca's `transform.c` (both WTFPL): the
-//! colours are toilet's palettes, and the mirrored and rotated characters come from
-//! libcaca's tables, which choose a character that looks like the turned one (`/` for
-//! `\`, `b` for `d`, `∀` for `A`). A filter works on the block made rectangular first, as
-//! libcaca's canvas is.
+//! toilet's: `crop`, `rainbow`, `metal`, `flip`, `flop`, `180` (`rotate`), `left`, `right`
+//! and `border`, written from toilet 0.3's `filter.c` and libcaca's `transform.c` (both
+//! WTFPL): the colours are toilet's palettes, and the mirrored and rotated characters
+//! come from libcaca's tables, which choose a character that looks like the turned one
+//! (`/` for `\`, `b` for `d`, `∀` for `A`).
+//!
+//! cash's own (decisions.md D84): true-colour gradients, lolcat's rainbow, a shadow, an
+//! outline, frames in Unicode's box lines with padding, and a background.
+//!
+//! A filter works on the block made rectangular first, as libcaca's canvas is.
 
 use crate::canvas::{Block, Cell, Row};
+use crate::palette;
 use crate::style::Color;
 
-/// One filter.
+/// Which way a gradient runs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Direction {
+    /// Left to right.
+    Horizontal,
+    /// Top to bottom.
+    Vertical,
+    /// From the top left corner to the bottom right.
+    Diagonal,
+}
+
+/// The lines a frame is drawn with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameStyle {
+    /// `┌─┐`
+    Single,
+    /// `╔═╗`
+    Double,
+    /// `╭─╮`
+    Rounded,
+    /// `┏━┓`
+    Heavy,
+    /// `+-+`
+    Ascii,
+}
+
+impl FrameStyle {
+    /// Every style, by the name `--border` takes.
+    pub const NAMES: &[(&str, Self)] = &[
+        ("single", Self::Single),
+        ("double", Self::Double),
+        ("rounded", Self::Rounded),
+        ("heavy", Self::Heavy),
+        ("ascii", Self::Ascii),
+    ];
+
+    /// Its corners and lines: top left, top right, bottom left, bottom right, across,
+    /// down.
+    const fn parts(self) -> [char; 6] {
+        match self {
+            Self::Single => ['┌', '┐', '└', '┘', '─', '│'],
+            Self::Double => ['╔', '╗', '╚', '╝', '═', '║'],
+            Self::Rounded => ['╭', '╮', '╰', '╯', '─', '│'],
+            Self::Heavy => ['┏', '┓', '┗', '┛', '━', '┃'],
+            Self::Ascii => ['+', '+', '+', '+', '-', '|'],
+        }
+    }
+}
+
+/// One filter.
+#[derive(Clone, Debug, PartialEq)]
 pub enum Filter {
     /// Takes off the blank rows and columns around the text.
     Crop,
@@ -31,6 +85,36 @@ pub enum Filter {
     Right,
     /// Draws a box around the text.
     Border,
+    /// Colours the text along `stops`, in true colour.
+    Gradient {
+        /// The colours, in order.
+        stops: Vec<(u8, u8, u8)>,
+        /// Which way they run.
+        direction: Direction,
+    },
+    /// Colours the text as lolcat does: sine waves of red, green and blue, in true
+    /// colour, continuing from block to block.
+    Lolcat {
+        /// Where the waves start.
+        seed: f64,
+        /// Columns to one step of the waves (lolcat's 3).
+        spread: f64,
+        /// How fast they change (lolcat's 0.1).
+        frequency: f64,
+    },
+    /// A dark grey shade (`░`) one cell down and right of the text, behind it.
+    Shadow,
+    /// Only the edges of the text: a cell with text on all four sides becomes a blank.
+    Outline,
+    /// A frame in `style`, `padding` columns from the text (half as many rows).
+    Frame {
+        /// The lines.
+        style: FrameStyle,
+        /// Blank columns between the text and the frame.
+        padding: usize,
+    },
+    /// Every cell on this background.
+    Background(Color),
 }
 
 /// Every filter, by the name `-F` takes and what `-F list` says of it. `rotate` is
@@ -59,6 +143,16 @@ pub const FILTERS: &[(&str, Filter, Option<&str>)] = &[
         Filter::Border,
         Some("surround text with a border"),
     ),
+    (
+        "shadow",
+        Filter::Shadow,
+        Some("cast a shadow down and right"),
+    ),
+    (
+        "outline",
+        Filter::Outline,
+        Some("keep only the edges of solid letters"),
+    ),
 ];
 
 /// The filters of a colon-separated list, as `-F crop:metal` gives them; the name that
@@ -70,14 +164,15 @@ pub fn parse_list(list: &str) -> Result<Vec<Filter>, String> {
             FILTERS
                 .iter()
                 .find(|(known, _, _)| *known == name)
-                .map(|(_, filter, _)| *filter)
+                .map(|(_, filter, _)| filter.clone())
                 .ok_or_else(|| name.to_owned())
         })
         .collect()
 }
 
-/// `block` after `filters`, in order.
-pub fn apply(filters: &[Filter], block: &Block) -> Block {
+/// `block` after `filters`, in order; `row` is how many rows were printed before it, so
+/// that lolcat's waves go on from one block to the next.
+pub fn apply(filters: &[Filter], block: &Block, row: usize) -> Block {
     let mut block = if filters.is_empty() {
         return block.clone();
     } else {
@@ -101,10 +196,121 @@ pub fn apply(filters: &[Filter], block: &Block) -> Block {
             }
             Filter::Left => quarter(&block, true),
             Filter::Right => quarter(&block, false),
-            Filter::Border => border(&block),
+            Filter::Border => frame(&block, FrameStyle::Single, 0),
+            Filter::Gradient { stops, direction } => gradient(&block, stops, *direction),
+            Filter::Lolcat {
+                seed,
+                spread,
+                frequency,
+            } => colour(&block, |x, y| {
+                Some(lolcat(
+                    *seed + count(row + y) + count(x) / spread.max(0.1),
+                    *frequency,
+                ))
+            }),
+            Filter::Shadow => shadow(&block),
+            Filter::Outline => outline(&block),
+            Filter::Frame { style, padding } => frame(&block, *style, *padding),
+            Filter::Background(colour) => {
+                let mut block = block.squared();
+                for cell in block.rows.iter_mut().flatten() {
+                    cell.style.bg = Some(*colour);
+                }
+                block
+            }
         };
     }
     block
+}
+
+/// A count as a float.
+fn count(n: usize) -> f64 {
+    f64::from(u32::try_from(n).unwrap_or(u32::MAX))
+}
+
+/// lolcat's colour at step `at`: three sine waves a third of a turn apart.
+fn lolcat(at: f64, frequency: f64) -> Color {
+    let wave =
+        |phase: f64| palette::channel(frequency.mul_add(at, phase).sin().mul_add(127.0, 128.0));
+    let third = 2.0 * std::f64::consts::PI / 3.0;
+    Color::Rgb(wave(0.0), wave(third), wave(2.0 * third))
+}
+
+/// The text coloured along `stops`, by where each cell is in the block.
+fn gradient(block: &Block, stops: &[(u8, u8, u8)], direction: Direction) -> Block {
+    let width = count(block.width().saturating_sub(1)).max(1.0);
+    let height = count(block.rows.len().saturating_sub(1)).max(1.0);
+    colour(block, |x, y| {
+        let t = match direction {
+            Direction::Horizontal => count(x) / width,
+            Direction::Vertical => count(y) / height,
+            Direction::Diagonal => f64::midpoint(count(x) / width, count(y) / height),
+        };
+        let (r, g, b) = palette::at(stops, t);
+        Some(Color::Rgb(r, g, b))
+    })
+}
+
+/// A dark grey shade one cell down and right of every character, where nothing is: a
+/// shade rather than a copy, which without colour reads as the text twice.
+fn shadow(block: &Block) -> Block {
+    let width = block.width() + 1;
+    let mut rows: Vec<Row> = block
+        .rows
+        .iter()
+        .map(|row| {
+            let mut row = row.clone();
+            row.resize(width, Cell::BLANK);
+            row
+        })
+        .collect();
+    rows.push(vec![Cell::BLANK; width]);
+    for (y, row) in block.rows.iter().enumerate() {
+        for (x, cell) in row.iter().enumerate() {
+            if cell.ch == ' ' || cell.is_tail() || cell.is_wide() {
+                continue;
+            }
+            if let Some(target) = rows.get_mut(y + 1).and_then(|r| r.get_mut(x + 1)) {
+                if target.ch == ' ' {
+                    *target = Cell {
+                        ch: '░',
+                        style: crate::style::Style {
+                            fg: Some(Color::Ansi(8)),
+                            ..crate::style::Style::PLAIN
+                        },
+                    };
+                }
+            }
+        }
+    }
+    Block { rows }
+}
+
+/// Only the cells of the text that touch a blank, or the edge, on one of four sides.
+fn outline(block: &Block) -> Block {
+    let filled = |x: Option<usize>, y: Option<usize>| -> bool {
+        let (Some(x), Some(y)) = (x, y) else {
+            return false;
+        };
+        block
+            .rows
+            .get(y)
+            .and_then(|row| row.get(x))
+            .is_some_and(|cell| cell.ch != ' ')
+    };
+    let mut out = block.clone();
+    for (y, row) in out.rows.iter_mut().enumerate() {
+        for (x, cell) in row.iter_mut().enumerate() {
+            let inside = filled(x.checked_sub(1), Some(y))
+                && filled(Some(x + 1), Some(y))
+                && filled(Some(x), y.checked_sub(1))
+                && filled(Some(x), Some(y + 1));
+            if cell.ch != ' ' && !cell.is_tail() && inside && !cell.is_wide() {
+                *cell = Cell::BLANK;
+            }
+        }
+    }
+    out
 }
 
 /// toilet's rainbow, light magenta to light blue, as ANSI colours.
@@ -272,24 +478,37 @@ fn quarter(block: &Block, left: bool) -> Block {
     Block { rows }
 }
 
-fn border(block: &Block) -> Block {
-    let width = block.width();
-    let mut rows = Vec::with_capacity(block.rows.len() + 2);
+/// A frame around the block, `padding` blank columns inside it on each side and half as
+/// many rows (rounded up); toilet's `border` is the single frame with none.
+fn frame(block: &Block, style: FrameStyle, padding: usize) -> Block {
+    let [top_left, top_right, bottom_left, bottom_right, across, down] = style.parts();
+    let inner = block.width() + 2 * padding;
+    let pad_rows = padding.div_ceil(2);
+    let mut rows = Vec::with_capacity(block.rows.len() + 2 + 2 * pad_rows);
     let edge = |l: char, r: char| {
         let mut row = vec![Cell::plain(l)];
-        row.extend(std::iter::repeat_n(Cell::plain('─'), width));
+        row.extend(std::iter::repeat_n(Cell::plain(across), inner));
         row.push(Cell::plain(r));
         row
     };
-    rows.push(edge('┌', '┐'));
+    let blank = || {
+        let mut row = vec![Cell::plain(down)];
+        row.extend(std::iter::repeat_n(Cell::BLANK, inner));
+        row.push(Cell::plain(down));
+        row
+    };
+    rows.push(edge(top_left, top_right));
+    rows.extend(std::iter::repeat_with(blank).take(pad_rows));
     for row in &block.rows {
-        let mut new = vec![Cell::plain('│')];
+        let mut new = vec![Cell::plain(down)];
+        new.extend(std::iter::repeat_n(Cell::BLANK, padding));
         new.extend_from_slice(row);
-        new.resize(width + 1, Cell::BLANK);
-        new.push(Cell::plain('│'));
+        new.resize(inner + 1, Cell::BLANK);
+        new.push(Cell::plain(down));
         rows.push(new);
     }
-    rows.push(edge('└', '┘'));
+    rows.extend(std::iter::repeat_with(blank).take(pad_rows));
+    rows.push(edge(bottom_left, bottom_right));
     Block { rows }
 }
 
@@ -704,9 +923,9 @@ mod tests {
     #[test]
     fn crop_and_border() {
         let b = block(&["      ", "  /\\  ", "      "]);
-        assert_eq!(text(&apply(&[Filter::Crop], &b)), ["/\\"]);
+        assert_eq!(text(&apply(&[Filter::Crop], &b, 0)), ["/\\"]);
         assert_eq!(
-            text(&apply(&[Filter::Crop, Filter::Border], &b)),
+            text(&apply(&[Filter::Crop, Filter::Border], &b, 0)),
             ["┌──┐", "│/\\│", "└──┘"]
         );
     }
@@ -714,29 +933,100 @@ mod tests {
     #[test]
     fn mirrors_and_turns() {
         let b = block(&["(b/", "_A "]);
-        assert_eq!(text(&apply(&[Filter::Flip], &b)), ["\\d)", " A_"]);
-        assert_eq!(text(&apply(&[Filter::Flop], &b)), ["‾∀ ", "(p\\"]);
-        assert_eq!(text(&apply(&[Filter::Rotate180], &b)), [" ∀‾", "/q)"]);
+        assert_eq!(text(&apply(&[Filter::Flip], &b, 0)), ["\\d)", " A_"]);
+        assert_eq!(text(&apply(&[Filter::Flop], &b, 0)), ["‾∀ ", "(p\\"]);
+        assert_eq!(text(&apply(&[Filter::Rotate180], &b, 0)), [" ∀‾", "/q)"]);
         // Flipping twice gives the block back.
-        assert_eq!(apply(&[Filter::Flip, Filter::Flip], &b), b.squared());
+        assert_eq!(apply(&[Filter::Flip, Filter::Flip], &b, 0), b.squared());
     }
 
     #[test]
     fn quarter_turns() {
         let b = block(&["--", "||"]);
-        assert_eq!(text(&apply(&[Filter::Left], &b)), ["丨⼆"]);
+        assert_eq!(text(&apply(&[Filter::Left], &b, 0)), ["丨⼆"]);
         let b = block(&["ab", "cd"]);
-        assert_eq!(text(&apply(&[Filter::Left], &b)), ["abcd"]);
-        assert_eq!(text(&apply(&[Filter::Right], &b)), ["cdab"]);
+        assert_eq!(text(&apply(&[Filter::Left], &b, 0)), ["abcd"]);
+        assert_eq!(text(&apply(&[Filter::Right], &b, 0)), ["cdab"]);
     }
 
     #[test]
     fn colours_leave_blanks_alone() {
         let b = block(&["a b"]);
-        let coloured = apply(&[Filter::Rainbow], &b);
+        let coloured = apply(&[Filter::Rainbow], &b, 0);
         assert_eq!(coloured.rows[0][0].style.fg, Some(Color::Ansi(13)));
         assert!(coloured.rows[0][1].style.is_plain());
-        let metal = apply(&[Filter::Metal], &b);
+        let metal = apply(&[Filter::Metal], &b, 0);
         assert_eq!(metal.rows[0][2].style.fg, Some(Color::Ansi(12)));
+    }
+
+    #[test]
+    fn gradients_run_across() {
+        let b = block(&["aaa"]);
+        let stops = vec![(0, 0, 0), (200, 0, 0)];
+        let out = apply(
+            &[Filter::Gradient {
+                stops,
+                direction: super::Direction::Horizontal,
+            }],
+            &b,
+            0,
+        );
+        let fgs: Vec<_> = out.rows[0].iter().map(|c| c.style.fg).collect();
+        assert_eq!(
+            fgs,
+            [
+                Some(Color::Rgb(0, 0, 0)),
+                Some(Color::Rgb(100, 0, 0)),
+                Some(Color::Rgb(200, 0, 0))
+            ]
+        );
+    }
+
+    #[test]
+    fn lolcat_goes_on_from_block_to_block() {
+        let lolcat = Filter::Lolcat {
+            seed: 0.0,
+            spread: 3.0,
+            frequency: 0.1,
+        };
+        let two_rows = apply(std::slice::from_ref(&lolcat), &block(&["x", "x"]), 0);
+        let second = apply(std::slice::from_ref(&lolcat), &block(&["x"]), 1);
+        assert_eq!(two_rows.rows[1][0].style.fg, second.rows[0][0].style.fg);
+        // lolcat's colour at step 0: red at 128, green and blue a third of a turn on.
+        assert_eq!(two_rows.rows[0][0].style.fg, Some(Color::Rgb(128, 238, 18)));
+    }
+
+    #[test]
+    fn shadow_outline_frame_background() {
+        assert_eq!(
+            text(&apply(&[Filter::Shadow], &block(&["ab"]), 0)),
+            ["ab ", " ░░"]
+        );
+        assert_eq!(
+            text(&apply(
+                &[Filter::Outline],
+                &block(&["###", "###", "###"]),
+                0
+            )),
+            ["###", "# #", "###"]
+        );
+        let framed = apply(
+            &[Filter::Frame {
+                style: super::FrameStyle::Rounded,
+                padding: 1,
+            }],
+            &block(&["hi"]),
+            0,
+        );
+        assert_eq!(
+            text(&framed),
+            ["╭────╮", "│    │", "│ hi │", "│    │", "╰────╯"]
+        );
+        let on_blue = apply(&[Filter::Background(Color::Ansi(4))], &block(&["a "]), 0);
+        assert!(
+            on_blue.rows[0]
+                .iter()
+                .all(|c| c.style.bg == Some(Color::Ansi(4)))
+        );
     }
 }

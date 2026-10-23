@@ -16,7 +16,7 @@
 use std::fmt::Write as _;
 
 use crate::canvas::{Block, Figure, Row};
-use crate::style::{Color, Style};
+use crate::style::{Color, SIXTEEN, Style};
 
 /// An output format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,8 +54,57 @@ pub fn text_blocks(blocks: &[Block]) -> String {
     text_rows(blocks.iter().flat_map(|block| block.rows.iter()))
 }
 
-/// Blocks in `format`, colour written when `colour` is true.
-pub fn write(blocks: &[Block], format: Format, colour: bool) -> Vec<u8> {
+/// How many colours the terminal shows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Depth {
+    /// 24-bit colour, as Windows Terminal and conhost show it.
+    #[default]
+    True,
+    /// The xterm palette's 256.
+    Palette256,
+    /// The sixteen ANSI colours.
+    Ansi16,
+}
+
+impl Depth {
+    /// Every depth, by the name `--colors` takes.
+    pub const NAMES: &[(&str, Self)] = &[
+        ("true", Self::True),
+        ("24bit", Self::True),
+        ("256", Self::Palette256),
+        ("16", Self::Ansi16),
+    ];
+
+    /// `color` as this depth shows it.
+    pub fn fit(self, color: Color) -> Color {
+        match (self, color) {
+            (Self::True, _) | (_, Color::Ansi(_)) => color,
+            (Self::Palette256, Color::Indexed(_)) => color,
+            (Self::Palette256, Color::Rgb(r, g, b)) => Color::Indexed(nearest_256(r, g, b)),
+            (Self::Ansi16, _) => Color::Ansi(sixteen(color)),
+        }
+    }
+}
+
+/// Blocks in `format`, colour written when `colour` is true, in `depth`.
+pub fn write(blocks: &[Block], format: Format, colour: bool, depth: Depth) -> Vec<u8> {
+    let fitted: Vec<Block>;
+    let blocks = if colour && depth != Depth::True {
+        fitted = blocks
+            .iter()
+            .map(|block| {
+                let mut block = block.clone();
+                for cell in block.rows.iter_mut().flatten() {
+                    cell.style.fg = cell.style.fg.map(|c| depth.fit(c));
+                    cell.style.bg = cell.style.bg.map(|c| depth.fit(c));
+                }
+                block
+            })
+            .collect();
+        &fitted
+    } else {
+        blocks
+    };
     let rows = blocks.iter().flat_map(|block| block.rows.iter());
     match format {
         Format::Text => text_rows(rows).into_bytes(),
@@ -63,6 +112,17 @@ pub fn write(blocks: &[Block], format: Format, colour: bool) -> Vec<u8> {
         Format::Utf8 => utf8_rows(rows).into_bytes(),
         Format::Ansi => ansi_rows(rows, colour),
     }
+}
+
+/// The nearest of the xterm palette's colour cube and greys.
+fn nearest_256(r: u8, g: u8, b: u8) -> u8 {
+    let distance = |(pr, pg, pb): (u8, u8, u8)| {
+        let d = |a: u8, b: u8| (i32::from(a) - i32::from(b)).pow(2);
+        d(r, pr) + d(g, pg) + d(b, pb)
+    };
+    (16..=255_u8)
+        .min_by_key(|&n| distance(Color::Indexed(n).rgb()))
+        .unwrap_or(15)
 }
 
 fn text_rows<'a>(rows: impl Iterator<Item = &'a Row>) -> String {
@@ -186,45 +246,20 @@ pub fn sixteen(color: Color) -> u8 {
     match color {
         Color::Ansi(n) => n % 16,
         Color::Indexed(n @ 0..16) => n,
-        Color::Indexed(n @ 16..232) => {
-            let n = n - 16;
-            let level = |v: u8| if v == 0 { 0 } else { 55 + 40 * v };
-            nearest(level(n / 36), level(n / 6 % 6), level(n % 6))
+        Color::Indexed(_) | Color::Rgb(..) => {
+            let (r, g, b) = color.rgb();
+            nearest_16(r, g, b)
         }
-        Color::Indexed(n) => {
-            let grey = 8 + 10 * (n - 232);
-            nearest(grey, grey, grey)
-        }
-        Color::Rgb(r, g, b) => nearest(r, g, b),
     }
 }
 
-/// The sixteen colours as Windows Terminal's default scheme shows them.
-const PALETTE: [(u8, u8, u8); 16] = [
-    (12, 12, 12),
-    (197, 15, 31),
-    (19, 161, 14),
-    (193, 156, 0),
-    (0, 55, 218),
-    (136, 23, 152),
-    (58, 150, 221),
-    (204, 204, 204),
-    (118, 118, 118),
-    (231, 72, 86),
-    (22, 198, 12),
-    (249, 241, 165),
-    (59, 120, 255),
-    (180, 0, 158),
-    (97, 214, 214),
-    (242, 242, 242),
-];
-
-fn nearest(r: u8, g: u8, b: u8) -> u8 {
+/// The nearest of the sixteen, as Windows Terminal's default scheme shows them.
+fn nearest_16(r: u8, g: u8, b: u8) -> u8 {
     let distance = |&(pr, pg, pb): &(u8, u8, u8)| {
         let d = |a: u8, b: u8| (i32::from(a) - i32::from(b)).pow(2);
         d(r, pr) + d(g, pg) + d(b, pb)
     };
-    PALETTE
+    SIXTEEN
         .iter()
         .enumerate()
         .min_by_key(|(_, colour)| distance(colour))
@@ -251,7 +286,7 @@ pub fn cp437(ch: char) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Format, cp437, sgr, sixteen, write};
+    use super::{Depth, Format, cp437, sgr, sixteen, write};
     use crate::canvas::{Block, cells};
     use crate::style::{Color, Style};
 
@@ -275,11 +310,11 @@ mod tests {
         assert_eq!(sgr(&bright), "\x1b[0;1;34;94m");
         let blocks = [block("ab", red), block("c", Style::PLAIN)];
         assert_eq!(
-            String::from_utf8(write(&blocks, Format::Utf8, true)).unwrap(),
+            String::from_utf8(write(&blocks, Format::Utf8, true, Depth::True)).unwrap(),
             "\x1b[0;31mab\x1b[0m\nc\n"
         );
-        assert_eq!(write(&blocks, Format::Utf8, false), b"ab\nc\n");
-        assert_eq!(write(&blocks, Format::Text, true), b"ab\nc\n");
+        assert_eq!(write(&blocks, Format::Utf8, false, Depth::True), b"ab\nc\n");
+        assert_eq!(write(&blocks, Format::Text, true, Depth::True), b"ab\nc\n");
     }
 
     #[test]
@@ -291,9 +326,12 @@ mod tests {
         assert_eq!(cp437('\u{a0}'), 0xff);
         assert_eq!(cp437('ア'), b'?');
         let blocks = [block("░A", Style::PLAIN)];
-        assert_eq!(write(&blocks, Format::Ansi, false), b"\xb0A\r\n");
         assert_eq!(
-            write(&blocks, Format::Ansi, true),
+            write(&blocks, Format::Ansi, false, Depth::True),
+            b"\xb0A\r\n"
+        );
+        assert_eq!(
+            write(&blocks, Format::Ansi, true, Depth::True),
             b"\x1b[0;37;40m\xb0A\x1b[0m\r\n"
         );
     }

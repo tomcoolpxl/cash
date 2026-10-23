@@ -49,6 +49,14 @@ In TOIlet's colours, boxed, and saved with its colours as code page 437 art:
     figlet -f future --metal -F crop:border Done
     figlet -f mono9 --rainbow -E ansi Hello > hello.ans
 
+A logo in a true-colour gradient, framed, and lolcat's rainbow:
+
+<!-- parse only: Git Bash has no figlet to compare with -->
+
+    figlet -f slant --gradient=sunset --border=rounded --padding=2 cash
+    figlet -f big --gradient=#00c6ff,#7f00ff --direction=diagonal Hello
+    figlet --lolcat "Hello, World!"
+
 ## How it works
 
 `figlet` draws each character of its message, or of each line of standard input, with a
@@ -65,6 +73,13 @@ it, `rainbow` and `metal` colour it, `flip` and `flop` mirror it, `180`, `left` 
 or with more `-F`s, and run in order. Colour reaches a console, unless `NO_COLOR` is
 set; into a pipe or a file it is left out, unless `-E` names a format or `--color=always`
 asks for it.
+
+cash adds more: gradients in true colour, from a named palette (`--gradient=list`) or
+colours of your own; lolcat's rainbow; a shadow; the outline of solid letters; frames in
+five styles with padding; a background colour; space between letters and between lines.
+They are filters too, and run in the order given with the others. Windows Terminal and
+the Windows console show true colour; `--colors=256` or `--colors=16` is for a terminal
+that shows fewer.
 
 cash carries 23 fonts: FIGlet's `standard`, `slant`, `small`, `big`, `banner`, `block`,
 `bubble`, `digital`, `ivrit`, `lean`, `mini`, `script`, `shadow`, `smscript`,
@@ -110,6 +125,22 @@ current directory last. A name with a slash or a backslash is a path.
                         (no colour ever); -E list names them.
     --color[=WHEN]      Colour: auto (a console, NO_COLOR unset),
                         always or never.
+    --colors=DEPTH      true (the default), 256 or 16 colours.
+
+    --gradient=SPEC     A gradient: a palette's name (--gradient=list)
+                        or colours with commas: names, #rgb, #rrggbb.
+    --direction=DIR     horizontal (the default), vertical, diagonal.
+    --lolcat            lolcat's rainbow; --seed=N for the same colours
+                        each time, --spread=F and --freq=F as lolcat's.
+    --shadow            A shade down and right of the text.
+    --outline           Only the edges of solid letters.
+    --border[=STYLE]    A frame: single (the default), double, rounded,
+                        heavy or ascii.
+    --padding=N         N blank columns inside the frame, half as many
+                        rows.
+    --background=COLOR  Every cell on COLOR.
+    --letter-spacing=N  N blank columns after every letter.
+    --line-gap=N        N blank rows after every line of text.
 
     -I CODE             Tell: 0 the version, 1 the version number, 2 the
                         font directory, 3 the font, 4 the width, 5 the

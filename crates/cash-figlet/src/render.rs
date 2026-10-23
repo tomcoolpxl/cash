@@ -87,7 +87,13 @@ pub struct Settings {
     pub paragraph: bool,
     /// `[\]{|}~` as `ÄÖÜäöüß` (`-D`).
     pub deutsch: bool,
+    /// Blank columns after every character, which smushing and kerning leave alone.
+    pub letter_spacing: usize,
 }
+
+/// What letter spacing puts after a character: kept apart from blanks, so that kerning
+/// stops at it, and printed as one.
+const SPACER: char = '\u{ffff}';
 
 impl Default for Settings {
     fn default() -> Self {
@@ -98,6 +104,7 @@ impl Default for Settings {
             direction: None,
             paragraph: false,
             deutsch: false,
+            letter_spacing: 0,
         }
     }
 }
@@ -171,6 +178,7 @@ pub struct Renderer<'f> {
     controls: &'f Controls,
     paragraph: bool,
     deutsch: bool,
+    letter_spacing: usize,
     /// -1: a break was forced by a blank or by a character too wide for a line, and
     /// blanks are to be swallowed; 0: the line is blanks; 1: no word break yet; 2: blanks
     /// after a word; 3: a word after a word break.
@@ -220,6 +228,7 @@ impl<'f> Renderer<'f> {
             controls,
             paragraph: settings.paragraph,
             deutsch: settings.deutsch,
+            letter_spacing: settings.letter_spacing,
             word_break: 0,
             last_was_eol: false,
             pending_newline: false,
@@ -412,7 +421,13 @@ impl<'f> Renderer<'f> {
             return None;
         }
         // Half of a wide character never overlaps anything but a blank.
-        if l.is_tail() || r.is_tail() || l.is_wide() || r.is_wide() {
+        if l.is_tail()
+            || r.is_tail()
+            || l.is_wide()
+            || r.is_wide()
+            || l.ch == SPACER
+            || r.ch == SPACER
+        {
             return None;
         }
         if self.smush_mode & SM_SMUSH == 0 {
@@ -533,7 +548,7 @@ impl<'f> Renderer<'f> {
     fn add_char(&mut self, c: u32) -> bool {
         self.get_letter(c);
         let amount = self.smush_amount();
-        if self.line_len + self.current_width > self.line_limit + amount
+        if self.line_len + self.current_width + self.letter_spacing > self.line_limit + amount
             || self.line_chars.len() + 1 > self.line_chars_limit
         {
             return false;
@@ -565,6 +580,13 @@ impl<'f> Renderer<'f> {
             };
             if let Some(line) = self.line.get_mut(row) {
                 *line = new_row;
+                // Letter spacing: on the side the next character comes from.
+                let spacers = std::iter::repeat_n(Cell::plain(SPACER), self.letter_spacing);
+                if self.right_to_left {
+                    line.splice(0..0, spacers);
+                } else {
+                    line.extend(spacers);
+                }
             }
         }
         self.line_len = self.line.first().map_or(0, Vec::len);
@@ -592,7 +614,7 @@ impl<'f> Renderer<'f> {
         for (k, cell) in cells.iter().take(len).enumerate() {
             let cut_head = cell.is_wide() && k + 1 == len;
             let lone_tail = cell.is_tail() && k == 0;
-            if cell.ch == self.hardblank || cut_head || lone_tail {
+            if cell.ch == self.hardblank || cell.ch == SPACER || cut_head || lone_tail {
                 row.push(Cell::BLANK);
             } else {
                 row.push(*cell);
@@ -756,6 +778,21 @@ mod tests {
             blocks.extend(renderer.finish());
             assert_eq!(blocks, whole.blocks, "paragraph {paragraph}");
         }
+    }
+
+    #[test]
+    fn letter_spacing_keeps_letters_apart() {
+        let font = tiny();
+        let settings = Settings {
+            letter_spacing: 2,
+            ..Settings::default()
+        };
+        assert_eq!(show(&font, &settings, &words_input(&["ab"])), "a  b  \n");
+        let kerned = Settings {
+            layout: Layout::Kerning,
+            ..settings
+        };
+        assert_eq!(show(&font, &kerned, &words_input(&["ab"])), "a  b  \n");
     }
 
     #[test]

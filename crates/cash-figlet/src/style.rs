@@ -15,6 +15,110 @@ pub enum Color {
     Rgb(u8, u8, u8),
 }
 
+impl Color {
+    /// A colour as written on a command line: a name (`red`, `brightblue`, `orange`),
+    /// `#rrggbb`, `#rgb`, or a number from 0 to 255 for the xterm palette.
+    pub fn parse(text: &str) -> Option<Self> {
+        let text = text.trim().to_ascii_lowercase();
+        if let Some(hex) = text.strip_prefix('#') {
+            let digit = |c: char| c.to_digit(16).and_then(|d| u8::try_from(d).ok());
+            let digits: Vec<u8> = hex.chars().map(digit).collect::<Option<_>>()?;
+            return match digits.as_slice() {
+                [r, g, b] => Some(Self::Rgb(r * 17, g * 17, b * 17)),
+                [r1, r2, g1, g2, b1, b2] => {
+                    Some(Self::Rgb(r1 * 16 + r2, g1 * 16 + g2, b1 * 16 + b2))
+                }
+                _ => None,
+            };
+        }
+        if let Ok(n) = text.parse::<u8>() {
+            return Some(Self::Indexed(n));
+        }
+        let name = text.replace(['-', '_', ' '], "");
+        NAMED
+            .iter()
+            .find(|(known, _)| *known == name)
+            .map(|(_, color)| *color)
+    }
+
+    /// The colour as red, green and blue, as Windows Terminal's default scheme shows the
+    /// sixteen and xterm the 256.
+    pub fn rgb(self) -> (u8, u8, u8) {
+        match self {
+            Self::Ansi(n) => SIXTEEN
+                .get(usize::from(n % 16))
+                .copied()
+                .unwrap_or((204, 204, 204)),
+            Self::Indexed(n @ 0..16) => Self::Ansi(n).rgb(),
+            Self::Indexed(n @ 16..232) => {
+                let n = n - 16;
+                let level = |v: u8| if v == 0 { 0 } else { 55 + 40 * v };
+                (level(n / 36), level(n / 6 % 6), level(n % 6))
+            }
+            Self::Indexed(n) => {
+                let grey = 8 + 10 * (n - 232);
+                (grey, grey, grey)
+            }
+            Self::Rgb(r, g, b) => (r, g, b),
+        }
+    }
+}
+
+/// The sixteen colours as Windows Terminal's default scheme ("Campbell") shows them.
+pub const SIXTEEN: [(u8, u8, u8); 16] = [
+    (12, 12, 12),
+    (197, 15, 31),
+    (19, 161, 14),
+    (193, 156, 0),
+    (0, 55, 218),
+    (136, 23, 152),
+    (58, 150, 221),
+    (204, 204, 204),
+    (118, 118, 118),
+    (231, 72, 86),
+    (22, 198, 12),
+    (249, 241, 165),
+    (59, 120, 255),
+    (180, 0, 158),
+    (97, 214, 214),
+    (242, 242, 242),
+];
+
+/// Colour names: the sixteen by their ANSI names, and a few more in true colour.
+const NAMED: &[(&str, Color)] = &[
+    ("black", Color::Ansi(0)),
+    ("red", Color::Ansi(1)),
+    ("green", Color::Ansi(2)),
+    ("yellow", Color::Ansi(3)),
+    ("blue", Color::Ansi(4)),
+    ("magenta", Color::Ansi(5)),
+    ("cyan", Color::Ansi(6)),
+    ("white", Color::Ansi(7)),
+    ("gray", Color::Ansi(8)),
+    ("grey", Color::Ansi(8)),
+    ("brightblack", Color::Ansi(8)),
+    ("brightred", Color::Ansi(9)),
+    ("brightgreen", Color::Ansi(10)),
+    ("brightyellow", Color::Ansi(11)),
+    ("brightblue", Color::Ansi(12)),
+    ("brightmagenta", Color::Ansi(13)),
+    ("brightcyan", Color::Ansi(14)),
+    ("brightwhite", Color::Ansi(15)),
+    ("orange", Color::Rgb(255, 140, 0)),
+    ("pink", Color::Rgb(255, 105, 180)),
+    ("purple", Color::Rgb(128, 0, 200)),
+    ("violet", Color::Rgb(148, 0, 211)),
+    ("indigo", Color::Rgb(75, 0, 130)),
+    ("gold", Color::Rgb(255, 200, 0)),
+    ("teal", Color::Rgb(0, 128, 128)),
+    ("navy", Color::Rgb(0, 0, 128)),
+    ("lime", Color::Rgb(50, 205, 50)),
+    ("coral", Color::Rgb(255, 127, 80)),
+    ("crimson", Color::Rgb(220, 20, 60)),
+    ("silver", Color::Rgb(192, 192, 192)),
+    ("brown", Color::Rgb(139, 69, 19)),
+];
+
 /// What a cell looks like besides its character.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Style {

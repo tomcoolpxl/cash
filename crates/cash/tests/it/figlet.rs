@@ -143,15 +143,25 @@ fn toilet_s_filters() {
     assert!(!out.stdout.contains("033"), "{out:?}");
 
     let out = cash("figlet -F list; figlet -E list");
-    assert!(out.stdout.starts_with("Available filters:\n\"crop\": crop unused blanks"), "{out:?}");
+    assert!(
+        out.stdout
+            .starts_with("Available filters:\n\"crop\": crop unused blanks"),
+        "{out:?}"
+    );
     assert!(out.stdout.contains("\"ansi\":"), "{out:?}");
 
     let out = cash("figlet -F sparkle x");
     assert_eq!(out.code, 1);
-    assert!(out.stderr.starts_with("figlet: unknown filter: sparkle"), "{out:?}");
+    assert!(
+        out.stderr.starts_with("figlet: unknown filter: sparkle"),
+        "{out:?}"
+    );
     let out = cash("figlet --html x");
     assert_eq!(out.code, 1);
-    assert!(out.stderr.contains("the html export is not carried"), "{out:?}");
+    assert!(
+        out.stderr.contains("the html export is not carried"),
+        "{out:?}"
+    );
 }
 
 #[test]
@@ -167,6 +177,52 @@ fn colour_when_asked_or_on_a_console() {
     let out = cash("figlet -f term --metal -E text --color=always x");
     assert_eq!(out.stdout, "x", "{out:?}");
     let out = cash("figlet --color=sometimes x");
+    assert_eq!(out.code, 1, "{out:?}");
+}
+
+#[test]
+fn gradients_lolcat_and_depth() {
+    // ocean's first and last stops at either end of "ab".
+    let out = cash("figlet -f term --gradient=ocean --color=always ab");
+    assert_eq!(
+        out.stdout, "\u{1b}[0;38;2;0;198;255ma\u{1b}[0;38;2;0;31;92mb\u{1b}[0m",
+        "{out:?}"
+    );
+    // In sixteen colours, red and blue are the ANSI ones.
+    let out = cash("figlet -f term --gradient=red,blue --colors=16 --color=always ab");
+    assert_eq!(out.stdout, "\u{1b}[0;31ma\u{1b}[0;34mb\u{1b}[0m", "{out:?}");
+    let out = cash("figlet -f term --gradient=#ff0000 --colors=256 --color=always x");
+    assert!(out.stdout.contains("38;5;196"), "{out:?}");
+    // lolcat with a seed is the same each time.
+    let twice = cash(
+        "figlet -f term --lolcat --seed=7 --color=always abc; figlet -f term --lolcat --seed=7 --color=always abc",
+    );
+    let lines: Vec<&str> = twice.stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "{twice:?}");
+    assert_eq!(lines[0], lines[1], "{twice:?}");
+    let out = cash("figlet --gradient=list");
+    assert!(out.stdout.lines().any(|l| l == "sunset"), "{out:?}");
+    let out = cash("figlet --gradient=red,nope x");
+    assert_eq!(out.code, 1, "{out:?}");
+}
+
+#[test]
+fn frames_shadows_and_spacing() {
+    let out = cash("figlet -f term --border=double --padding=2 hi");
+    assert_eq!(
+        out.stdout, "╔══════╗\n║      ║\n║  hi  ║\n║      ║\n╚══════╝",
+        "{out:?}"
+    );
+    let out = cash("figlet -f term --border hi");
+    assert_eq!(out.stdout, "┌──┐\n│hi│\n└──┘", "{out:?}");
+    let out = cash("figlet -f term --shadow ab");
+    assert_eq!(out.stdout, "ab \n ░░", "{out:?}");
+    // The spacing follows every letter; a gap follows every line of text.
+    let out = cash("figlet -f term --letter-spacing=2 abc; figlet -f term --line-gap=1 a '' b");
+    assert_eq!(out.stdout, "a  b  c  \na \n\nb", "{out:?}");
+    let out = cash("figlet -f term --background=navy --color=always x");
+    assert_eq!(out.stdout, "\u{1b}[0;48;2;0;0;128mx\u{1b}[0m", "{out:?}");
+    let out = cash("figlet --border=wavy x");
     assert_eq!(out.code, 1, "{out:?}");
 }
 

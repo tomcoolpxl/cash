@@ -16,6 +16,7 @@ pub mod control;
 pub mod export;
 pub mod filter;
 pub mod font;
+pub mod palette;
 pub mod render;
 pub mod style;
 
