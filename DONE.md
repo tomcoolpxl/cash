@@ -3165,3 +3165,11 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   beside it, and prose between words, so nothing is cut but in a window under twenty
   columns. `--shadow` draws cfonts' box-line shadow, the same bytes as cfonts on its own
   block letters.
+- **Git completion out of the box** (2026-10-23, from the comparison with Git Bash's own
+  setup, picked by the user): the first Tab after `git` or `gitk` loads Git for Windows'
+  `git-completion.bash`, found beside `git.exe` or through a Scoop shim's `.shim` file,
+  when nothing else completes git (no `complete` spec, no `complete -D`, no `_git` or
+  `__git_main` of the user's, carapace silent). It loads once, in an interactive shell
+  only, starts no process, prints nothing, runs no trap, and puts back `$?`, `$_` and every
+  option, so `set -eux` and aliases do not reach it. Found on the way: every completion
+  function reset `$?` to its own status (`echo $?` after a Tab said 0); Bash keeps it.

@@ -118,6 +118,8 @@ mod free_nice;
 mod fuser_lsof;
 // `getconf` and `locale`: glibc's interfaces with the values Windows has.
 mod getconf_locale;
+// Git's git-completion.bash, loaded on the first completion after `git`.
+mod git_completion;
 // Git for Windows' git-prompt.sh (`__git_ps1`), sourced from the Git install.
 mod git_prompt;
 // BIN-05: Git's prompt scripts against Git Bash's frozen output.

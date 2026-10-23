@@ -884,6 +884,9 @@ impl Spec {
         // `release_trap_delivery_block()` always runs.
         shell.acquire_trap_delivery_block();
 
+        // cash: `$?`, `PIPESTATUS` and `$_` are the last command's again afterwards, as
+        // Bash keeps them (`save_parser_state`): `echo $?` after a Tab said 0.
+        let saved_status = shell.save_command_status();
         let params = shell.default_exec_params();
         let invoke_result = shell
             .invoke_function(function_name, args.iter(), params)
@@ -892,6 +895,7 @@ impl Spec {
 
         tracing::debug!(target: trace_categories::COMPLETION, "[completion function '{function_name}' returned: {invoke_result:?}]");
 
+        shell.restore_command_status(saved_status);
         shell.release_trap_delivery_block();
 
         // Make a best-effort attempt to unset the temporary variables.
@@ -1335,6 +1339,17 @@ impl Config {
                     found_spec = Some(spec);
                 }
             } else {
+                // cash: Git's own completion, loaded on first use when nothing else
+                // completes git (`shell::git_completion`); then the spec it made is used.
+                if self.default.is_none()
+                    && let Some(file_name) = Path::new(command_name).file_name()
+                    && shell
+                        .load_git_completion_for(&file_name.to_string_lossy())
+                        .await
+                {
+                    return Answer::RestartCompletionProcess;
+                }
+
                 if let Some(spec) = shell.completion_config().commands.get(command_name) {
                     found_spec = Some(spec);
                 } else if let Some(file_name) = PathBuf::from(command_name).file_name() {

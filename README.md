@@ -131,7 +131,8 @@ The prompt borrows what fish does well, without giving up Bash's language:
 - **Completions with descriptions** for 700+ commands — git, winget, docker, kubectl,
   terraform, cargo, npm — when [carapace](https://github.com/carapace-sh/carapace-bin) is
   installed (`scoop install extras/carapace-bin`). A completion script you source for a
-  command always wins (D63).
+  command always wins (D63). Without carapace, git still completes as in Git Bash, with
+  Git for Windows' own completion script.
 
 ## Help
 

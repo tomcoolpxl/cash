@@ -33,6 +33,9 @@ work as in Bash.
 - `Tab`: complete; the first press inserts what the candidates share, the next opens
   the menu or moves through it. Completion ignores case and quotes what needs quoting.
 - `Shift-Tab`: move back through the menu. `Esc` closes it.
+- After `git`, Tab completes subcommands, branches and remotes with Git for Windows'
+  own `git-completion.bash`, loaded on the first such Tab, as Git Bash does. A
+  completion set up for git with `complete`, `complete -D` or carapace is used instead.
 
 ## Moving and editing
 

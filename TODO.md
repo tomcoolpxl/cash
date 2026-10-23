@@ -32,16 +32,19 @@ on the new `cash-figlet` crate, with cash's colour pack, a font picker, pixel an
 fonts, DEC double-size lines and TheDraw fonts; the sixel image mode dropped. In DONE.md.
 Released as 2.0.0, a milestone and not a breaking change.
 
-## Found comparing with Git Bash's own setup (2026-10-23), not yet picked
+## This phase (2026-10-23)
+
+Picked by the user from the Git Bash comparison below: items 1, 3 and 4 there, in that
+order (Git completion, `~/.inputrc`, Start menu and Explorer).
+
+## Found comparing with Git Bash's own setup (2026-10-23), items 2 and 5 not picked
 
 What Git for Windows 2.55 sets up out of the box (`/etc/profile`, `profile.d/*.sh`,
 `bash.bashrc`, `/etc/inputrc`) that cash lacks. Git itself stays a separate program: none
 of this is about taking git into cash. cash is ahead on history, `ls` colours and icons,
 the Terminal profile and shell integration, and needs no winpty.
 
-1. **Git completion out of the box.** Git Bash completes subcommands, branches and
-   remotes with no setup; cash needs carapace or a `source` line by hand, though it runs
-   Git's `git-completion.bash`. Sourcing it when found (from `git --exec-path`) would close it.
+1. Git completion out of the box: done, in DONE.md.
 2. **The starter never reaches a Git Bash user.** It is written only when there is neither
    `~/.bashrc` nor `~/.cashrc`, so someone with a `~/.bashrc` lands on `cash-2.0$ `, no
    title, no branch, no aliases. Also: the starter's branch shows no MERGING/REBASE state

@@ -34,6 +34,7 @@ mod execution;
 mod expansion;
 mod fs;
 mod funcs;
+mod git_completion;
 mod history;
 mod initscripts;
 mod io;
@@ -225,6 +226,11 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     #[cfg_attr(feature = "serde", serde(skip))]
     records: crate::kept::Records,
 
+    /// Whether Git's completion script has been looked for, which happens once
+    /// (`git_completion`).
+    #[cfg_attr(feature = "serde", serde(skip))]
+    git_completion_tried: bool,
+
     /// Last "SECONDS" captured time.
     last_stopwatch_time: std::time::SystemTime,
 
@@ -318,6 +324,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             abbreviations: self.abbreviations.clone(),
             directory_history: self.directory_history.clone(),
             records: self.records.clone(),
+            git_completion_tried: self.git_completion_tried,
             last_stopwatch_time: self.last_stopwatch_time,
             last_stopwatch_offset: self.last_stopwatch_offset,
             key_bindings: self.key_bindings.clone(),
