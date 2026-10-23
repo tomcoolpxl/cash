@@ -502,6 +502,24 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         std::mem::take(&mut self.word_substitution_ends)
     }
 
+    /// As a script ends: what the shell holds open beyond its standard streams is closed,
+    /// as a process's end closes it, and then the background jobs that run inside it are
+    /// waited for (`JobManager::wait_for_jobs_inside_the_shell`). A coprocess reading from
+    /// the shell (`coproc cat`) sees the end of its input and ends, where the wait waited
+    /// on it for ever.
+    pub async fn finish_jobs_as_the_script_ends(&mut self) {
+        let held: Vec<_> = self
+            .open_files
+            .iter_fds()
+            .map(|(fd, _)| fd)
+            .filter(|fd| *fd > 2)
+            .collect();
+        for fd in held {
+            self.open_files.remove_fd(fd);
+        }
+        self.jobs.wait_for_jobs_inside_the_shell().await;
+    }
+
     /// Turns the restricted shell's limits on, for good (`set -r`, `cash -r`), as Bash's do:
     /// `SHELL`, `PATH`, `HISTFILE`, `ENV` and `BASH_ENV` become read only, declared unset
     /// where they are not set. What else is refused is said where it is tried.
