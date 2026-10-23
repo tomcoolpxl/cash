@@ -1,0 +1,66 @@
+# Cases compared with figlet 2.2.5 (Arch's, in WSL): name|options|message.
+# The message is words split at blanks, as figlet's command line gives them, or after a
+# `<` text for standard input, `\n` a newline. `-C utf8` makes figlet read UTF-8, as cash
+# always does; cash reads it as a control file that changes nothing.
+# Regenerate the .out files with generate.sh after changing this list.
+std-hello|-f standard|Hello, World!
+std-digits|-f standard|cash 2.0 -- 1234567890
+std-fox|-f standard|The quick brown fox jumps over the lazy dog
+std-punct|-f standard|!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
+std-center|-f standard -c|centred
+std-right|-f standard -r|right
+std-w40|-f standard -w 40|wrap this at forty columns please
+std-w20|-f standard -w 20|tiny width
+std-w1|-f standard -w 1|ab
+std-kern|-f standard -k|Kerning test
+std-full|-f standard -W|Full width
+std-smush|-f standard -S|Smush test
+std-overlap|-f standard -o|Overlap test
+std-m0|-f standard -m 0|mode zero
+std-m-1|-f standard -m -1|mode minus one
+std-m15|-f standard -m 15|mode fifteen
+std-m1|-f standard -m 1|mode one
+std-rtl|-f standard -R|right to left
+std-rtl-left|-f standard -R -l|right to left
+std-deutsch|-f standard -D|[\]{|}~
+std-latin1|-f standard -C utf8|ÄÖÜ äöü ß
+std-codetag|-f standard -C utf8|Ā ě Ł
+std-missing|-f standard -C utf8|a€b
+std-lines|-f standard|<one\ntwo\n\nfour
+std-para|-f standard -p|<one\ntwo\n\nfour\nfive
+std-para-w30|-f standard -p -w 30|<a long paragraph\nthat goes on\n\nnext one
+std-spaces|-f standard|a   b
+std-lead|-f standard -w 30|<   leading blanks and trailing
+std-empty-word|-f standard|a  b
+std-tab|-f standard|<a\tb
+std-crlf-free|-f standard|<a\nb
+slant-hello|-f slant|Hello, World!
+slant-fox|-f slant|The quick brown fox jumps over the lazy dog
+slant-kern|-f slant -k|kerning
+slant-full|-f slant -W|full
+small-hello|-f small|Hello, World!
+big-hello|-f big|Hello, World!
+banner-hello|-f banner|Hello!
+block-hello|-f block|Hello!
+bubble-hello|-f bubble|Hello!
+digital-hello|-f digital|Hello!
+ivrit-hello|-f ivrit|hello world
+ivrit-ltr|-f ivrit -L|hello world
+lean-hello|-f lean|Hello!
+mini-hello|-f mini|Hello, World!
+script-hello|-f script|Hello!
+shadow-hello|-f shadow|Hello!
+smscript-hello|-f smscript|Hello!
+smshadow-hello|-f smshadow|Hello!
+smslant-hello|-f smslant|Hello, World!
+term-hello|-f term|Hello, World!
+future-hello|-f future|Hello, World!
+future-w30|-f future -w 30|wrap the future font
+pagga-hello|-f pagga|Hello, World!
+smblock-hello|-f smblock|Hello, World!
+smblock-kana|-f smblock -C utf8|アイウ
+smbraille-hello|-f smbraille|Hello, World!
+mono9-hello|-f mono9|Hello
+mono12-hello|-f mono12|Hi!
+mono9-w60|-f mono9 -w 60|wrap me
+mono12-kern|-f mono12 -k|ab

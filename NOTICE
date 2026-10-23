@@ -141,3 +141,38 @@ archive can reach where it called `unwrap` or `expect` is an error, a poisoned l
 its data back, and the rest says why it cannot fail; a FILETIME is formatted from its
 count, as Windows cannot hold every one in a `SystemTime`; a header cipher is cached with
 its salt only once it is made.
+
+## figlet
+
+`crates/cash-figlet/src/render.rs`, how text is laid out (smushing, kerning, wrapping,
+justification, paragraphs, direction), is ported from `figlet.c` of
+[FIGlet](http://www.figlet.org/) 2.2.5, and `crates/cash-figlet/src/font.rs` and
+`control.rs` read fonts and control files as its `readfont` and `readcontrol` do. The 17
+fonts in `crates/cash-figlet/fonts` with the suffix `.flf` are FIGlet's own. FIGlet is
+Copyright (C) 1991, 1993, 1994 Glenn Chappell and Ian Chai, Copyright (C) 1996-2001 John
+Cowan, Copyright (C) 2002 Christiaan Keet, Copyright (C) 2011 Claudio Matsuoka, used under
+the BSD 3-Clause License, whose text is in
+[licenses/figlet-BSD-3-Clause.txt](licenses/figlet-BSD-3-Clause.txt).
+
+Changes: the C was rewritten in Rust over cells (a character and its colours) instead of
+bytes, with wide characters taking two columns; input is Unicode text, so the control
+files' commands for input encodings are read and not applied; the fonts are unchanged.
+
+## TOIlet fonts
+
+The six fonts in `crates/cash-figlet/fonts` with the suffix `.tlf` are
+[TOIlet](http://caca.zoy.org/wiki/toilet)'s, by Sam Hocevar, used under the Do What The
+Fuck You Want To Public License, Version 2, whose text is in
+[licenses/toilet-WTFPL.txt](licenses/toilet-WTFPL.txt). They are unchanged.
+
+## rs-figlet
+
+The smusher in `crates/cash-figlet/src/render.rs` started from
+[rs-figlet](https://github.com/yuanbohan/rs-figlet) 1.0.0 (`figlet-rs`), © its
+contributors, used under the Apache License 2.0, whose text is in
+[licenses/rs-figlet-Apache-2.0.txt](licenses/rs-figlet-Apache-2.0.txt).
+
+Changes: it was rewritten to follow `figlet.c` line by line over cells, with the empty
+line's first column, every repeated end mark, character 0 for missing characters,
+Latin-1 fonts and wide characters as figlet and toilet have them; its zip dependency,
+its API and its bundled font set are not used.

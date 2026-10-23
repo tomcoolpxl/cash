@@ -804,6 +804,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cash-figlet"
+version = "1.50.0"
+dependencies = [
+ "cash-archive",
+ "unicode-width 0.2.2",
+]
+
+[[package]]
 name = "cash-getopt"
 version = "1.50.0"
 

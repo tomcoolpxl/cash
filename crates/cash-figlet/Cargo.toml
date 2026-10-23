@@ -1,0 +1,20 @@
+[package]
+name = "cash-figlet"
+description = "FIGlet and TOIlet fonts and rendering for cash-shell's figlet (decisions.md D84)"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# Zipped fonts and control files, as figlet and toilet read them: cash's own zip reader.
+cash-archive = { workspace = true }
+unicode-width = { workspace = true }
+
+[lints]
+workspace = true
