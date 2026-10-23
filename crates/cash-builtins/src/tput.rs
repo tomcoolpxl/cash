@@ -10,7 +10,12 @@
 //! after a string capability being its parameters, with what follows them further
 //! capabilities, as `tput cup 5 10 bold` writes both.
 //!
-//! Differences, deliberate: a `TERM` that is unset or not VT-like is ignored, since the
+//! A `TERM` (or `-T`) of `dumb` is a dumb terminal, as ncurses' is: auto margins, its
+//! columns and lines, a bell, a carriage return and a line feed, and nothing else, so a
+//! script, Emacs' shell or a CI job that asks for no escape codes gets none (the user,
+//! 2026-10-23).
+//!
+//! Differences, deliberate: another `TERM` that is unset or not VT-like is ignored, since the
 //! terminal cash runs in is VT whatever `TERM` says, and only an explicit `-T` is checked
 //! (any xterm-, vt- or ms-terminal-like name, there being no terminfo to consult);
 //! `longname` is always `xterm with 256 colors`; `reset` also puts back the console modes
@@ -843,6 +848,8 @@ fn parse_options(args: &[String], order: Order) -> Result<Options, Problem> {
 /// One `tput` run: what it was asked and where it writes.
 struct Run<'a, W: Write> {
     keep_scrollback: bool,
+    /// A dumb terminal (`TERM=dumb`), not a VT one ([`Run::dumb_one`]).
+    dumb: bool,
     size: (i32, i32),
     sink: Sink<'a, W>,
 }
@@ -851,6 +858,9 @@ impl<W: Write> Run<'_, W> {
     /// Runs the capability `words[0]` with the parameters after it, saying how many words
     /// were taken: the name, and after a string capability every number that follows.
     fn one(&mut self, words: &[&str]) -> std::io::Result<(Outcome, usize)> {
+        if self.dumb {
+            return self.dumb_one(words);
+        }
         let name = words[0];
         let rest = &words[1..];
         match name {
@@ -924,6 +934,54 @@ impl<W: Write> Run<'_, W> {
         }
         if lists(STRINGS, name) {
             return Ok((Outcome::Lacking, 1));
+        }
+        Ok((Outcome::Unknown, 1))
+    }
+
+    /// [`Run::one`] for a dumb terminal, as ncurses answers for `dumb`: `am`, the columns
+    /// and lines, `bel`, `cr`, `cud1` and `ind`; any other capability it lacks, writing
+    /// nothing, and `clear`, `init` and `reset` write nothing either.
+    fn dumb_one(&mut self, words: &[&str]) -> std::io::Result<(Outcome, usize)> {
+        let name = words[0];
+        let string: Option<&[u8]> = match name {
+            "bel" => Some(b"\x07"),
+            "cr" => Some(b"\r"),
+            "cud1" | "ind" => Some(b"\n"),
+            _ => None,
+        };
+        if let Some(bytes) = string {
+            self.sink.write_sequence(bytes)?;
+            return Ok((Outcome::Done, 1));
+        }
+        match name {
+            "am" | "init" | "reset" => return Ok((Outcome::Done, 1)),
+            "clear" => return Ok((Outcome::Lacking, 1)),
+            "longname" => {
+                self.sink.pending.extend_from_slice(b"80-column dumb tty");
+                return Ok((Outcome::Done, 1));
+            }
+            "cols" | "lines" => {
+                let value = number(name, self.size).unwrap_or(-1);
+                self.sink
+                    .pending
+                    .extend_from_slice(format!("{value}\n").as_bytes());
+                return Ok((Outcome::Done, 1));
+            }
+            _ => {}
+        }
+        if lists(NUMBERS, name) {
+            self.sink.pending.extend_from_slice(b"-1\n");
+            return Ok((Outcome::Done, 1));
+        }
+        if lists(BOOLEANS, name) {
+            return Ok((Outcome::Lacking, 1));
+        }
+        if lists(STRINGS, name) {
+            let used = 1 + words[1..]
+                .iter()
+                .take_while(|word| is_parameter(word))
+                .count();
+            return Ok((Outcome::Lacking, used));
         }
         Ok((Outcome::Unknown, 1))
     }
@@ -1014,7 +1072,7 @@ impl builtins::Command for TputCommand {
                 )?;
                 return Ok(ExecutionResult::new(2));
             }
-            Some(term) if !is_vt(term) => {
+            Some(term) if term != "dumb" && !is_vt(term) => {
                 writeln!(context.stderr(), "tput: unknown terminal \"{term}\"")?;
                 return Ok(ExecutionResult::new(3));
             }
@@ -1026,8 +1084,15 @@ impl builtins::Command for TputCommand {
         }
 
         let mut stderr = context.stderr();
+        let term = options.term.clone().or_else(|| {
+            context
+                .shell
+                .env_str("TERM")
+                .map(std::borrow::Cow::into_owned)
+        });
         let mut run = Run {
             keep_scrollback: options.keep_scrollback,
+            dumb: term.as_deref() == Some("dumb"),
             size: screen_size(context.shell),
             sink: Sink {
                 pending: Vec::new(),

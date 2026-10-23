@@ -396,6 +396,14 @@ released, not reaped, so what it left running goes on, as in Bash; at exit cash 
 console programs and leaves GUI applications. The exceptions are elevated programs (D42)
 and `detach` (D45). Turned down: assigning a program after it starts, which lets a
 grandchild escape.
+Amended (the user, 2026-10-23, from a pick list, recommended): a script (not the prompt)
+that ends while background jobs run inside cash (`( work ) &`, a function, a builtin
+with `&`) waits for them before it exits, since a thread of cash cannot outlive it and
+under Bash their work is done after the script has ended; nb's git commits were lost.
+A job that is one program alone (`server &`) is not waited for, and goes as above. At the
+prompt `exit` still ends them, as Bash hangs them up; Ctrl-C ends the wait. The cost:
+a script that leaves an endless background loop running no longer ends (Bash leaves the
+loop orphaned). Turned down: ending them with the script, as before.
 
 ### D11 — cash owns job control
 
@@ -1005,7 +1013,12 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   and is now picked. Not picked: traps and jobs.
 - **The phase after 1.49.0** (the user, 2026-10-23, from a pick list): the small
   leftovers (recommended) and another corpus round. Not picked: POSIX `TZ` rules, raw
-  bytes in place of U+FFFD.
+  bytes in place of U+FFFD. The round's suites (the user's pick of four not in the
+  corpus): makeself, dehydrated, oh-my-bash and nb.
+- **`tput` honours `TERM=dumb`** (the user, 2026-10-23, from a pick list, recommended):
+  a dumb terminal has auto margins, its columns and lines, a bell, a carriage return and
+  a line feed, as ncurses' does, so Emacs' shell, IDE terminals and CI that set it get no
+  escape codes. Another `TERM`, or none, stays VT. Turned down: VT whatever `TERM` says.
 - **The phase after 1.48.0** (the user, 2026-10-23, from a pick list): traps, signals
   and jobs (recommended), the small parser, glob and start items, and the restricted
   shell. Not picked: POSIX `TZ` rules.

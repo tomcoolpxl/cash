@@ -875,6 +875,24 @@ impl JobManager {
             .find(|job| job.spawned_pids().contains(&pid) || job.representative_pid() == Some(pid))
     }
 
+    /// Waits for the jobs that run inside the shell (`( work ) &`, a function run with `&`),
+    /// as a script ends: a thread of cash cannot outlive it, and under Bash a job's work is
+    /// done after the script has ended (the user, 2026-10-23). They were ended with the
+    /// script, so nb's git commits were lost or left git's lock behind. A job that is a
+    /// program alone is not waited for (D6). A Ctrl-C ends the wait.
+    pub async fn wait_for_jobs_inside_the_shell(&mut self) {
+        for job in self
+            .jobs
+            .iter_mut()
+            .filter(|job| job.runs_inside_the_shell() && !job.program_alone)
+        {
+            tokio::select! {
+                _ = job.wait() => {}
+                _ = sys::signal::await_ctrl_c() => return,
+            }
+        }
+    }
+
     /// Waits for all managed jobs to complete.
     pub async fn wait_all(&mut self) -> Result<Vec<Job>, error::Error> {
         // Of the jobs that finished before the wait, `$!`'s keeps its status for
@@ -1039,6 +1057,10 @@ pub struct Job {
     /// work for any job; here they find the job by this number.
     own_pid: Option<sys::process::ProcessId>,
 
+    /// Whether the job is one program alone (`server &`), whose thread only waits for it:
+    /// not waited for as a script ends (`JobManager::wait_for_jobs_inside_the_shell`).
+    program_alone: bool,
+
     /// The signal cash's `kill` sent the job, which it is shown by if it ended of it.
     killed_by: Option<sys::signal::Signal>,
 
@@ -1121,7 +1143,15 @@ impl Job {
             cancel: None,
             console_at_stop: None,
             reap_counted: false,
+            program_alone: false,
         }
+    }
+
+    /// Marks the job as one program alone (`program_alone`).
+    #[must_use]
+    pub(crate) const fn with_program_alone(mut self, alone: bool) -> Self {
+        self.program_alone = alone;
+        self
     }
 
     /// Attach the sink that a background task reports spawned process IDs into.

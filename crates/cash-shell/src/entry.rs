@@ -689,6 +689,19 @@ async fn run_in_shell(
         drop(shell);
     }
 
+    // A script's background jobs that run inside cash are waited for as it ends, so that
+    // their work is done, as under Bash, where they outlive it; at the prompt `exit` ends
+    // them, as Bash hangs them up.
+    let interactive = shell_ref.lock().await.options().interactive;
+    if !interactive {
+        shell_ref
+            .lock()
+            .await
+            .jobs_mut()
+            .wait_for_jobs_inside_the_shell()
+            .await;
+    }
+
     // When a login shell exits, bash sources ~/.bash_logout if present.
     if shell_ref.lock().await.options().login_shell {
         let _ = shell_ref.lock().await.load_logout_scripts().await;

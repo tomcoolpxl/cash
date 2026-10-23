@@ -4213,6 +4213,54 @@ fn the_restricted_shell_refuses_what_bashs_refuses() {
 }
 
 #[test]
+fn a_scripts_background_jobs_inside_cash_finish_before_it_exits() {
+    // A job that is a thread of cash was ended with the script, so its work was lost
+    // (nb's git commits); under Bash it outlives the script. One program alone is not
+    // waited for (D6).
+    let scratch = Scratch::new("jobs-at-exit");
+    let (status, _) = output_in(
+        scratch.path(),
+        "( sleep 0.3; echo sub > sub.txt ) &\nf() { sleep 0.3; echo fn > fn.txt; }\nf &\nexit 3",
+    );
+    assert_eq!(status, 3);
+    assert_eq!(
+        std::fs::read_to_string(scratch.join("sub.txt"))
+            .unwrap()
+            .trim(),
+        "sub"
+    );
+    assert_eq!(
+        std::fs::read_to_string(scratch.join("fn.txt"))
+            .unwrap()
+            .trim(),
+        "fn"
+    );
+    let started = std::time::Instant::now();
+    let windows = std::env::var("SystemRoot").unwrap_or_else(|_| "C:/Windows".into());
+    let ping = format!("{}/System32/PING.EXE", windows.replace('\\', "/"));
+    output(&format!(
+        "\"{ping}\" -n 8 127.0.0.1 >/dev/null & echo started"
+    ));
+    assert!(started.elapsed() < std::time::Duration::from_secs(6));
+}
+
+#[test]
+fn tput_gives_a_dumb_terminal_no_escape_codes() {
+    // `TERM=dumb` wrote xterm's sequences; ncurses writes none, which is why Emacs' shell
+    // and CI set it (the user, 2026-10-23).
+    assert_eq!(
+        output(
+            "export TERM=dumb COLUMNS=80 LINES=24; tput sgr0; echo \"sgr0 $?\"; tput bold setaf 1; \
+             echo \"bold $?\"; tput am; echo \"am $?\"; tput bel | od -An -c; tput cols lines \
+             colors longname; echo; tput -T dumb smam; echo \"T $?\"; TERM=xterm-256color \
+             tput bold | od -An -c"
+        )
+        .1,
+        "sgr0 1\nbold 1\nam 0\n  \\a\n80\n24\n-1\n80-column dumb tty\nT 1\n 033   [   1   m"
+    );
+}
+
+#[test]
 fn find_takes_links_as_git_bash_counts_them() {
     // `-links` was an unknown predicate, so makeself built empty archives. A directory
     // has one link, as Git Bash shows it, and a file its hard links.

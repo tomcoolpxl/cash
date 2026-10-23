@@ -7,10 +7,8 @@ mkdir -p "$HOME"
 git config --global user.name u
 git config --global user.email u@example.com
 git config --global init.defaultBranch main
-# cash's tput writes sgr0 whatever TERM says (D74's VT terminal), where ncurses' writes
-# nothing for a dumb one: the sequence is left out.
 n() {
-    bash nb/nb "$@" 2>&1 | sed -E -e 's/[0-9]{14}/STAMP/g' -e "s|$PWD|PWD|g" -e 's/\x1b\(B\x1b\[m//g'
+    bash nb/nb "$@" 2>&1 | sed -E -e 's/[0-9]{14}/STAMP/g' -e "s|$PWD|PWD|g"
     echo "[${PIPESTATUS[0]}]"
 }
 n

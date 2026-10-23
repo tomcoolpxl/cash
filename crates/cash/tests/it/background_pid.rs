@@ -110,8 +110,9 @@ fn several_background_jobs_report_their_own_pids() {
 #[test]
 fn a_background_job_that_never_ends_does_not_stall_the_shell() {
     // The trap in any "wait for the pid" scheme. This job spawns nothing and never
-    // finishes, so a naive wait hangs the shell for good.
-    let out = cash(r#"while true; do :; done & echo survived"#);
+    // finishes, so a naive wait hangs the shell for good. The script ends it: one that
+    // ends with its background jobs running waits for them (the user, 2026-10-23).
+    let out = cash(r#"while true; do :; done & echo survived; kill $!"#);
     assert_eq!(out.stdout, "survived", "the shell stalled: {}", out.stderr);
     assert_eq!(out.code, 0);
 }

@@ -663,11 +663,22 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     let ao_list = ao_list.clone();
     let command_line = ao_list.to_string();
     let simple = matches!(ao_list.first.seq.first(), Some(ast::Command::Simple(_)));
+    // One program alone, `server &`: no function or builtin of the shell, whose thread
+    // only waits for the program. It is not waited for as a script ends (D6).
+    let program_alone = ao_list.additional.is_empty()
+        && !ao_list.first.bang
+        && matches!(ao_list.first.seq.as_slice(), [ast::Command::Simple(simple)]
+        if simple.word_or_name.as_ref().is_some_and(|word| {
+            let name = word.value.as_str();
+            shell.funcs().get(name).is_none()
+                && shell.builtins().get(name).is_none_or(|builtin| builtin.disabled)
+        }));
     start_background_job(
         shell,
         job_params,
         command_line,
         simple,
+        program_alone,
         move |mut job_shell, job_params| {
             tokio::runtime::Handle::current().block_on(async {
                 let result = ao_list.execute(&mut job_shell, &job_params).await?;
@@ -709,6 +720,7 @@ async fn start_background_job<SE, F>(
     params: ExecutionParameters,
     command_line: String,
     begins_with_simple_command: bool,
+    program_alone: bool,
     run: F,
 ) -> Option<&jobs::Job>
 where
@@ -799,7 +811,8 @@ where
     let started_a_program = pid_sink.lock().is_ok_and(|pids| !pids.is_empty());
     let mut job = jobs::Job::new([task], command_line, jobs::JobState::Running)
         .with_spawned_pids(pid_sink)
-        .with_cancel(cancel);
+        .with_cancel(cancel)
+        .with_program_alone(program_alone);
     if !started_a_program && let Some(number) = job_number {
         job = job.with_own_pid(number);
     }
@@ -1836,6 +1849,7 @@ impl Execute for ast::CoprocessCommand {
             child_params,
             self.to_string(),
             simple,
+            false,
             move |mut child_shell, child_params| {
                 tokio::runtime::Handle::current().block_on(async move {
                     let pipeline_context = PipelineExecutionContext {

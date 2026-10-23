@@ -24,10 +24,10 @@ fn tput_matches_ncurses() {
     );
     let expected = with_divergence(
         &expected,
-        // The terminal cash runs in is VT whatever TERM says, so neither an unset TERM
-        // nor a non-VT one is refused; only an explicit -T is checked.
+        // The terminal cash runs in is VT whatever TERM says, so an unset TERM is not
+        // refused; only an explicit -T is checked. A dumb one is dumb, as ncurses has it.
         "tput: No value for $TERM and no -T specified\nrc=2\nrc=1\n",
-        " 033 [ 1 m\nrc=0\n 033 [ 1 m\nrc=0\n",
+        " 033 [ 1 m\nrc=0\nrc=1\n",
         1,
     );
     assert_eq!(run_oracle_script("tput_cases"), expected);

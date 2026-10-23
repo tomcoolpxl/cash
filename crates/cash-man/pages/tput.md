@@ -59,7 +59,9 @@ not know; 4 for a capability name it does not know.
 
 There is no terminfo database: the capabilities are those of `xterm-256color`, built
 in, which Windows Terminal and ConPTY understand. `TERM` is not consulted, since the
-terminal cash runs in is VT whatever it says; a `-T` naming a terminal that is not
-xterm-, VT- or ms-terminal-like is refused with status 3. `cols` and `lines` are the
-console window's, or an exported `COLUMNS` or `LINES`; 80 and 24 when there is no
+terminal cash runs in is VT whatever it says, except that `TERM=dumb` (or `-T dumb`) is
+a dumb terminal, as in ncurses: no escape codes, only a bell, a carriage return and a
+line feed, which Emacs' shell and CI set it for. A `-T` naming a terminal that is not
+dumb, xterm-, VT- or ms-terminal-like is refused with status 3. `cols` and `lines` are
+the console window's, or an exported `COLUMNS` or `LINES`; 80 and 24 when there is no
 console. `tput reset` also puts back the console modes cash relies on, as `reset` does.

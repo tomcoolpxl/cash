@@ -52,6 +52,11 @@ on in the background. `wait` waits for jobs to end, and `kill` ends them.
 
 In a script, `fg` and `bg` need job control: they say `no job control` until `set -m`.
 
+A script that ends while jobs of its own run waits for them first: a subshell, a
+function or one of cash's commands run with `&` is part of cash and cannot outlive it,
+where under Bash it goes on after the script, so its work is done either way. A
+program alone (`server &`) is not waited for. At the prompt, `exit` ends the jobs.
+
 ## Options
 
 For `jobs`:

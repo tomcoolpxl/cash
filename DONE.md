@@ -3125,3 +3125,21 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   split at every `:`, so `[[:alpha:]]1` held patterns of nothing and `[a:b]*` ignored
   nothing; it is split as Bash splits it, past brackets, extended groups, quotes and a
   `\:`.
+- **A corpus round: makeself, dehydrated, oh-my-bash and nb** (2026-10-23, the phase after
+  1.49.0, the user's pick of four suites not in the corpus): each copied unchanged with its
+  licence, with its terms in `tests/corpus/SOURCES.md`. makeself 2.7.1 builds, checks,
+  lists, describes and extracts its archives; dehydrated 0.7.2's help, configuration,
+  cleanup and JSON helpers run with no CA; Oh My Bash's themes, plugins and aliases load
+  in interactive shells; nb 7.25.5 keeps notes, notebooks and todos over git, as Git Bash
+  does under `unixpaths`, the plain case listed as known different (D3: nb climbs to `/`).
+  Found and fixed: `find -links` was unknown, so makeself built empty archives; tar
+  stopped reading at the archive's end, so `cat` writing an uncompressed archive into it
+  failed at times of a broken pipe, where GNU tar reads the whole record; `command -v` of
+  a command cash carries gave its bare name, so `[[ -x "$(command -v grep)" ]]` failed
+  (dehydrated's check), and gives the path `which` gives. The cases put a `shasum` first on
+  PATH and leave out agnoster's root sign, so that a CI runner gives the same output.
+  With the user's picks: `tput` honours `TERM=dumb`, writing no escape codes, as ncurses
+  does; and a script that ends while background jobs run inside cash waits for them, as
+  their work is done under Bash, where they outlive it (D6 amended; one program alone is
+  not waited for), so nb's commits are made. Written down in TODO.md: an interactive cash
+  with no console keeps job control on.
