@@ -1,6 +1,13 @@
 # source: https://github.com/megastep/makeself/tree/release-2.7.1 (`makeself.sh` and `makeself-header.sh`, unchanged, with its COPYING, as the fixture directory `makeself`)
 # desc: a self-extracting archive built of a small tree with a startup script, then checked, listed, described and extracted by itself, with and without running the script, as bash and as sh, and one uncompressed with a SHA-256 sum; the checksums, sizes, modes (D78), owner and dates left out
 # timeout: 60
+# A shasum first on PATH, so that the SHA-256 sum is taken alike wherever the case runs:
+# makeself takes the first `shasum` it finds and gives `-a 256` only to one of that name,
+# and a CI runner's `shasum.bat` took SHA-1.
+mkdir -p bin
+printf '#!/bin/sh\n[ "$1" = -a ] && shift 2\nexec sha256sum "$@"\n' > bin/shasum
+chmod +x bin/shasum
+export PATH="$PWD/bin:$PATH"
 mkdir -p payload/sub
 printf 'hello\n' > payload/hello.txt
 printf 'nested\n' > payload/sub/nested.txt

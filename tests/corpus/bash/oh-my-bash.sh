@@ -1,8 +1,10 @@
 # source: https://github.com/ohmybash/oh-my-bash/tree/4d86087 (`oh-my-bash.sh`, `lib`, `tools/git-prompt.sh`, the themes font, minimal, agnoster, powerline and powerline-plain, the plugins git and bashmarks, and four alias files, unchanged, with its LICENSE.md, as the fixture directory `oh-my-bash`)
-# desc: a prompt framework loaded into interactive shells with no terminal: four themes' prompts built by their prompt commands and shown with cat -v, outside and inside a fresh git repository; its aliases, its git plugin and bashmarks' save, list and go; the clock left out
+# desc: a prompt framework loaded into interactive shells with no terminal: four themes' prompts built by their prompt commands and shown with cat -v, outside and inside a fresh git repository; its aliases, its git plugin and bashmarks' save and go; the clock and agnoster's root sign left out
 # timeout: 120
 export HOME="$PWD/home" OSH="$PWD/oh-my-bash" DISABLE_AUTO_UPDATE=true THEME_SHOW_CLOCK=false
 mkdir -p "$HOME"
+# agnoster's root sign, for a UID of 0, which cash gives an elevated shell (a CI runner's),
+# is left out with the paths and the user's name.
 omb() {
     OSH_THEME="$1" bash --norc --noprofile -i -c '
         plugins=(git bashmarks)
@@ -10,7 +12,8 @@ omb() {
         completions=()
         source "$OSH/oh-my-bash.sh"
         echo "loaded ${OSH_THEME:-no theme}: ${OMB_VERSION}"
-        '"$2" 2>/dev/null < /dev/null | sed -e "s|$PWD|PWD|g" -e "s|${USER:-$USERNAME}@|USER@|g"
+        '"$2" 2>/dev/null < /dev/null | sed -e "s|$PWD|PWD|g" -e "s|${USER:-$USERNAME}@|USER@|g" \
+            -e 's/ \\\[\\e\[33m\\\]M-bM-^ZM-!\\\[\\e\[0;40m\\\]//'
 }
 prompt='for c in "${PROMPT_COMMAND[@]}"; do eval "$c"; done; printf "%s\n" "$PS1" | cat -v'
 for theme in font minimal agnoster powerline-plain; do
