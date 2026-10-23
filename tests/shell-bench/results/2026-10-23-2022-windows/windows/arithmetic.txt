@@ -1,0 +1,12 @@
+Benchmark 1: cash (47 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     64.5 ms  ±     1.3 ms      62.7 ms  …    68.3 ms
+ 
+Benchmark 2: gitbash (24 runs)
+                mean     ±       σ          min     …     max
+  Wall Time    126.3 ms  ±     1.6 ms     123.7 ms  …   129.4 ms           +95.9%  (2.0x slower)
+ 
+Benchmark 3: pwsh (10 runs)
+                mean     ±       σ          min     …     max
+  Wall Time    315.8 ms  ±    18.7 ms     282.8 ms  …   337.7 ms          +389.6%  (4.9x slower)
+ 
