@@ -32,7 +32,9 @@ Every built-in font, to choose one:
 
 <!-- parse only: Git Bash has no figlet to compare with -->
 
-    for f in standard slant small big mini smslant shadow script; do echo "$f:"; figlet -f "$f" Hi; done
+    for f in standard slant small big mini smslant shadow script; do
+        echo "$f:"; figlet -f "$f" Hi
+    done
 
 Wrapped at 40 columns, broken between words:
 
@@ -73,41 +75,47 @@ current directory last. A name with a slash or a backslash is a path.
 
 ## Options
 
-    -f, --font=FONT       The font, by name (with or without .flf or .tlf) or path.
-    -d, --directory=DIR   Look for fonts and control files in DIR first.
-    -C FILE               A control file, translating characters; may be repeated.
-    -N                    Forget the control files given so far.
-    -D                    [\]{|}~ as German letters.
+    -f, --font=FONT     The font, by name or path; .flf or .tlf may be
+                        left off.
+    -d, --directory=DIR Look for fonts and control files in DIR first.
+    -C FILE             A control file, translating characters; may be
+                        given more than once.
+    -N                  Forget the control files given so far.
+    -D                  [\]{|}~ as German letters.
 
-    -s                    The font's own layout (the default).
-    -S                    Smush by the font's rules; overlap where it has none.
-    -k                    Kerning: letters touch.
-    -W                    Full width: letters side by side.
-    -o                    Overlap each letter with the one before.
-    -m MODE               A layout as a number: -1 full width, 0 kerning, a sum of
-                          smushing rules to smush with them.
+    -s                  The font's own layout (the default).
+    -S                  Smush by the font's rules, or overlap.
+    -k                  Kerning: letters touch.
+    -W                  Full width: letters side by side.
+    -o                  Overlap each letter with the one before.
+    -m MODE             A layout as a number: -1 full width, 0 kerning,
+                        a sum of smushing rules to smush with them.
 
-    -w, --width=COLUMNS   The output width; a line takes at most one column less.
-    -t, --termwidth       The console's width.
-    -l, -c, -r            Left, centred, right.
-    -x                    As the font runs: right for a right-to-left font.
-    -L, -R                Left to right, right to left.
-    -X                    As the font runs.
-    -p                    Paragraph mode: a single newline is a blank.
-    -n                    Normal mode (the default): every newline ends a line.
+    -w, --width=COLUMNS The output width; a line takes at most one
+                        column less.
+    -t, --termwidth     The console's width.
+    -l, -c, -r          Left, centred, right.
+    -x                  As the font runs: right for a right-to-left font.
+    -L, -R              Left to right, right to left.
+    -X                  As the font runs.
+    -p                  Paragraph mode: a single newline is a blank.
+    -n                  Every newline ends a line (the default).
 
-    -F, --filter=LIST     Filters, separated by colons; -F list says what each does.
-    --rainbow, --gay      The rainbow filter.
-    --metal               The metal filter.
-    -E, --export=FORMAT   utf8 (the default: UTF-8, with colour), ansi (code page 437,
-                          with colour, CRLF line ends) or text (no colour ever);
-                          -E list names them.
-    --color[=WHEN]        Colour: auto (a console, NO_COLOR unset), always, never.
+    -F, --filter=LIST   Filters, separated by colons; -F list says what
+                        each does.
+    --rainbow, --gay    The rainbow filter.
+    --metal             The metal filter.
+    -E, --export=FORMAT utf8 (the default: UTF-8, with colour), ansi
+                        (code page 437, colour, CRLF line ends) or text
+                        (no colour ever); -E list names them.
+    --color[=WHEN]      Colour: auto (a console, NO_COLOR unset),
+                        always or never.
 
-    -I CODE               Tell: 0 the version, 1 the version number, 2 the font
-                          directory, 3 the font, 4 the width, 5 the font formats.
-    -v, --version         The version.
-    -h, --help            The options.
+    -I CODE             Tell: 0 the version, 1 the version number, 2 the
+                        font directory, 3 the font, 4 the width, 5 the
+                        font formats.
+    -v, --version       The version.
+    -h, --help          The options.
 
 Exit status: 0, or 1 for a bad option or a font or control file that cannot be read.
 
