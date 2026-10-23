@@ -87,6 +87,7 @@ impl Install {
             .env("USERPROFILE", &self.home)
             .env("LOCALAPPDATA", &self.local)
             .env("CASH_USER_ENVIRONMENT_KEY", &self.key)
+            .env("CASH_CLASSES_KEY", self.classes())
             .env("CASH_FONTS_KEY", NO_FONTS)
             .env_remove("CASH_UPDATE_API")
             .env_remove("CASH_UPDATE_DOWNLOAD")
@@ -106,6 +107,24 @@ impl Install {
 
     fn current(&self) -> PathBuf {
         self.root.join("current")
+    }
+
+    /// The key that stands for `Software\Classes`, under this install's test key.
+    fn classes(&self) -> String {
+        format!(r"{}\Classes", self.key_root)
+    }
+
+    /// The command line of "Open cash here" on `class`, as `reg query` prints it.
+    fn explorer_command(&self, class: &str) -> Option<String> {
+        let key = format!(r"HKCU\{}\{class}\shell\cash\command", self.classes());
+        let out = Command::new("reg")
+            .args(["query", &key, "/ve"])
+            .stderr(Stdio::null())
+            .output()
+            .unwrap();
+        let stdout = text(&out.stdout);
+        let line = stdout.lines().find(|line| line.contains("REG_SZ"))?;
+        Some(line.split_once("REG_SZ")?.1.trim().to_owned())
     }
 
     fn bin(&self) -> PathBuf {
@@ -381,6 +400,114 @@ fn a_version_directory_whose_exe_is_running_is_kept_and_an_idle_one_is_swept() {
         install.current_target().as_deref(),
         Some(entry(&install.root.join("3.0.0")).as_str())
     );
+}
+
+/// `--explorer-menu` writes "Open cash here" on a directory and its background: Terminal
+/// with cash's profile when `wt.exe` is there, cash with `--cd` when not. A finish leaves
+/// Explorer alone until the entry exists, then writes it for `current`; the remover
+/// takes it away.
+#[test]
+fn the_explorer_entry_is_written_only_on_request_and_kept_up_to_date() {
+    let install = Install::new("explorer");
+    let exe = install.version("9.9.9");
+    assert!(install.finish(&exe, &["--quiet"]).status.success());
+    assert_eq!(install.explorer_command("Directory"), None);
+
+    let current_exe = install.current().join("cash.exe");
+    let out = install
+        .command(&current_exe)
+        .arg("--explorer-menu")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let console = format!(r#""{}" --cd "%V.""#, plain_case(&current_exe));
+    for class in ["Directory", r"Directory\Background"] {
+        assert_eq!(
+            install.explorer_command(class).map(|c| c.to_lowercase()),
+            Some(console.to_lowercase()),
+            "{class}"
+        );
+    }
+
+    // Terminal arrives; the next finish writes the entry for it.
+    let apps = install.local.join(r"Microsoft\WindowsApps");
+    std::fs::create_dir_all(&apps).unwrap();
+    std::fs::write(apps.join("wt.exe"), "").unwrap();
+    let out = install.finish(&exe, &[]);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        text(&out.stdout).contains("Open cash here"),
+        "{}",
+        text(&out.stdout)
+    );
+    let terminal = format!(
+        r#""{}" -p "cash" -d "%V.""#,
+        plain_case(&apps.join("wt.exe"))
+    );
+    assert_eq!(
+        install
+            .explorer_command(r"Directory\Background")
+            .map(|c| c.to_lowercase()),
+        Some(terminal.to_lowercase())
+    );
+
+    let out = install
+        .command(&exe)
+        .arg("--install-remove")
+        .arg(&install.root)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        text(&out.stdout).contains("\"Open cash here\" removed from Explorer\n"),
+        "{}",
+        text(&out.stdout)
+    );
+    assert_eq!(install.explorer_command("Directory"), None);
+    assert_eq!(install.explorer_command(r"Directory\Background"), None);
+}
+
+/// `--remove-explorer-menu` takes the entry away, and says when there was none.
+#[test]
+fn remove_explorer_menu_takes_the_entry_away() {
+    let install = Install::new("explorer-remove");
+    let exe = install.version("9.9.9");
+    let run = |arg: &str| {
+        let out = install.command(&exe).arg(arg).output().unwrap();
+        assert!(out.status.success(), "{arg}: {}", text(&out.stderr));
+        text(&out.stdout)
+    };
+    run("--explorer-menu");
+    assert!(install.explorer_command("Directory").is_some());
+    assert!(run("--remove-explorer-menu").contains("removed"));
+    assert_eq!(install.explorer_command("Directory"), None);
+    assert!(run("--remove-explorer-menu").contains("there was no"));
+}
+
+/// `--cd DIR`, which the entry passes without Terminal, starts cash there, before the
+/// startup files; the `.` Explorer's `"%V."` adds is not part of the name.
+#[test]
+fn cd_starts_cash_in_a_directory() {
+    let install = Install::new("cd");
+    let dir = install.home.join("a dir");
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = crate::common::output_of(crate::common::cash_command().args([
+        "--cd",
+        &format!("{}.", plain_case(&dir)),
+        "-c",
+        "pwd",
+    ]));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(
+        out.stdout.to_lowercase(),
+        plain_case(&dir).replace('\\', "/").to_lowercase()
+    );
+}
+
+/// A path with backslashes and without the `\\?\` prefix, its case kept.
+fn plain_case(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('/', "\\");
+    text.strip_prefix(r"\\?\").unwrap_or(&text).to_owned()
 }
 
 #[test]

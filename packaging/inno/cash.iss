@@ -12,7 +12,7 @@
 ; the Scoop channel and this one share one implementation.
 ;
 ; Silent: cash-vX.Y.Z-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-;         [/DIR="C:\path"] [/TASKS="links,scoop" | /TASKS=""] [/LOG="file"]
+;         [/DIR="C:\path"] [/TASKS="links,explorer,scoop" | /TASKS=""] [/LOG="file"]
 
 #ifndef AppVersion
   #error Pass /DAppVersion=X.Y.Z
@@ -64,6 +64,13 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "links"; Description: "Make the tools programs on PATH (ls.exe, sed.exe, awk.exe, ...), for editors, make and scripts outside cash"; GroupDescription: "Tools:"
 Name: "scoop"; Description: "Also install Scoop, a package manager for command-line tools (runs Scoop's own installer)"; GroupDescription: "Tools:"; Flags: unchecked
+Name: "explorer"; Description: "Add ""Open cash here"" to Explorer's menu of a directory"; GroupDescription: "Explorer:"
+
+[Icons]
+; The Start menu's cash: Windows Terminal with cash's profile, or cash in a console
+; window on a Windows without Terminal (D85). Removed with the rest on uninstall.
+Name: "{userprograms}\cash"; Filename: "{code:TerminalExe}"; Parameters: "-p cash"; IconFilename: "{app}\current\cash.exe"; Comment: "cash in Windows Terminal"; Check: HasTerminal
+Name: "{userprograms}\cash"; Filename: "{app}\current\cash.exe"; WorkingDir: "{%USERPROFILE}"; Comment: "cash"; Check: not HasTerminal
 
 [Files]
 Source: "{#SourceDir}\cash.exe"; DestDir: "{app}\{#AppVersion}"; Flags: ignoreversion
@@ -80,6 +87,10 @@ Source: "{#SourceDir}\licenses\*"; DestDir: "{app}\{#AppVersion}\licenses"; Flag
 Filename: "{app}\{#AppVersion}\cash.exe"; Parameters: "--install-finish ""{app}"" --links"; Tasks: links; Flags: runhidden waituntilterminated; StatusMsg: "Finishing the install..."
 Filename: "{app}\{#AppVersion}\cash.exe"; Parameters: "--install-finish ""{app}"""; Tasks: not links; Flags: runhidden waituntilterminated; StatusMsg: "Finishing the install..."
 Filename: "{app}\{#AppVersion}\cash.exe"; Parameters: "--install-finish ""{app}"" --scoop"; Tasks: scoop; Flags: waituntilterminated; StatusMsg: "Installing Scoop..."
+; "Open cash here" in Explorer (D85), through `current`, which the finish has just made;
+; an unchecked task takes an earlier one away.
+Filename: "{app}\current\cash.exe"; Parameters: "--explorer-menu"; Tasks: explorer; Flags: runhidden waituntilterminated; StatusMsg: "Adding ""Open cash here"" to Explorer..."
+Filename: "{app}\current\cash.exe"; Parameters: "--remove-explorer-menu"; Tasks: not explorer; Flags: runhidden waituntilterminated
 Filename: "{app}\{#AppVersion}\cash.exe"; Description: "Open cash"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
@@ -129,6 +140,18 @@ begin
   else
     Result := App + '\' + Found + '\cash.exe';
   Log('Remover: ' + Result);
+end;
+
+// Windows Terminal's wt.exe, the alias the inbox and the Store's Terminal put in the
+// user's WindowsApps, for the Start menu's shortcut.
+function TerminalExe(Param: String): String;
+begin
+  Result := ExpandConstant('{localappdata}\Microsoft\WindowsApps\wt.exe');
+end;
+
+function HasTerminal(): Boolean;
+begin
+  Result := FileExists(TerminalExe(''));
 end;
 
 // A cash that Scoop installed is Scoop's to upgrade: refuse, pointing there.

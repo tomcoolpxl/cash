@@ -9,23 +9,29 @@ see: config keys ls which
 installs cash for your account alone: no administrator, no UAC prompt. It puts the files
 in `%LOCALAPPDATA%\Programs\cash\X.Y.Z\`, points the `current` directory beside them at that
 version, puts `current` on your PATH so `cash` is a command everywhere, adds the Windows
-Terminal profile and writes the starter `~/.bashrc` the first time. Two options:
+Terminal profile and a Start-menu entry, and writes the starter `~/.bashrc` the first
+time. The Start-menu entry opens Windows Terminal with the cash profile (cash in a console
+window on a Windows without Terminal). Three options:
 
 - **Make the tools programs on PATH**, on by default: `ls.exe`, `sed.exe`, `awk.exe` and
   the rest in `%LOCALAPPDATA%\Programs\cash\bin`, first on your user PATH, so editors,
   `make`, `npm`, PowerShell and scripts outside cash get cash's tools ahead of Git's.
+- **Add "Open cash here" to Explorer**, on by default: right-click a directory, or the
+  empty space inside one, to open cash there. On Windows 11 it is under "Show more
+  options". `cash --explorer-menu` and `cash --remove-explorer-menu` do the same at any
+  time.
 - **Also install Scoop**, off by default: runs Scoop's own installer last, for the rest of
   your command-line tools (`scoop install jq`).
 
 For scripts and winget, the setup runs silently:
 
     ./cash-v1.5.0-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
-        /TASKS=links,scoop
+        /TASKS=links,explorer,scoop
 
-`/DIR=` names another directory; `/TASKS=` lists the options to turn on (`links`, `scoop`),
-none when empty. Uninstall from Settings > Apps > Installed apps: the tool links, the
-Terminal profile, the PATH entries and the files go; your `~/.bashrc`, history and
-config stay.
+`/DIR=` names another directory; `/TASKS=` lists the options to turn on (`links`,
+`explorer`, `scoop`), none when empty. Uninstall from Settings > Apps > Installed apps:
+the tool links, the Terminal profile, the Start-menu and Explorer entries, the PATH
+entries and the files go; your `~/.bashrc`, history and config stay.
 
 The setup is not signed. Downloaded with a browser, Windows shows SmartScreen's
 "unknown publisher" prompt once; "More info", then "Run anyway". A download by winget or
@@ -59,7 +65,9 @@ releases page; a portable cash does not replace itself.
 
 ## What the Scoop install does
 
-`scoop install cash` puts `cash.exe` in place and runs three things, each quietly:
+`scoop install cash` puts `cash.exe` in place, adds a cash entry to the Start menu's
+"Scoop Apps" (Windows Terminal with the cash profile), and runs three things, each
+quietly:
 
 - `cash --terminal-profile`: a "cash" profile in Windows Terminal, with the logo and
   command marks on. Restart Terminal if it does not show. `cash --remove-terminal-profile`
@@ -75,6 +83,10 @@ programs a builtin hides, whether the tool links are current, and what is worth 
 
 ## Optional, once
 
+- **"Open cash here" in Explorer.** `cash --explorer-menu` adds it to the menu of a
+  directory and of the empty space inside one (on Windows 11 under "Show more options"):
+  Windows Terminal with the cash profile, there. `cash --remove-explorer-menu` takes it
+  away; `scoop uninstall cash` does too.
 - **Tool links on PATH.** `cash --link-tools --add-to-path` makes `ls.exe`, `sort.exe`,
   `sed.exe` and every other bundled tool a program on `PATH`, so editors, `make`, `npm`
   and scripts outside cash can run them. `cash --unlink-tools` removes them. `help which`

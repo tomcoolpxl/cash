@@ -17,6 +17,8 @@ compile_error!("cash builds only on Windows (spec D43)");
 /// Accounts and their rights, for `sudo`, `su` and `cash doctor`.
 pub mod account;
 pub mod children;
+// The user's shell verbs in Explorer's menus, for "Open cash here".
+pub mod classes;
 // The clipboard's text, for `pbcopy` and `pbpaste`.
 pub mod clipboard;
 pub mod cmd;

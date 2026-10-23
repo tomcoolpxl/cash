@@ -205,6 +205,13 @@ fn finish(exe: &Path, options: &FinishOptions) -> Result<(), String> {
         ));
     }
 
+    // "Open cash here", written again when an earlier install made it (the setup's task
+    // runs `--explorer-menu` itself): Terminal may have come or gone since.
+    if crate::explorer_menu::is_set() {
+        let command = crate::explorer_menu::write_for(&current.join("cash.exe"))?;
+        say.line(&format!("Explorer's \"Open cash here\": {command}"));
+    }
+
     if let Some(path) = crate::init_rc::run_once()? {
         say.line(&format!("wrote {}, a starter ~/.bashrc", shown(&path)));
     }
@@ -400,6 +407,11 @@ fn remove_install(root: &Path, quiet: bool) -> u8 {
     }
     match crate::terminal_profile::remove_quietly() {
         Ok(true) => say.line("Windows Terminal profile removed"),
+        Ok(false) => {}
+        Err(message) => failures.push(message),
+    }
+    match crate::explorer_menu::remove_quietly() {
+        Ok(true) => say.line("\"Open cash here\" removed from Explorer"),
         Ok(false) => {}
         Err(message) => failures.push(message),
     }

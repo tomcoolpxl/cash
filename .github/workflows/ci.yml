@@ -55,6 +55,22 @@ jobs:
       - name: RustSec advisories
         run: cargo deny check advisories
 
+      # The installer's script compiles, so a mistake in it shows on the push and not first
+      # in a release: against placeholder files, where the release has the real ones.
+      - name: Compile the installer script
+        shell: pwsh
+        run: |
+          $dist = Join-Path $env:RUNNER_TEMP 'inno-dist'
+          New-Item -ItemType Directory -Force "$dist\licenses" | Out-Null
+          foreach ($file in 'cash.exe', 'README.md', 'NOTICE', 'THIRD-PARTY-LICENSES.html', 'licenses\placeholder.txt') {
+            Set-Content -Path "$dist\$file" -Value 'placeholder'
+          }
+          Copy-Item LICENSE "$dist\LICENSE"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "iscc" }
+          & $iscc /Q "/DAppVersion=0.0.0" "/DSourceDir=$dist" "/O$env:RUNNER_TEMP" packaging\inno\cash.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       # The same command as a local run: format check, clippy, the documentation, the
       # quick lane's tests (each in a process of its own, through nextest) and the doc
       # tests.

@@ -88,6 +88,8 @@ the user's answers, with their dates. A new decision goes here, under its topic.
 | D81 | `winglob`: at the prompt, a Windows program globs for itself | Paths, files and text |
 | D82 | An opt-in `/c/` mode: Git Bash's spelling, with arguments for Windows programs | Paths, files and text |
 | D83 | Under `unixpaths`, a climb past a drive's top spells `$PWD` `/` | Paths, files and text |
+| D84 | `figlet`: one builtin doing figlet's and toilet's work, and more | Paths, files and text |
+| D85 | A Start-menu entry and "Open cash here" in Explorer | Packaging, installing and updating |
 
 ## 1. Scope and foundation
 
@@ -1173,6 +1175,20 @@ portable cash offers once to set itself up and changes nothing without a yes. At
 interactive prompt a missing command names its `winget` and `scoop` packages. Turned down:
 Velopack and a per-user MSI; background polling and silent self-replacement, since a shell
 that changes overnight surprises script authors; a paid certificate or SignPath.
+
+### D85 — A Start-menu entry and "Open cash here" in Explorer
+
+The user's picks, 2026-10-23, from the comparison with Git Bash's own setup. Both open
+Windows Terminal with cash's profile (`wt.exe -p cash -d DIR`), and `cash.exe --cd DIR`
+in a console window where Windows Terminal is missing. The Explorer entry, on a
+directory and on a directory's background, is `cash --explorer-menu` writing
+`HKCU\Software\Classes`, no admin; the installer offers it as a task, checked, and
+removes it on uninstall; a Scoop user runs the command, which Scoop's notes name, and
+Scoop's uninstall removes it. The Start-menu entry comes with each installer: Inno's own
+shortcut, and Scoop's post-install in Scoop's "Scoop Apps" directory. Turned down: the
+entries running `cash.exe` alone, left to Windows' default terminal and its default
+look; Scoop writing the Explorer entry by itself, which Scoop manifests leave to the
+user; a Windows 11 top-level menu entry, which needs a packaged shell extension.
 
 ### Decided in working sessions
 

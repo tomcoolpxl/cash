@@ -9,6 +9,7 @@
 //! contained. See `cash_win32::session`.
 
 mod doctor;
+mod explorer_menu;
 mod init_rc;
 mod installer;
 mod link_tools;
@@ -66,12 +67,13 @@ fn main() {
     }
 
     // `cash --link-tools` and `--unlink-tools` (D65), `--terminal-profile` (D38),
-    // `--init-rc` (D69), the installer's `--install-finish`, `--install-remove` and
+    // `--explorer-menu` (D85), `--init-rc` (D69), the installer's `--install-finish`, `--install-remove` and
     // `--update` (D75) and `--add-to-path`/`--remove-from-path` for cash's own directory,
     // like `cash doctor`, act on the installation rather than running anything in a shell.
     let args: Vec<String> = std::env::args().collect();
     if let Some(status) = link_tools::command(&args)
         .or_else(|| terminal_profile::command(&args))
+        .or_else(|| explorer_menu::command(&args))
         .or_else(|| init_rc::command(&args))
         .or_else(|| installer::command(&args))
         .or_else(|| own_path::command(&args))

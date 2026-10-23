@@ -182,6 +182,11 @@ pub struct CommandLineArgs {
     #[clap(short = 'x', help_heading = HEADING_STANDARD_OPTIONS)]
     pub print_commands_and_arguments: bool,
 
+    /// Start in DIR, before the startup files run, as Git Bash's `--cd`; Explorer's
+    /// "Open cash here" passes it when Windows Terminal is missing.
+    #[clap(long = "cd", value_name = "DIR", help_heading = HEADING_UI_OPTIONS)]
+    pub start_dir: Option<PathBuf>,
+
     /// Enable xtrace and configure for the given output file.
     #[clap(long = "xtrace-file", value_name = "FILE", help_heading = HEADING_UI_OPTIONS)]
     pub xtrace_file_path: Option<PathBuf>,

@@ -52,6 +52,9 @@ cash's own:
   is there.
 - `cash --terminal-profile`: add a cash profile to Windows Terminal;
   `--remove-terminal-profile` takes it away.
+- `cash --explorer-menu`: "Open cash here" on directories in Explorer;
+  `--remove-explorer-menu` takes it away.
+- `cash --cd DIR`: start in DIR, before the startup files, as Git Bash's `--cd`.
 - `cash --link-tools [--add-to-path] [DIR]`: hard links (`ls.exe`, `sed.exe`, ...) that
   programs outside cash can run; `--unlink-tools` removes them.
 - `--disable-color`, `--disable-bracketed-paste`, `--noenv`, `--xtrace-file FILE`.

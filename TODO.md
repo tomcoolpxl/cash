@@ -50,8 +50,9 @@ the Terminal profile and shell integration, and needs no winpty.
    title, no branch, no aliases. Also: the starter's branch shows no MERGING/REBASE state
    and no tag on a detached HEAD, which `__git_ps1` shows.
 3. `~/.inputrc` read: done, in DONE.md.
-4. **No Start-menu entry and no "Open cash here"** on a directory in Explorer (Inno has no
-   `[Icons]`); Git's installer offers both.
+4. Start menu and "Open cash here": done, in DONE.md. At the release that carries it,
+   the bucket's hooks and notes get `scripts/sync-bucket.py` (RELEASING.md step 7), and
+   the user tries one right-click, which no test can (`wt -d "%V."`).
 5. **Small ones:** `~/bin` first on PATH and `~/bash_completion.d/*.bash` sourced (Git
    Bash's `env.sh` and `git-prompt.sh`); `no_empty_cmd_completion`; PageUp/PageDown to the
    start and end of history (`/etc/inputrc`); a note on Windows' OpenSSH agent beside Git's

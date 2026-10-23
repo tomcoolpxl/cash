@@ -618,6 +618,16 @@ async fn run_in_shell(
         return Ok(dump_strings(shell_ref, &args, read_commands_from_stdin).await);
     }
 
+    // `--cd DIR`: the directory to start in, before the startup files. Explorer passes
+    // `"%V."`, since `"C:\"` would end in an escaped quote; the full path drops the dot.
+    if let Some(dir) = &args.start_dir {
+        let dir = std::path::absolute(dir).unwrap_or_else(|_| dir.clone());
+        let changed = shell_ref.lock().await.set_working_dir(&dir);
+        if let Err(error) = changed {
+            eprintln!("cash: --cd {}: {error}", dir.display());
+        }
+    }
+
     // Readline's `$INPUTRC` or `~/.inputrc`, before the startup files, so that a `bind` in
     // them wins, as in Bash, where `bind` reads the file before it binds.
     if read_commands_from_stdin {

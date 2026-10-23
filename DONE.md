@@ -3182,3 +3182,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   and `set editing-mode`, `keymap`, `mark-directories`, `mark-symlinked-directories`.
   What cash's editor lacks, and bindings in a vi keymap, are passed over silently, so a
   file written for readline never makes the start print anything.
+- **A Start-menu entry and "Open cash here" in Explorer** (2026-10-23, D85, the user's
+  picks): both open Windows Terminal with cash's profile (`wt.exe -p cash -d "%V."`), or
+  `cash.exe --cd DIR` where Terminal is missing; `--cd DIR` is new, as Git Bash's. `cash
+  --explorer-menu` and `--remove-explorer-menu` write and remove the verb on
+  `Directory` and `Directory\Background` under `HKCU\Software\Classes`; the setup has a
+  checked task for it, an upgrade writes an existing entry again, the remover takes it
+  away. The setup makes the Start-menu shortcut itself; Scoop's post-install makes one in
+  "Scoop Apps" and its uninstall removes it and the Explorer entry; its notes name
+  `cash --explorer-menu`. The installer tests use a key of their own for the classes, so
+  no run touches the real menus. CI now compiles the setup script on every push.
