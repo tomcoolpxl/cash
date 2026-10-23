@@ -32,12 +32,12 @@ on the new `cash-figlet` crate, with cash's colour pack, a font picker, pixel an
 fonts, DEC double-size lines and TheDraw fonts; the sixel image mode dropped. In DONE.md.
 Released as 2.0.0, a milestone and not a breaking change.
 
-## This phase (2026-10-23)
+## The phase before (2026-10-23, done, released as 2.1.1)
 
 The interpreter's dispatch (D86, research/interpreter-dispatch.md), the user's pick for the
-rest of the slowdown since 1.39: native `impl Future` execution traits with a box only
-where the tree recurses, then a one-command pipeline path. With it ships the simple-command
-fix (e9529401). Each step: the whole suite, and a timing against 1.39 and 2.0.1.
+rest of the slowdown since 1.39, with the simple-command fix (e9529401): faster than 1.39
+on every interpreter workload. The one-command pipeline path was left, with the reason
+in the research file. In DONE.md.
 
 ## The phase before (2026-10-23, done, released as 2.1.0)
 
@@ -413,12 +413,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   (no Bash script starts a line with `&`, so scripts are not touched), a `.ps1` given to
   `.`/`source` run through PowerShell, or at least an error that names the fix (`in cash,
   run the path itself: ./x.ps1`). **Yours** to pick.
-- **`((...))` is about 20% slower than at 1.39** (2026-10-23, after the interpreter fixes
-  that brought simple commands back): `i=0; while ((i<200000)); do ((i++)); done` takes
-  473 ms against 394 ms at 1.39 (`dist` builds, Git Bash steady as the control), about
-  0.4 us an evaluation; the loop rows of the benchmark are 6% over 1.39 by it. Not the
-  copy of the name on assignment (removed, no change). A profile put it in the
-  interpreter's boxed futures, not in arithmetic: picked as this phase (D86).
 - **A CI run timed out on a TODO-only commit** (run 39966452795 on 783ec1db,
   2026-10-23): `corpus::the_ci_glue_script_matches_real_bash` (15 s) and two ConPTY
   tests (`a_program_that_breaks_the_console...`, `...took_the_mouse_gives_it_back`, 60 s)

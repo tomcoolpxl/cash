@@ -3203,3 +3203,13 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   substitution needs a file ran for every command. Simple commands are back to 1.39
   (200,000: 721 ms, now 634, 1.39 617). An assignment no longer copies the name to look
   for an element reference. Left: `((...))`, in TODO.md.
+- **The interpreter's dispatch: a future per nesting level, not per command** (2026-10-23,
+  D86, the user's pick after a profile; research/interpreter-dispatch.md): what was left of
+  the slowdown since 1.39, `((...))` 20% over it, was not arithmetic but five
+  `#[async_trait]` boxes per command, 19% of a loop in `memcpy` and 14% in allocation.
+  The execution traits return `impl Future + Send`, a box only where the tree recurses
+  and once where a program starts; a compound command is no longer copied as it runs.
+  Faster than 1.39 on every interpreter workload: empty loop 431 ms, now 364 (2.0.1
+  529), `if` in a loop 979, now 734. Tests running a shell on their own thread get the
+  shell's stack (`RUST_MIN_STACK`). The one-command pipeline path was left, the
+  reason in the research file.

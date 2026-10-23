@@ -38,6 +38,30 @@ futures grew, and so did every copy: the slowdown.
    no queue of results, the command run in this shell and its status kept as the general
    path keeps it. The general path stays for two commands and more, and for `time`.
 
+## What was done
+
+Steps 1 and 2 (9620d290; the change is in 33797629). A box went in at each place the tree
+recurses: a compound command's body, a function's, a process substitution's, a trap
+handler's commands, `%job &`, through a generic helper or a function with a named type,
+since boxing a future that holds itself in place was a cycle the compiler could not
+resolve. A whole program is boxed once where it starts. On the way out went a copy of
+the whole compound command each time it ran in this shell.
+
+| 200,000 turns, `dist` | 1.39.0 | 2.0.1 | after |
+|---|---|---|---|
+| empty loop | 431 ms | 529 ms | 364 ms |
+| `echo` | 583 ms | 685 ms | 524 ms |
+| function call | 817 ms | 969 ms | 717 ms |
+| `((...))` alone | 377 ms | 459 ms | 368 ms |
+| `if` in a loop | 979 ms | 1158 ms | 734 ms |
+| a function with an `if` | 693 ms | 819 ms | 551 ms |
+
+Step 3 was left: its point was `Pipeline`'s large future copied into a box for each
+command, which step 1 already took away. What is left of a one-command pipeline is one
+small allocation and a cheap copy of the parameters, against a second path for the wait
+and its status, Ctrl-Z, interrupts and job reports; worth it only if a new profile shows
+it.
+
 Not changed: what a command does, its errors, traps, `set -e`, `PIPESTATUS`, job control.
 Each step is built, run through the whole suite (both lanes and the corpus) and timed
 against 1.39 and 2.0.1 (`dist` builds, Git Bash as the control) before the next.
