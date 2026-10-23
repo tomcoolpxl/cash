@@ -102,7 +102,8 @@ pub enum Filter {
         /// How fast they change (lolcat's 0.1).
         frequency: f64,
     },
-    /// A dark grey shade (`░`) one cell down and right of the text, behind it.
+    /// cfonts' and oh-my-logo's "ANSI Shadow": box lines along each stroke's right and
+    /// bottom edges.
     Shadow,
     /// Only the edges of the text: a cell with text on all four sides becomes a blank.
     Outline,
@@ -146,7 +147,7 @@ pub const FILTERS: &[(&str, Filter, Option<&str>)] = &[
     (
         "shadow",
         Filter::Shadow,
-        Some("cast a shadow down and right"),
+        Some("box-line shadows on solid letters, as cfonts' block font"),
     ),
     (
         "outline",
@@ -251,36 +252,66 @@ fn gradient(block: &Block, stops: &[(u8, u8, u8)], direction: Direction) -> Bloc
     })
 }
 
-/// A dark grey shade one cell down and right of every character, where nothing is: a
-/// shade rather than a copy, which without colour reads as the text twice.
+/// The "ANSI Shadow" of cfonts' `block` font and oh-my-logo's filled logos: double box
+/// lines along the right and bottom edges of every stroke, one cell out.
+///
+/// Each blank cell takes its line from which of three neighbours hold text: the one to
+/// its left (a stroke's right edge, `║`, topped by `╗`), the one above (a stroke's bottom
+/// edge, `═`, begun by `╚`), and the one up and to the left (the corner below a stroke's
+/// right edge, `╝`); with all three, the line turns down, `╔`. Worked out from cfonts'
+/// alphabet and digits (2026-10-23), where it gives 1,028 of the 1,036 shadow cells; the
+/// eight others are drawn by hand in single letters. Best on solid letters: `banner`,
+/// `block`, `mono9`, `mono12`, `--pixel`, TheDraw fonts.
 fn shadow(block: &Block) -> Block {
+    let solid = |x: Option<usize>, y: Option<usize>| -> bool {
+        let (Some(x), Some(y)) = (x, y) else {
+            return false;
+        };
+        block
+            .rows
+            .get(y)
+            .and_then(|row| row.get(x))
+            .is_some_and(|cell| cell.ch != ' ')
+    };
     let width = block.width() + 1;
-    let mut rows: Vec<Row> = block
-        .rows
-        .iter()
-        .map(|row| {
-            let mut row = row.clone();
-            row.resize(width, Cell::BLANK);
-            row
-        })
-        .collect();
-    rows.push(vec![Cell::BLANK; width]);
-    for (y, row) in block.rows.iter().enumerate() {
-        for (x, cell) in row.iter().enumerate() {
-            if cell.ch == ' ' || cell.is_tail() || cell.is_wide() {
+    let height = block.rows.len() + 1;
+    let mut rows: Vec<Row> = Vec::with_capacity(height);
+    for y in 0..height {
+        let mut row = block.rows.get(y).cloned().unwrap_or_default();
+        row.resize(width, Cell::BLANK);
+        for (x, cell) in row.iter_mut().enumerate() {
+            if cell.ch != ' ' {
                 continue;
             }
-            if let Some(target) = rows.get_mut(y + 1).and_then(|r| r.get_mut(x + 1)) {
-                if target.ch == ' ' {
-                    *target = Cell {
-                        ch: '░',
-                        style: crate::style::Style {
-                            fg: Some(Color::Ansi(8)),
-                            ..crate::style::Style::PLAIN
-                        },
-                    };
-                }
-            }
+            let left = solid(x.checked_sub(1), Some(y));
+            let above = solid(Some(x), y.checked_sub(1));
+            let corner = solid(x.checked_sub(1), y.checked_sub(1));
+            let line = match (left, above, corner) {
+                (false, false, false) => continue,
+                (false, false, true) => '╝',
+                (false, true, false) => '╚',
+                (false, true, true) => '═',
+                (true, false, false) => '╗',
+                (true, false, true) => '║',
+                (true, true, _) => '╔',
+            };
+            *cell = Cell::plain(line);
+        }
+        rows.push(row);
+    }
+    // The row and column added for the shadow, where none of it landed.
+    if rows
+        .last()
+        .is_some_and(|row| row.iter().all(|c| c.ch == ' '))
+    {
+        rows.pop();
+    }
+    if rows
+        .iter()
+        .all(|row| row.last().is_none_or(|c| c.ch == ' '))
+    {
+        for row in &mut rows {
+            row.pop();
         }
     }
     Block { rows }
@@ -997,11 +1028,23 @@ mod tests {
     }
 
     #[test]
-    fn shadow_outline_frame_background() {
+    fn shadows_are_box_lines_as_cfonts_draws_them() {
+        let h = block(&["██  ██", "██  ██", "██████", "██  ██", "██  ██"]);
         assert_eq!(
-            text(&apply(&[Filter::Shadow], &block(&["ab"]), 0)),
-            ["ab ", " ░░"]
+            text(&apply(&[Filter::Shadow], &h, 0)),
+            [
+                "██╗ ██╗",
+                "██║ ██║",
+                "██████║",
+                "██╔═██║",
+                "██║ ██║",
+                "╚═╝ ╚═╝",
+            ]
         );
+    }
+
+    #[test]
+    fn shadow_outline_frame_background() {
         assert_eq!(
             text(&apply(
                 &[Filter::Outline],

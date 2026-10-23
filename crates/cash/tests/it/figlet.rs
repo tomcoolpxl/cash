@@ -221,8 +221,9 @@ fn frames_shadows_and_spacing() {
     );
     let out = cash("figlet -f term --border hi");
     assert_eq!(out.stdout, "┌──┐\n│hi│\n└──┘", "{out:?}");
+    // cfonts' box-line shadow: down the right edge, along the bottom.
     let out = cash("figlet -f term --shadow ab");
-    assert_eq!(out.stdout, "ab \n ░░", "{out:?}");
+    assert_eq!(out.stdout, "ab╗\n╚═╝", "{out:?}");
     // The spacing follows every letter; a gap follows every line of text.
     let out = cash("figlet -f term --letter-spacing=2 abc; figlet -f term --line-gap=1 a '' b");
     assert_eq!(out.stdout, "a  b  c  \na \n\nb", "{out:?}");

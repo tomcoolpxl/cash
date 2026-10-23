@@ -150,7 +150,9 @@ current directory last. A name with a slash or a backslash is a path.
     --direction=DIR     horizontal (the default), vertical, diagonal.
     --lolcat            lolcat's rainbow; --seed=N for the same colours
                         each time, --spread=F and --freq=F as lolcat's.
-    --shadow            A shade down and right of the text.
+    --shadow            Box-line shadows along each stroke's right and
+                        bottom edges, as cfonts' block font draws them;
+                        best on solid letters (banner, mono12, --pixel).
     --outline           Only the edges of solid letters.
     --border[=STYLE]    A frame: single (the default), double, rounded,
                         heavy or ascii.

@@ -161,7 +161,7 @@ More colour and shape:
                         colours, comma-separated (red,#ff8800,gold)
       --direction=DIR   horizontal (the default), vertical or diagonal
       --lolcat          lolcat's rainbow; --seed=N, --spread=F, --freq=F
-      --shadow          a shadow down and right
+      --shadow          box-line shadows, as cfonts' block font (solid letters)
       --outline         only the edges of solid letters
       --border[=STYLE]  a frame: single, double, rounded, heavy or ascii
       --padding=N       N blank columns inside the frame (half as many rows)
