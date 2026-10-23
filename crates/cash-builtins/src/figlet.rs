@@ -84,7 +84,32 @@ const LONGS: &[Long<'static, char>] = &[
     Long::new("colors", Arg::Required, 'O'),
     Long::new("colours", Arg::Required, 'O'),
     Long::new("pick", Arg::No, 'V'),
+    // Pixel fonts, installed Windows fonts, and DEC double-size lines.
+    Long::new("pixel", Arg::Optional, 'i'),
+    Long::new("winfont", Arg::Required, 'a'),
+    Long::new("windows-font", Arg::Required, 'a'),
+    Long::new("size", Arg::Required, 'T'),
+    Long::new("bold", Arg::No, 'g'),
+    Long::new("italic", Arg::No, '1'),
+    Long::new("dec", Arg::Optional, '2'),
 ];
+
+/// What a pixel font or an installed Windows font is drawn with.
+#[derive(Default)]
+struct Pixels {
+    mode: Option<cash_figlet::pixel::Mode>,
+    winfont: Option<String>,
+    size: Option<i32>,
+    bold: bool,
+    italic: bool,
+}
+
+/// DEC's double-size lines: the text itself, twice as high and wide, or twice as wide.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Dec {
+    Big,
+    Wide,
+}
 
 /// When colour is written.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -150,6 +175,14 @@ Fonts:
                         --pick Hi)\" Hi)
   figlist, showfigfonts list the fonts, and show each
 
+Pixels and Windows fonts:
+      --pixel[=MODE]    the built-in 8x8 pixel font (or -f 8x8), drawn with half
+                        (the default), full, quadrant, sextant, octant or braille
+                        characters: more pixels to a cell, smaller letters
+      --winfont=NAME    an installed Windows font (Consolas, \"Segoe UI\"), drawn
+                        as pixels; --size=PIXELS (16), --bold, --italic
+      --dec[=big|wide]  the text itself in the terminal's double-size lines
+
 Information:
   -I CODE, --infocode=CODE  0 version, 1 version number, 2 font directory,
                         3 font, 4 width, 5 font formats
@@ -173,6 +206,9 @@ struct Request {
     color: Option<When>,
     extras: Extras,
     pick: bool,
+    pixels: Pixels,
+    dec: Option<Dec>,
+    font_given: bool,
     message: Vec<String>,
 }
 
@@ -261,40 +297,6 @@ impl builtins::Command for FigletCommand {
             return Ok(ExecutionResult::success());
         }
 
-        let font = match load_font(&context, &request, &request.font) {
-            Ok(font) => font,
-            Err(message) => {
-                writeln!(context.stderr(), "figlet: {message}")?;
-                return Ok(ExecutionResult::general_error());
-            }
-        };
-        let mut controls = Controls::new();
-        let mut control_dirs = directories(&context, &request);
-        control_dirs.push(".".to_owned());
-        for name in &request.controls {
-            let text = find_file(&context, &control_dirs, name, &[".flc"]).and_then(|bytes| {
-                cash_figlet::font::unzipped(&bytes)
-                    .ok()
-                    .map(|t| t.into_owned())
-            });
-            match text {
-                Some(text) => controls.add(&text),
-                // cash's input is Unicode already: utf8.flc would change nothing.
-                None if bare_name(name, ".flc") == "utf8" => {}
-                None => {
-                    writeln!(
-                        context.stderr(),
-                        "figlet: {name}: Unable to open control file"
-                    )?;
-                    return Ok(ExecutionResult::general_error());
-                }
-            }
-        }
-
-        if request.pick {
-            return pick_font(&context, &request, &controls, &settings);
-        }
-
         let format = request.format.unwrap_or(Format::Utf8);
         let colour = match request.color {
             Some(When::Always) => true,
@@ -305,6 +307,46 @@ impl builtins::Command for FigletCommand {
                 .try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD)
                 .is_some_and(|fd| context.shell.colours(&fd)),
         };
+
+        if let Some(dec) = request.dec {
+            let text = plain_text(&context, &request)?;
+            context
+                .stdout()
+                .write_all(&dec_lines(&request, dec, &text, colour, format))?;
+            return Ok(ExecutionResult::success());
+        }
+
+        let message_text = request.message.join(" ");
+        let loaded = match &request.pixels.winfont {
+            Some(face) => windows_font(&request, face, &message_text),
+            // --pixel alone draws the built-in pixel font.
+            None if request.pixels.mode.is_some() && !request.font_given => {
+                load_font(&context, &request, PIXEL_FONT)
+            }
+            None => load_font(&context, &request, &request.font),
+        };
+        let font = match loaded {
+            Ok(font) => font,
+            Err(message) => {
+                writeln!(context.stderr(), "figlet: {message}")?;
+                return Ok(ExecutionResult::general_error());
+            }
+        };
+        let controls = match load_controls(&context, &request) {
+            Ok(controls) => controls,
+            Err(name) => {
+                writeln!(
+                    context.stderr(),
+                    "figlet: {name}: Unable to open control file"
+                )?;
+                return Ok(ExecutionResult::general_error());
+            }
+        };
+
+        if request.pick {
+            return pick_font(&context, &request, &controls, &settings);
+        }
+
         // Rows printed so far, so lolcat's waves go on from one line of text to the next.
         let mut rows_printed = 0;
         let mut out = |blocks: Vec<Block>| -> Vec<u8> {
@@ -442,6 +484,44 @@ fn extra_option(request: &mut Request, id: char, value: &str) -> Option<Result<(
             Some((_, depth)) => extras.depth = *depth,
             None => return bad("colour depth"),
         },
+        _ => return pixel_option(request, id, value),
+    }
+    Some(Ok(()))
+}
+
+/// The pixel fonts' options, the Windows fonts' and `--dec`: whether `id` was one, and
+/// how it ends the command line when it does.
+fn pixel_option(request: &mut Request, id: char, value: &str) -> Option<Result<(), Early>> {
+    let bad = |what: &str| {
+        Some(Err(Early::fail(format!(
+            "figlet: invalid {what}: '{value}'\nTry 'figlet --help' for more information.\n"
+        ))))
+    };
+    match id {
+        'i' => {
+            let name = if value.is_empty() { "half" } else { value };
+            match cash_figlet::pixel::Mode::NAMES
+                .iter()
+                .find(|(n, _)| *n == name)
+            {
+                Some((_, mode)) => request.pixels.mode = Some(*mode),
+                None => return bad("pixel mode"),
+            }
+        }
+        'a' => request.pixels.winfont = Some(value.to_owned()),
+        'T' => match value.trim().parse::<i32>() {
+            Ok(size @ 4..=512) => request.pixels.size = Some(size),
+            _ => return bad("size (4 to 512 pixels)"),
+        },
+        'g' => request.pixels.bold = true,
+        '1' => request.pixels.italic = true,
+        '2' => {
+            request.dec = Some(match value {
+                "" | "big" => Dec::Big,
+                "wide" => Dec::Wide,
+                _ => return bad("--dec (big or wide)"),
+            });
+        }
         _ => return None,
     }
     Some(Ok(()))
@@ -562,6 +642,9 @@ fn read_command_line<SE: cash_core::ShellExtensions>(
         color: None,
         extras: Extras::default(),
         pick: false,
+        pixels: Pixels::default(),
+        dec: None,
+        font_given: false,
         message: Vec::new(),
     };
     let shorts = optstring(OPTSTRING);
@@ -616,7 +699,10 @@ fn read_command_line<SE: cash_core::ShellExtensions>(
             'v' => request.info = Some(0),
             'I' => request.info = Some(atoi(&value)),
             'd' => request.directory = Some(value),
-            'f' => request.font = value,
+            'f' => {
+                request.font = value;
+                request.font_given = true;
+            }
             'C' => request.controls.push(value),
             'N' => request.controls.clear(),
             _ => {}
@@ -741,6 +827,11 @@ fn load_font<SE: cash_core::ShellExtensions>(
     request: &Request,
     name: &str,
 ) -> Result<Font, String> {
+    if name == PIXEL_FONT {
+        let mode = request.pixels.mode.unwrap_or_default();
+        let chars = cash_figlet::pixel::wanted_chars(&request.message.join(" "));
+        return Ok(cash_figlet::pixel::font8x8_font(mode, &chars));
+    }
     let suffixes = [".flf", ".tlf"];
     let found = find_file(context, &directories(context, request), name, &suffixes)
         .or_else(|| {
@@ -752,6 +843,107 @@ fn load_font<SE: cash_core::ShellExtensions>(
         .or_else(|| find_file(context, &[".".to_owned()], name, &suffixes));
     let bytes = found.ok_or_else(|| format!("{name}: Unable to open font file"))?;
     Font::parse(&bytes).map_err(|error| format!("{name}: {error}"))
+}
+
+/// The control files the request names, read: those in the font directories or the
+/// current directory; the name of one that cannot be read.
+fn load_controls<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    request: &Request,
+) -> Result<Controls, String> {
+    let mut controls = Controls::new();
+    let mut dirs = directories(context, request);
+    dirs.push(".".to_owned());
+    for name in &request.controls {
+        let text = find_file(context, &dirs, name, &[".flc"]).and_then(|bytes| {
+            cash_figlet::font::unzipped(&bytes)
+                .ok()
+                .map(|t| t.into_owned())
+        });
+        match text {
+            Some(text) => controls.add(&text),
+            // cash's input is Unicode already: utf8.flc would change nothing.
+            None if bare_name(name, ".flc") == "utf8" => {}
+            None => return Err(name.clone()),
+        }
+    }
+    Ok(controls)
+}
+
+/// The name of the built-in pixel font, font8x8, drawn with `--pixel`'s characters.
+const PIXEL_FONT: &str = "8x8";
+
+/// An installed Windows font as a pixel font: the characters of `text` and the common
+/// ones, drawn by GDI and turned into block characters.
+fn windows_font(request: &Request, face: &str, text: &str) -> Result<Font, String> {
+    use cash_figlet::pixel::{self, Bitmap};
+
+    let pixels = &request.pixels;
+    let mut rasterizer = cash_win32::rasterize::Rasterizer::new(
+        face,
+        pixels.size.unwrap_or(16),
+        pixels.bold,
+        pixels.italic,
+    )
+    .map_err(|error| format!("{face}: {error}"))?;
+    let mut glyphs: Vec<(char, Bitmap)> = pixel::wanted_chars(text)
+        .into_iter()
+        .filter_map(|ch| {
+            let raster = rasterizer.glyph(ch).ok()?;
+            Some((
+                ch,
+                Bitmap::from_coverage(raster.width, raster.height, &raster.coverage),
+            ))
+        })
+        .collect();
+    pixel::trim(&mut glyphs);
+    Ok(pixel::font(glyphs, pixels.mode.unwrap_or_default()))
+}
+
+/// The text as it is, for `--dec`: the message as figlet reads its words, or standard
+/// input, a CRLF one newline and the last newline gone.
+fn plain_text<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    request: &Request,
+) -> std::io::Result<String> {
+    if !request.message.is_empty() {
+        return Ok(words_input(&request.message).into_iter().collect());
+    }
+    let mut input = Vec::new();
+    std::io::Read::read_to_end(&mut context.stdin(), &mut input)?;
+    let text = cash_figlet::font::decode(&input).replace("\r\n", "\n");
+    Ok(text.strip_suffix('\n').unwrap_or(&text).to_owned())
+}
+
+/// `--dec`: each line of the text itself, in DEC's double-size lines (ESC # 3 and # 4,
+/// the top and bottom halves of a line twice as high and wide, or ESC # 6, twice as
+/// wide), filtered and coloured like any figure.
+fn dec_lines(request: &Request, dec: Dec, text: &str, colour: bool, format: Format) -> Vec<u8> {
+    let mut out = Vec::new();
+    for line in text.split('\n') {
+        let block = Block {
+            rows: vec![cash_figlet::canvas::cells(line, cash_figlet::Style::PLAIN)],
+        };
+        let block = filter::apply(&request.filters, &block, 0);
+        let written = export::write(&[block], format, colour, request.extras.depth);
+        for row in String::from_utf8_lossy(&written).lines() {
+            match dec {
+                Dec::Big => {
+                    for half in ["\x1b#3", "\x1b#4"] {
+                        out.extend_from_slice(half.as_bytes());
+                        out.extend_from_slice(row.as_bytes());
+                        out.push(b'\n');
+                    }
+                }
+                Dec::Wide => {
+                    out.extend_from_slice(b"\x1b#6");
+                    out.extend_from_slice(row.as_bytes());
+                    out.push(b'\n');
+                }
+            }
+        }
+    }
+    out
 }
 
 /// The names of the fonts with the suffix `.flf` or `.tlf` in `dir`, sorted.
@@ -789,6 +981,7 @@ fn font_names<SE: cash_core::ShellExtensions>(
         .iter()
         .flat_map(|dir| fonts_in(context, dir, &[".flf", ".tlf"]))
         .chain(builtin::FONTS.iter().map(|font| font.name.to_owned()))
+        .chain(std::iter::once(PIXEL_FONT.to_owned()))
         .collect();
     names.sort();
     names.dedup();
@@ -970,6 +1163,9 @@ fn read_lister_line<SE: cash_core::ShellExtensions>(
         color: None,
         extras: Extras::default(),
         pick: false,
+        pixels: Pixels::default(),
+        dec: None,
+        font_given: false,
         message: Vec::new(),
     };
     request.settings.width = default_width(context);

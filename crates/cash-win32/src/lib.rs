@@ -86,6 +86,8 @@ pub mod spawn;
 pub mod stdio;
 /// Asking one process to stop, then making it: D21's `TERM`.
 pub mod stop;
+// Characters drawn by an installed font into a bitmap, for `figlet` (D84).
+pub mod rasterize;
 /// What the machine is, asked directly — the numbers `coolfetch` prints.
 pub mod sysinfo;
 pub mod terminal;

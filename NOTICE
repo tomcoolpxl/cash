@@ -176,3 +176,10 @@ Changes: it was rewritten to follow `figlet.c` line by line over cells, with the
 line's first column, every repeated end mark, character 0 for missing characters,
 Latin-1 fonts and wide characters as figlet and toilet have them; its zip dependency,
 its API and its bundled font set are not used.
+
+## font8x8
+
+The 8x8 pixel font in `crates/cash-figlet/src/pixel_data.rs` is
+[font8x8](https://github.com/dhepper/font8x8) by Daniel Hepper, after Marcel Sondaar's,
+from the IBM VGA fonts, all in the public domain. Its table of characters for two by four
+pixels is generated from Unicode 16's `UnicodeData.txt`.

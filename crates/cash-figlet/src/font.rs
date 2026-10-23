@@ -162,6 +162,15 @@ impl Font {
         })
     }
 
+    /// A font made rather than read: `header` and the glyphs by their codes.
+    pub const fn from_glyphs(header: Header, glyphs: HashMap<u32, Glyph>) -> Self {
+        Self {
+            header,
+            comments: Vec::new(),
+            glyphs,
+        }
+    }
+
     /// The glyph for `code`, if the font has one.
     pub fn glyph(&self, code: u32) -> Option<&Glyph> {
         self.glyphs.get(&code)

@@ -255,7 +255,8 @@ fn figlist_and_showfigfonts() {
     let out = cash(&format!(
         "showfigfonts -d '{path}' ab | grep ' :$' | head -3"
     ));
-    assert_eq!(out.stdout, "banner :\nbig :\nblock :", "{out:?}");
+    // The pixel font, 8x8, sorts first.
+    assert_eq!(out.stdout, "8x8 :\nbanner :\nbig :", "{out:?}");
     let out = cash(&format!(
         "showfigfonts -d '{path}' | grep -A1 '^brackets :'"
     ));
@@ -299,6 +300,57 @@ fn the_picker_draws_the_font_under_the_cursor_and_prints_the_pick() {
     session
         .expect("picked=slant", Duration::from_secs(10))
         .expect("the pick is printed");
+}
+
+#[test]
+fn the_pixel_font_in_its_modes() {
+    let out = cash("figlet --pixel Hi");
+    assert_eq!(
+        out.stdout, "██  ██    ▀▀    \n██▄▄██   ▀██    \n██  ██    ██    \n▀▀  ▀▀   ▀▀▀▀",
+        "{out:?}"
+    );
+    let out = cash("figlet -f 8x8 --pixel=quadrant Hi");
+    assert_eq!(
+        out.stdout, "█ █  ▀  \n█▄█ ▝█  \n█ █  █  \n▀ ▀ ▝▀▘",
+        "{out:?}"
+    );
+    // Two by four pixels to a cell: an 8 by 8 letter in two rows of four.
+    let out = cash("figlet --pixel=braille H");
+    assert_eq!(out.stdout.lines().count(), 2, "{out:?}");
+    assert!(
+        out.stdout
+            .chars()
+            .all(|c| c == '\n' || ('\u{2800}'..='\u{28ff}').contains(&c)),
+        "{out:?}"
+    );
+    let out = cash("figlet --pixel=sparkle x");
+    assert_eq!(out.code, 1, "{out:?}");
+}
+
+#[test]
+fn an_installed_windows_font() {
+    let out = cash("figlet --winfont=Arial --size=24 --pixel=half Hi");
+    assert_eq!(out.code, 0, "{out:?}");
+    assert!(out.stdout.lines().count() >= 6, "{out:?}");
+    assert!(out.stdout.contains('█'), "{out:?}");
+    let out = cash("figlet --winfont='No Such Font' x");
+    assert_eq!(out.code, 1);
+    assert_eq!(
+        out.stderr,
+        "figlet: No Such Font: no font called No Such Font is installed"
+    );
+}
+
+#[test]
+fn dec_double_size_lines() {
+    let out = cash("figlet --dec Big | od -c | head -1");
+    assert!(
+        out.stdout
+            .contains("033   #   3   B   i   g  \\n 033   #   4   B   i   g"),
+        "{out:?}"
+    );
+    let out = cash("figlet --dec=wide Big; printf 'a\\nb\\n' | figlet --dec=wide");
+    assert_eq!(out.stdout, "\u{1b}#6Big\n\u{1b}#6a\n\u{1b}#6b", "{out:?}");
 }
 
 #[test]

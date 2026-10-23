@@ -57,6 +57,13 @@ A logo in a true-colour gradient, framed, and lolcat's rainbow:
     figlet -f big --gradient=#00c6ff,#7f00ff --direction=diagonal Hello
     figlet --lolcat "Hello, World!"
 
+In pixels: the built-in 8x8 font in quadrants, and an installed Windows font:
+
+<!-- parse only: Git Bash has no figlet to compare with -->
+
+    figlet --pixel=quadrant Hello
+    figlet --winfont="Segoe UI" --size=24 --gradient=ocean Hello
+
 ## How it works
 
 `figlet` draws each character of its message, or of each line of standard input, with a
@@ -80,6 +87,13 @@ five styles with padding; a background colour; space between letters and between
 They are filters too, and run in the order given with the others. Windows Terminal and
 the Windows console show true colour; `--colors=256` or `--colors=16` is for a terminal
 that shows fewer.
+
+Pixel fonts draw letters as pixels with block characters, several pixels to a cell:
+`--pixel` uses the built-in 8x8 font, `--winfont` any font installed in Windows, drawn
+at `--size` pixels. `half` blocks show in every font; `quadrant` in any with block
+elements; `sextant` and `octant` need Windows Terminal or Cascadia Code; `braille` most
+fonts have. `--dec` uses no font at all: Windows Terminal draws the text itself twice
+as large.
 
 cash carries 23 fonts: FIGlet's `standard`, `slant`, `small`, `big`, `banner`, `block`,
 `bubble`, `digital`, `ivrit`, `lean`, `mini`, `script`, `shadow`, `smscript`,
@@ -145,6 +159,14 @@ current directory last. A name with a slash or a backslash is a path.
     --pick              Choose a font from a list, MESSAGE drawn in the
                         one under the cursor; its name is printed:
                         figlet -f "$(figlet --pick Hi)" Hi
+
+    --pixel[=MODE]      The built-in pixel font, 8x8 (also -f 8x8),
+                        drawn in half (the default), full, quadrant,
+                        sextant, octant or braille characters.
+    --winfont=NAME      An installed Windows font, drawn as pixels.
+    --size=PIXELS       Its size (16); --bold, --italic.
+    --dec[=big|wide]    The text itself in the terminal's double-size
+                        lines: twice as high and wide, or as wide.
 
     -I CODE             Tell: 0 the version, 1 the version number, 2 the
                         font directory, 3 the font, 4 the width, 5 the
