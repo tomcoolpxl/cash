@@ -1,0 +1,5 @@
+Benchmark 1: wslbash (750 runs)
+                mean     ±       σ          min     …     max
+  Wall Time      3.4 ms  ±     0.4 ms       2.8 ms  …     6.1 ms
+  Memory         3.7 MiB ±     0.1 MiB      3.5 MiB …     3.9 MiB
+ 
