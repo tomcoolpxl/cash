@@ -24,5 +24,5 @@ mod golden;
 pub use canvas::{Block, Cell, Figure, Row};
 pub use control::Controls;
 pub use font::{Font, FontError};
-pub use render::{Direction, Justify, Layout, Settings, render};
+pub use render::{Direction, Justify, Layout, Renderer, Settings, render};
 pub use style::{Color, Style};

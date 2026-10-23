@@ -151,10 +151,10 @@ pub fn text_input(text: &str) -> Vec<char> {
 
 /// Renders `input` in `font`, with the control files' translations and `settings`.
 pub fn render(font: &Font, controls: &Controls, settings: &Settings, input: &[char]) -> Figure {
-    let mut renderer = Renderer::new(font, settings);
-    renderer.run(controls, settings, input);
+    let mut renderer = Renderer::new(font, controls, settings);
+    renderer.push(input);
     Figure {
-        blocks: renderer.output,
+        blocks: renderer.finish(),
     }
 }
 
@@ -162,8 +162,23 @@ pub fn render(font: &Font, controls: &Controls, settings: &Settings, input: &[ch
 static MISSING: Glyph = Glyph { rows: Vec::new() };
 
 /// figlet's state while it renders.
-struct Renderer<'f> {
+///
+/// Text goes in a piece at a time ([`Renderer::push`]), and each line comes out as a
+/// block as soon as it is broken, as figlet prints a line of standard input once it has
+/// read it.
+pub struct Renderer<'f> {
     font: &'f Font,
+    controls: &'f Controls,
+    paragraph: bool,
+    deutsch: bool,
+    /// -1: a break was forced by a blank or by a character too wide for a line, and
+    /// blanks are to be swallowed; 0: the line is blanks; 1: no word break yet; 2: blanks
+    /// after a word; 3: a word after a word break.
+    word_break: i8,
+    last_was_eol: bool,
+    /// A newline at the end of a piece in paragraph mode, which the next character
+    /// decides.
+    pending_newline: bool,
     smush_mode: i32,
     right_to_left: bool,
     justification: usize,
@@ -185,7 +200,8 @@ struct Renderer<'f> {
 }
 
 impl<'f> Renderer<'f> {
-    fn new(font: &'f Font, settings: &Settings) -> Self {
+    /// A renderer for `font`, with the control files' translations and `settings`.
+    pub fn new(font: &'f Font, controls: &'f Controls, settings: &Settings) -> Self {
         let right_to_left = match settings.direction {
             Some(Direction::RightToLeft) => true,
             Some(Direction::LeftToRight) => false,
@@ -201,6 +217,12 @@ impl<'f> Renderer<'f> {
         let height = font.header.height;
         Self {
             font,
+            controls,
+            paragraph: settings.paragraph,
+            deutsch: settings.deutsch,
+            word_break: 0,
+            last_was_eol: false,
+            pending_newline: false,
             smush_mode: settings.smush_mode(font),
             right_to_left,
             justification,
@@ -219,18 +241,47 @@ impl<'f> Renderer<'f> {
         }
     }
 
+    /// Renders the next piece of text; the lines it completes are taken with
+    /// [`Renderer::take_blocks`].
+    pub fn push(&mut self, input: &[char]) {
+        if std::mem::take(&mut self.pending_newline) {
+            let mut joined = Vec::with_capacity(input.len() + 1);
+            joined.push('\n');
+            joined.extend_from_slice(input);
+            self.process(&joined, false);
+        } else {
+            self.process(input, false);
+        }
+    }
+
+    /// The blocks finished so far, taken.
+    pub fn take_blocks(&mut self) -> Vec<Block> {
+        std::mem::take(&mut self.output)
+    }
+
+    /// Ends the text: the last line is printed, and every block not yet taken returned.
+    pub fn finish(mut self) -> Vec<Block> {
+        if std::mem::take(&mut self.pending_newline) {
+            self.process(&['\n'], true);
+        }
+        if self.line_len != 0 {
+            self.print_line();
+        }
+        self.output
+    }
+
     /// figlet's `main` after the options: the characters one by one, and the line breaks.
-    fn run(&mut self, controls: &Controls, settings: &Settings, input: &[char]) {
-        // -1: a break was forced by a blank or by a character too wide for a line, and
-        //     blanks are to be swallowed; 0: the line is blanks; 1: no word break yet;
-        //     2: blanks after a word; 3: a word after a word break.
-        let mut word_break: i8 = 0;
-        let mut last_was_eol = false;
+    fn process(&mut self, input: &[char], at_end: bool) {
+        let mut word_break = self.word_break;
         let mut i = 0;
         while let Some(&ch) = input.get(i) {
             i += 1;
             // In paragraph mode a newline is a blank, unless a blank of any kind follows.
-            let paragraph_break = ch == '\n' && settings.paragraph && !last_was_eol;
+            let paragraph_break = ch == '\n' && self.paragraph && !self.last_was_eol;
+            if paragraph_break && i == input.len() && !at_end {
+                self.pending_newline = true;
+                break;
+            }
             let mut c = if paragraph_break
                 && !input
                     .get(i)
@@ -240,9 +291,9 @@ impl<'f> Renderer<'f> {
             } else {
                 u32::from(ch)
             };
-            last_was_eol = is_c_space(c) && c != u32::from('\t') && c != u32::from(' ');
+            self.last_was_eol = is_c_space(c) && c != u32::from('\t') && c != u32::from(' ');
 
-            if settings.deutsch {
+            if self.deutsch {
                 let at = match char::from_u32(c) {
                     Some('['..=']') => usize::try_from(c - u32::from('[')).ok(),
                     Some('{'..='~') => usize::try_from(c - u32::from('{') + 3).ok(),
@@ -253,7 +304,7 @@ impl<'f> Renderer<'f> {
                 }
             }
 
-            c = controls.map(c);
+            c = self.controls.map(c);
 
             if is_c_space(c) {
                 c = if c == u32::from('\t') || c == u32::from(' ') {
@@ -325,9 +376,7 @@ impl<'f> Renderer<'f> {
                 }
             }
         }
-        if self.line_len != 0 {
-            self.print_line();
-        }
+        self.word_break = word_break;
     }
 
     /// Makes `c`'s glyph the current one (`getletter`): the font's, else its character 0,
@@ -684,6 +733,29 @@ mod tests {
             show(&font, &settings, &text_input("a b\n\nc")),
             "a b\n\nc\n"
         );
+    }
+
+    #[test]
+    fn pieces_render_as_the_whole() {
+        let font = tiny();
+        let controls = Controls::new();
+        for paragraph in [false, true] {
+            let settings = Settings {
+                width: 8,
+                paragraph,
+                ..Settings::default()
+            };
+            let text = "one two\nthree\n\nfour five six\n";
+            let whole = render(&font, &controls, &settings, &text_input(text));
+            let mut renderer = super::Renderer::new(&font, &controls, &settings);
+            let mut blocks = Vec::new();
+            for line in text.split_inclusive('\n') {
+                renderer.push(&text_input(line));
+                blocks.extend(renderer.take_blocks());
+            }
+            blocks.extend(renderer.finish());
+            assert_eq!(blocks, whole.blocks, "paragraph {paragraph}");
+        }
     }
 
     #[test]

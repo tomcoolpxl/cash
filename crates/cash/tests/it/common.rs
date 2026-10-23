@@ -41,6 +41,7 @@ pub const ISOLATED_VARIABLES: [&str; 6] = [
 ];
 
 /// What a run of cash printed and how it ended.
+#[derive(Debug)]
 pub struct Output {
     /// Standard output, its trailing whitespace removed.
     pub stdout: String,

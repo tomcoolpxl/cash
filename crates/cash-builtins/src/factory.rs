@@ -349,6 +349,7 @@ fn make_default_builtins<SE: cash_core::ShellExtensions>(
         builtin::<flock::FlockCommand, SE>().with_substitution_files(),
     );
     m.insert("rev".into(), builtin::<rev::RevCommand, SE>());
+    m.insert("figlet".into(), builtin::<figlet::FigletCommand, SE>());
     // cash's own, not the bundled ones: pure string work, run inside the shell (the user,
     // 2026-10-16, research/in-process-tools-design.md).
     m.insert("basename".into(), builtin::<names::BasenameCommand, SE>());

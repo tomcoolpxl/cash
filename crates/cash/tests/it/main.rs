@@ -66,6 +66,8 @@ mod completion_windows;
 mod column_builtin;
 // coolfetch system banner.
 mod coolfetch;
+// figlet (D84): fonts found, control files, standard input, the width, -I.
+mod figlet;
 // EXE-04: `coproc` ends when its input does, and is a job with a pid.
 mod coprocesses;
 // Inputs that used to take the whole shell down: deep recursion, and panics.

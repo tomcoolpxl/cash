@@ -979,7 +979,7 @@ fn check_deliberate_shadows(
 }
 
 /// Programs outside System32 that cash's own commands shadow on purpose, and how its own
-/// differ: 7-Zip from Scoop or its installer.
+/// differ: 7-Zip and RAR from Scoop or their installers, figlet from Scoop.
 const PROGRAM_SHADOWS: &[(&str, &str)] = &[
     (
         "7z",
@@ -991,6 +991,10 @@ const PROGRAM_SHADOWS: &[(&str, &str)] = &[
         "WinRAR 7.23's commands and words, LF and / in what it prints",
     ),
     ("unrar", "the same, UnRAR's commands only"),
+    (
+        "figlet",
+        "FIGlet 2.2.5's options with toilet's, Unicode input, 23 fonts built in",
+    ),
 ];
 
 /// Names cash answers although a program elsewhere on `PATH` has them, in one note.

@@ -637,6 +637,7 @@ dependencies = [
  "blake2s_simd",
  "cash-archive",
  "cash-core",
+ "cash-figlet",
  "cash-getopt",
  "cash-man",
  "cash-parser",

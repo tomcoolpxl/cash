@@ -119,6 +119,10 @@ mod xargs;
 // nothing — which is the whole difference from the tools that print this elsewhere.
 mod coolfetch;
 
+// cash (D84): `figlet`, big letters, doing what figlet 2.2.5 and toilet 0.3 do, on
+// `cash-figlet`; Windows has neither.
+mod figlet;
+
 // cash (D48): `top`, which Windows has no equivalent of at all — procps was never
 // ported, and the Cygwin build reports pids `kill` cannot use.
 mod top;
