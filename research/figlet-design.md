@@ -244,6 +244,10 @@ with TheDraw fonts. Not chosen: animation, PNG export.
 4. **Exports: `utf8`, `ansi` (CP437) and `text`.** Turned down: six formats with HTML,
    SVG and IRC, and all twelve of libcaca's.
 
+5. **The release that finishes this work is 2.0.0**, a milestone, not a breaking change;
+   its notes say so, so nobody holds back. Turned down: a minor 1.x bump as every release
+   before it, and deciding at release time.
+
 Still open, settled in their phases: the order of the extras (section 10 proposes one),
 and whether the user installs `figlet` and `toilet` in WSL for the oracle.
 
