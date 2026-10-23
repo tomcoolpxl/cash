@@ -1006,6 +1006,13 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
 - **The phase after 1.48.0** (the user, 2026-10-23, from a pick list): traps, signals
   and jobs (recommended), the small parser, glob and start items, and the restricted
   shell. Not picked: POSIX `TZ` rules.
+- **A copy of the shell has a `$BASHPID` of its own** (2026-10-23, in that phase): a
+  subshell, a substitution and a job run inside cash's process, and each now gets a
+  number no Windows process has, as a job with no program has for `$!` (D70); a job's
+  `$BASHPID` is its `$!`. So `[[ $BASHPID != $$ ]]` finds a subshell and `kill
+  $BASHPID` there is the copy's, while `kill $$` from a job reaches the shell. Given up:
+  `$BASHPID` in a subshell naming a real process (`ps -p $BASHPID`); `$$` and `$PID`
+  still do.
 - **The phase after 1.47.0** (the user, 2026-10-22, from a pick list): the small
   leftovers (recommended). Not picked: traps, signals and jobs; another corpus round;
   time zones and raw bytes.

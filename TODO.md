@@ -25,15 +25,15 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the current phase, after 1.48.0, 2026-10-23)
+## The phase before (2026-10-23, done, released as 1.49.0)
 
 From "Found by the corpus round after 1.41.0" below (decisions.md, "The phase after
 1.48.0"), each checked against Git Bash 5.3 first: **Traps, signals and jobs** whole;
 the small items of **Scripts refused that Bash runs**, **Globbing and conditionals**,
-**Starting cash** and **Builtins, small** (`[[ =~ ]]` with a quoted `]`, a malformed
-bracket in an extended group, a collating symbol, a redirection's word globbed in POSIX
-mode, `-r` and `-D`, `--pretty-print` of a here-document before `|`, a builtin's
-`--help`); and the restricted shell (`set -r`, `cash -r`).
+**Starting cash** and **Builtins, small**; and the restricted shell. Done, in DONE.md,
+with a `$BASHPID` for each copy of the shell (decisions.md) and F1 naming `man`; left,
+below: a RETURN trap after a `.` that cannot open its file, a `set -m` script's finished
+jobs before `wait`, GLOBIGNORE inside brackets and `find /dev/null`.
 
 ## The phase before (2026-10-22, done, released as 1.48.0)
 
