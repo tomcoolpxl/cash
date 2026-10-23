@@ -20,6 +20,13 @@ Windows already has Git Bash, MSYS2, WSL and Cygwin. They work by making Windows
 to be Unix. cash starts from the other end: keep the bash language, and make the
 execution model native Windows.
 
+## In numbers
+
+- Compatibility: ~900 scripts from ~50 projects give the same output as in Git Bash 5.3.
+- Tools: ~250 commands built in, among them tar, zip, 7z, rar, gzip, bzip2, xz and zstd,
+  all without anything else installed.
+- Tests: 9,000+ run on every release.
+
 ## Design decisions worth knowing
 
 Full rationale in [spec.md](spec.md); the short version:
