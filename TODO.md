@@ -25,13 +25,15 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## Picked by the user (the current phase, after 1.49.0, 2026-10-23)
+## The phase before (2026-10-23, done, released as 1.50.0)
 
 The small leftovers (decisions.md, "The phase after 1.49.0"), each checked against Git
 Bash 5.3 first: `find /dev/null`, a RETURN trap after a `.` that cannot open its file,
 `eval` of a multi-line alias that unaliases itself, GLOBIGNORE with `:` inside brackets.
-Then another corpus round: more real-world script suites run under cash and Git Bash,
-what differs written down here and fixed in turn.
+Then a corpus round of makeself, dehydrated, oh-my-bash and nb. Done, in DONE.md, with
+`find -links`, tar's whole records, `command -v`'s path for a carried tool, `tput` for a
+dumb terminal and a script waiting for its jobs inside cash (the user's picks); left,
+below: job control in an interactive cash with no console.
 
 ## The phase before (2026-10-23, done, released as 1.49.0)
 
