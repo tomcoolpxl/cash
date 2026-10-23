@@ -38,6 +38,29 @@ def latest_runs():
     return sorted(latest.values(), key=lambda run: run.name.endswith("-linux"))
 
 
+def machine(run):
+    """A run's machine.txt as a dictionary: `cash: cash 2.1.1 (git:...)` is `cash`."""
+    path = run / "machine.txt"
+    if not path.exists():
+        return {}
+    pairs = (line.split(":", 1) for line in path.read_text(encoding="utf-8").splitlines())
+    return {key.strip(): value.strip() for key, value in pairs if value}
+
+
+def label(shell, run):
+    """A column's heading, saying which shell it is: cash with its version, as a table that
+    only said `cash` did not tell 2.1.1's run from 2.0.0's."""
+    if shell == "cash":
+        words = machine(run).get("cash", "").split()
+        return f"cash {words[1]}" if len(words) > 1 else "cash"
+    if shell == "pwsh":
+        words = machine(run).get("pwsh", "").split()
+        return f"PowerShell {words[1].split('.')[0]}" if len(words) > 1 else "PowerShell"
+    return {"gitbash": "Git Bash", "wslbash": "WSL bash", "linuxbash": "Linux native"}.get(
+        shell, shell
+    )
+
+
 def median(result):
     """The median wall-clock time of one command, from hyperfine 2's export or 1's."""
     if "summary" in result:
@@ -64,7 +87,8 @@ for run, _, shell, _ in found:
 medians = {}
 columns = []
 for run, workload, shell, seconds in found:
-    column = shell if len(owners[shell]) == 1 else f"{shell} ({run.name})"
+    name = label(shell, run)
+    column = name if len(owners[shell]) == 1 else f"{name} ({run.name})"
     medians.setdefault(workload, {})[column] = seconds
     if column not in columns:
         columns.append(column)
