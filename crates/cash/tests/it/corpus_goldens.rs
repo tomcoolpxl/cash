@@ -48,6 +48,12 @@ const KNOWN_DIFFERENT: &[(&str, &str)] = &[
          `C:/…` does not; bats-assert-unixpaths.sh runs it under `unixpaths` (D82)",
     ),
     (
+        "bash/nb.sh",
+        "D3: nb looks for a local notebook climbing with `cd ..` until `$PWD` is `/`, which \
+         `C:/…` never is, to the limit of 500 calls; nb-unixpaths.sh runs it under \
+         `unixpaths` (D82, D83)",
+    ),
+    (
         "bash/nvm-helpers.sh",
         "D3: `$PWD` is `C:/…`, whose colon splits `nvm_strip_path`'s colon-separated list",
     ),

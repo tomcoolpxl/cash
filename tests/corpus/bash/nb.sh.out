@@ -1,0 +1,83 @@
+--------------------------------------------------------------------------------
+                               Welcome to
+                               __          _
+                               \ \   _ __ | |__
+                                \ \ | '_ \| '_ \
+                                / / | | | | |_) |
+                               /_/  |_| |_|_.__/
+--------------------------------------------------------------------------------
+                                      home
+[?7l--------------------------------------------------------------------------------[?7h
+0 items.
+
+Add a note:
+  nb add
+Add a bookmark:
+  nb <url>
+Add a todo:
+  nb todo add <title>
+Import a file:
+  nb import (<path> | <url>)
+Help information:
+  nb help
+[?7l--------------------------------------------------------------------------------[?7h
+> nb - nb add - nb <url> - nb edit <id> - nb show <id> - nb open <id>
+nb browse - nb todos - nb tasks - nb search <query> - nb notebooks add <name>
+nb settings - nb help
+[0]
+Added: [1] first_note.md "First note"
+[0]
+Added: [2] second.md "Second"
+[0]
+[2] Second
+[1] First note
+[0]
+# First note
+
+The first note body
+
+[0]
+[2] second.md "Second"
+[0]
+[1] First note
+--------------
+3:The first note body
+
+[2] Second
+----------
+3:Second body, with #tag1 and #tag2
+
+[0]
+[2] Second
+----------
+3:Second body, with #tag1 and #tag2
+
+[0]
+Added notebook: work
+[0]
+Added: [work:1] work:work.md "Work"
+[0]
+[work:1] Work
+[0]
+home
+work
+[0]
+Added: [3] ✔️  STAMP.todo.md "[ ] Buy milk"
+[0]
+[3] ✔️  [ ] Buy milk
+[0]
+Done: [3] ✅ [x] Buy milk
+[0]
+[3] ✅ [x] Buy milk
+[0]
+Deleted:  [3] ✅ STAMP.todo.md "[x] Buy milk"
+[0]
+Moved to: [work:2] work:first_note.md "First note"
+[0]
+[2] Second
+[0]
+[work:1] Work
+[work:2] First note
+[0]
+7.25.5
+[0]
