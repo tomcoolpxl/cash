@@ -274,6 +274,23 @@ impl<R: Read> Reader<R> {
         self.input
     }
 
+    /// Reads on to the end of the record the archive's end fell in, `blocks` blocks a
+    /// record, as GNU tar reads whole records. A program writing the archive into a pipe
+    /// (`cat x.tar | tar xf -`) is then not cut off before the padding it still had to
+    /// write, and does not fail of a broken pipe. A short input ends it.
+    ///
+    /// # Errors
+    ///
+    /// A read that fails.
+    pub fn finish_record(&mut self, blocks: u64) -> io::Result<()> {
+        while blocks > 0 && self.block % blocks != 0 {
+            if self.read_block()?.is_none() {
+                break;
+            }
+        }
+        Ok(())
+    }
+
     /// One whole block, or `None` at the end of the input; a last block cut short is no
     /// block.
     fn read_block(&mut self) -> io::Result<Option<[u8; BLOCK]>> {

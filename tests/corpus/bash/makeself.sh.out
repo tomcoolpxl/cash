@@ -1,0 +1,79 @@
+Header is 763 lines long
+
+About to compress N KB of data...
+Adding files to archive named "demo.run"...
+./hello.txt
+./setup.sh
+./sub/nested.txt
+CRC: X
+MD5: X
+
+Self-extractable archive "demo.run" successfully created.
+build: 0
+== --check
+Verifying archive integrity... ./demo.run does not contain an embedded SHA256 checksum.
+     0%    32%    64%    96%  100%   MD5 checksums are OK. All good.
+== --list
+Target directory: payload
+./hello.txt
+./setup.sh
+./sub/nested.txt
+== --info
+Identification: Demo archive
+Target directory: payload
+Uncompressed size: N KB
+Compression: gzip
+Encryption: n
+Date of packaging: DATE
+Built with Makeself version 2.7.1
+Build command was: makeself/makeself.sh \
+    "payload" \
+    "demo.run" \
+    "Demo archive" \
+    "./setup.sh" \
+    "one" \
+    "two"
+Script run after extraction:
+     ./setup.sh one two
+payload will be removed after extraction
+== --lsm
+No LSM.
+== --noexec --target out
+Creating directory out
+Verifying archive integrity...     0%    32%    64%    96%  100%   MD5 checksums are OK. All good.
+Uncompressing Demo archive     0%    32%    64%    96%  100%  
+== --target run2
+Creating directory run2
+Verifying archive integrity...     0%    32%    64%    96%  100%   MD5 checksums are OK. All good.
+Uncompressing Demo archive     0%    32%    64%    96%  100%  
+setup ran in run2 with one two
+== --quiet --target run3 -- three
+setup ran in run3 with one two three
+== sh
+setup ran in run4 with one two
+Verifying archive integrity...     0%    40%    80%  100%   SHA256 checksums are OK. ./plain.run does not contain an embedded MD5 checksum.
+ ./plain.run does not contain a CRC checksum.
+ All good.
+Identification: Plain archive
+Compression: none
+setup ran in run5 with 
+out/hello.txt
+out/setup.sh
+out/sub/nested.txt
+run2/hello.txt
+run2/setup.sh
+run2/sub/nested.txt
+run3/hello.txt
+run3/setup.sh
+run3/sub/nested.txt
+run4/hello.txt
+run4/setup.sh
+run4/sub/nested.txt
+run5/hello.txt
+run5/setup.sh
+run5/sub/nested.txt
+nested
+Usage: makeself/makeself.sh [args] archive_dir file_name label startup_script [script_args]
+args can be one or more of the following :
+    --version | -v     : Print out Makeself version number and exit
+Makeself version 2.7.1

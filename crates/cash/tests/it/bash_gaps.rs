@@ -4213,6 +4213,24 @@ fn the_restricted_shell_refuses_what_bashs_refuses() {
 }
 
 #[test]
+fn find_takes_links_as_git_bash_counts_them() {
+    // `-links` was an unknown predicate, so makeself built empty archives. A directory
+    // has one link, as Git Bash shows it, and a file its hard links.
+    let scratch = Scratch::new("find-links");
+    std::fs::create_dir_all(scratch.join("d/e")).unwrap();
+    std::fs::write(scratch.join("f"), "").unwrap();
+    assert_eq!(
+        output_in(
+            scratch.path(),
+            "find . -links 2; find . -type f -links 1; find . -links +1; find . -links -2 | sort; \
+             find . -links x 2>&1"
+        )
+        .1,
+        "./f\n.\n./d\n./d/e\n./f\nfind: non-numeric argument to -links: 'x'"
+    );
+}
+
+#[test]
 fn find_visits_dev_null_as_the_character_device_it_is() {
     // `find /dev/null` said there was no such file (modernish's find check).
     assert_eq!(

@@ -179,6 +179,8 @@ enum Test {
     /// how long ago one of its times was, in whole units of the given seconds, as GNU
     /// `find` counts it.
     Age(Stamp, Compare, u64, u64),
+    /// `-links`: the entry's hard links, a directory's 1 as Git Bash counts it.
+    Links(Compare, u64),
     Empty,
     True,
     False,
@@ -691,6 +693,14 @@ impl ExprParser<'_> {
                 };
                 Ok(Expr::Test(Test::Type(kind)))
             }
+            "-links" => {
+                let value = self.argument_to(&token)?;
+                let (compare, digits) = Compare::parse(value.as_str());
+                let count = digits
+                    .parse()
+                    .map_err(|_| std::format!("non-numeric argument to -links: '{value}'"))?;
+                Ok(Expr::Test(Test::Links(compare, count)))
+            }
             "-size" => {
                 let value = self.argument_to(&token)?;
                 let (compare, digits) = Compare::parse(value.as_str());
@@ -880,6 +890,14 @@ fn matches(test: &Test, visit: &Visit<'_>) -> bool {
         Test::Age(stamp, compare, count, unit) => stamp_of(visit, *stamp)
             .and_then(|time| SystemTime::now().duration_since(time).ok())
             .is_some_and(|age| compare.holds(age.as_secs() / unit, *count)),
+        Test::Links(compare, count) => {
+            let links = match &visit.metadata {
+                Some(metadata) => cash_win32::fs::file_link_count(visit.path, metadata),
+                None if visit.device => 1,
+                None => return false,
+            };
+            compare.holds(u64::from(links), *count)
+        }
         Test::Empty => visit.metadata.as_ref().is_some_and(|m| {
             if m.is_dir() {
                 std::fs::read_dir(visit.path).is_ok_and(|mut entries| entries.next().is_none())

@@ -86,11 +86,17 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
                     self.error("Skipping to next header")?;
                     continue;
                 }
+                // The rest of the record is read, as GNU tar reads whole records: what
+                // writes the archive into a pipe is not cut off before its padding.
                 Event::LoneZero(at) => {
                     self.say(&format!("A lone zero block at {at}"))?;
+                    let _ = reader.finish_record(self.options.blocking);
                     break;
                 }
-                Event::End => break,
+                Event::End => {
+                    let _ = reader.finish_record(self.options.blocking);
+                    break;
+                }
                 Event::Member(entry) => entry,
             };
             if op == Op::TestLabel {
