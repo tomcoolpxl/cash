@@ -32,6 +32,29 @@ on the new `cash-figlet` crate, with cash's colour pack, a font picker, pixel an
 fonts, DEC double-size lines and TheDraw fonts; the sixel image mode dropped. In DONE.md.
 Released as 2.0.0, a milestone and not a breaking change.
 
+## Found comparing with Git Bash's own setup (2026-10-23), not yet picked
+
+What Git for Windows 2.55 sets up out of the box (`/etc/profile`, `profile.d/*.sh`,
+`bash.bashrc`, `/etc/inputrc`) that cash lacks. Git itself stays a separate program: none
+of this is about taking git into cash. cash is ahead on history, `ls` colours and icons,
+the Terminal profile and shell integration, and needs no winpty.
+
+1. **Git completion out of the box.** Git Bash completes subcommands, branches and
+   remotes with no setup; cash needs carapace or a `source` line by hand, though it runs
+   Git's `git-completion.bash`. Sourcing it when found (from `git --exec-path`) would close it.
+2. **The starter never reaches a Git Bash user.** It is written only when there is neither
+   `~/.bashrc` nor `~/.cashrc`, so someone with a `~/.bashrc` lands on `cash-2.0$ `, no
+   title, no branch, no aliases. Also: the starter's branch shows no MERGING/REBASE state
+   and no tag on a detached HEAD, which `__git_ps1` shows.
+3. **`~/.inputrc` is ignored** (`INPUTRC` too), so a Git Bash user's own bindings are lost
+   without a word; `bind -f` already reads the format.
+4. **No Start-menu entry and no "Open cash here"** on a directory in Explorer (Inno has no
+   `[Icons]`); Git's installer offers both.
+5. **Small ones:** `~/bin` first on PATH and `~/bash_completion.d/*.bash` sourced (Git
+   Bash's `env.sh` and `git-prompt.sh`); `no_empty_cmd_completion`; PageUp/PageDown to the
+   start and end of history (`/etc/inputrc`); a note on Windows' OpenSSH agent beside Git's
+   `ssh-agent` and `SSH_ASKPASS`. Not checked yet: `LANG` when unset.
+
 ## The phase before (2026-10-23, done, released as 1.50.0)
 
 The small leftovers (decisions.md, "The phase after 1.49.0"), each checked against Git
