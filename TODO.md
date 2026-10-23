@@ -25,6 +25,28 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
+## The phase now (2026-10-23): `figlet`, toward 2.0.0
+
+The user's design, research/figlet-design.md, decided by pick lists on 2026-10-23
+(decisions.md D84). One `figlet` builtin doing what figlet 2.2.5 and toilet 0.3 do, with
+loose compatibility, 23 fonts built in, and extras. Released as **2.0.0** at the end, a
+milestone and not a breaking change; the steps below are not released one by one. The
+oracle is figlet and toilet in WSL's Arch (installed by the user, 2026-10-23).
+
+1. `cash-figlet` (new leaf crate): fonts (`.flf`, `.tlf`, Latin-1 or UTF-8, code tags,
+   colour escapes in glyphs), control files, the smusher copied from rs-figlet
+   (Apache-2.0), wrapping, justification, paragraphs, direction, the canvas, the `text`
+   export; rs-figlet's goldens.
+2. The `figlet` builtin: figlet's options, the 23 built-in fonts, font search (`-d`,
+   `FIGLET_FONTDIR`, `%LOCALAPPDATA%\cash\fonts`), zipped fonts, `-I`, help, man pages.
+3. Colour fonts, toilet's options and filters, the `utf8` and `ansi` exports, `--color`.
+4. The colour pack: gradients and palettes, lolcat rainbow, shadow and outline, Unicode
+   borders, letter spacing, line height, background.
+5. `figlist`, `showfigfonts`, and the font picker with a live preview.
+6. Pixel fonts drawn with sub-cell blocks, any installed Windows font, double-size lines.
+7. The sixel image mode and TheDraw `.tdf` fonts.
+8. The WSL oracle, the `cash doctor` shadow row, NOTICE and `upstreams.toml`.
+
 ## The phase before (2026-10-23, done, released as 1.50.0)
 
 The small leftovers (decisions.md, "The phase after 1.49.0"), each checked against Git

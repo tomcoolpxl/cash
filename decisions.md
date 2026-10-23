@@ -204,6 +204,23 @@ and made a one-letter name at `/` a whole drive (`rm -rf c`), for a gain this sp
 gives; the same in the default mode; Git's install directory as `/`; `cd ..` failing at
 a drive's top, which a loop that does not check goes round.
 
+### D84 — `figlet`: one builtin doing figlet's and toilet's work, and more
+
+The user's picks, 2026-10-23 (research/figlet-design.md). One command, `figlet`, written
+in-house in Rust, reads FIGfont 2.0 in all its flavours (`.flf`, toilet's UTF-8 `.tlf`
+with colour glyphs, `.flc` control files, each possibly zipped) and does what figlet 2.2.5
+and toilet 0.3 do, with loose compatibility; toilet's options are added to it and `-E` is
+toilet's export. rs-figlet's parser and smusher (Apache-2.0) are taken in as cash's own
+code. 23 fonts are built into cash.exe (figlet's 17 without `mnemonic`, toilet's `mono12`,
+`mono9`, `future`, `smbraille`, `pagga`, `smblock`; 443 KB), chosen from a sample of
+GitHub scripts; the rest load from a font directory. Exports: `utf8`, `ansi` (CP437) and
+`text`. Extras: true-colour gradients and palettes, a font picker, pixel fonts and
+installed Windows fonts drawn with sub-cell blocks, double-size lines, a sixel image mode,
+TheDraw fonts. The release that finishes it is 2.0.0, a milestone, not a breaking change.
+Turned down: `figlet` and `toilet` as two commands, a new name with aliases; all 75 font
+files built in, rs-figlet's nine, figlet's only; HTML, SVG, IRC and libcaca's other
+exports; a 1.x version.
+
 ### D4 — Arguments are never rewritten
 
 A child gets exactly the string a variable holds; cash never guesses which arguments are
