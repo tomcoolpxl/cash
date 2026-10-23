@@ -21,6 +21,7 @@ pub mod pixel;
 mod pixel_data;
 pub mod render;
 pub mod style;
+pub mod tdf;
 
 #[cfg(test)]
 mod golden;

@@ -95,6 +95,10 @@ elements; `sextant` and `octant` need Windows Terminal or Cascadia Code; `braill
 fonts have. `--dec` uses no font at all: Windows Terminal draws the text itself twice
 as large.
 
+TheDraw fonts (`.tdf`), the colour fonts of DOS's ANSI art, are read too: put them in a
+font directory and name them with `-f` like any other. Colour and block fonts are read,
+not outline fonts; a line is as high as the letters on it, as in TheDraw.
+
 cash carries 23 fonts: FIGlet's `standard`, `slant`, `small`, `big`, `banner`, `block`,
 `bubble`, `digital`, `ivrit`, `lean`, `mini`, `script`, `shadow`, `smscript`,
 `smshadow`, `smslant` and `term`, and TOIlet's `future`, `mono9`, `mono12`, `pagga`,
@@ -104,7 +108,7 @@ current directory last. A name with a slash or a backslash is a path.
 
 ## Options
 
-    -f, --font=FONT     The font, by name or path; .flf or .tlf may be
+    -f, --font=FONT     The font, by name or path; .flf, .tlf or .tdf may be
                         left off.
     -d, --directory=DIR Look for fonts and control files in DIR first.
     -C FILE             A control file, translating characters; may be

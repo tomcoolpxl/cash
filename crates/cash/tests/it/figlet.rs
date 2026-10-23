@@ -341,6 +341,43 @@ fn an_installed_windows_font() {
     );
 }
 
+/// A TheDraw font file with `A`, two red-on-blue full blocks over a white upper half
+/// block, of type `kind` (2 colour, 0 outline), a column of spacing.
+fn tiny_tdf(kind: u8) -> Vec<u8> {
+    let mut file = b"\x13TheDraw FONTS file\x1a".to_vec();
+    file.extend_from_slice(&[0x55, 0xaa, 0x00, 0xff, 4]);
+    file.extend_from_slice(b"TINY\0\0\0\0\0\0\0\0\0\0\0\0");
+    file.extend_from_slice(&[kind, 1]);
+    let a: &[u8] = &[2, 2, 0xdb, 0x14, 0xdb, 0x14, b'\r', 0xdf, 0x0f, 0];
+    file.extend_from_slice(&u16::try_from(a.len()).unwrap().to_le_bytes());
+    for ch in '!'..='~' {
+        let offset: u16 = if ch == 'A' { 0 } else { 0xffff };
+        file.extend_from_slice(&offset.to_le_bytes());
+    }
+    file.extend_from_slice(a);
+    file
+}
+
+#[test]
+fn thedraw_fonts() {
+    let dir = Scratch::new("figlet-tdf");
+    std::fs::write(dir.join("tiny.tdf"), tiny_tdf(2)).unwrap();
+    std::fs::write(dir.join("outline.tdf"), tiny_tdf(0)).unwrap();
+    let path = dir.as_script_path();
+    let out = cash(&format!("figlet -d '{path}' -f tiny A"));
+    assert_eq!(out.stdout, "██ \n▀", "{out:?}");
+    let out = cash(&format!(
+        "figlet -f '{path}/tiny.tdf' --color=always A | head -1"
+    ));
+    // The colour, the two blocks, a reset, and the column of spacing (trimmed here).
+    assert_eq!(out.stdout, "\u{1b}[0;31;44m██\u{1b}[0m", "{out:?}");
+    let out = cash(&format!("figlet -d '{path}' -f outline A"));
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.contains("outline fonts are not read"), "{out:?}");
+    let out = cash(&format!("figlist -d '{path}'"));
+    assert!(out.stdout.contains(":\noutline\ntiny"), "{out:?}");
+}
+
 #[test]
 fn dec_double_size_lines() {
     let out = cash("figlet --dec Big | od -c | head -1");

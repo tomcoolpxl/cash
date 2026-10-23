@@ -272,6 +272,20 @@ const CP437_HIGH: &str = "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ
 ░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀\
 αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u{a0}";
 
+/// The character a code page 437 byte stands for, from 0x20 up; a control byte is `?`.
+pub fn cp437_char(byte: u8) -> char {
+    match byte {
+        0x20..=0x7e => char::from(byte),
+        0x80..=0xff => CP437_HIGH
+            .chars()
+            .nth(usize::from(byte - 0x80))
+            .unwrap_or('?'),
+        // 0x7f is a house in code page 437.
+        0x7f => '⌂',
+        _ => '?',
+    }
+}
+
 /// `ch` in code page 437, `?` where it has none.
 pub fn cp437(ch: char) -> u8 {
     if (' '..='~').contains(&ch) {

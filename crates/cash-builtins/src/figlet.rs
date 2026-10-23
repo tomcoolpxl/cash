@@ -832,18 +832,29 @@ fn load_font<SE: cash_core::ShellExtensions>(
         let chars = cash_figlet::pixel::wanted_chars(&request.message.join(" "));
         return Ok(cash_figlet::pixel::font8x8_font(mode, &chars));
     }
-    let suffixes = [".flf", ".tlf"];
-    let found = find_file(context, &directories(context, request), name, &suffixes)
+    let found = find_file(context, &directories(context, request), name, FONT_SUFFIXES)
         .or_else(|| {
             (!name.contains(['/', '\\']))
                 .then(|| builtin::find(name))
                 .flatten()
                 .map(|font| font.bytes.to_vec())
         })
-        .or_else(|| find_file(context, &[".".to_owned()], name, &suffixes));
+        .or_else(|| find_file(context, &[".".to_owned()], name, FONT_SUFFIXES));
     let bytes = found.ok_or_else(|| format!("{name}: Unable to open font file"))?;
+    if cash_figlet::tdf::is_tdf(&bytes) {
+        // A line as high as the message's letters, as tdfiglet draws it; standard input,
+        // read as it comes, gets the whole font.
+        let message = request.message.join(" ");
+        let chars = cash_figlet::pixel::wanted_chars(&message);
+        let only = (!message.is_empty()).then_some(chars.as_slice());
+        return cash_figlet::tdf::parse_for(&bytes, only)
+            .map_err(|error| format!("{name}: {error}"));
+    }
     Font::parse(&bytes).map_err(|error| format!("{name}: {error}"))
 }
+
+/// What a font file's name ends in: FIGlet's, TOIlet's and TheDraw's.
+const FONT_SUFFIXES: &[&str] = &[".flf", ".tlf", ".tdf"];
 
 /// The control files the request names, read: those in the font directories or the
 /// current directory; the name of one that cannot be read.
@@ -979,7 +990,7 @@ fn font_names<SE: cash_core::ShellExtensions>(
 ) -> Vec<String> {
     let mut names: Vec<String> = directories(context, request)
         .iter()
-        .flat_map(|dir| fonts_in(context, dir, &[".flf", ".tlf"]))
+        .flat_map(|dir| fonts_in(context, dir, FONT_SUFFIXES))
         .chain(builtin::FONTS.iter().map(|font| font.name.to_owned()))
         .chain(std::iter::once(PIXEL_FONT.to_owned()))
         .collect();
@@ -1207,7 +1218,7 @@ impl builtins::Command for FiglistCommand {
             text.push('\n');
         }
         for dir in &dirs {
-            let fonts = fonts_in(&context, dir, &[".flf", ".tlf"]);
+            let fonts = fonts_in(&context, dir, FONT_SUFFIXES);
             if !fonts.is_empty() {
                 text.push_str("Fonts in ");
                 text.push_str(dir);
@@ -1307,7 +1318,7 @@ fn print_info<SE: cash_core::ShellExtensions>(
                 .first()
                 .map_or("", String::as_str)
         )?,
-        3 => writeln!(out, "{}", bare_name(&request.font, ".flf .tlf"))?,
+        3 => writeln!(out, "{}", bare_name(&request.font, ".flf .tlf .tdf"))?,
         4 => writeln!(out, "{width}")?,
         5 => writeln!(out, "flf2 tlf2")?,
         _ => {}
