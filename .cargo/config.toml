@@ -20,3 +20,9 @@ rustflags = ["-C", "target-feature=+crt-static"]
 # offer's own tests remove it again.
 [env]
 CASH_NO_OFFER = "1"
+# A test that runs a shell in its own thread (`Shell::builder()`, then `complete` or
+# `run_string`) gets the stack the shell's threads have (`SHELL_THREAD_STACK_SIZE`, 256 MiB,
+# reserved, not committed), not libtest's 2 MiB: since the interpreter's futures nest in
+# place (D86), a debug build's frames are large, and a completion script's few function
+# calls overflowed it.
+RUST_MIN_STACK = "268435456"

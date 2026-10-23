@@ -17,7 +17,7 @@ use crate::{
     Shell, ShellFd, builtins, error, escape,
     extensions::{self, ShellExtensions},
     functions,
-    interp::{self, Execute, ProcessGroupPolicy},
+    interp::{self, ProcessGroupPolicy},
     openfiles::{self, OpenFile, OpenFiles},
     pathsearch, processes,
     results::ExecutionSpawnResult,
@@ -2231,8 +2231,8 @@ pub(crate) async fn invoke_shell_function(
     // fails skips it with the trap's status.
     let result = match interp::run_debug_trap(context.shell, &context.params, || None, body).await {
         Ok(interp::DebugTrap::Skip(result) | interp::DebugTrap::Leave(result)) => Ok(result),
-        Ok(interp::DebugTrap::Run) => body
-            .execute(context.shell, &context.params)
+        // Boxed: a function's body may call it again (D86).
+        Ok(interp::DebugTrap::Run) => interp::execute_boxed(body, context.shell, &context.params)
             .await
             .map_err(|e| e.located_at(context.shell.error_prefix())),
         Err(error) => Err(error),

@@ -402,25 +402,42 @@ pub enum ProcessGroupPolicy {
     SameProcessGroup,
 }
 
-#[async_trait::async_trait]
+/// A future boxed where the syntax tree recurses ([`Execute`]), its type erased.
+type Recursing<'a, T> =
+    std::pin::Pin<Box<dyn Future<Output = Result<T, error::Error>> + Send + 'a>>;
+
+/// `node.execute(shell, params)`, boxed: for where the syntax tree recurses (D86). Generic
+/// over the node, so that `Send` follows from [`Execute`]'s bound and the compiler need
+/// not work out the boxed future's type, which holds the caller's own: boxing in place
+/// was a cycle it could not resolve.
+pub(crate) fn execute_boxed<'a, N: Execute + Sync + ?Sized>(
+    node: &'a N,
+    shell: &'a mut Shell<impl extensions::ShellExtensions>,
+    params: &'a ExecutionParameters,
+) -> Recursing<'a, ExecutionResult> {
+    Box::pin(node.execute(shell, params))
+}
+
+/// A node of the syntax tree that runs. Its future holds those of the nodes it runs, in
+/// place: it was an `#[async_trait]` method, which boxed and copied a future at every
+/// level, five times a command (D86). Where the tree recurses, a compound command's body
+/// and a trap's commands, the caller boxes it, which no future type can do without.
 pub trait Execute {
-    async fn execute(
+    fn execute(
         &self,
         shell: &mut Shell<impl extensions::ShellExtensions>,
         params: &ExecutionParameters,
-    ) -> Result<ExecutionResult, error::Error>;
+    ) -> impl Future<Output = Result<ExecutionResult, error::Error>> + Send;
 }
 
-#[async_trait::async_trait]
 trait ExecuteInPipeline<SE: extensions::ShellExtensions> {
-    async fn execute_in_pipeline(
+    fn execute_in_pipeline(
         &self,
         context: PipelineExecutionContext<'_, SE>,
         params: ExecutionParameters,
-    ) -> Result<ExecutionSpawnResult, error::Error>;
+    ) -> impl Future<Output = Result<ExecutionSpawnResult, error::Error>> + Send;
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::Program {
     async fn execute(
         &self,
@@ -549,7 +566,6 @@ pub(crate) async fn execute_program(
     Ok((result, None))
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::CompoundList {
     async fn execute(
         &self,
@@ -561,8 +577,9 @@ impl Execute for ast::CompoundList {
         for ast::CompoundListItem(ao_list, sep) in &self.0 {
             let run_async = matches!(sep, ast::SeparatorOperator::Async);
 
+            // `%1 &` runs a list again: boxed, where the tree recurses (D86).
             if run_async && let Some(bg) = job_spec_sent_to_background(ao_list) {
-                result = bg.execute(shell, params).await?;
+                result = execute_boxed(&bg, shell, params).await?;
                 shell.set_last_exit_status(result.exit_code.into());
             } else if run_async {
                 if let Some(job) = spawn_async_ao_list_in_task(ao_list, shell, params).await {
@@ -820,7 +837,6 @@ where
     Some(shell.jobs_mut().add_as_current(job))
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::AndOrList {
     async fn execute(
         &self,
@@ -1019,8 +1035,8 @@ const fn is_compound_of_commands(pipeline: &ast::Pipeline) -> bool {
     )
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::Pipeline {
+    #[expect(clippy::too_many_lines)]
     async fn execute(
         &self,
         shell: &mut Shell<impl extensions::ShellExtensions>,
@@ -1495,7 +1511,6 @@ async fn act_on_console_interrupt(
     shell.interrupt(params).await
 }
 
-#[async_trait::async_trait]
 impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::Command {
     async fn execute_in_pipeline(
         &self,
@@ -1533,7 +1548,7 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::Command {
                     }
                 }
 
-                spawn_or_run_in_pipeline(pipeline_context, params, compound.clone()).await
+                spawn_or_run_in_pipeline(pipeline_context, params, compound).await
             }
             Self::Function(func) => Ok(func
                 .execute(&mut pipeline_context.shell, &params)
@@ -1641,13 +1656,17 @@ pub(crate) fn release_redirections(
 /// pipeline under `lastpipe` keeps running inline: it owns the parent shell, its output
 /// is not going into a pipe anyone has to drain, and running it elsewhere would lose the
 /// variable assignments `lastpipe` exists to keep.
+///
+/// The command is copied only for a stage on a thread of its own: run in this shell, it
+/// was copied whole each time it ran, an `if` in a loop on every turn.
 async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
     pipeline_context: PipelineExecutionContext<'_, SE>,
     params: ExecutionParameters,
-    compound: ast::CompoundCommand,
+    compound: &ast::CompoundCommand,
 ) -> Result<ExecutionSpawnResult, error::Error> {
     match pipeline_context.shell {
         commands::ShellForCommand::OwnedShell { target, .. } => {
+            let compound = compound.clone();
             let Ok(slot_guard) = jobs::SubshellSlotGuard::try_acquire() else {
                 use std::io::Write as _;
                 let _ = writeln!(
@@ -1667,7 +1686,7 @@ async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
                 let _held = hold_redirections(&mut shell, &mut params);
                 let rt = tokio::runtime::Handle::current();
                 let outcome = rt.block_on(async {
-                    let result = compound.execute(&mut shell, &params).await?;
+                    let result = execute_boxed(&compound, &mut shell, &params).await?;
                     // The stage is a subshell: its own EXIT trap runs as it ends.
                     let status = shell.end_subshell(result.exit_code.into(), &params).await;
                     Ok(ExecutionResult {
@@ -1682,7 +1701,8 @@ async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
         commands::ShellForCommand::ParentShell(shell) => {
             let mut params = params;
             let held = hold_redirections(shell, &mut params);
-            let result = compound.execute(shell, &params).await;
+            // Boxed: the syntax tree recurses here, and so would the future (D86).
+            let result = execute_boxed(compound, shell, &params).await;
             release_redirections(shell, held);
             Ok(result?.into())
         }
@@ -1694,7 +1714,6 @@ enum WhileOrUntil {
     Until,
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::CompoundCommand {
     async fn execute(
         &self,
@@ -1802,7 +1821,6 @@ impl Execute for ast::CompoundCommand {
     }
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::CoprocessCommand {
     async fn execute(
         &self,
@@ -1927,7 +1945,6 @@ fn add_fd_at_or_below<SE: extensions::ShellExtensions>(
     fd
 }
 
-#[async_trait::async_trait]
 #[expect(clippy::too_many_lines)]
 impl Execute for ast::SelectClauseCommand {
     async fn execute(
@@ -2081,7 +2098,6 @@ impl Execute for ast::SelectClauseCommand {
     }
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::ForClauseCommand {
     async fn execute(
         &self,
@@ -2188,7 +2204,6 @@ fn refuse_loop_name(
     Some(ExecutionResult::general_error())
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::CaseClauseCommand {
     async fn execute(
         &self,
@@ -2264,7 +2279,6 @@ impl Execute for ast::CaseClauseCommand {
     }
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::IfClauseCommand {
     async fn execute(
         &self,
@@ -2317,7 +2331,6 @@ impl Execute for ast::IfClauseCommand {
     }
 }
 
-#[async_trait::async_trait]
 impl Execute for (WhileOrUntil, &ast::WhileOrUntilClauseCommand) {
     async fn execute(
         &self,
@@ -2375,7 +2388,6 @@ impl Execute for (WhileOrUntil, &ast::WhileOrUntilClauseCommand) {
     }
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::ArithmeticCommand {
     async fn execute(
         &self,
@@ -2417,7 +2429,6 @@ impl Execute for ast::ArithmeticCommand {
     }
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::ArithmeticForClauseCommand {
     async fn execute(
         &self,
@@ -2503,8 +2514,11 @@ impl Execute for ast::ArithmeticForClauseCommand {
     }
 }
 
-#[async_trait::async_trait]
 impl Execute for ast::FunctionDefinition {
+    #[expect(
+        clippy::unused_async_trait_impl,
+        reason = "defining a function waits for nothing; the trait is for every node"
+    )]
     async fn execute(
         &self,
         shell: &mut Shell<impl extensions::ShellExtensions>,
@@ -2565,7 +2579,6 @@ impl Execute for ast::FunctionDefinition {
 /// cash's own and gets the pipe.
 const NEEDS_A_FILE: &[&str] = &["diff", "cmp", "findstr", "fc", "comp", "certutil"];
 
-#[async_trait::async_trait]
 #[expect(clippy::too_many_lines)]
 impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleCommand {
     async fn execute_in_pipeline(
@@ -2615,7 +2628,7 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         // Asked only for a process substitution: it copied the command's name, looked it up
         // and compared it with each name in the list for every command.
         let requires_seekable_file = |shell: &Shell<_>| {
-            self.word_or_name.as_ref().map_or(false, |won| {
+            self.word_or_name.as_ref().is_some_and(|won| {
                 let s = won.flatten();
                 let base = std::path::Path::new(&s)
                     .file_stem()
@@ -4073,10 +4086,8 @@ async fn setup_process_substitution_path(
                 OpenFiles::STDOUT_FD,
                 OpenFile::from(std::fs::File::create(&path)?),
             );
-            let result = subshell_cmd
-                .list
-                .execute(&mut subshell, &child_params)
-                .await;
+            // Boxed: the list may hold a process substitution again (D86).
+            let result = execute_boxed(&subshell_cmd.list, &mut subshell, &child_params).await;
             drop(child_params);
             status.send_replace(Some(substitution_status(Ok(result))));
 

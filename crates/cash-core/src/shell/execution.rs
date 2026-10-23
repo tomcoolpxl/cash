@@ -955,7 +955,16 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         params: &ExecutionParameters,
         parsed_as: &cash_parser::ParserOptions,
     ) -> Result<(ExecutionResult, Option<usize>), error::Error> {
-        match crate::interp::execute_program(program, self, params, Some(parsed_as)).await {
+        // Boxed once for the whole program, whose commands' futures nest in place (D86):
+        // what calls it, `eval`, `source`, `$(...)`, a trap, the shell's API, stays small.
+        match Box::pin(crate::interp::execute_program(
+            program,
+            self,
+            params,
+            Some(parsed_as),
+        ))
+        .await
+        {
             Ok(ran) => Ok(ran),
             // An interrupt a program passes on is for the program that runs it to act on, as
             // is `break 1 2`, which leaves every `eval` and sourced file.
@@ -1013,7 +1022,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         program: cash_parser::ast::Program,
         params: &ExecutionParameters,
     ) -> Result<ExecutionResult, error::Error> {
-        program.execute(self, params).await
+        Box::pin(program.execute(self, params)).await
     }
 
     /// Evaluate the given arithmetic expression, returning the result.

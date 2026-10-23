@@ -11,6 +11,19 @@ const fn signal_status(signal: crate::sys::signal::Signal) -> u8 {
 }
 
 impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
+    /// A trap handler's commands, run boxed behind a named type: they can run a trap
+    /// again, and a future that holds itself needs a box whose type the compiler need not
+    /// work out from inside the cycle (D86).
+    fn run_handler_boxed<'a>(
+        &'a mut self,
+        command: &'a str,
+        source_info: &'a crate::SourceInfo,
+        params: &'a ExecutionParameters,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<ExecutionResult, error::Error>> + Send + 'a>>
+    {
+        Box::pin(self.run_string(command, source_info, params))
+    }
+
     /// Runs any exit steps for the shell.
     ///
     /// This currently includes invoking the `EXIT` trap handler, if any.
@@ -308,8 +321,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             crate::variables::ShellVariable::new(signal.trap_number().to_string()),
         );
 
+        // Boxed: the handler runs commands, which can run a trap again (D86).
         let result = self
-            .run_string(&handler.command, &handler.source_info, &params)
+            .run_handler_boxed(&handler.command, &handler.source_info, &params)
             .await;
 
         let _ = match previous_trapsig {
