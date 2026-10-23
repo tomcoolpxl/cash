@@ -131,6 +131,72 @@ pub fn run_list<W: Write>(
     Ok(picked)
 }
 
+/// A list with a preview of the line the cursor is on drawn above it.
+pub struct Previewed<'a> {
+    list: &'a mut List,
+    preview: &'a mut dyn FnMut(usize, usize, usize, usize) -> Vec<String>,
+}
+
+impl Previewed<'_> {
+    /// The rows above the list, the preview's, and the list's own below them: a third of
+    /// the area for the list, at least five rows.
+    fn frame(&mut self, width: usize, height: usize) -> Vec<String> {
+        let list_rows = (height / 3).max(5).min(height);
+        let preview_rows = height - list_rows;
+        let mut lines = match self.list.current() {
+            Some((scope, index)) => (self.preview)(scope, index, width, preview_rows),
+            None => Vec::new(),
+        };
+        lines.resize(preview_rows, String::new());
+        lines.extend(self.list.frame(width, list_rows));
+        lines
+    }
+}
+
+/// Runs `list` as [`run_list`] does, with a preview of the line the cursor is on.
+///
+/// `preview` draws it above the list: it gets the line's list and index, and the width
+/// and rows it may take, and gives the rows to draw, escapes and all, each no wider than
+/// that.
+///
+/// # Errors
+///
+/// When the terminal cannot be drawn on or read from.
+pub fn run_list_previewed<W: Write>(
+    list: &mut List,
+    out: &mut W,
+    height: Option<&str>,
+    pending: &mut Vec<Event>,
+    preview: &mut dyn FnMut(usize, usize, usize, usize) -> Vec<String>,
+) -> io::Result<Option<(usize, usize, bool)>> {
+    let mut picked = None;
+    let mut model = Previewed { list, preview };
+    raw(|| {
+        drive(
+            &mut model,
+            out,
+            height,
+            pending,
+            Previewed::frame,
+            |_| false,
+            &mut |model, key, _, _| {
+                let Some(key) = translate_list(key) else {
+                    return Ok(Flow::Go);
+                };
+                Ok(match model.list.key(key) {
+                    list::Outcome::Continue => Flow::Go,
+                    list::Outcome::Closed => Flow::Stop,
+                    list::Outcome::Picked { scope, index, tab } => {
+                        picked = Some((scope, index, tab));
+                        Flow::Stop
+                    }
+                })
+            },
+        )
+    })?;
+    Ok(picked)
+}
+
 /// Runs `body` with the terminal in raw mode, as it was found again afterwards.
 fn raw<R>(body: impl FnOnce() -> io::Result<R>) -> io::Result<R> {
     let was_raw = terminal::is_raw_mode_enabled().unwrap_or(false);

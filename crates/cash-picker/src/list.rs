@@ -174,6 +174,15 @@ impl List {
         self.scopes.get(scope)?.lines.get(index)
     }
 
+    /// The line the cursor is on, by its list and its index there; `None` when the
+    /// filter leaves no line.
+    pub fn current(&mut self) -> Option<(usize, usize)> {
+        self.build();
+        self.shown
+            .get(self.selected)
+            .map(|shown| (self.scope, shown.index))
+    }
+
     /// Acts on a key.
     pub fn key(&mut self, key: Key) -> Outcome {
         self.build();
@@ -368,6 +377,24 @@ mod tests {
             })
             .filter(|line| !line.is_empty())
             .collect()
+    }
+
+    #[test]
+    fn the_current_line_follows_the_cursor_and_the_filter() {
+        let mut list = list(
+            vec![Scope {
+                title: "Fonts".to_owned(),
+                lines: lines(&["standard", "slant", "small"]),
+            }],
+            "",
+        );
+        assert_eq!(list.current(), Some((0, 0)));
+        list.key(Key::Down);
+        assert_eq!(list.current(), Some((0, 1)));
+        list.key(Key::Char('m'));
+        assert_eq!(list.current(), Some((0, 2)));
+        list.key(Key::Char('q'));
+        assert_eq!(list.current(), None);
     }
 
     #[test]

@@ -2,7 +2,7 @@
 name: figlet
 summary: Print text in big letters made of small ones.
 kind: Text and file tools
-see: coolfetch echo
+see: figlist showfigfonts coolfetch
 ---
 
 ## Syntax
@@ -141,6 +141,10 @@ current directory last. A name with a slash or a backslash is a path.
     --background=COLOR  Every cell on COLOR.
     --letter-spacing=N  N blank columns after every letter.
     --line-gap=N        N blank rows after every line of text.
+
+    --pick              Choose a font from a list, MESSAGE drawn in the
+                        one under the cursor; its name is printed:
+                        figlet -f "$(figlet --pick Hi)" Hi
 
     -I CODE             Tell: 0 the version, 1 the version number, 2 the
                         font directory, 3 the font, 4 the width, 5 the

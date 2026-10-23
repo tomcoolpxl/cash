@@ -12,8 +12,14 @@
 )]
 
 use std::fmt::Write as _;
+use std::path::Path;
+use std::time::Duration;
 
-use crate::common::{Scratch, cash_command, output_of, run as cash, run_in};
+use cash_win32::conpty::ConPtySession;
+
+use crate::common::{
+    CASH, Scratch, cash_command, output_of, run as cash, run_in, with_isolated_environment,
+};
 
 /// A font one row high: each printable ASCII character drawn as itself in brackets, the
 /// German letters as `?`.
@@ -224,6 +230,75 @@ fn frames_shadows_and_spacing() {
     assert_eq!(out.stdout, "\u{1b}[0;48;2;0;0;128mx\u{1b}[0m", "{out:?}");
     let out = cash("figlet --border=wavy x");
     assert_eq!(out.code, 1, "{out:?}");
+}
+
+#[test]
+fn figlist_and_showfigfonts() {
+    let dir = Scratch::new("figlet-lists");
+    std::fs::write(dir.join("brackets.flf"), bracket_font()).unwrap();
+    std::fs::write(dir.join("upper.flc"), "flc2a\nt a-z A-Z\n").unwrap();
+    let path = dir.as_script_path();
+    let out = cash(&format!("figlist -d '{path}'"));
+    assert!(
+        out.stdout
+            .starts_with("Default font: standard\nFont directory: "),
+        "{out:?}"
+    );
+    assert!(
+        out.stdout.contains("Fonts built into cash:\nbanner\nbig\n"),
+        "{out:?}"
+    );
+    assert!(out.stdout.contains(":\nbrackets\n"), "{out:?}");
+    assert!(out.stdout.ends_with(":\nupper"), "{out:?}");
+
+    // The fonts come sorted, the directory's among the built-in ones.
+    let out = cash(&format!(
+        "showfigfonts -d '{path}' ab | grep ' :$' | head -3"
+    ));
+    assert_eq!(out.stdout, "banner :\nbig :\nblock :", "{out:?}");
+    let out = cash(&format!(
+        "showfigfonts -d '{path}' | grep -A1 '^brackets :'"
+    ));
+    assert_eq!(
+        out.stdout, "brackets :\n[b][r][a][c][k][e][t][s]",
+        "{out:?}"
+    );
+}
+
+#[test]
+fn the_picker_draws_the_font_under_the_cursor_and_prints_the_pick() {
+    let mut session = with_isolated_environment(|env| {
+        ConPtySession::start_sized(
+            Path::new(CASH),
+            &[
+                "--no-config",
+                "-c",
+                "f=$(figlet --pick Hi); echo \"picked=$f\"",
+            ],
+            Some(env),
+            None,
+            100,
+            40,
+        )
+    })
+    .expect("start cash in a pseudo terminal");
+    let (shown, text) = session
+        .wait_for_screen(
+            |t| t.contains("Fonts") && t.contains("Enter pick"),
+            Duration::from_secs(20),
+        )
+        .unwrap();
+    assert!(shown, "the list:\n{text}");
+    session.send("slant").unwrap();
+    // slant's "Hi", drawn above the list.
+    let (shown, text) = session
+        .wait_for_screen(|t| t.contains("/ /_/ / /"), Duration::from_secs(10))
+        .unwrap();
+    assert!(shown, "the preview:\n{text}");
+    session.send("\r").unwrap();
+    session
+        .expect("picked=slant", Duration::from_secs(10))
+        .expect("the pick is printed");
 }
 
 #[test]

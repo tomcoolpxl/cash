@@ -83,6 +83,7 @@ const LONGS: &[Long<'static, char>] = &[
     Long::new("line-gap", Arg::Required, 'q'),
     Long::new("colors", Arg::Required, 'O'),
     Long::new("colours", Arg::Required, 'O'),
+    Long::new("pick", Arg::No, 'V'),
 ];
 
 /// When colour is written.
@@ -143,6 +144,12 @@ More colour and shape:
       --letter-spacing=N  N blank columns after every letter
       --line-gap=N      N blank rows after every line of text
 
+Fonts:
+      --pick            choose a font from a list, MESSAGE drawn in each as the
+                        cursor moves; its name is printed (figlet -f \"$(figlet
+                        --pick Hi)\" Hi)
+  figlist, showfigfonts list the fonts, and show each
+
 Information:
   -I CODE, --infocode=CODE  0 version, 1 version number, 2 font directory,
                         3 font, 4 width, 5 font formats
@@ -165,6 +172,7 @@ struct Request {
     format: Option<Format>,
     color: Option<When>,
     extras: Extras,
+    pick: bool,
     message: Vec<String>,
 }
 
@@ -253,7 +261,7 @@ impl builtins::Command for FigletCommand {
             return Ok(ExecutionResult::success());
         }
 
-        let font = match load_font(&context, &request) {
+        let font = match load_font(&context, &request, &request.font) {
             Ok(font) => font,
             Err(message) => {
                 writeln!(context.stderr(), "figlet: {message}")?;
@@ -281,6 +289,10 @@ impl builtins::Command for FigletCommand {
                     return Ok(ExecutionResult::general_error());
                 }
             }
+        }
+
+        if request.pick {
+            return pick_font(&context, &request, &controls, &settings);
         }
 
         let format = request.format.unwrap_or(Format::Utf8);
@@ -549,6 +561,7 @@ fn read_command_line<SE: cash_core::ShellExtensions>(
         format: None,
         color: None,
         extras: Extras::default(),
+        pick: false,
         message: Vec::new(),
     };
     let shorts = optstring(OPTSTRING);
@@ -572,6 +585,7 @@ fn read_command_line<SE: cash_core::ShellExtensions>(
         let s = &mut request.settings;
         match id {
             'h' => return Ok(Err(Early::print(format!("{HELP}\n")))),
+            'V' => request.pick = true,
             'A' => {}
             'D' => s.deutsch = true,
             'X' => s.direction = None,
@@ -725,8 +739,8 @@ fn find_file<SE: cash_core::ShellExtensions>(
 fn load_font<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     request: &Request,
+    name: &str,
 ) -> Result<Font, String> {
-    let name = &request.font;
     let suffixes = [".flf", ".tlf"];
     let found = find_file(context, &directories(context, request), name, &suffixes)
         .or_else(|| {
@@ -738,6 +752,338 @@ fn load_font<SE: cash_core::ShellExtensions>(
         .or_else(|| find_file(context, &[".".to_owned()], name, &suffixes));
     let bytes = found.ok_or_else(|| format!("{name}: Unable to open font file"))?;
     Font::parse(&bytes).map_err(|error| format!("{name}: {error}"))
+}
+
+/// The names of the fonts with the suffix `.flf` or `.tlf` in `dir`, sorted.
+fn fonts_in<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    dir: &str,
+    suffixes: &[&str],
+) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(context.shell.absolute_path(dir)) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let lower = name.to_ascii_lowercase();
+            suffixes
+                .iter()
+                .find(|suffix| lower.ends_with(*suffix))
+                .and_then(|suffix| name.get(..name.len() - suffix.len()).map(str::to_owned))
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Every font that can be named: those in the font directories and those built in, each
+/// name once, sorted.
+fn font_names<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    request: &Request,
+) -> Vec<String> {
+    let mut names: Vec<String> = directories(context, request)
+        .iter()
+        .flat_map(|dir| fonts_in(context, dir, &[".flf", ".tlf"]))
+        .chain(builtin::FONTS.iter().map(|font| font.name.to_owned()))
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// `line` cut to `width` columns, its escapes kept and colour reset after a cut.
+fn clip(line: &str, width: usize) -> String {
+    use unicode_width::UnicodeWidthChar as _;
+    let mut out = String::with_capacity(line.len());
+    let mut used = 0;
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            out.push(c);
+            for e in chars.by_ref() {
+                out.push(e);
+                if e.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+            continue;
+        }
+        let w = c.width().unwrap_or(0);
+        if used + w > width {
+            out.push_str("\x1b[0m");
+            return out;
+        }
+        used += w;
+        out.push(c);
+    }
+    out
+}
+
+/// `--pick`: a list of the fonts, the message drawn in the one the cursor is on above
+/// it; the name of the one picked is printed.
+fn pick_font<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    request: &Request,
+    controls: &Controls,
+    settings: &Settings,
+) -> Result<ExecutionResult, cash_core::Error> {
+    use cash_picker::colours::Colours;
+    use cash_picker::list::{Line, List, Scope, Setup};
+
+    let Ok(mut console) = std::fs::OpenOptions::new().write(true).open("CONOUT$") else {
+        writeln!(context.stderr(), "figlet: no terminal to draw on")?;
+        return Ok(ExecutionResult::general_error());
+    };
+    let var = |name: &str| context.shell.env_str(name).map(|value| value.into_owned());
+    let colour = var("NO_COLOR").is_none_or(|value| value.is_empty());
+    let names = font_names(context, request);
+    let mut list = List::new(Setup {
+        scopes: vec![Scope {
+            title: "Fonts".to_owned(),
+            lines: names
+                .iter()
+                .map(|name| Line {
+                    text: name.clone(),
+                    when: None,
+                })
+                .collect(),
+        }],
+        typed: String::new(),
+        hints: "Enter pick  Esc".to_owned(),
+        colours: if colour {
+            Colours::new(None, var("CASH_PICKER_COLORS").as_deref())
+        } else {
+            Colours::none()
+        },
+        paths: false,
+    });
+    let mut fonts: std::collections::HashMap<String, Option<Font>> =
+        std::collections::HashMap::new();
+    let mut preview = |_: usize, index: usize, width: usize, rows: usize| -> Vec<String> {
+        let Some(name) = names.get(index) else {
+            return Vec::new();
+        };
+        let font = fonts
+            .entry(name.clone())
+            .or_insert_with(|| load_font(context, request, name).ok());
+        let Some(font) = font else {
+            return vec![format!("{name}: Unable to open font file")];
+        };
+        let words = if request.message.is_empty() {
+            vec![name.clone()]
+        } else {
+            request.message.clone()
+        };
+        let mut shown = *settings;
+        // figlet takes a column less than its width; the preview may take them all.
+        shown.width = width + 1;
+        let figure = cash_figlet::render(font, controls, &shown, &words_input(&words));
+        let blocks: Vec<Block> = figure
+            .blocks
+            .iter()
+            .map(|block| filter::apply(&request.filters, block, 0))
+            .collect();
+        let bytes = export::write(&blocks, Format::Utf8, colour, request.extras.depth);
+        String::from_utf8_lossy(&bytes)
+            .lines()
+            .take(rows)
+            .map(|line| clip(line, width))
+            .collect()
+    };
+    let height = var("CASH_PICKER_HEIGHT").unwrap_or_else(|| "75%".to_owned());
+    match cash_picker::term::run_list_previewed(
+        &mut list,
+        &mut console,
+        Some(&height),
+        &mut Vec::new(),
+        &mut preview,
+    ) {
+        Ok(Some((_, index, _))) => {
+            if let Some(name) = names.get(index) {
+                writeln!(context.stdout(), "{name}")?;
+            }
+            Ok(ExecutionResult::success())
+        }
+        Ok(None) => Ok(ExecutionResult::general_error()),
+        Err(error) => {
+            writeln!(context.stderr(), "figlet: {error}")?;
+            Ok(ExecutionResult::general_error())
+        }
+    }
+}
+
+/// List the fonts and control files.
+#[derive(Parser)]
+#[clap(disable_help_flag = true, disable_version_flag = true)]
+pub(crate) struct FiglistCommand {
+    /// Options, parsed here.
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    args: Vec<String>,
+}
+
+/// Show each font, its name drawn in it.
+#[derive(Parser)]
+#[clap(disable_help_flag = true, disable_version_flag = true)]
+pub(crate) struct ShowfigfontsCommand {
+    /// Options and the word, parsed here.
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    args: Vec<String>,
+}
+
+/// What `figlist` and `showfigfonts` take: `-d DIR`, `--help`, and words.
+fn read_lister_line<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    args: &[String],
+    tool: &str,
+    help: &str,
+) -> Result<Result<(Request, Vec<String>), Early>, cash_getopt::Problem> {
+    const LISTER_LONGS: &[Long<'static, char>] = &[
+        Long::new("directory", Arg::Required, 'd'),
+        Long::new("help", Arg::No, 'h'),
+    ];
+    let shorts = optstring("d:h");
+    let getopt = Getopt::new(&shorts, LISTER_LONGS).order(options::gnu_order(context));
+    let mut directory = None;
+    let mut words = Vec::new();
+    for item in getopt.read(args) {
+        match item? {
+            Item::Option { id: 'h', .. } => {
+                return Ok(Err(Early::print(format!("Usage: {tool} {help}\n"))));
+            }
+            Item::Option { value, .. } => directory = value,
+            Item::Operand { value, .. } => words.push(value),
+        }
+    }
+    let mut request = Request {
+        font: "standard".to_owned(),
+        directory,
+        controls: Vec::new(),
+        settings: Settings::default(),
+        width: None,
+        info: None,
+        filters: Vec::new(),
+        format: None,
+        color: None,
+        extras: Extras::default(),
+        pick: false,
+        message: Vec::new(),
+    };
+    request.settings.width = default_width(context);
+    Ok(Ok((request, words)))
+}
+
+impl builtins::Command for FiglistCommand {
+    type Error = cash_core::Error;
+
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        Ok(Self {
+            args: args.into_iter().skip(1).collect(),
+        })
+    }
+
+    async fn execute<SE: cash_core::ShellExtensions>(
+        &self,
+        context: cash_core::ExecutionContext<'_, SE>,
+    ) -> Result<ExecutionResult, Self::Error> {
+        let help = "[-d DIRECTORY]\nList the fonts figlet can use, and the control files.";
+        let request = match read_lister_line(&context, &self.args, "figlist", help) {
+            Ok(Ok((request, _))) => request,
+            Ok(Err(early)) => {
+                context.stdout().write_all(early.stdout.as_bytes())?;
+                return Ok(early.status);
+            }
+            Err(problem) => return options::gnu_usage_error(&context, "figlist", problem, 1),
+        };
+        let dirs = directories(&context, &request);
+        let mut text = String::from("Default font: standard\n");
+        text.push_str("Font directory: ");
+        text.push_str(dirs.first().map_or("(none)", String::as_str));
+        text.push_str("\nFonts built into cash:\n");
+        for font in builtin::FONTS {
+            text.push_str(font.name);
+            text.push('\n');
+        }
+        for dir in &dirs {
+            let fonts = fonts_in(&context, dir, &[".flf", ".tlf"]);
+            if !fonts.is_empty() {
+                text.push_str("Fonts in ");
+                text.push_str(dir);
+                text.push_str(":\n");
+                for name in fonts {
+                    text.push_str(&name);
+                    text.push('\n');
+                }
+            }
+            let controls = fonts_in(&context, dir, &[".flc"]);
+            if !controls.is_empty() {
+                text.push_str("Control files in ");
+                text.push_str(dir);
+                text.push_str(":\n");
+                for name in controls {
+                    text.push_str(&name);
+                    text.push('\n');
+                }
+            }
+        }
+        context.stdout().write_all(text.as_bytes())?;
+        Ok(ExecutionResult::success())
+    }
+}
+
+impl builtins::Command for ShowfigfontsCommand {
+    type Error = cash_core::Error;
+
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        Ok(Self {
+            args: args.into_iter().skip(1).collect(),
+        })
+    }
+
+    async fn execute<SE: cash_core::ShellExtensions>(
+        &self,
+        context: cash_core::ExecutionContext<'_, SE>,
+    ) -> Result<ExecutionResult, Self::Error> {
+        let help =
+            "[-d DIRECTORY] [WORD]\nShow each font figlet can use, WORD (or its name) drawn in it.";
+        let (request, words) = match read_lister_line(&context, &self.args, "showfigfonts", help) {
+            Ok(Ok(read)) => read,
+            Ok(Err(early)) => {
+                context.stdout().write_all(early.stdout.as_bytes())?;
+                return Ok(early.status);
+            }
+            Err(problem) => {
+                return options::gnu_usage_error(&context, "showfigfonts", problem, 1);
+            }
+        };
+        let controls = Controls::new();
+        let mut stdout = context.stdout();
+        for name in font_names(&context, &request) {
+            let Ok(font) = load_font(&context, &request, &name) else {
+                continue;
+            };
+            let shown = if words.is_empty() {
+                vec![name.clone()]
+            } else {
+                words.clone()
+            };
+            let figure =
+                cash_figlet::render(&font, &controls, &request.settings, &words_input(&shown));
+            writeln!(stdout, "{name} :")?;
+            stdout.write_all(export::text(&figure).as_bytes())?;
+            writeln!(stdout)?;
+        }
+        Ok(ExecutionResult::success())
+    }
 }
 
 /// `-I CODE`: what figlet tells about itself.
@@ -783,6 +1129,18 @@ mod tests {
         assert_eq!(atoi(" -1x"), -1);
         assert_eq!(atoi("abc"), 0);
         assert_eq!(atoi("+7"), 7);
+    }
+
+    #[test]
+    fn clipping_keeps_escapes_and_counts_columns() {
+        use super::clip;
+        assert_eq!(clip("abcdef", 4), "abcd\u{1b}[0m");
+        assert_eq!(
+            clip("\u{1b}[0;31mabc\u{1b}[0m", 2),
+            "\u{1b}[0;31mab\u{1b}[0m"
+        );
+        assert_eq!(clip("ab", 4), "ab");
+        assert_eq!(clip("アイ", 3), "ア\u{1b}[0m");
     }
 
     #[test]
