@@ -3,3 +3,4 @@ f634de91 # fix(declare): refuse -t; taken back by 432459d8, as -t works
 432459d8 # fix(declare): the taking back of f634de91; together they change nothing
 ed6e916d # feat(paths): / above the drives under unixpaths; taken back by 6036a4cb before 1.41.0, as its cost outweighed its gain
 6036a4cb # revert(paths): the taking back of ed6e916d; together they change nothing
+33797629 # the interpreter rework (D86) under the research commit's stale message; listed by the perf(core) commit after it
