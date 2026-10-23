@@ -3,7 +3,7 @@
 //!
 //! [`font`] reads FIGfont 2.0 files in all their flavours (figlet's `.flf`, toilet's
 //! UTF-8 `.tlf` with colour glyphs, zipped or not), [`control`] reads `.flc` control
-//! files, [`render`] lays text out as figlet 2.2.5 does (smushing, kerning, wrapping,
+//! files, [`render`](mod@render) lays text out as figlet 2.2.5 does (smushing, kerning, wrapping,
 //! justification, paragraphs, direction), into a [`canvas::Figure`] of cells, which
 //! [`export`] writes out. [`builtin`] holds the fonts cash carries.
 //!
