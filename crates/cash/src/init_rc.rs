@@ -239,8 +239,9 @@ mod tests {
         assert!(STARTER.starts_with("# ~/.bashrc"), "not the starter bashrc");
     }
 
-    /// `cash: F1 for help` follows the banner, under the same once-per-window condition,
-    /// in the section Git Bash skips.
+    /// `cash: press F1 or type man for help` follows the banner, under the same
+    /// once-per-window condition, in the section Git Bash skips: F1 and `man` in colour
+    /// on a terminal, `"man"` quoted without colour.
     #[test]
     fn the_starter_says_where_help_is_after_the_banner() {
         let cash_only = STARTER
@@ -248,12 +249,16 @@ mod tests {
             .last()
             .unwrap();
         let banner = cash_only.find("coolfetch\n").unwrap();
-        let help = cash_only.find("echo 'cash: F1 for help'\n").unwrap();
-        assert!(banner < help, "{cash_only}");
-        assert_eq!(cash_only.matches("fi\n").count(), 2, "{cash_only}");
+        let coloured = cash_only
+            .find(r"printf 'cash: press \e[36mF1\e[0m or type \e[36mman\e[0m for help\n'")
+            .unwrap();
+        let plain = cash_only
+            .find(r#"echo 'cash: press F1 or type "man" for help'"#)
+            .unwrap();
+        assert!(banner < coloured && coloured < plain, "{cash_only}");
         assert!(
             cash_only.contains(
-                "<= 1)); then\n        coolfetch\n        echo 'cash: F1 for help'\n    fi\n"
+                "<= 1)); then\n        coolfetch\n        if [[ -t 1 && -z ${NO_COLOR-} ]]; then\n"
             ),
             "{cash_only}"
         );

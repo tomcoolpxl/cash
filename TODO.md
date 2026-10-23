@@ -50,9 +50,9 @@ the Terminal profile and shell integration, and needs no winpty.
    title, no branch, no aliases. Also: the starter's branch shows no MERGING/REBASE state
    and no tag on a detached HEAD, which `__git_ps1` shows.
 3. `~/.inputrc` read: done, in DONE.md.
-4. Start menu and "Open cash here": done, in DONE.md. At the release that carries it,
-   the bucket's hooks and notes get `scripts/sync-bucket.py` (RELEASING.md step 7), and
-   the user tries one right-click, which no test can (`wt -d "%V."`).
+4. Start menu and "Open cash here": done, in DONE.md; the user tried the right-click
+   (2026-10-23: works). At the release that carries it, the bucket's hooks and notes get
+   `scripts/sync-bucket.py` (RELEASING.md step 7).
 5. **Small ones:** `~/bin` first on PATH and `~/bash_completion.d/*.bash` sourced (Git
    Bash's `env.sh` and `git-prompt.sh`); `no_empty_cmd_completion`; PageUp/PageDown to the
    start and end of history (`/etc/inputrc`); a note on Windows' OpenSSH agent beside Git's
@@ -386,6 +386,12 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **A CI run timed out on a TODO-only commit** (run 39966452795 on 783ec1db,
+  2026-10-23): `corpus::the_ci_glue_script_matches_real_bash` (15 s) and two ConPTY
+  tests (`a_program_that_breaks_the_console...`, `...took_the_mouse_gives_it_back`, 60 s)
+  on slow shards 2 and 4, beside install-action's "bash startup failure" on the runner,
+  while the 2.0.1 run went on at the same time. The runs before and after passed. Only
+  worth looking into if it comes back.
 - **Three empty files, `1`, `f` and `file`, at the repository's root** (untracked, made
   2026-10-19 between 07:33 and 07:37): from no test that was found; perhaps a command
   typed with a stray `>`. Left in place, as another session may own them.

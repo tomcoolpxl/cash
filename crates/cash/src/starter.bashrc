@@ -133,6 +133,10 @@ if [[ -n $CASH_VERSION ]]; then
     # this one.
     if ((${SHLVL:-1} <= 1)); then
         coolfetch
-        echo 'cash: F1 for help'
+        if [[ -t 1 && -z ${NO_COLOR-} ]]; then
+            printf 'cash: press \e[36mF1\e[0m or type \e[36mman\e[0m for help\n'
+        else
+            echo 'cash: press F1 or type "man" for help'
+        fi
     fi
 fi
