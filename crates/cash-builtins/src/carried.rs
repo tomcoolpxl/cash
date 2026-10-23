@@ -81,6 +81,32 @@ pub fn is_bash_builtin(name: &str) -> bool {
     BASH_BUILTINS.contains(&name)
 }
 
+/// The path a command cash carries that is no builtin of Bash's is run by: a hard link to
+/// this cash on `PATH` for it (`cash --link-tools`), which programs outside cash can run
+/// too, or else its virtual path (`C:/…/cash.exe/NAME`, D58). `which` prints it, and so
+/// does `command -v`, as Bash's prints a program's path: `[ -x "$(command -v grep)" ]`
+/// found the bare name and failed. `None` for one of Bash's own builtins.
+pub fn carried_path<SE: ShellExtensions>(
+    shell: &cash_core::Shell<SE>,
+    name: &str,
+) -> Option<std::path::PathBuf> {
+    if is_bash_builtin(name) {
+        return None;
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        // The first match that is this cash ends the search: every match of PATH was
+        // gathered before any was compared. Each directory is looked at once
+        // (`pathsearch`), so without a link the whole of PATH costs a look each.
+        if let Some(link) = shell
+            .find_executables_in_path(name)
+            .find(|path| cash_win32::fs::same_file(path, &exe))
+        {
+            return Some(link);
+        }
+    }
+    cash_win32::path::virtual_path(name).map(std::path::PathBuf::from)
+}
+
 /// Whether `name` is a command `shell` carries that is a program elsewhere: an enabled
 /// builtin that is not one of Bash's own. Such a command has a path cash runs it by.
 pub fn carries_program<SE: ShellExtensions>(shell: &cash_core::Shell<SE>, name: &str) -> bool {

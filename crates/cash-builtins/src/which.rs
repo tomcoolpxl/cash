@@ -27,42 +27,13 @@
 //! A script wanting only a filesystem path should ask for one: `which -p` restricts the
 //! search to `PATH`, and prints nothing for a builtin.
 
-use std::{io::Write, path::Path};
+use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
 
-use crate::carried::is_bash_builtin;
+use crate::carried::carried_path;
 use crate::lookup::{self, Resolved};
-
-/// The path `which` prints for a command cash carries that is not one of bash's own
-/// builtins: `C:/…/cash.exe/NAME`, which cash runs as that command (ROADMAP item 12), so
-/// `LS=$(which ls); "$LS" -la` works as it does where `ls` is a file.
-fn executable_path(name: &str) -> Option<String> {
-    if is_bash_builtin(name) {
-        return None;
-    }
-    cash_win32::path::virtual_path(name)
-}
-
-/// A hard link to this cash on `PATH` for `name`, made by `cash --link-tools`: a real
-/// file, which programs outside cash can run too, so `which` prefers it to the virtual
-/// path.
-fn linked_path<SE: cash_core::ShellExtensions>(
-    shell: &cash_core::Shell<SE>,
-    name: &str,
-) -> Option<std::path::PathBuf> {
-    if is_bash_builtin(name) {
-        return None;
-    }
-    let exe = std::env::current_exe().ok()?;
-    // The first match that is this cash ends the search: every match of PATH was gathered
-    // before any was compared. Each directory is looked at once (`pathsearch`), so without a
-    // link the whole of PATH costs a look each.
-    shell
-        .find_executables_in_path(name)
-        .find(|path| cash_win32::fs::same_file(path, &exe))
-}
 
 /// Report what the shell would run for a name.
 #[derive(Parser)]
@@ -140,20 +111,13 @@ impl builtins::Command for WhichCommand {
                             writeln!(stdout, "{}", context.shell.shown_path(path))?;
                         }
                     }
-                    Resolved::Builtin => {
-                        if let Some(link) = linked_path(context.shell, name) {
-                            writeln!(stdout, "{}", context.shell.shown_path(&link))?;
-                            printed_link = Some(link);
-                        } else {
-                            match executable_path(name) {
-                                Some(path) => {
-                                    let shown = context.shell.shown_path(Path::new(&path));
-                                    writeln!(stdout, "{shown}")?;
-                                }
-                                None => writeln!(stdout, "{name}: shell builtin")?,
-                            }
+                    Resolved::Builtin => match carried_path(context.shell, name) {
+                        Some(path) => {
+                            writeln!(stdout, "{}", context.shell.shown_path(&path))?;
+                            printed_link = Some(path);
                         }
-                    }
+                        None => writeln!(stdout, "{name}: shell builtin")?,
+                    },
                     Resolved::Keyword => writeln!(stdout, "{name}: shell keyword")?,
                     Resolved::Function(_) => writeln!(stdout, "{name}: shell function")?,
                     Resolved::Alias(target) => writeln!(stdout, "{name}: aliased to {target}")?,

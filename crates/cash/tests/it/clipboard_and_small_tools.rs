@@ -112,7 +112,11 @@ fn xdg_open_takes_one_target_and_exits_as_the_real_one_does() {
 
     // What a script does to find it.
     let out = run_in(dir, "command -v xdg-open; type -t xdg-open");
-    assert_eq!(out.stdout, "xdg-open\nbuiltin");
+    assert!(
+        out.stdout.ends_with("cash.exe/xdg-open\nbuiltin"),
+        "{}",
+        out.stdout
+    );
 
     let page = run("help -m xdg-open");
     assert_eq!(page.code, 0, "{}", page.stderr);

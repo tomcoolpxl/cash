@@ -89,9 +89,17 @@ impl CommandCommand {
                     Resolved::Alias(target) => {
                         write_alias_definition(context.stdout(), name, target, true)?;
                     }
-                    Resolved::Keyword | Resolved::Function(_) | Resolved::Builtin => {
+                    Resolved::Keyword | Resolved::Function(_) => {
                         writeln!(context.stdout(), "{name}")?;
                     }
+                    // A command cash carries that is a program elsewhere is said by the
+                    // path it runs by, as Bash says a program's (`carried_path`).
+                    Resolved::Builtin => match crate::carried::carried_path(context.shell, name) {
+                        Some(path) => {
+                            writeln!(context.stdout(), "{}", context.shell.shown_path(&path))?;
+                        }
+                        None => writeln!(context.stdout(), "{name}")?,
+                    },
                     Resolved::File { path, .. } => {
                         // cash (D3): rendered like `type` does, or a `PATH` directory is
                         // joined to the file name with a backslash

@@ -108,7 +108,24 @@ fn header_times_follow_tz() {
 #[test]
 fn diff_and_cmp_are_bundled_builtins() {
     let out = run("type -t diff cmp; command -v diff cmp");
-    assert_eq!(out.stdout, "builtin\nbuiltin\ndiff\ncmp", "{}", out.stderr);
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(
+        lines.get(..2),
+        Some(&["builtin", "builtin"][..]),
+        "{}",
+        out.stderr
+    );
+    // `command -v` gives the path cash runs each by, as Bash gives a program's.
+    assert!(
+        lines
+            .get(2)
+            .is_some_and(|line| line.ends_with("cash.exe/diff"))
+            && lines
+                .get(3)
+                .is_some_and(|line| line.ends_with("cash.exe/cmp")),
+        "{}",
+        out.stdout
+    );
     for tool in ["diff", "cmp"] {
         let out = output_of(isolate(Command::new(CASH).args([
             "--invoke-bundled",
