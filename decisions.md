@@ -90,6 +90,7 @@ the user's answers, with their dates. A new decision goes here, under its topic.
 | D83 | Under `unixpaths`, a climb past a drive's top spells `$PWD` `/` | Paths, files and text |
 | D84 | `figlet`: one builtin doing figlet's and toilet's work, and more | Paths, files and text |
 | D85 | A Start-menu entry and "Open cash here" in Explorer | Packaging, installing and updating |
+| D86 | The interpreter boxes a future per nesting level, not per command | Scope and foundation |
 
 ## 1. Scope and foundation
 
@@ -149,6 +150,17 @@ written.
 - **A crate cash must change becomes cash's own code**, its licence kept (brush, D9;
   sevenz-rust2, 2026-10-07; the patched uutils tools, reedline and crossterm,
   2026-10-10). Turned down: patched copies in `vendor/`, which is gone.
+
+### D86 — The interpreter boxes a future per nesting level, not per command
+
+The user's pick, 2026-10-23, after a profile of the slowdown since 1.39
+(research/interpreter-dispatch.md): every command went through five `#[async_trait]`
+methods, each boxing and copying its future, 19% of a loop's time in `memcpy` and 14% in
+allocation. The execution traits return `impl Future + Send`, so the levels nest in place,
+with a box only where the syntax tree recurses (a compound command's body, a function's);
+a one-command pipeline has a path of its own. Behaviour does not change, and each step is
+checked by the whole suite and timed. Turned down: shrinking the futures one slow path at
+a time (cheaper, offered); a second, synchronous interpreter for commands that never wait.
 
 ## 2. Paths, files and text
 - **Scripts are read a command at a time, as Bash reads them** (the user, 2026-10-18,
