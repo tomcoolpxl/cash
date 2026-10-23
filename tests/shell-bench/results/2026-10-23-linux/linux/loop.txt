@@ -1,0 +1,4 @@
+Benchmark 1: linuxbash
+  Time (mean ± σ):      32.3 ms ±   0.7 ms    [User: 31.2 ms, System: 0.8 ms]
+  Range (min … max):    30.8 ms …  36.1 ms    92 runs
+ 

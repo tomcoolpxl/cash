@@ -1,0 +1,6 @@
+system: Manjaro Linux, Linux 7.1.13-2-MANJARO
+cpu: AMD Ryzen 7 3700X 8-Core Processor
+threads: 16
+memory: 31 GB
+hyperfine: hyperfine 1.20.0
+linuxbash: GNU bash, version 5.3.15(1)-release (x86_64-pc-linux-gnu)
