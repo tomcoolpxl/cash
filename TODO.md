@@ -32,10 +32,11 @@ on the new `cash-figlet` crate, with cash's colour pack, a font picker, pixel an
 fonts, DEC double-size lines and TheDraw fonts; the sixel image mode dropped. In DONE.md.
 Released as 2.0.0, a milestone and not a breaking change.
 
-## This phase (2026-10-23)
+## The phase before (2026-10-23, done, released as 2.1.0)
 
-Picked by the user from the Git Bash comparison below: items 1, 3 and 4 there, in that
-order (Git completion, `~/.inputrc`, Start menu and Explorer).
+Picked by the user from the Git Bash comparison below: items 1, 3 and 4 there (Git
+completion, `~/.inputrc`, Start menu and Explorer), with the starter's help hint the
+user asked for on the way. In DONE.md.
 
 ## Found comparing with Git Bash's own setup (2026-10-23), items 2 and 5 not picked
 
