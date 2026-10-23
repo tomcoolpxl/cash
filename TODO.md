@@ -387,6 +387,15 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
+- **PowerShell's `& script.ps1` at the prompt is a syntax error** (the user, 2026-10-23:
+  "that should work, we need to do something there"). Typed out of PowerShell habit, `&
+  C:\x\profile.ps1` says `syntax error near unexpected token '&'`, as Bash does; `.
+  ./x.ps1` sources the file as Bash (`Write-Host: command not found`). cash already runs
+  a `.ps1` named as a command (`./x.ps1 a b`, through PowerShell, arguments passed). To
+  decide: a leading `&` taken as PowerShell's call operator at an interactive prompt only
+  (no Bash script starts a line with `&`, so scripts are not touched), a `.ps1` given to
+  `.`/`source` run through PowerShell, or at least an error that names the fix (`in cash,
+  run the path itself: ./x.ps1`). **Yours** to pick.
 - **`((...))` is about 20% slower than at 1.39** (2026-10-23, after the interpreter fixes
   that brought simple commands back): `i=0; while ((i<200000)); do ((i++)); done` takes
   473 ms against 394 ms at 1.39 (`dist` builds, Git Bash steady as the control), about
