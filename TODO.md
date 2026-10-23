@@ -47,6 +47,14 @@ oracle is figlet and toilet in WSL's Arch (installed by the user, 2026-10-23).
 7. The sixel image mode and TheDraw `.tdf` fonts.
 8. The WSL oracle, the `cash doctor` shadow row, NOTICE and `upstreams.toml`.
 
+## Next, straight after the figlet phase (the user, 2026-10-23)
+
+The F1 help screen (`crates/cash-builtins/src/helpdocs/f1.md`, its MORE section):
+- `man` above `help`;
+- a line for `man` alone, the manual browser (a help browser), beside `man NAME`;
+- check how the F1 screen shows in a window too small for it (narrow and short), and
+  make it fit or degrade cleanly.
+
 ## The phase before (2026-10-23, done, released as 1.50.0)
 
 The small leftovers (decisions.md, "The phase after 1.49.0"), each checked against Git
