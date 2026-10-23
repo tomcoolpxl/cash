@@ -14,6 +14,7 @@ pub mod builtin;
 pub mod canvas;
 pub mod control;
 pub mod export;
+pub mod filter;
 pub mod font;
 pub mod render;
 pub mod style;

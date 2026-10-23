@@ -135,6 +135,52 @@ fn info_codes() {
 }
 
 #[test]
+fn toilet_s_filters() {
+    let out = cash("figlet -f term -F flip 'b/'; figlet -f term -F crop:border hi");
+    assert_eq!(out.stdout, "\\d\n┌──┐\n│hi│\n└──┘", "{out:?}");
+    let out = cash("figlet -f term --rainbow x | od -c | head -1");
+    // Into a pipe, colour is off unless asked for.
+    assert!(!out.stdout.contains("033"), "{out:?}");
+
+    let out = cash("figlet -F list; figlet -E list");
+    assert!(out.stdout.starts_with("Available filters:\n\"crop\": crop unused blanks"), "{out:?}");
+    assert!(out.stdout.contains("\"ansi\":"), "{out:?}");
+
+    let out = cash("figlet -F sparkle x");
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.starts_with("figlet: unknown filter: sparkle"), "{out:?}");
+    let out = cash("figlet --html x");
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.contains("the html export is not carried"), "{out:?}");
+}
+
+#[test]
+fn colour_when_asked_or_on_a_console() {
+    let metal = "\u{1b}[0;1;34;94mx\u{1b}[0m";
+    let out = cash("figlet -f term --metal --color=always x");
+    assert_eq!(out.stdout, metal, "{out:?}");
+    // A format named with -E is written as toilet writes it, colour and all.
+    let out = cash("figlet -f term --metal -E utf8 x");
+    assert_eq!(out.stdout, metal, "{out:?}");
+    let out = cash("figlet -f term --metal -E utf8 --color=never x");
+    assert_eq!(out.stdout, "x", "{out:?}");
+    let out = cash("figlet -f term --metal -E text --color=always x");
+    assert_eq!(out.stdout, "x", "{out:?}");
+    let out = cash("figlet --color=sometimes x");
+    assert_eq!(out.code, 1, "{out:?}");
+}
+
+#[test]
+fn the_ansi_export_is_code_page_437() {
+    let out = cash("figlet -f term -E ansi --color=never '£±é' | od -An -tx1");
+    assert_eq!(
+        out.stdout.split_whitespace().collect::<Vec<_>>(),
+        ["9c", "f1", "82", "0d", "0a"],
+        "{out:?}"
+    );
+}
+
+#[test]
 fn errors_say_what_and_end_with_one() {
     let out = cash("figlet -f nosuch x");
     assert_eq!(out.code, 1);

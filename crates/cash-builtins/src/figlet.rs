@@ -1,12 +1,18 @@
 //! `figlet`: big letters made of small ones (decisions.md D84,
 //! research/figlet-design.md).
 //!
-//! One command doing what figlet 2.2.5 does, on `cash-figlet`, which lays text out as
-//! figlet's own C does (61 cases match it byte for byte). The options are figlet's
-//! `ADEXLRI:xlcrpntvm:w:d:f:C:NskSWo`, with toilet's long names for those the two share
-//! (`--font`, `--directory`, `--width`, `--termwidth`, `--infocode`) and `-h`/`--help`.
+//! One command doing what figlet 2.2.5 and toilet 0.3 do, on `cash-figlet`, which lays
+//! text out as figlet's own C does (61 cases match it byte for byte). The options are
+//! figlet's `ADXLRI:xlcrpntvm:w:d:f:C:NskSWo` and toilet's `-F` filters (`--rainbow`,
+//! `--gay`, `--metal`) and `-E` exports, with toilet's long names for those the two
+//! share (`--font`, `--directory`, `--width`, `--termwidth`, `--infocode`), `-h`/`--help`,
+//! and `--color=auto|always|never`.
 //!
 //! Where it differs, on purpose:
+//! - `-E` is toilet's export, not figlet's "German off", which only undid `-D` (off by
+//!   default); the exports are `utf8`, `ansi` and `text`;
+//! - colour goes to a console and, with `NO_COLOR` unset, nowhere else, unless `-E`
+//!   names a format or `--color=always` asks; toilet colours a pipe too;
 //! - input is Unicode text, so `-C utf8` is never needed (and works when `utf8.flc` is
 //!   not there); the control files' other input encodings are not decoded;
 //! - with neither `-w` nor `-t`, the width is the console's when the output goes to one,
@@ -20,10 +26,10 @@ use std::io::{BufRead, BufReader, Write};
 
 use cash_core::input::Dash;
 use cash_core::{ExecutionResult, builtins};
+use cash_figlet::export::{self, Format};
+use cash_figlet::filter::{self, Filter};
 use cash_figlet::render::{text_input, words_input};
-use cash_figlet::{
-    Controls, Direction, Font, Justify, Layout, Renderer, Settings, builtin, export,
-};
+use cash_figlet::{Block, Controls, Direction, Font, Justify, Layout, Renderer, Settings, builtin};
 use cash_getopt::{Arg, Getopt, Item, Long, optstring};
 use clap::Parser;
 
@@ -38,19 +44,38 @@ pub(crate) struct FigletCommand {
     args: Vec<String>,
 }
 
-/// figlet 2.2.5's option string, with `h` for help.
-const OPTSTRING: &str = "ADEXLRI:xlcrpntvm:w:d:f:C:NskSWoh";
+/// figlet 2.2.5's option string with toilet's `F:` and `E:` (its export, which takes
+/// figlet's `-E`), and `h` for help.
+const OPTSTRING: &str = "ADE:XLRI:xlcrpntvm:w:d:f:C:NskSWohF:";
 
-/// The long names toilet gives the options it shares with figlet.
+/// toilet's long options, and `--color`. The long-only ones are known by letters no
+/// short option has.
 const LONGS: &[Long<'static, char>] = &[
     Long::new("font", Arg::Required, 'f'),
     Long::new("directory", Arg::Required, 'd'),
     Long::new("width", Arg::Required, 'w'),
     Long::new("termwidth", Arg::No, 't'),
+    Long::new("filter", Arg::Required, 'F'),
+    Long::new("gay", Arg::No, 'G'),
+    Long::new("rainbow", Arg::No, 'G'),
+    Long::new("metal", Arg::No, 'M'),
+    Long::new("export", Arg::Required, 'E'),
+    Long::new("irc", Arg::No, 'Q'),
+    Long::new("html", Arg::No, 'H'),
     Long::new("infocode", Arg::Required, 'I'),
     Long::new("version", Arg::No, 'v'),
     Long::new("help", Arg::No, 'h'),
+    Long::new("color", Arg::Optional, 'K'),
+    Long::new("colour", Arg::Optional, 'K'),
 ];
+
+/// When colour is written.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum When {
+    Auto,
+    Always,
+    Never,
+}
 
 /// The version figlet 2.2.5 reports with `-I1`, so a script checking for a figlet that
 /// new finds one.
@@ -65,7 +90,7 @@ Fonts and characters:
   -d, --directory=DIR   look for fonts in DIR first (default: $FIGLET_FONTDIR)
   -C FILE               a control file, translating characters (repeatable)
   -N                    forget the control files given so far
-  -D, -E                [\\]{|}~ as German letters, or not (the default)
+  -D                    [\\]{|}~ as German letters
 
 Layout:
   -s                    the font's own layout (the default)
@@ -79,6 +104,14 @@ Layout:
   -l, -c, -r, -x        left, centred, right, or as the font runs
   -L, -R, -X            left to right, right to left, or as the font runs
   -p, -n                paragraph mode (one newline is a blank), or not
+
+Colour and output:
+  -F, --filter=LIST     filters, colon-separated: crop, rainbow, metal, flip, flop,
+                        180, left, right, border (-F list for what each does)
+      --rainbow, --gay  the rainbow filter
+      --metal           the metal filter
+  -E, --export=FORMAT   utf8 (the default), ansi (code page 437) or text
+      --color[=WHEN]    auto (a console, NO_COLOR unset), always or never
 
 Information:
   -I CODE, --infocode=CODE  0 version, 1 version number, 2 font directory,
@@ -98,7 +131,37 @@ struct Request {
     settings: Settings,
     width: Option<usize>,
     info: Option<i64>,
+    filters: Vec<Filter>,
+    format: Option<Format>,
+    color: Option<When>,
     message: Vec<String>,
+}
+
+/// How a command line ends early: what to print on each stream, and the status.
+struct Early {
+    stdout: String,
+    stderr: String,
+    status: ExecutionResult,
+}
+
+impl Early {
+    /// `text` on standard output, and success.
+    const fn print(text: String) -> Self {
+        Self {
+            stdout: text,
+            stderr: String::new(),
+            status: ExecutionResult::success(),
+        }
+    }
+
+    /// `text` on standard error, and status 1.
+    const fn fail(text: String) -> Self {
+        Self {
+            stdout: String::new(),
+            stderr: text,
+            status: ExecutionResult::general_error(),
+        }
+    }
 }
 
 impl builtins::Command for FigletCommand {
@@ -119,7 +182,11 @@ impl builtins::Command for FigletCommand {
     ) -> Result<ExecutionResult, Self::Error> {
         let request = match read_command_line(&context, &self.args) {
             Ok(Ok(request)) => request,
-            Ok(Err(early)) => return Ok(early),
+            Ok(Err(early)) => {
+                context.stdout().write_all(early.stdout.as_bytes())?;
+                context.stderr().write_all(early.stderr.as_bytes())?;
+                return Ok(early.status);
+            }
             Err(problem) => return options::gnu_usage_error(&context, "figlet", problem, 1),
         };
         let mut settings = request.settings;
@@ -160,6 +227,24 @@ impl builtins::Command for FigletCommand {
             }
         }
 
+        let format = request.format.unwrap_or(Format::Utf8);
+        let colour = match request.color {
+            Some(When::Always) => true,
+            Some(When::Never) => false,
+            // A format asked for by name is written as toilet writes it, colour and all.
+            None if request.format.is_some() => true,
+            Some(When::Auto) | None => context
+                .try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD)
+                .is_some_and(|fd| context.shell.colours(&fd)),
+        };
+        let out = |blocks: Vec<Block>| -> Vec<u8> {
+            let blocks: Vec<Block> = blocks
+                .iter()
+                .map(|block| filter::apply(&request.filters, block))
+                .collect();
+            export::write(&blocks, format, colour)
+        };
+
         let mut renderer = Renderer::new(&font, &controls, &settings);
         let mut stdout = context.stdout();
         if request.message.is_empty() {
@@ -173,13 +258,93 @@ impl builtins::Command for FigletCommand {
                 }
                 let text = cash_figlet::font::decode(&line);
                 renderer.push(&text_input(&text));
-                stdout.write_all(export::text_blocks(&renderer.take_blocks()).as_bytes())?;
+                stdout.write_all(&out(renderer.take_blocks()))?;
             }
         } else {
             renderer.push(&words_input(&request.message));
         }
-        stdout.write_all(export::text_blocks(&renderer.finish()).as_bytes())?;
+        stdout.write_all(&out(renderer.finish()))?;
         Ok(ExecutionResult::success())
+    }
+}
+
+/// A list as toilet prints `-F list` and `-E list`: a title, then `"name": what it is`.
+fn list<'a>(title: &str, entries: impl Iterator<Item = (&'a str, &'a str)>) -> String {
+    let mut text = format!("{title}:\n");
+    for (name, about) in entries {
+        text.push('"');
+        text.push_str(name);
+        text.push_str("\": ");
+        text.push_str(about);
+        text.push('\n');
+    }
+    text
+}
+
+/// toilet's options, and `--color`: whether `id` was one, and how it ends the command
+/// line when it does.
+fn toilet_option(request: &mut Request, id: char, value: &str) -> Option<Result<(), Early>> {
+    let ends = |message: String| Some(Err(Early::fail(message)));
+    match id {
+        'F' if value == "list" => Some(Err(Early::print(list(
+            "Available filters",
+            filter::FILTERS
+                .iter()
+                .filter_map(|(name, _, about)| about.map(|about| (*name, about))),
+        )))),
+        'F' => match filter::parse_list(value) {
+            Ok(filters) => {
+                request.filters.extend(filters);
+                Some(Ok(()))
+            }
+            Err(name) => ends(format!(
+                "figlet: unknown filter: {name}\nTry 'figlet -F list' for the filters.\n"
+            )),
+        },
+        'G' => {
+            request.filters.push(Filter::Rainbow);
+            Some(Ok(()))
+        }
+        'M' => {
+            request.filters.push(Filter::Metal);
+            Some(Ok(()))
+        }
+        'E' if value == "list" => Some(Err(Early::print(list(
+            "Available export formats",
+            export::FORMATS
+                .iter()
+                .map(|(name, _, about)| (*name, *about)),
+        )))),
+        'E' => match export::format_named(value) {
+            Some(format) => {
+                request.format = Some(format);
+                Some(Ok(()))
+            }
+            None => ends(format!(
+                "figlet: unknown export format: {value}\nTry 'figlet -E list' for the formats.\n"
+            )),
+        },
+        'Q' | 'H' => {
+            let name = if id == 'Q' { "irc" } else { "html" };
+            ends(format!(
+                "figlet: the {name} export is not carried\nTry 'figlet -E list' for the formats.\n"
+            ))
+        }
+        'K' => {
+            request.color = Some(match value {
+                "" | "always" | "yes" | "force" => When::Always,
+                "never" | "no" | "none" => When::Never,
+                "auto" | "tty" | "if-tty" => When::Auto,
+                other => {
+                    return ends(format!(
+                        "figlet: invalid argument '{other}' for '--color'\n\
+                         Valid arguments are 'always', 'never' and 'auto'.\n"
+                    ));
+                }
+            });
+            Some(Ok(()))
+        }
+        _ => None,
     }
 }
 
@@ -188,7 +353,7 @@ impl builtins::Command for FigletCommand {
 fn read_command_line<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     args: &[String],
-) -> Result<Result<Request, ExecutionResult>, cash_getopt::Problem> {
+) -> Result<Result<Request, Early>, cash_getopt::Problem> {
     let mut request = Request {
         font: "standard".to_owned(),
         directory: None,
@@ -196,6 +361,9 @@ fn read_command_line<SE: cash_core::ShellExtensions>(
         settings: Settings::default(),
         width: None,
         info: None,
+        filters: Vec::new(),
+        format: None,
+        color: None,
         message: Vec::new(),
     };
     let shorts = optstring(OPTSTRING);
@@ -209,19 +377,16 @@ fn read_command_line<SE: cash_core::ShellExtensions>(
             }
         };
         let value = value.unwrap_or_default();
+        match toilet_option(&mut request, id, &value) {
+            Some(Ok(())) => continue,
+            Some(Err(early)) => return Ok(Err(early)),
+            None => {}
+        }
         let s = &mut request.settings;
         match id {
-            'h' => {
-                let status = if writeln!(context.stdout(), "{HELP}").is_ok() {
-                    ExecutionResult::success()
-                } else {
-                    ExecutionResult::general_error()
-                };
-                return Ok(Err(status));
-            }
+            'h' => return Ok(Err(Early::print(format!("{HELP}\n")))),
             'A' => {}
             'D' => s.deutsch = true,
-            'E' => s.deutsch = false,
             'X' => s.direction = None,
             'L' => s.direction = Some(Direction::LeftToRight),
             'R' => s.direction = Some(Direction::RightToLeft),

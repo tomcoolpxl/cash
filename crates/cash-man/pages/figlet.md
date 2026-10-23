@@ -40,14 +40,29 @@ Wrapped at 40 columns, broken between words:
 
     figlet -w 40 "a longer message than fits"
 
+In TOIlet's colours, boxed, and saved with its colours as code page 437 art:
+
+<!-- parse only: Git Bash has no figlet to compare with -->
+
+    figlet -f future --metal -F crop:border Done
+    figlet -f mono9 --rainbow -E ansi Hello > hello.ans
+
 ## How it works
 
 `figlet` draws each character of its message, or of each line of standard input, with a
 FIGlet font: a file of letters made of ordinary characters. Letters are moved together
 until they touch (kerning) or overlap where the font's rules allow it (smushing), and a
 line that would pass the width is broken between words. It is a reimplementation of
-FIGlet 2.2.5 and reads both FIGlet's fonts (`.flf`) and TOIlet's (`.tlf`, UTF-8, some in
-colour), zipped or not, and FIGlet's control files (`.flc`).
+FIGlet 2.2.5 with TOIlet 0.3's additions: it reads both FIGlet's fonts (`.flf`) and
+TOIlet's (`.tlf`, UTF-8, some in colour), zipped or not, and FIGlet's control files
+(`.flc`), and it has TOIlet's filters and output formats.
+
+Filters (`-F`) change each line as it is printed: `crop` takes off the blanks around
+it, `rainbow` and `metal` colour it, `flip` and `flop` mirror it, `180`, `left` and
+`right` turn it, and `border` boxes it. Several are given with colons (`-F crop:border`)
+or with more `-F`s, and run in order. Colour reaches a console, unless `NO_COLOR` is
+set; into a pipe or a file it is left out, unless `-E` names a format or `--color=always`
+asks for it.
 
 cash carries 23 fonts: FIGlet's `standard`, `slant`, `small`, `big`, `banner`, `block`,
 `bubble`, `digital`, `ivrit`, `lean`, `mini`, `script`, `shadow`, `smscript`,
@@ -63,7 +78,6 @@ current directory last. A name with a slash or a backslash is a path.
     -C FILE               A control file, translating characters; may be repeated.
     -N                    Forget the control files given so far.
     -D                    [\]{|}~ as German letters.
-    -E                    Not as German letters (the default).
 
     -s                    The font's own layout (the default).
     -S                    Smush by the font's rules; overlap where it has none.
@@ -81,6 +95,14 @@ current directory last. A name with a slash or a backslash is a path.
     -X                    As the font runs.
     -p                    Paragraph mode: a single newline is a blank.
     -n                    Normal mode (the default): every newline ends a line.
+
+    -F, --filter=LIST     Filters, separated by colons; -F list says what each does.
+    --rainbow, --gay      The rainbow filter.
+    --metal               The metal filter.
+    -E, --export=FORMAT   utf8 (the default: UTF-8, with colour), ansi (code page 437,
+                          with colour, CRLF line ends) or text (no colour ever);
+                          -E list names them.
+    --color[=WHEN]        Colour: auto (a console, NO_COLOR unset), always, never.
 
     -I CODE               Tell: 0 the version, 1 the version number, 2 the font
                           directory, 3 the font, 4 the width, 5 the font formats.
@@ -102,3 +124,13 @@ into a pipe or a file it is FIGlet's 80, so a script gets what FIGlet would give
 
 A CRLF line end in the input is one newline, so a Windows text file prints no blank
 figure between its lines.
+
+`-E` is TOIlet's output format; FIGlet's own `-E` only turned `-D` off again, which is
+the default anyway.
+
+### Difference from TOIlet
+
+There is one command, `figlet`; TOIlet's options are part of it. Layout is FIGlet's,
+which TOIlet follows only roughly. The formats are `utf8`, `ansi` and `text`; TOIlet's
+HTML, IRC, SVG and others are not carried. TOIlet colours a pipe; cash does so only when
+`-E` names a format or `--color=always` asks.
