@@ -215,7 +215,8 @@ Costs are rough: S a day or less, M a few days, L a week or more.
 Chosen on 2026-10-23: the colour pack (gradients and palettes, lolcat rainbow, shadow and
 outline, Unicode borders, letter spacing, line height, background), the font gallery and
 picker, Windows fonts and pixel modes (with double-size lines), and the sixel image mode
-with TheDraw fonts. Not chosen: animation, PNG export.
+with TheDraw fonts. Not chosen: animation, PNG export. The sixel image mode was dropped
+later the same day: too big for what it gives, and nobody would use it (the user).
 
 ## 8. Tests
 
@@ -261,6 +262,6 @@ and whether the user installs `figlet` and `toilet` in WSL for the oracle.
 5. `figlist`, `showfigfonts` and the picker.
 6. Pixel modes, Windows fonts (cash-win32 rasteriser), double-size lines; checked in the
    user's Terminal profile, octants first.
-7. Sixel image mode (reusing the rasteriser) and the TheDraw reader.
+7. The TheDraw reader. (The sixel image mode was dropped, section 7.)
 8. The WSL oracle, the `cash doctor` row, NOTICE and the `upstreams.toml` entry for
    rs-figlet.

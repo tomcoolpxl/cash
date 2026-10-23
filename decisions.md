@@ -215,8 +215,9 @@ code. 23 fonts are built into cash.exe (figlet's 17 without `mnemonic`, toilet's
 `mono9`, `future`, `smbraille`, `pagga`, `smblock`; 443 KB), chosen from a sample of
 GitHub scripts; the rest load from a font directory. Exports: `utf8`, `ansi` (CP437) and
 `text`. Extras: true-colour gradients and palettes, a font picker, pixel fonts and
-installed Windows fonts drawn with sub-cell blocks, double-size lines, a sixel image mode,
-TheDraw fonts. The release that finishes it is 2.0.0, a milestone, not a breaking change.
+installed Windows fonts drawn with sub-cell blocks, double-size lines, TheDraw fonts. The
+sixel image mode chosen at first was dropped the same day (the user: too big, and nobody
+would use it). The release that finishes it is 2.0.0, a milestone, not a breaking change.
 Turned down: `figlet` and `toilet` as two commands, a new name with aliases; all 75 font
 files built in, rs-figlet's nine, figlet's only; HTML, SVG, IRC and libcaca's other
 exports; a 1.x version.

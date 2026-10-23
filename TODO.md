@@ -44,7 +44,8 @@ oracle is figlet and toilet in WSL's Arch (installed by the user, 2026-10-23).
    borders, letter spacing, line height, background.
 5. `figlist`, `showfigfonts`, and the font picker with a live preview.
 6. Pixel fonts drawn with sub-cell blocks, any installed Windows font, double-size lines.
-7. The sixel image mode and TheDraw `.tdf` fonts.
+7. TheDraw `.tdf` fonts. (The sixel image mode was dropped by the user, 2026-10-23:
+   too big for what it gives, and nobody would use it.)
 8. The WSL oracle, the `cash doctor` shadow row, NOTICE and `upstreams.toml`.
 
 ## Next, straight after the figlet phase (the user, 2026-10-23)
