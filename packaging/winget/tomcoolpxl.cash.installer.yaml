@@ -13,7 +13,7 @@ InstallModes:
 InstallerSwitches:
   Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART
-  Custom: /TASKS=links
+  Custom: /TASKS=links,explorer
 UpgradeBehavior: install
 # Inno's uninstall key for AppId {B7E3A0C4-5D2F-4F4B-9E8A-7C1D2B3E4F50}.
 ProductCode: '{B7E3A0C4-5D2F-4F4B-9E8A-7C1D2B3E4F50}_is1'
