@@ -610,7 +610,10 @@ fn grant_to_every_account(exe: &Path) -> String {
 
 /// Scoop installs the command-line tools the rest of this report and cash's hints name,
 /// so its absence is a warning, given first (the user, 2026-10-24). Its own one-line
-/// installer is PowerShell's, so it is given as cash runs it.
+/// installer is PowerShell's, so it is given as cash runs it, with the execution policy
+/// for that one PowerShell: Windows' default refuses the installer ("PowerShell requires
+/// an execution policy in `[Unrestricted, RemoteSigned, ByPass]`"), as the setup's Scoop
+/// task already allows for.
 fn check_scoop(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[String], cwd: &Path) {
     findings.push(if resolve("scoop", entries, pathext, cwd).is_some() {
         Finding::ok("Scoop installs command-line tools: scoop install NAME")
@@ -619,7 +622,7 @@ fn check_scoop(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[Stri
             "Scoop not found: the easiest way to install command-line tools (git, jq, rg...)",
             Some(format!(
                 "install it:\t{}",
-                typed(r#"powershell -c "irm get.scoop.sh | iex""#)
+                typed(r#"powershell -ExecutionPolicy Bypass -c "irm get.scoop.sh | iex""#)
             )),
         )
     });

@@ -11,7 +11,8 @@ scoop install jq`, so the name to install is at hand without a search. Scripts, 
 and a defined `command_not_found_handle` get Bash's message and status 127 and nothing
 more, and `cash doctor` names the same packages for what it finds missing.
 
-winget comes with Windows; Scoop is installed with `irm get.scoop.sh | iex` in PowerShell.
+winget comes with Windows; Scoop is installed with
+`powershell -ExecutionPolicy Bypass -c "irm get.scoop.sh | iex"`, in cash or anywhere.
 A name with a bucket, `extras/vscode`, is `scoop bucket add extras` first. A `-` means the
 manager has no package for it.
 

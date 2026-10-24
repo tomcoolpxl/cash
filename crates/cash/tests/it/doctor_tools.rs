@@ -36,7 +36,8 @@ fn without_scoop_and_git_both_are_warned_of_first_with_the_way_to_install_them()
         scoop
             .fix
             .as_deref()
-            .is_some_and(|fix| fix.contains("irm get.scoop.sh | iex")),
+            .is_some_and(|fix| fix
+                .contains(r#"powershell -ExecutionPolicy Bypass -c "irm get.scoop.sh | iex""#)),
         "{report}"
     );
     let git = doctor_finding(&report, "git not found").expect("a git finding");
