@@ -3236,3 +3236,8 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   no git process, Git need not be installed, and the repository is looked for only when
   the directory changes. The user's own `~/.bashrc` got the same prompt section (backup
   `~/.bashrc.before-git-states`).
+- **`cash doctor` names Scoop and git first** (2026-10-24, the user): either missing is a
+  warning, given before every other: Scoop with its one-line installer as cash runs it
+  (`powershell -c "irm get.scoop.sh | iex"`), git with `scoop install git, or winget
+  install Git.Git` (both Git for Windows: git, Git Bash and its tools). Found, each is a
+  line that passed. carapace's note adds `scoop bucket add extras` before its install.

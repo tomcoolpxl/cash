@@ -31,7 +31,7 @@ fn start(dir: &Path, args: &[&str]) -> ConPtySession {
     ];
     all.extend_from_slice(args);
     all.push("-i");
-    let session = ConPtySession::start_sized(
+    ConPtySession::start_sized(
         Path::new(CASH),
         &all,
         Some(&[
@@ -44,8 +44,7 @@ fn start(dir: &Path, args: &[&str]) -> ConPtySession {
         100,
         25,
     )
-    .expect("start cash on a pseudo console");
-    session
+    .expect("start cash on a pseudo console")
 }
 
 fn exits(mut session: ConPtySession) {

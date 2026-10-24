@@ -167,7 +167,10 @@ pub fn run() -> u8 {
 
     let builtins = builtin_names();
 
-    // In the order the report gives them: what passed first, then the notes.
+    // In the order the report gives them: what passed first, then the notes. Scoop and
+    // git first: what the rest of the advice installs with, and what most work needs.
+    check_scoop(&mut findings, &entries, &pathext, &cwd);
+    check_git(&mut findings, &entries, &pathext, &cwd);
     check_shells(&mut findings, &entries, &pathext, &cwd);
     check_own_path(&mut findings);
     check_userland(&mut findings, &builtins, &entries);
@@ -605,6 +608,40 @@ fn grant_to_every_account(exe: &Path) -> String {
     )
 }
 
+/// Scoop installs the command-line tools the rest of this report and cash's hints name,
+/// so its absence is a warning, given first (the user, 2026-10-24). Its own one-line
+/// installer is PowerShell's, so it is given as cash runs it.
+fn check_scoop(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[String], cwd: &Path) {
+    findings.push(if resolve("scoop", entries, pathext, cwd).is_some() {
+        Finding::ok("Scoop installs command-line tools: scoop install NAME")
+    } else {
+        Finding::warn(
+            "Scoop not found: the easiest way to install command-line tools (git, jq, rg...)",
+            Some(format!(
+                "install it:\t{}",
+                typed(r#"powershell -c "irm get.scoop.sh | iex""#)
+            )),
+        )
+    });
+}
+
+/// git is vital to most work in a shell, so its absence is a warning (the user,
+/// 2026-10-24). Either package is Git for Windows, git with Git Bash and its tools; Scoop
+/// first, as this report recommends it, winget for one without.
+fn check_git(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[String], cwd: &Path) {
+    findings.push(match resolve("git", entries, pathext, cwd) {
+        Some(git) => Finding::ok(format!("git: {}", cash_win32::path::render(git.target()))),
+        None => Finding::warn(
+            "git not found: Git for Windows brings git, and Git Bash with its tools",
+            Some(format!(
+                "install it:\t{}, or {}",
+                typed("scoop install git"),
+                typed("winget install Git.Git")
+            )),
+        ),
+    });
+}
+
 /// carapace gives Tab completion, with descriptions, for the commands that bring none of
 /// their own (D63). Optional, so its absence is a note, never a warning.
 fn check_carapace(
@@ -627,7 +664,7 @@ fn check_carapace(
              scripts you source",
             Some(format!(
                 "for 700 more commands, with descriptions:\t{}",
-                typed("scoop install extras/carapace-bin")
+                typed("scoop bucket add extras; scoop install extras/carapace-bin")
             )),
         )
     });

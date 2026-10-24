@@ -95,6 +95,8 @@ mod diff_builtin;
 mod directory_stack;
 mod disown;
 mod doctor_busybox;
+// `cash doctor` on Scoop and git, named first.
+mod doctor_tools;
 // D22: a job's pid names the process cash started, or none, after the job has ended.
 mod ended_children;
 // D3/D5: what a script sees of its environment, and the here-document deadlock.
