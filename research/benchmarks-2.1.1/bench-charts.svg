@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="430" viewBox="0 0 860 430" font-family="Segoe UI, Arial, sans-serif">
+<rect width="860" height="430" fill="#ffffff"/>
+<text x="10" y="30" font-size="15" font-weight="600" fill="#111">Startup <tspan font-weight="400" fill="#555">(ms, lower is better)</tspan></text>
+<line x1="110" y1="48" x2="110" y2="204" stroke="#999" stroke-width="1"/>
+<text x="102" y="69" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="600" fill="#222">cash 2.1.1</text>
+<rect x="110" y="59" width="18.6" height="20" rx="3" fill="#2a78d6"/>
+<text x="134.6" y="69" dominant-baseline="middle" font-size="13" fill="#111">20.9</text>
+<text x="102" y="99" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">Git Bash</text>
+<rect x="110" y="89" width="23.6" height="20" rx="3" fill="#b4b2a9"/>
+<text x="139.6" y="99" dominant-baseline="middle" font-size="13" fill="#111">26.5</text>
+<text x="102" y="129" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">PowerShell 7</text>
+<rect x="110" y="119" width="230.0" height="20" rx="3" fill="#b4b2a9"/>
+<text x="346.0" y="129" dominant-baseline="middle" font-size="13" fill="#111">258.6</text>
+<text x="102" y="159" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">WSL bash</text>
+<rect x="110" y="149" width="3.0" height="20" rx="3" fill="#b4b2a9"/>
+<text x="119.0" y="159" dominant-baseline="middle" font-size="13" fill="#111">3.4</text>
+<text x="102" y="189" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">Linux native</text>
+<rect x="110" y="179" width="2.0" height="20" rx="3" fill="#b4b2a9"/>
+<text x="118.0" y="189" dominant-baseline="middle" font-size="13" fill="#111">1.1</text>
+<text x="440" y="30" font-size="15" font-weight="600" fill="#111">Interpreter, per step <tspan font-weight="400" fill="#555">(µs, lower is better)</tspan></text>
+<line x1="540" y1="48" x2="540" y2="204" stroke="#999" stroke-width="1"/>
+<text x="532" y="69" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="600" fill="#222">cash 2.1.1</text>
+<rect x="540" y="59" width="96.7" height="20" rx="3" fill="#2a78d6"/>
+<text x="642.7" y="69" dominant-baseline="middle" font-size="13" fill="#111">2.9</text>
+<text x="532" y="99" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">Git Bash</text>
+<rect x="540" y="89" width="186.7" height="20" rx="3" fill="#b4b2a9"/>
+<text x="732.7" y="99" dominant-baseline="middle" font-size="13" fill="#111">5.6</text>
+<text x="532" y="129" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">PowerShell 7</text>
+<rect x="540" y="119" width="230.0" height="20" rx="3" fill="#b4b2a9"/>
+<text x="776.0" y="129" dominant-baseline="middle" font-size="13" fill="#111">6.9</text>
+<text x="532" y="159" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">WSL bash</text>
+<rect x="540" y="149" width="83.3" height="20" rx="3" fill="#b4b2a9"/>
+<text x="629.3" y="159" dominant-baseline="middle" font-size="13" fill="#111">2.5</text>
+<text x="532" y="189" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">Linux native</text>
+<rect x="540" y="179" width="86.7" height="20" rx="3" fill="#b4b2a9"/>
+<text x="632.7" y="189" dominant-baseline="middle" font-size="13" fill="#111">2.6</text>
+<text x="10" y="240" font-size="15" font-weight="600" fill="#111">$(...) <tspan font-weight="400" fill="#555">(µs, lower is better)</tspan></text>
+<line x1="110" y1="258" x2="110" y2="414" stroke="#999" stroke-width="1"/>
+<text x="102" y="279" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="600" fill="#222">cash 2.1.1</text>
+<rect x="110" y="269" width="24.3" height="20" rx="3" fill="#2a78d6"/>
+<text x="140.3" y="279" dominant-baseline="middle" font-size="13" fill="#111">74</text>
+<text x="102" y="309" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">Git Bash</text>
+<rect x="110" y="299" width="260.0" height="20" rx="3" fill="#b4b2a9"/>
+<path d="M325,296 l6,26 M334,296 l6,26" stroke="#ffffff" stroke-width="4"/>
+<text x="118" y="309" dominant-baseline="middle" font-size="13" fill="#222">20,850 (bar cut)</text>
+<text x="102" y="339" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">PowerShell 7</text>
+<rect x="110" y="329" width="37.1" height="20" rx="3" fill="#b4b2a9"/>
+<text x="153.1" y="339" dominant-baseline="middle" font-size="13" fill="#111">113</text>
+<text x="102" y="369" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">WSL bash</text>
+<rect x="110" y="359" width="199.4" height="20" rx="3" fill="#b4b2a9"/>
+<text x="315.4" y="369" dominant-baseline="middle" font-size="13" fill="#111">607</text>
+<text x="102" y="399" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">Linux native</text>
+<rect x="110" y="389" width="131.4" height="20" rx="3" fill="#b4b2a9"/>
+<text x="247.4" y="399" dominant-baseline="middle" font-size="13" fill="#111">400</text>
+<text x="440" y="240" font-size="15" font-weight="600" fill="#111">Start a program <tspan font-weight="400" fill="#555">(ms, lower is better)</tspan></text>
+<line x1="540" y1="258" x2="540" y2="414" stroke="#999" stroke-width="1"/>
+<text x="532" y="279" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="600" fill="#222">cash 2.1.1</text>
+<rect x="540" y="269" width="97.2" height="20" rx="3" fill="#2a78d6"/>
+<text x="643.2" y="279" dominant-baseline="middle" font-size="13" fill="#111">19.4</text>
+<text x="532" y="309" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">Git Bash</text>
+<rect x="540" y="299" width="230.0" height="20" rx="3" fill="#b4b2a9"/>
+<text x="776.0" y="309" dominant-baseline="middle" font-size="13" fill="#111">45.9</text>
+<text x="532" y="339" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">PowerShell 7</text>
+<rect x="540" y="329" width="111.7" height="20" rx="3" fill="#b4b2a9"/>
+<text x="657.7" y="339" dominant-baseline="middle" font-size="13" fill="#111">22.3</text>
+<text x="532" y="369" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">WSL bash</text>
+<rect x="540" y="359" width="4.3" height="20" rx="3" fill="#b4b2a9"/>
+<text x="550.3" y="369" dominant-baseline="middle" font-size="13" fill="#111">0.86</text>
+<text x="532" y="399" text-anchor="end" dominant-baseline="middle" font-size="13" font-weight="400" fill="#222">Linux native</text>
+<rect x="540" y="389" width="3.2" height="20" rx="3" fill="#b4b2a9"/>
+<text x="549.2" y="399" dominant-baseline="middle" font-size="13" fill="#111">0.63</text>
+</svg>
