@@ -576,6 +576,9 @@ ends with the builtin's own `--help` instead of copying its options.
 
 ### Decided in working sessions
 
+- **`LANG` stays unset** (the user, 2026-10-24): where no locale variable is set, cash
+  sets none, though Git Bash's `lang.sh` sets `LANG` from Windows' language; git's
+  messages would follow it. Turned down: Git Bash's way, and `C.UTF-8`.
 - **What cash prints never cites its own documents** (the user, 2026-10-05): no decision
   numbers, spec rows, ROADMAP items or research files in help pages, `--help`, version
   lines, warnings or `cash doctor`; they point to a `help` page instead.

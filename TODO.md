@@ -64,9 +64,8 @@ the Terminal profile and shell integration, and needs no winpty.
 4. Start menu and "Open cash here": done, in DONE.md; the user tried the right-click
    (2026-10-23: works). At the release that carries it, the bucket's hooks and notes get
    `scripts/sync-bucket.py` (RELEASING.md step 7).
-5. The small ones: done, in DONE.md, but `LANG`: cash leaves it unset where no locale
-   variable is set; Git Bash sets it from Windows' language (`lang.sh`: `locale -uU`),
-   which turns git's messages into that language. **Yours** to decide.
+5. The small ones: done, in DONE.md. `LANG` stays unset where no locale variable is set
+   (the user, 2026-10-24), under "Decided" below.
 
 ## The phase before (2026-10-23, done, released as 1.50.0)
 

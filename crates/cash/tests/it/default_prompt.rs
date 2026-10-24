@@ -65,7 +65,14 @@ fn an_rc_file_that_sets_no_prompt_gets_cashs_with_the_branch() {
     session
         .expect("(topic)", WAIT)
         .expect("the prompt names the branch");
-    session.expect("❯", WAIT).expect("and ends in the arrow");
+    session.send("echo prompt-do''ne\r").unwrap();
+    session.expect("prompt-done", WAIT).expect("a command ran");
+    // The arrow, or a red `#` as administrator, which CI's runners are.
+    let output = session.output();
+    assert!(
+        output.contains('❯') || output.contains("admin: "),
+        "{output}"
+    );
     exits(session);
 }
 
@@ -73,7 +80,10 @@ fn an_rc_file_that_sets_no_prompt_gets_cashs_with_the_branch() {
 fn norc_keeps_bashs_prompt() {
     let dir = Scratch::new("default-prompt-norc");
     let mut session = start(dir.path(), &["--norc"]);
-    session.expect("$ ", WAIT).expect("Bash's `cash-X.Y$ `");
+    // `cash-X.Y$ `, or `#` for `$` as administrator.
+    session.expect("cash-", WAIT).expect("Bash's `cash-X.Y$ `");
+    session.send("echo prompt-do''ne\r").unwrap();
+    session.expect("prompt-done", WAIT).expect("a command ran");
     assert!(!session.output().contains('❯'), "{}", session.output());
     exits(session);
 }
