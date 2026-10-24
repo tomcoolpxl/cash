@@ -3225,3 +3225,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   line, so nothing else changes: a script keeps the syntax error, and `cmd &` and `&&`
   are Bash's. `. x.ps1` and `source x.ps1` stay as Bash has them (the user: not to be
   handled at all).
+- **cash's prompt when the startup files set none, and Git's states in it** (2026-10-24, the
+  user's picks): someone with a `~/.bashrc` of their own (a Git Bash user) got Bash's
+  `cash-2.1$ `; when the startup files ran and left `PS1` at that with no `PROMPT_COMMAND`,
+  cash now runs the starter's prompt: directory, branch, `❯`, title. Not with `--norc`, a
+  `PS1` handed down, or in `sh` or POSIX mode. The prompt is one file,
+  `cash-shell/src/prompt.bash`, which the starter is built from too. Its branch shows
+  Git's states as `__git_ps1` does (`main|MERGING`, `feature|REBASE 2/5`, CHERRY-PICKING,
+  REVERTING, BISECTING, AM) and a tag on a detached HEAD, read from the repository's files:
+  no git process, Git need not be installed, and the repository is looked for only when
+  the directory changes. The user's own `~/.bashrc` got the same prompt section (backup
+  `~/.bashrc.before-git-states`).

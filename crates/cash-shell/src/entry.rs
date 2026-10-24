@@ -904,9 +904,42 @@ async fn initialize_shell(
         cash_core::RcLoadBehavior::LoadDefault
     };
 
-    shell_ref.lock().await.load_config(&profile, &rc).await?;
+    let mut shell = shell_ref.lock().await;
+    shell.load_config(&profile, &rc).await?;
+    if !rc.skip() {
+        default_prompt(&mut shell).await;
+    }
+    drop(shell);
 
     Ok(())
+}
+
+/// cash's prompt, the starter's (`prompt.bash`), when the startup files ran and set none:
+/// `PS1` still Bash's `\s-\v\$ ` and no `PROMPT_COMMAND`, which a prompt of the user's own
+/// (starship, oh-my-bash) sets. A Git Bash user's `~/.bashrc` left them on `cash-2.1$ `,
+/// without the directory, the branch or the window title. Not with `--norc`, nor for a
+/// `PS1` handed down, nor in `sh` or POSIX mode, where Bash's stays, as in Bash.
+async fn default_prompt(shell: &mut cash_core::Shell<impl cash_core::ShellExtensions>) {
+    const PROMPT: &str = concat!(
+        include_str!("prompt.bash"),
+        "__prompt_command() { __prompt_draw \"$?\"; }\nPROMPT_COMMAND=__prompt_command\n",
+    );
+    let options = shell.options();
+    if !options.interactive || options.sh_mode || options.posix_mode {
+        return;
+    }
+    let bash_default = shell.env_str("PS1").is_some_and(|ps1| ps1 == r"\s-\v\$ ");
+    let prompt_command = shell
+        .env_str("PROMPT_COMMAND")
+        .is_some_and(|command| !command.is_empty());
+    if !bash_default || prompt_command {
+        return;
+    }
+    let params = shell.default_exec_params();
+    let source = cash_core::SourceInfo::from("cash: default prompt");
+    if let Err(error) = shell.run_string(PROMPT, &source, &params).await {
+        tracing::warn!("couldn't set the default prompt: {error}");
+    }
 }
 
 /// Instantiates a shell from command-line arguments. Does *not* run any code in the shell.

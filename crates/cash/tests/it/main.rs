@@ -83,6 +83,8 @@ mod cp_times;
 mod crlf_scripts;
 // D13: what the keyboard's Ctrl-C does to a script, outside `read`.
 mod ctrl_c;
+// cash's prompt when the startup files set none.
+mod default_prompt;
 // D7: `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` as the shell's descriptors.
 mod dev_descriptors;
 // `/dev/tcp/HOST/PORT` and `/dev/udp/HOST/PORT` in redirections: a socket in the

@@ -21,7 +21,14 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 /// The starter, as written.
-const STARTER: &str = include_str!("starter.bashrc");
+/// The starter, its prompt from the file the shell takes its own default prompt from
+/// (`cash-shell/src/prompt.bash`), so the two look alike.
+const STARTER: &str = concat!(
+    include_str!("starter_head.bashrc"),
+    include_str!("../../cash-shell/src/prompt.bash"),
+    "\n",
+    include_str!("starter_tail.bashrc"),
+);
 
 const USAGE: &str = "\
 usage: cash --init-rc [--once]

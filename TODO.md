@@ -59,10 +59,7 @@ of this is about taking git into cash. cash is ahead on history, `ls` colours an
 the Terminal profile and shell integration, and needs no winpty.
 
 1. Git completion out of the box: done, in DONE.md.
-2. **The starter never reaches a Git Bash user.** It is written only when there is neither
-   `~/.bashrc` nor `~/.cashrc`, so someone with a `~/.bashrc` lands on `cash-2.0$ `, no
-   title, no branch, no aliases. Also: the starter's branch shows no MERGING/REBASE state
-   and no tag on a detached HEAD, which `__git_ps1` shows.
+2. Reaching Git Bash users: the prompt done, in DONE.md.
 3. `~/.inputrc` read: done, in DONE.md.
 4. Start menu and "Open cash here": done, in DONE.md; the user tried the right-click
    (2026-10-23: works). At the release that carries it, the bucket's hooks and notes get
