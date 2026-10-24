@@ -9,7 +9,8 @@
     "notes": [
         "If Scoop listed a running cash above, that is this window: it keeps the old version until you close it. New tabs start the new one.",
         "Windows Terminal has a \"cash\" profile, and the Start menu a cash entry. cash doctor checks the install.",
-        "To add \"Open cash here\" to Explorer's menu of a directory: cash --explorer-menu"
+        "To add \"Open cash here\" to Explorer's menu of a directory: cash --explorer-menu",
+        "To open .sh scripts with cash: cash --associate-sh"
     ],
     "suggest": {
         "carapace": "extras/carapace-bin",
@@ -41,6 +42,7 @@
         "    if (Test-Path \"$persist_dir\\bin\\.cash-links\") { & \"$dir\\cash.exe\" --unlink-tools *> $null }",
         "    & \"$dir\\cash.exe\" --remove-terminal-profile *> $null",
         "    & \"$dir\\cash.exe\" --remove-explorer-menu *> $null",
+        "    & \"$dir\\cash.exe\" --remove-sh-association *> $null",
         "    Remove-Item -LiteralPath \"$([Environment]::GetFolderPath('StartMenu'))\\Programs\\Scoop Apps\\cash.lnk\" -ErrorAction SilentlyContinue",
         "}"
     ],

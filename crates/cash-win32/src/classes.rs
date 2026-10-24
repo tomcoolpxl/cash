@@ -1,5 +1,7 @@
-//! Shell verbs of the user's own, in `HKEY_CURRENT_USER\Software\Classes`: the entries
-//! Explorer adds to a menu, such as "Open cash here" on a directory (D85).
+//! Shell verbs and file associations of the user's own, in `HKEY_CURRENT_USER`.
+//!
+//! Under `Software\Classes`: the entries Explorer adds to a menu, such as "Open cash
+//! here" on a directory (D85), and what opens a `.sh` file.
 //!
 //! A verb is `<class>\shell\<verb>`: its default value the menu's text, `Icon` the icon,
 //! and its `command` subkey the command line, where Explorer puts the item's path for
@@ -9,9 +11,11 @@ use std::io;
 
 use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, WIN32_ERROR};
 use windows_sys::Win32::System::Registry::{
-    HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_OPTION_NON_VOLATILE, REG_SZ,
-    RRF_RT_REG_SZ, RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegGetValueW, RegSetValueExW,
+    HKEY, HKEY_CLASSES_ROOT, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE,
+    REG_OPTION_NON_VOLATILE, REG_SZ, RRF_RT_REG_SZ, RegCloseKey, RegCreateKeyExW,
+    RegDeleteKeyValueW, RegDeleteTreeW, RegGetValueW, RegSetValueExW,
 };
+use windows_sys::Win32::UI::Shell::{SHCNE_ASSOCCHANGED, SHCNF_IDLIST, SHChangeNotify};
 
 use crate::wide::to_wide_nul;
 
@@ -88,8 +92,137 @@ pub fn command(class: &str, name: &str) -> Option<String> {
 }
 
 fn verb_key(class: &str, name: &str) -> String {
-    let root = std::env::var(KEY_VAR).unwrap_or_else(|_| CLASSES.to_owned());
-    format!(r"{root}\{class}\shell\{name}")
+    format!(r"{}\{class}\shell\{name}", root())
+}
+
+/// `Software\Classes`, or the tests' key in its place ([`KEY_VAR`]).
+fn root() -> String {
+    std::env::var(KEY_VAR).unwrap_or_else(|_| CLASSES.to_owned())
+}
+
+/// Whether the keys are the tests' own ([`KEY_VAR`]), not the user's.
+fn redirected() -> bool {
+    std::env::var_os(KEY_VAR).is_some()
+}
+
+/// Sets the value `name` (the key's default for `None`) of the key at `path` under the
+/// classes, creating the key.
+///
+/// # Errors
+///
+/// A key or value that could not be written.
+pub fn set_value(path: &str, name: Option<&str>, value: &str) -> io::Result<()> {
+    let key = create(&format!(r"{}\{path}", root()))?;
+    set_string(&key, name, value)
+}
+
+/// The string value `name` (the default for `None`) of the key at `path` under the
+/// user's classes.
+pub fn value(path: &str, name: Option<&str>) -> Option<String> {
+    read_string(HKEY_CURRENT_USER, &format!(r"{}\{path}", root()), name)
+}
+
+/// The default value of the key at `path` in Windows' merged classes.
+///
+/// `HKEY_CLASSES_ROOT` holds the user's and the machine's: what a program installed for
+/// every user, such as Git for Windows, set counts. The tests' key alone when redirected.
+pub fn merged_default(path: &str) -> Option<String> {
+    if redirected() {
+        return value(path, None);
+    }
+    read_string(HKEY_CLASSES_ROOT, path, None)
+}
+
+/// The program class the user chose for `extension` in Windows' "Open with" or Settings,
+/// which wins over every class's default; none for the tests' key.
+pub fn user_choice(extension: &str) -> Option<String> {
+    if redirected() {
+        return None;
+    }
+    let path = format!(
+        r"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\{extension}\UserChoice"
+    );
+    read_string(HKEY_CURRENT_USER, &path, Some("ProgId")).filter(|class| !class.is_empty())
+}
+
+/// Removes the value `name` (the default for `None`) of the key at `path` under the
+/// classes; whether there was one.
+///
+/// # Errors
+///
+/// A value that is there but could not be removed.
+pub fn remove_value(path: &str, name: Option<&str>) -> io::Result<bool> {
+    let subkey = to_wide_nul(format!(r"{}\{path}", root()));
+    let name = name.map(to_wide_nul);
+    let name_ptr = name.as_ref().map_or(std::ptr::null(), |name| name.as_ptr());
+    // SAFETY: the subkey is NUL-terminated; the name is null (the default) or
+    // NUL-terminated.
+    match unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER, subkey.as_ptr(), name_ptr) } {
+        ERROR_SUCCESS => Ok(true),
+        ERROR_FILE_NOT_FOUND => Ok(false),
+        other => Err(os_error(other)),
+    }
+}
+
+/// Removes the key at `path` under the classes, with everything under it; whether there
+/// was one.
+///
+/// # Errors
+///
+/// A key that is there but could not be removed.
+pub fn remove_key(path: &str) -> io::Result<bool> {
+    let subkey = to_wide_nul(format!(r"{}\{path}", root()));
+    // SAFETY: the subkey is NUL-terminated and names a key under the user's hive.
+    match unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, subkey.as_ptr()) } {
+        ERROR_SUCCESS => Ok(true),
+        ERROR_FILE_NOT_FOUND => Ok(false),
+        other => Err(os_error(other)),
+    }
+}
+
+/// Tells Explorer that file associations changed, so it shows the new ones at once; not
+/// for the tests' key.
+pub fn announce_associations() {
+    if redirected() {
+        return;
+    }
+    // SAFETY: SHCNE_ASSOCCHANGED takes no items; both pointers may be null.
+    unsafe {
+        SHChangeNotify(
+            SHCNE_ASSOCCHANGED.cast_signed(),
+            SHCNF_IDLIST,
+            std::ptr::null(),
+            std::ptr::null(),
+        );
+    }
+}
+
+fn read_string(hive: HKEY, path: &str, name: Option<&str>) -> Option<String> {
+    let subkey = to_wide_nul(path);
+    let name = name.map(to_wide_nul);
+    let name_ptr = name.as_ref().map_or(std::ptr::null(), |name| name.as_ptr());
+    let mut buffer = vec![0u16; 2048];
+    let mut size = u32::try_from(buffer.len() * 2).unwrap_or(u32::MAX);
+    // SAFETY: the subkey is NUL-terminated, the name null or NUL-terminated, and `size`
+    // is the buffer's length in bytes.
+    let status = unsafe {
+        RegGetValueW(
+            hive,
+            subkey.as_ptr(),
+            name_ptr,
+            RRF_RT_REG_SZ,
+            std::ptr::null_mut(),
+            buffer.as_mut_ptr().cast(),
+            &raw mut size,
+        )
+    };
+    if status != ERROR_SUCCESS {
+        return None;
+    }
+    let chars = (size as usize / 2).min(buffer.len());
+    let text = buffer.get(..chars).unwrap_or_default();
+    let text = text.strip_suffix(&[0]).unwrap_or(text);
+    Some(String::from_utf16_lossy(text))
 }
 
 /// An open registry key, closed when dropped.

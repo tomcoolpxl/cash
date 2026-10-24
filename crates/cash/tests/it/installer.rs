@@ -127,6 +127,34 @@ impl Install {
         Some(line.split_once("REG_SZ")?.1.trim().to_owned())
     }
 
+    /// The string value `name` (the default for `None`) of `path` under the classes key,
+    /// as `reg query` prints it.
+    fn class_value(&self, path: &str, name: Option<&str>) -> Option<String> {
+        let key = format!(r"HKCU\{}\{path}", self.classes());
+        let mut query = Command::new("reg");
+        query.args(["query", &key]);
+        match name {
+            Some(name) => query.args(["/v", name]),
+            None => query.arg("/ve"),
+        };
+        let out = query.stderr(Stdio::null()).output().unwrap();
+        let stdout = text(&out.stdout);
+        let line = stdout.lines().find(|line| line.contains("REG_SZ"))?;
+        let value = line.split_once("REG_SZ")?.1.trim();
+        // A key without a default value is printed with this in place of one.
+        (value != "(value not set)").then(|| value.to_owned())
+    }
+
+    /// Set the default value of `path` under the classes key, as another program would.
+    fn set_class_default(&self, path: &str, value: &str) {
+        let key = format!(r"HKCU\{}\{path}", self.classes());
+        let out = Command::new("reg")
+            .args(["add", &key, "/ve", "/d", value, "/f"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", text(&out.stderr));
+    }
+
     fn bin(&self) -> PathBuf {
         self.root.join("bin")
     }
@@ -482,6 +510,146 @@ fn remove_explorer_menu_takes_the_entry_away() {
     assert!(run("--remove-explorer-menu").contains("removed"));
     assert_eq!(install.explorer_command("Directory"), None);
     assert!(run("--remove-explorer-menu").contains("there was no"));
+}
+
+/// `--associate-sh` registers `cash.sh` and, with no other program on `.sh`, makes it the
+/// default; `--remove-sh-association` takes all of it away, and says when there was none.
+#[test]
+fn associate_sh_registers_cash_and_remove_takes_it_away() {
+    let install = Install::new("sh");
+    let exe = install.version("9.9.9");
+    let run = |arg: &str| {
+        let out = install.command(&exe).arg(arg).output().unwrap();
+        assert!(out.status.success(), "{arg}: {}", text(&out.stderr));
+        text(&out.stdout)
+    };
+    let stdout = run("--associate-sh");
+    assert!(stdout.contains(".sh scripts open with cash"), "{stdout}");
+    let command = format!(r#""{}" "%1" %*"#, plain_case(&exe));
+    assert_eq!(
+        install
+            .class_value(r"cash.sh\shell\open\command", None)
+            .map(|c| c.to_lowercase()),
+        Some(command.to_lowercase())
+    );
+    assert_eq!(
+        install
+            .class_value(r"cash.sh\DefaultIcon", None)
+            .map(|c| c.to_lowercase()),
+        Some(format!(r#""{}",0"#, plain_case(&exe)).to_lowercase())
+    );
+    assert_eq!(
+        install.class_value(r".sh\OpenWithProgids", Some("cash.sh")),
+        Some(String::new())
+    );
+    assert_eq!(install.class_value(".sh", None).as_deref(), Some("cash.sh"));
+
+    assert!(run("--remove-sh-association").contains("no longer open with cash"));
+    assert_eq!(
+        install.class_value(r"cash.sh\shell\open\command", None),
+        None
+    );
+    assert_eq!(
+        install.class_value(r".sh\OpenWithProgids", Some("cash.sh")),
+        None
+    );
+    assert_eq!(install.class_value(".sh", None), None);
+    assert!(run("--remove-sh-association").contains("did not open with cash"));
+}
+
+/// With another program on `.sh`, as Git for Windows is, cash joins its "Open with" and
+/// leaves the default alone, before and after its removal.
+#[test]
+fn associate_sh_leaves_another_programs_default() {
+    let install = Install::new("sh-other");
+    let exe = install.version("9.9.9");
+    install.set_class_default(".sh", "sh_auto_file");
+    let out = install
+        .command(&exe)
+        .arg("--associate-sh")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let stdout = text(&out.stdout);
+    assert!(stdout.contains("still starts sh_auto_file"), "{stdout}");
+    assert_eq!(
+        install.class_value(r".sh\OpenWithProgids", Some("cash.sh")),
+        Some(String::new())
+    );
+    assert_eq!(
+        install.class_value(".sh", None).as_deref(),
+        Some("sh_auto_file")
+    );
+
+    let out = install
+        .command(&exe)
+        .arg("--remove-sh-association")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert_eq!(
+        install.class_value(".sh", None).as_deref(),
+        Some("sh_auto_file")
+    );
+    assert_eq!(
+        install.class_value(r".sh\OpenWithProgids", Some("cash.sh")),
+        None
+    );
+}
+
+/// A finish leaves `.sh` alone until cash is registered, then registers it for `current`;
+/// the remover takes it away.
+#[test]
+fn the_sh_association_is_kept_up_to_date_and_removed_with_the_install() {
+    let install = Install::new("sh-finish");
+    let exe = install.version("9.9.9");
+    assert!(install.finish(&exe, &["--quiet"]).status.success());
+    assert_eq!(
+        install.class_value(r"cash.sh\shell\open\command", None),
+        None
+    );
+
+    let out = install
+        .command(&exe)
+        .arg("--associate-sh")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let out = install.finish(&exe, &[]);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        text(&out.stdout).contains(".sh scripts open with: "),
+        "{}",
+        text(&out.stdout)
+    );
+    let current = format!(
+        r#""{}" "%1" %*"#,
+        plain_case(&install.current().join("cash.exe"))
+    );
+    assert_eq!(
+        install
+            .class_value(r"cash.sh\shell\open\command", None)
+            .map(|c| c.to_lowercase()),
+        Some(current.to_lowercase())
+    );
+
+    let out = install
+        .command(&exe)
+        .arg("--install-remove")
+        .arg(&install.root)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        text(&out.stdout).contains(".sh scripts no longer open with cash\n"),
+        "{}",
+        text(&out.stdout)
+    );
+    assert_eq!(
+        install.class_value(r"cash.sh\shell\open\command", None),
+        None
+    );
+    assert_eq!(install.class_value(".sh", None), None);
 }
 
 /// `--cd DIR`, which the entry passes without Terminal, starts cash there, before the

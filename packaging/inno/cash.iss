@@ -65,6 +65,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "links"; Description: "Make the tools programs on PATH (ls.exe, sed.exe, awk.exe, ...), for editors, make and scripts outside cash"; GroupDescription: "Tools:"
 Name: "scoop"; Description: "Also install Scoop, a package manager for command-line tools (runs Scoop's own installer)"; GroupDescription: "Tools:"; Flags: unchecked
 Name: "explorer"; Description: "Add ""Open cash here"" to Explorer's menu of a directory"; GroupDescription: "Explorer:"
+Name: "sh"; Description: "Open .sh scripts with cash (where Git Bash has them, cash joins ""Open with"")"; GroupDescription: "Explorer:"
 
 [Icons]
 ; The Start menu's cash: Windows Terminal with cash's profile, or cash in a console
@@ -91,6 +92,9 @@ Filename: "{app}\{#AppVersion}\cash.exe"; Parameters: "--install-finish ""{app}"
 ; an unchecked task takes an earlier one away.
 Filename: "{app}\current\cash.exe"; Parameters: "--explorer-menu"; Tasks: explorer; Flags: runhidden waituntilterminated; StatusMsg: "Adding ""Open cash here"" to Explorer..."
 Filename: "{app}\current\cash.exe"; Parameters: "--remove-explorer-menu"; Tasks: not explorer; Flags: runhidden waituntilterminated
+; .sh scripts (D87), the same way.
+Filename: "{app}\current\cash.exe"; Parameters: "--associate-sh"; Tasks: sh; Flags: runhidden waituntilterminated; StatusMsg: "Opening .sh scripts with cash..."
+Filename: "{app}\current\cash.exe"; Parameters: "--remove-sh-association"; Tasks: not sh; Flags: runhidden waituntilterminated
 Filename: "{app}\{#AppVersion}\cash.exe"; Description: "Open cash"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]

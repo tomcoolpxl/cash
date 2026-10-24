@@ -212,6 +212,13 @@ fn finish(exe: &Path, options: &FinishOptions) -> Result<(), String> {
         say.line(&format!("Explorer's \"Open cash here\": {command}"));
     }
 
+    // `.sh` scripts, likewise when an earlier install registered cash for them (the setup's
+    // task runs `--associate-sh` itself).
+    if crate::sh_association::is_set() {
+        let written = crate::sh_association::write_for(&current.join("cash.exe"))?;
+        say.line(&format!(".sh scripts open with: {}", written.command));
+    }
+
     if let Some(path) = crate::init_rc::run_once()? {
         say.line(&format!("wrote {}, a starter ~/.bashrc", shown(&path)));
     }
@@ -412,6 +419,11 @@ fn remove_install(root: &Path, quiet: bool) -> u8 {
     }
     match crate::explorer_menu::remove_quietly() {
         Ok(true) => say.line("\"Open cash here\" removed from Explorer"),
+        Ok(false) => {}
+        Err(message) => failures.push(message),
+    }
+    match crate::sh_association::remove_quietly() {
+        Ok(true) => say.line(".sh scripts no longer open with cash"),
         Ok(false) => {}
         Err(message) => failures.push(message),
     }

@@ -3248,3 +3248,20 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   with `--norc`. `PageUp` and `PageDown` go to the oldest history entry and back to the
   line being typed (`beginning-of-history`, `end-of-history`, new in cash's reedline), as
   Git's `/etc/inputrc` binds them. `help installing` says how to run Windows' OpenSSH agent.
+- **The winget install checked on a clean Windows** (2026-10-24, the user enabled Windows
+  Sandbox for it): Microsoft's `SandboxTest.ps1` with the 2.2.0 manifests of the
+  winget-pkgs pull request. The silent install gave status 0, both "Open cash here"
+  verbs, the Start-menu entry, the Apps entry, `bin` and `current` on the user PATH and
+  the Terminal fragment; the silent uninstall took every one of them away again.
+- **.sh scripts open with cash** (2026-10-24, D87, the user: "make it true", for the winget
+  manifest's `FileExtensions: sh`): `cash --associate-sh` and `--remove-sh-association`
+  register and remove the class `cash.sh` and its place in `.sh`'s "Open with", and make
+  it `.sh`'s default only when no other program has one (Git for Windows keeps its own).
+  The setup has a checked task, an upgrade writes it again for `current`, the remover
+  takes it away; Scoop's notes name the command and its uninstall removes it; the winget
+  manifest's silent install turns the task on.
+- **`cash doctor`'s Scoop command failed on a fresh Windows** (the user, in Windows
+  Sandbox, 2026-10-24): `powershell -c "irm get.scoop.sh | iex"` stopped at once,
+  "PowerShell requires an execution policy in [Unrestricted, RemoteSigned, ByPass]";
+  the fix line is now `powershell -ExecutionPolicy Bypass -c "irm get.scoop.sh | iex"`,
+  as the setup's Scoop task runs it.

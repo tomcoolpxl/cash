@@ -1205,6 +1205,19 @@ entries running `cash.exe` alone, left to Windows' default terminal and its defa
 look; Scoop writing the Explorer entry by itself, which Scoop manifests leave to the
 user; a Windows 11 top-level menu entry, which needs a packaged shell extension.
 
+### D87 — .sh scripts open with cash
+
+The user's call, 2026-10-24 ("make it true"), when the winget manifest's `FileExtensions:
+sh` was taken out of the 2.2.0 pull request for not yet being so. `cash --associate-sh`
+registers the program class `cash.sh` (`cash.exe "%1" %*`, cash's icon) under
+`HKCU\Software\Classes` and lists it in the `Open with` of `.sh`; it makes it the
+default only when no other program has `.sh`, so Git for Windows' own stays, and a
+choice the user made in Windows wins over both. The installer offers it as a task,
+checked, refreshes it on upgrade and removes it on uninstall; Scoop's notes name the
+command and its uninstall removes it, as for D85. Turned down: taking `.sh` over from
+Git Bash, whose users chose it; Windows keeps a choice made in "Open with" out of any
+program's reach anyway (it is hash-signed).
+
 ### Decided in working sessions
 
 - **Scoop updates cash while it runs** (the user, 2026-10-02): the user's Scoop ignores

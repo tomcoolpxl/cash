@@ -59,6 +59,8 @@ cash's own:
   `--remove-terminal-profile` takes it away.
 - `cash --explorer-menu`: "Open cash here" on directories in Explorer;
   `--remove-explorer-menu` takes it away.
+- `cash --associate-sh`: `.sh` scripts open with cash, or cash is in their "Open with"
+  where another program has them; `--remove-sh-association` takes it away.
 - `cash --cd DIR`: start in DIR, before the startup files, as Git Bash's `--cd`.
 - `cash --link-tools [--add-to-path] [DIR]`: hard links (`ls.exe`, `sed.exe`, ...) that
   programs outside cash can run; `--unlink-tools` removes them.

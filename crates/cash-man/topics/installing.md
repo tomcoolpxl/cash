@@ -20,18 +20,24 @@ window on a Windows without Terminal). Three options:
   empty space inside one, to open cash there. On Windows 11 it is under "Show more
   options". `cash --explorer-menu` and `cash --remove-explorer-menu` do the same at any
   time.
+- **Open .sh scripts with cash**, on by default: a double-click, or `start x.sh`, runs
+  the script in cash. Where Git for Windows has `.sh` already, it keeps the double-click
+  and cash joins the "Open with" menu; a choice made there, or in Settings > Apps >
+  Default apps, wins. `cash --associate-sh` and `cash --remove-sh-association` do the
+  same at any time.
 - **Also install Scoop**, off by default: runs Scoop's own installer last, for the rest of
   your command-line tools (`scoop install jq`).
 
 For scripts and winget, the setup runs silently:
 
     ./cash-v1.5.0-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
-        /TASKS=links,explorer,scoop
+        /TASKS=links,explorer,sh,scoop
 
 `/DIR=` names another directory; `/TASKS=` lists the options to turn on (`links`,
-`explorer`, `scoop`), none when empty. Uninstall from Settings > Apps > Installed apps:
-the tool links, the Terminal profile, the Start-menu and Explorer entries, the PATH
-entries and the files go; your `~/.bashrc`, history and config stay.
+`explorer`, `sh`, `scoop`), none when empty. Uninstall from Settings > Apps > Installed
+apps: the tool links, the Terminal profile, the Start-menu and Explorer entries, the
+`.sh` association, the PATH entries and the files go; your `~/.bashrc`, history and
+config stay.
 
 The setup is not signed. Downloaded with a browser, Windows shows SmartScreen's
 "unknown publisher" prompt once; "More info", then "Run anyway". A download by winget or
@@ -87,6 +93,9 @@ programs a builtin hides, whether the tool links are current, and what is worth 
   directory and of the empty space inside one (on Windows 11 under "Show more options"):
   Windows Terminal with the cash profile, there. `cash --remove-explorer-menu` takes it
   away; `scoop uninstall cash` does too.
+- **.sh scripts open with cash.** `cash --associate-sh`: a double-click on a `.sh` runs
+  it in cash, or, where Git for Windows has `.sh`, cash is in its "Open with" menu.
+  `cash --remove-sh-association` takes it away; `scoop uninstall cash` does too.
 - **Tool links on PATH.** `cash --link-tools --add-to-path` makes `ls.exe`, `sort.exe`,
   `sed.exe` and every other bundled tool a program on `PATH`, so editors, `make`, `npm`
   and scripts outside cash can run them. `cash --unlink-tools` removes them. `help which`
