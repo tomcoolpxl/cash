@@ -199,6 +199,8 @@ cash-getopt = { workspace = true }
 cash-archive = { workspace = true }
 # `figlet` (D84): FIGlet's and TOIlet's fonts and layout, and the fonts cash carries.
 cash-figlet = { workspace = true }
+# `sextant` (D88): the shooter drawn with text.
+cash-sextant = { workspace = true }
 # `7z h` and `-scrc`: 7-Zip's hashes. All but blake2s_simd (BLAKE2sp, by the authors of
 # the blake2b_simd already in the tree) were already in the tree.
 sha1 = "0.11.0"

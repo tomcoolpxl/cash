@@ -21,6 +21,7 @@ members = [
     "crates/cash-getopt",
     "crates/cash-archive",
     "crates/cash-figlet",
+    "crates/cash-sextant",
     "crates/cash-crossterm",
     "xtask",
 ]
@@ -47,6 +48,7 @@ cash-core = { version = "2.0.0", path = "crates/cash-core" }
 cash-coreutils-builtins = { version = "2.0.0", path = "crates/cash-coreutils-builtins" }
 cash-diffutils = { version = "2.0.0", path = "crates/cash-diffutils" }
 cash-figlet = { version = "2.0.0", path = "crates/cash-figlet" }
+cash-sextant = { version = "2.0.0", path = "crates/cash-sextant" }
 cash-getopt = { version = "2.0.0", path = "crates/cash-getopt" }
 cash-interactive = { version = "2.0.0", path = "crates/cash-interactive" }
 cash-parser = { version = "2.0.0", path = "crates/cash-parser" }

@@ -3265,3 +3265,11 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   "PowerShell requires an execution policy in [Unrestricted, RemoteSigned, ByPass]";
   the fix line is now `powershell -ExecutionPolicy Bypass -c "irm get.scoop.sh | iex"`,
   as the setup's Scoop task runs it.
+- **`sextant`, a game** (2026-10-24, D88, the user's call after a prototype in
+  `../sextant`): a shooter drawn with text, 2x3 pixels to a cell in 24-bit colour, held
+  keys for steering while firing, a formation that sends enemies down in dives, waves,
+  lives and a score printed on quitting. The cell patterns come from a DEC soft font the
+  game sends the terminal (no installed font had the sextants); `--unicode` uses a
+  font's, `--glyphs` shows both, `--demo` plays by itself. Crate `cash-sextant`; the
+  page is on F1 and `man`. Checked in an interactive cash in a pseudo-console: it draws
+  with the soft font, `q` quits, the prompt comes back with status 0.

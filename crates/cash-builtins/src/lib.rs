@@ -123,6 +123,9 @@ mod coolfetch;
 // `cash-figlet`; Windows has neither.
 mod figlet;
 
+// cash (D88): `sextant`, a shooter drawn with text, on `cash-sextant`.
+mod sextant;
+
 // cash (D48): `top`, which Windows has no equivalent of at all — procps was never
 // ported, and the Cygwin build reports pids `kill` cannot use.
 mod top;

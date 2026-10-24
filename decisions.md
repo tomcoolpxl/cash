@@ -1218,6 +1218,19 @@ command and its uninstall removes it, as for D85. Turned down: taking `.sh` over
 Git Bash, whose users chose it; Windows keeps a choice made in "Open with" out of any
 program's reach anyway (it is hash-signed).
 
+### D88 — A game built in: sextant
+
+The user's call, 2026-10-24, after a prototype in a repository of its own
+(`../sextant`): "it won't be more than 250kb. do it", with its page on F1 and `man`.
+`sextant` is a shooter drawn with text, 2x3 pixels to a cell in 24-bit colour, in the
+crate `cash-sextant`, run in the shell as `top` is. Its cell patterns come from a DEC
+soft font (DECDLD) that it sends the terminal, because no font installed on the user's
+machine had Unicode's sextants, Cascadia 2102 among them; `--unicode` uses a font's
+own. Its escapes are its own, not crossterm's styles, whose colour switch is the
+process's. Turned down: a separate release of the game only; sixel pictures (the user:
+no); requiring a font with the sextants. Tests are light, as the user asked: the page,
+`--glyphs`, refusing a non-terminal, the cost of a frame.
+
 ### Decided in working sessions
 
 - **Scoop updates cash while it runs** (the user, 2026-10-02): the user's Scoop ignores

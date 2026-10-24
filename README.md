@@ -340,6 +340,10 @@ name resolves to something worse there: `find` and `xargs`, `ps`, `pgrep`, `pstr
 fonts; 23 of them are built in (`figlet -f slant Hello`), and any other is read from a
 font directory.
 
+`sextant` is a game: a shooter drawn in the terminal with text, two by three pixels to a
+cell in full colour, from a soft font cash sends the terminal, so no font needs anything.
+`man sextant` has the keys.
+
 `where` is Windows' `where.exe` with options spelled with dashes: `where git` lists every
 `git` along the current directory and PATH, `where -r . '*.log'` searches a tree, and
 `-q`, `-f`, `-t` and `where -?` work as `/q`, `/f`, `/t` and `/?` do there. Paths print

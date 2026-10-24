@@ -643,6 +643,7 @@ dependencies = [
  "cash-parser",
  "cash-picker",
  "cash-sed",
+ "cash-sextant",
  "cash-win32",
  "chrono",
  "clap",
@@ -927,6 +928,13 @@ dependencies = [
  "tempfile",
  "uucore",
  "uutests",
+]
+
+[[package]]
+name = "cash-sextant"
+version = "2.2.0"
+dependencies = [
+ "crossterm",
 ]
 
 [[package]]

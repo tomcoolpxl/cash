@@ -1,0 +1,19 @@
+[package]
+name = "cash-sextant"
+description = "sextant, a shooter drawn in the terminal with text, for cash-shell's sextant (decisions.md D88)"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# Raw keys, key releases, the window's size: cash's own crossterm.
+crossterm = { workspace = true }
+
+[lints]
+workspace = true

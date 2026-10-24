@@ -68,6 +68,8 @@ mod completion_windows;
 mod column_builtin;
 // coolfetch system banner.
 mod coolfetch;
+// sextant, the shooter drawn with text.
+mod sextant;
 // figlet (D84): fonts found, control files, standard input, the width, -I.
 mod figlet;
 // EXE-04: `coproc` ends when its input does, and is a job with a pid.

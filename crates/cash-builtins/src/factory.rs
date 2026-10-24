@@ -355,6 +355,7 @@ fn make_default_builtins<SE: cash_core::ShellExtensions>(
         "showfigfonts".into(),
         builtin::<figlet::ShowfigfontsCommand, SE>(),
     );
+    m.insert("sextant".into(), builtin::<sextant::SextantCommand, SE>());
     // cash's own, not the bundled ones: pure string work, run inside the shell (the user,
     // 2026-10-16, research/in-process-tools-design.md).
     m.insert("basename".into(), builtin::<names::BasenameCommand, SE>());
