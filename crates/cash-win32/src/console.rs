@@ -398,13 +398,8 @@ pub fn repair_before_prompt() -> Repaired {
         }
     }
     let output = open("CONOUT$");
-    if let Some(output) = &output
-        && let Some(current) = mode(output)
-    {
-        let wanted = (current | NEEDED_OUTPUT) & !NO_AUTO_RETURN;
-        if wanted != current {
-            repaired.output = set(output, wanted);
-        }
+    if let Some(output) = &output {
+        repaired.output = output_modes_set(output);
     }
     if input.is_none() && output.is_none() {
         return repaired;
@@ -427,6 +422,36 @@ pub fn repair_before_prompt() -> Repaired {
             .is_ok();
     }
     repaired
+}
+
+/// Turns on the output modes cash relies on, as cash starts; whether it changed any.
+///
+/// Processed output, wrapping and VT processing, with line feeds returning to the
+/// margin, before the startup files run: what they print in colour (coolfetch, the
+/// starter's hint) is then drawn, not shown as `[36m...` in a Windows Console window
+/// whose VT processing starts off. The first prompt turned it on, after them.
+pub fn enable_vt_output() -> bool {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("CONOUT$")
+        .is_ok_and(|output| output_modes_set(&output))
+}
+
+/// Sets the output modes cash relies on, on the console output `output`, where any is
+/// off ([`repair_before_prompt`], [`enable_vt_output`]); whether it set them.
+fn output_modes_set(output: &std::fs::File) -> bool {
+    use std::os::windows::io::AsRawHandle as _;
+    use windows_sys::Win32::System::Console::{GetConsoleMode, SetConsoleMode};
+
+    let mut current = 0u32;
+    // SAFETY: an open console handle owned by `output`, and a valid out-parameter.
+    if unsafe { GetConsoleMode(output.as_raw_handle(), &raw mut current) } == 0 {
+        return false;
+    }
+    let wanted = (current | NEEDED_OUTPUT) & !NO_AUTO_RETURN;
+    // SAFETY: as above, alive for the call.
+    wanted != current && unsafe { SetConsoleMode(output.as_raw_handle(), wanted) != 0 }
 }
 
 /// Set the console to UTF-8 (D41).

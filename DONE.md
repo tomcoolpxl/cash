@@ -3213,3 +3213,9 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   529), `if` in a loop 979, now 734. Tests running a shell on their own thread get the
   shell's stack (`RUST_MIN_STACK`). The one-command pipeline path was left, the
   reason in the research file.
+- **Raw escape codes before the first prompt in Windows Console** (the user's screenshot,
+  2026-10-23, picked 2026-10-24): an elevated cash in conhost showed coolfetch's colours and
+  the starter's hint as `[36m...[0m`, VT processing starting off there and turned on
+  only by the first prompt. cash turns its output modes on as it starts, beside the UTF-8
+  code page (`console::enable_vt_output`). No test console shows it (a pseudo-console has
+  VT on); the user looks at one admin window after the release.

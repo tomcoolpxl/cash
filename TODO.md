@@ -25,6 +25,12 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
+## This phase (2026-10-24)
+
+Picked by the user: the raw escape codes before the first prompt in Windows Console; and
+PowerShell's `& script.ps1` (both under "Found along the way"); and items 2 and 5 of the
+Git Bash comparison below (reaching Git Bash users, the small ones). In that order.
+
 ## The phase before (2026-10-23, done, released as 2.0.0)
 
 `figlet` (research/figlet-design.md, D84): figlet 2.2.5 and toilet 0.3 in one builtin
@@ -394,13 +400,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 
 ## Found along the way
 
-- **In Windows Console (conhost), what runs before the first prompt prints its escape
-  codes raw** (the user's screenshot, 2026-10-23, an elevated cash 2.0.1 whose `Terminal:`
-  is `Windows Console`): coolfetch's colours and the starter's `cash: press F1 or type man
-  for help` show `[36m...[0m` literally, while the prompt after them is coloured. VT
-  output processing seems to be turned on by the line editor, after the startup files
-  have run; cash would turn it on as it starts, before them. To fix (the user: "make a
-  note for later to fix this").
 - **No scheduled tasks** (the user, 2026-10-23): an elevated step, such as a samply or
   wpr profile, stays one the user runs by hand (`sudo pwsh -File ...`); a task with
   highest privileges that cash or Claude could start later was turned down as dangerous.
