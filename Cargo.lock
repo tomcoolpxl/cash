@@ -1013,7 +1013,7 @@ dependencies = [
  "memchr",
  "memmap2",
  "notify",
- "parse_datetime",
+ "parse_datetime 0.17.0",
  "rand 0.10.3",
  "rand_chacha 0.10.0",
  "rayon",
@@ -3549,6 +3549,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "parse_datetime"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb51967a779ef73b125a243688e53e4bb2474f91cae72734ee5051e857fb2645"
+dependencies = [
+ "jiff",
+ "num-traits",
+ "winnow",
+]
+
+[[package]]
 name = "pbkdf2"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5230,7 +5241,7 @@ dependencies = [
  "jiff-icu",
  "jiff-tzdb",
  "libc",
- "parse_datetime",
+ "parse_datetime 0.16.0",
  "rustix",
  "thiserror 2.0.21",
  "uucore",
