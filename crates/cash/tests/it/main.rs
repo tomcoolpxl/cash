@@ -46,6 +46,8 @@ mod builtin_parameters;
 mod bundled_paths;
 // `bzip2`, `bunzip2` and `bzcat`: bzip2 1.0.8's golden output, and the file handling.
 mod bzip2_builtin;
+// PowerShell's `& script.ps1` typed at the prompt.
+mod call_operator;
 mod cd_errors;
 // `chown` and `chgrp`: nothing changed, said once, status 0; GNU's errors kept.
 mod chown_builtin;

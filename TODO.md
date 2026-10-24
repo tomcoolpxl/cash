@@ -403,15 +403,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
 - **No scheduled tasks** (the user, 2026-10-23): an elevated step, such as a samply or
   wpr profile, stays one the user runs by hand (`sudo pwsh -File ...`); a task with
   highest privileges that cash or Claude could start later was turned down as dangerous.
-- **PowerShell's `& script.ps1` at the prompt is a syntax error** (the user, 2026-10-23:
-  "that should work, we need to do something there"). Typed out of PowerShell habit, `&
-  C:\x\profile.ps1` says `syntax error near unexpected token '&'`, as Bash does; `.
-  ./x.ps1` sources the file as Bash (`Write-Host: command not found`). cash already runs
-  a `.ps1` named as a command (`./x.ps1 a b`, through PowerShell, arguments passed). To
-  decide: a leading `&` taken as PowerShell's call operator at an interactive prompt only
-  (no Bash script starts a line with `&`, so scripts are not touched), a `.ps1` given to
-  `.`/`source` run through PowerShell, or at least an error that names the fix (`in cash,
-  run the path itself: ./x.ps1`). **Yours** to pick.
 - **A CI run timed out on a TODO-only commit** (run 39966452795 on 783ec1db,
   2026-10-23): `corpus::the_ci_glue_script_matches_real_bash` (15 s) and two ConPTY
   tests (`a_program_that_breaks_the_console...`, `...took_the_mouse_gives_it_back`, 60 s)

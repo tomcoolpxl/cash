@@ -3219,3 +3219,9 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   only by the first prompt. cash turns its output modes on as it starts, beside the UTF-8
   code page (`console::enable_vt_output`). No test console shows it (a pseudo-console has
   VT on); the user looks at one admin window after the release.
+- **PowerShell's `& script.ps1` at the prompt** (the user, 2026-10-23, picked 2026-10-24): a
+  line typed at the prompt that starts with `& ` runs what follows (`& C:\x\a.ps1 b`), as
+  cash runs a `.ps1` named alone; history keeps the line as typed. Bash refuses such a
+  line, so nothing else changes: a script keeps the syntax error, and `cmd &` and `&&`
+  are Bash's. `. x.ps1` and `source x.ps1` stay as Bash has them (the user: not to be
+  handled at all).

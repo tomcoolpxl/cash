@@ -43,6 +43,15 @@ pub struct InteractiveOptions {
     pub zsh_style_hooks: bool,
 }
 
+/// The line after PowerShell's call operator, `& ` (or `&` and a tab) at its start, or
+/// `None` for any other line: `&&` or a lone `&` stays as typed, for Bash's error.
+fn without_call_operator(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix('&')?;
+    rest.starts_with([' ', '\t'])
+        .then(|| rest.trim_start())
+        .filter(|rest| !rest.is_empty())
+}
+
 /// Reads `PROMPT_COMMAND` as bash does: a string is a single command, an indexed array is one
 /// command per element, and any other type runs nothing at all. Deliberately *not* read as a
 /// word list the way the hook registries are: bash gives `PROMPT_COMMAND` its own handling
@@ -386,6 +395,14 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
             return Ok(InteractiveExecutionResult::Executed(exit));
         }
 
+        // PowerShell's call operator, typed from habit: `& C:\x\script.ps1 a b` runs the
+        // script, as cash runs a `.ps1` named as a command. Bash refuses a line that starts
+        // with `&`, so no line means anything else by it; only the prompt's are read so,
+        // and history keeps the line as typed.
+        if user_input && let Some(rest) = without_call_operator(&read_result) {
+            read_result = rest.to_owned();
+        }
+
         // Count the command's lines.
         let line_count = read_result.lines().count().max(1);
 
@@ -547,8 +564,25 @@ impl crate::term_detection::TerminalEnvironment for HostEnvironment {
 mod tests {
     use std::sync::Arc;
 
-    use super::{InteractiveOptions, InteractiveShell, catch_future_panic};
+    use super::{InteractiveOptions, InteractiveShell, catch_future_panic, without_call_operator};
     use crate::{InputBackend, InteractivePrompt, ReadResult, ShellError, ShellRef};
+
+    #[test]
+    fn powershells_call_operator_is_taken_off_a_prompt_line() {
+        assert_eq!(
+            without_call_operator("& C:\\x\\a.ps1 b"),
+            Some("C:\\x\\a.ps1 b")
+        );
+        assert_eq!(
+            without_call_operator("  &\t\"C:/a b/c.ps1\""),
+            Some("\"C:/a b/c.ps1\"")
+        );
+        assert_eq!(without_call_operator("&& echo"), None);
+        assert_eq!(without_call_operator("&"), None);
+        assert_eq!(without_call_operator("& "), None);
+        assert_eq!(without_call_operator("echo a & echo b"), None);
+        assert_eq!(without_call_operator("&x"), None);
+    }
 
     struct PanicThenEof {
         reads: usize,
