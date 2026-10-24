@@ -405,9 +405,6 @@ What the phases now in DONE.md left open, each where its phase says more. Not no
   on slow shards 2 and 4, beside install-action's "bash startup failure" on the runner,
   while the 2.0.1 run went on at the same time. The runs before and after passed. Only
   worth looking into if it comes back.
-- **Three empty files, `1`, `f` and `file`, at the repository's root** (untracked, made
-  2026-10-19 between 07:33 and 07:37): from no test that was found; perhaps a command
-  typed with a stray `>`. Left in place, as another session may own them.
 
 - **Two oracle tests lost their directory part way, once** (2026-10-19, a full `it`
   run): `column_cases.sh` and `bzip2_cases.sh`, running at the same moment, found the
