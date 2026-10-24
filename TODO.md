@@ -25,11 +25,12 @@ for working through it. What is done, phases and findings, is in DONE.md.
 
 ---
 
-## This phase (2026-10-24)
+## The phase before (2026-10-24, done, released as 2.2.0)
 
-Picked by the user: the raw escape codes before the first prompt in Windows Console; and
-PowerShell's `& script.ps1` (both under "Found along the way"); and items 2 and 5 of the
-Git Bash comparison below (reaching Git Bash users, the small ones). In that order.
+Picked by the user: the raw escape codes before the first prompt in Windows Console;
+PowerShell's `& script.ps1`; items 2 and 5 of the Git Bash comparison below (cash's
+prompt when none is set, with Git's states; the small defaults); with `cash doctor`
+naming Scoop and git first, asked for on the way. In DONE.md.
 
 ## The phase before (2026-10-23, done, released as 2.0.0)
 
