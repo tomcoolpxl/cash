@@ -24,6 +24,11 @@ def main() -> int:
     source = json.loads(SOURCE.read_text(encoding="utf-8"))
     bucket = json.loads(bucket_path.read_text(encoding="utf-8"))
     changed = [f for f in FIELDS if f in source and bucket.get(f) != source[f]]
+    if not changed:
+        # Left as it is: written again, a checkout with CRLF endings showed it changed,
+        # and the next `git pull` refused to run over it (the 2.2.0 release).
+        print("changed: nothing")
+        return 0
     for field in changed:
         bucket[field] = source[field]
     # Scoop's bucket style: four-space indent, LF, a final newline.
