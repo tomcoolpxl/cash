@@ -905,6 +905,9 @@ async fn initialize_shell(
     };
 
     let mut shell = shell_ref.lock().await;
+    if !rc.skip() {
+        git_bash_defaults(&mut shell).await;
+    }
     shell.load_config(&profile, &rc).await?;
     if !rc.skip() {
         default_prompt(&mut shell).await;
@@ -912,6 +915,55 @@ async fn initialize_shell(
     drop(shell);
 
     Ok(())
+}
+
+/// What Git for Windows' `/etc/profile` sets up for an interactive Git Bash, before the
+/// startup files, which may undo any of it: `~/bin` first on `PATH` (`env.sh`), and
+/// `shopt -s no_empty_cmd_completion` and each `~/bash_completion.d/*.bash` sourced
+/// (`git-prompt.sh`). Not in `sh` or POSIX mode, and not with `--norc`. `~/bin` only
+/// where it is a directory and not on `PATH` already.
+async fn git_bash_defaults(shell: &mut cash_core::Shell<impl cash_core::ShellExtensions>) {
+    let options = shell.options();
+    if !options.interactive || options.sh_mode || options.posix_mode {
+        return;
+    }
+    shell.options_mut().no_empty_cmd_completion = true;
+    let Some(home) = shell
+        .env_str("HOME")
+        .map(|home| std::path::PathBuf::from(home.as_ref()))
+    else {
+        return;
+    };
+    let mut script = String::new();
+    let bin = home.join("bin");
+    if bin.is_dir() {
+        let entry = cash_win32::path::to_unix(&bin);
+        let on_path = shell.env_str("PATH").is_some_and(|path| {
+            path.split(':')
+                .any(|directory| directory.eq_ignore_ascii_case(&entry))
+        });
+        if !on_path {
+            let quoted = cash_core::escape::quote_if_needed(
+                &entry,
+                cash_core::escape::QuoteMode::SingleQuote,
+            );
+            script = format!("PATH={quoted}:\"$PATH\"\n");
+        }
+    }
+    if home.join("bash_completion.d").is_dir() {
+        script.push_str(
+            "for __cash_c in \"$HOME\"/bash_completion.d/*.bash; do\n    \
+             [[ -f $__cash_c ]] && . \"$__cash_c\"\ndone\nunset __cash_c\n",
+        );
+    }
+    if script.is_empty() {
+        return;
+    }
+    let params = shell.default_exec_params();
+    let source = cash_core::SourceInfo::from("cash: Git Bash's defaults");
+    if let Err(error) = shell.run_string(script, &source, &params).await {
+        tracing::warn!("couldn't apply Git Bash's defaults: {error}");
+    }
 }
 
 /// cash's prompt, the starter's (`prompt.bash`), when the startup files ran and set none:

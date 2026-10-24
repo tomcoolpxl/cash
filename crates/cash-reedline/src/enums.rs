@@ -1009,6 +1009,13 @@ pub enum ReedlineEvent {
     /// Navigate to the previous historic buffer
     PreviousHistory,
 
+    /// Navigate to the oldest historic buffer (readline's `beginning-of-history`)
+    HistoryFirst,
+
+    /// Back past the newest historic buffer to the line being typed (readline's
+    /// `end-of-history`)
+    HistoryLast,
+
     /// Move up to the previous line, if multiline, or up into the historic buffers
     Up,
 

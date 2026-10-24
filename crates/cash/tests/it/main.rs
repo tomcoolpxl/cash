@@ -124,6 +124,8 @@ mod free_nice;
 mod fuser_lsof;
 // `getconf` and `locale`: glibc's interfaces with the values Windows has.
 mod getconf_locale;
+// Git for Windows' profile and inputrc defaults: ~/bin, completion scripts, PageUp/Down.
+mod git_bash_defaults;
 // Git's git-completion.bash, loaded on the first completion after `git`.
 mod git_completion;
 // Git for Windows' git-prompt.sh (`__git_ps1`), sourced from the Git install.

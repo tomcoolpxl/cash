@@ -312,6 +312,19 @@ fn an_rc_file_can_override_a_shim() {
 // A Cobra-shaped script, end to end
 // ---------------------------------------------------------------------------
 
+/// `shopt -s no_empty_cmd_completion`: Tab on an empty line searches no `PATH`, as in
+/// Bash; it was taken and not followed.
+#[tokio::test]
+async fn no_empty_cmd_completion_offers_nothing_on_an_empty_line() {
+    let mut fixture = Fixture::new("no-empty").await;
+    fixture.source("shopt -s no_empty_cmd_completion\n").await;
+    assert_eq!(fixture.complete("").await, Vec::<String>::new());
+    assert!(
+        !fixture.complete("ech").await.is_empty(),
+        "a word still completes"
+    );
+}
+
 #[tokio::test]
 async fn a_cobra_shaped_script_completes_a_subcommand() {
     let mut fixture = Fixture::new("cobra").await;

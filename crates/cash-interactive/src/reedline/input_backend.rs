@@ -387,6 +387,18 @@ fn compose_key_bindings(completion_menu_name: &str) -> reedline::Keybindings {
         reedline::KeyCode::BackTab,
         reedline::ReedlineEvent::MenuPrevious,
     );
+    // PageUp and PageDown: the oldest history entry, and back to the line being typed, as
+    // Git for Windows' /etc/inputrc binds them (beginning-of-history, end-of-history).
+    key_bindings.add_binding(
+        reedline::KeyModifiers::NONE,
+        reedline::KeyCode::PageUp,
+        reedline::ReedlineEvent::HistoryFirst,
+    );
+    key_bindings.add_binding(
+        reedline::KeyModifiers::NONE,
+        reedline::KeyCode::PageDown,
+        reedline::ReedlineEvent::HistoryLast,
+    );
 
     // Add undo.
     // NOTE: To match readline, we bind Ctrl+_ to undo; in practice, the only way

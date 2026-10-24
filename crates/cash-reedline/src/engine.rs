@@ -1476,6 +1476,8 @@ impl Reedline {
             | ReedlineEvent::Multiple(_)
             | ReedlineEvent::None
             | ReedlineEvent::HistoryHintWordComplete
+            | ReedlineEvent::HistoryFirst
+            | ReedlineEvent::HistoryLast
             | ReedlineEvent::OpenEditor
             | ReedlineEvent::Menu(_)
             | ReedlineEvent::MenuNext
@@ -1808,6 +1810,14 @@ impl Reedline {
                 self.previous_history();
                 Ok(EventStatus::Handled)
             }
+            ReedlineEvent::HistoryFirst => {
+                self.first_history();
+                Ok(EventStatus::Handled)
+            }
+            ReedlineEvent::HistoryLast => {
+                self.last_history();
+                Ok(EventStatus::Handled)
+            }
             ReedlineEvent::NextHistory => {
                 self.next_history();
                 Ok(EventStatus::Handled)
@@ -1975,6 +1985,43 @@ impl Reedline {
         self.editor.move_to_line_end(false);
         // History navigation positions the cursor outside the command path, so
         // settle it under the rest policy (vi-normal must not rest past the line).
+        self.editor.commit_cursor();
+        self.editor
+            .update_undo_state(UndoBehavior::HistoryNavigation);
+    }
+
+    /// The oldest history entry, as readline's `beginning-of-history` (PageUp in Git
+    /// Bash); the line being typed comes back with [`Self::last_history`].
+    fn first_history(&mut self) {
+        self.history_cursor_on_excluded = false;
+        if self.input_mode != InputMode::HistoryTraversal {
+            self.input_mode = InputMode::HistoryTraversal;
+            self.history_cursor = HistoryCursor::new(
+                self.get_history_navigation_based_on_line_buffer(),
+                self.get_history_session_id(),
+            );
+        }
+        let _moved = self.history_cursor.oldest(self.history.as_ref()).is_ok();
+        self.update_buffer_from_history();
+        self.editor.move_to_start(false);
+        self.editor.move_to_line_end(false);
+        // See `previous_history`: settle the out-of-band cursor under the policy.
+        self.editor.commit_cursor();
+        self.editor
+            .update_undo_state(UndoBehavior::HistoryNavigation);
+    }
+
+    /// Back to the line being typed, past the newest history entry, as readline's
+    /// `end-of-history` (PageDown in Git Bash); nothing outside history traversal.
+    fn last_history(&mut self) {
+        if self.input_mode != InputMode::HistoryTraversal {
+            return;
+        }
+        self.history_cursor_on_excluded = false;
+        self.history_cursor.newest();
+        self.input_mode = InputMode::Regular;
+        self.update_buffer_from_history();
+        self.editor.move_to_end(false);
         self.editor.commit_cursor();
         self.editor
             .update_undo_state(UndoBehavior::HistoryNavigation);

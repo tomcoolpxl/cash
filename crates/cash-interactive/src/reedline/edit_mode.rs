@@ -731,6 +731,8 @@ fn translate_input_function_to_reedline_event(
         InputFunction::ReverseSearchHistory | InputFunction::HistorySearchBackward => {
             Some(ReedlineEvent::SearchHistory)
         }
+        InputFunction::BeginningOfHistory => Some(ReedlineEvent::HistoryFirst),
+        InputFunction::EndOfHistory => Some(ReedlineEvent::HistoryLast),
         InputFunction::RedrawCurrentLine => Some(ReedlineEvent::Repaint),
         InputFunction::Complete => Some(ReedlineEvent::Edit(vec![EditCommand::Complete])),
         InputFunction::CashAcceptHint => Some(ReedlineEvent::HistoryHintComplete),
@@ -904,6 +906,12 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
         }
         reedline::ReedlineEvent::HistoryHintComplete => {
             Some(KeyAction::DoInputFunction(InputFunction::CashAcceptHint))
+        }
+        reedline::ReedlineEvent::HistoryFirst => Some(KeyAction::DoInputFunction(
+            InputFunction::BeginningOfHistory,
+        )),
+        reedline::ReedlineEvent::HistoryLast => {
+            Some(KeyAction::DoInputFunction(InputFunction::EndOfHistory))
         }
         reedline::ReedlineEvent::HistoryHintWordComplete => Some(KeyAction::DoInputFunction(
             InputFunction::CashAcceptHintWord,

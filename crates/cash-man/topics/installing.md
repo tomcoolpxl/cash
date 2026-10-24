@@ -95,7 +95,13 @@ programs a builtin hides, whether the tool links are current, and what is worth 
   `scoop install nerd-fonts/CascadiaMono-NF`, then `cash --terminal-profile` again, which
   picks the font up.
 - **Completions with descriptions** for git, winget, docker and 700 more commands:
-  `scoop install extras/carapace-bin`. Nothing else to configure.
+  `scoop bucket add extras`, then `scoop install extras/carapace-bin`. Nothing else to
+  configure.
+- **An SSH agent.** Git Bash ships its own `ssh-agent`; cash uses the OpenSSH that comes
+  with Windows, whose agent is a service. Once, in an administrator's PowerShell:
+  `Set-Service ssh-agent -StartupType Automatic; Start-Service ssh-agent`. Then `ssh-add`
+  keeps your key for every window, and Git for Windows uses it once `git config --global
+  core.sshCommand "$SYSTEMROOT/System32/OpenSSH/ssh.exe"` has run in cash.
 
 ## Upgrading
 

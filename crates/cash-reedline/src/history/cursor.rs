@@ -38,6 +38,30 @@ impl HistoryCursor {
         self.navigate_in_direction(history, SearchDirection::Forward)
     }
 
+    /// This moves the cursor to the oldest entry the navigation query matches; a no-op
+    /// when none does
+    pub fn oldest(&mut self, history: &dyn History) -> Result<()> {
+        self.current = None;
+        let mut first = history.search(SearchQuery {
+            start_id: None,
+            end_id: None,
+            start_time: None,
+            end_time: None,
+            direction: SearchDirection::Forward,
+            limit: Some(1),
+            filter: self.get_search_filter(),
+        })?;
+        if first.len() == 1 {
+            self.current = Some(first.swap_remove(0));
+        }
+        Ok(())
+    }
+
+    /// This moves the cursor past the newest entry, back to the line being typed
+    pub fn newest(&mut self) {
+        self.current = None;
+    }
+
     fn get_search_filter(&self) -> SearchFilter {
         let filter = match self.query.clone() {
             HistoryNavigationQuery::Normal(_) => SearchFilter::anything(self.session),

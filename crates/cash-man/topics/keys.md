@@ -15,6 +15,8 @@ work as in Bash.
 ## History and suggestions
 
 - `Up`, `Down` (`Ctrl-P`, `Ctrl-N`): walk the history, or move in the completion menu.
+- `PageUp`, `PageDown`: the oldest command in the history, and back to the line you
+  were typing, as in Git Bash (`beginning-of-history`, `end-of-history`).
 - `Ctrl-R`: pick a command from the history, in a list below the line. Each command
   shows once, newest first, with its age; typing filters it, and what was on the line
   is the filter it opens with. `Enter` puts the command on the line to edit, `Tab` runs

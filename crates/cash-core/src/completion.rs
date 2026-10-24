@@ -1330,6 +1330,15 @@ impl Config {
         shell: &mut Shell<impl extensions::ShellExtensions>,
         context: Context<'_>,
     ) -> Answer {
+        // `shopt -s no_empty_cmd_completion`: Tab on an empty line searches no `PATH`, as in
+        // Bash, unless a `complete -E` asks otherwise. The option was taken and not followed.
+        if shell.options().no_empty_cmd_completion
+            && context.input_line.trim().is_empty()
+            && self.empty_line.is_none()
+        {
+            return Answer::Candidates(Vec::new(), ProcessingOptions::default());
+        }
+
         // See if we can find a completion spec matching the current command.
         let mut found_spec: Option<&Spec> = None;
 

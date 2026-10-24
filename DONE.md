@@ -3241,3 +3241,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   (`powershell -c "irm get.scoop.sh | iex"`), git with `scoop install git, or winget
   install Git.Git` (both Git for Windows: git, Git Bash and its tools). Found, each is a
   line that passed. carapace's note adds `scoop bucket add extras` before its install.
+- **Git Bash's small defaults** (2026-10-24, the user's pick): before the startup files, as
+  Git for Windows' `/etc/profile`, an interactive cash puts `~/bin` first on `PATH` (when it
+  is a directory not on it), sources each `~/bash_completion.d/*.bash`, and turns on
+  `no_empty_cmd_completion`, which completion now follows (it was taken and ignored); not
+  with `--norc`. `PageUp` and `PageDown` go to the oldest history entry and back to the
+  line being typed (`beginning-of-history`, `end-of-history`, new in cash's reedline), as
+  Git's `/etc/inputrc` binds them. `help installing` says how to run Windows' OpenSSH agent.

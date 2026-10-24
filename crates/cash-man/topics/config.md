@@ -32,6 +32,11 @@ option on the command line wins over the file, the file over the default.
   Git Bash. `--norc` reads none of them; `--rcfile FILE` reads FILE instead.
 - Before them, an interactive shell takes the key bindings of `$INPUTRC`, or else
   `~/.inputrc`, as Git Bash's readline does; `help bind` says what of it cash follows.
+  It also does what Git Bash's `/etc/profile` does: puts `~/bin` first on PATH when it is
+  a directory, sources each `~/bash_completion.d/*.bash`, and turns on `shopt -s
+  no_empty_cmd_completion`. The startup files may undo any of it; `--norc` skips it.
+- After them, when none set a prompt (`PS1` still Bash's `\s-\v\$ `, no
+  `PROMPT_COMMAND`), it takes the starter's: the directory and Git branch, then `❯`.
 - A login shell (`cash -l`) reads `%ProgramData%\cash\profile`, then the first of
   `~/.bash_profile`, `~/.bash_login` and `~/.profile`; `--noprofile` skips them.
 - A script reads `$BASH_ENV` if it is set, as Bash does.
