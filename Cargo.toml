@@ -79,7 +79,7 @@ crc32fast = "1.5.2"
 # Terminal I/O, crossterm made cash's own (its name and version kept; see below).
 crossterm = { version = "0.29.0", path = "crates/cash-crossterm" }
 diff = "0.1.13"
-fancy-regex = "0.19.2"
+fancy-regex = "0.20.0"
 # `gzip`: deflate on the pure-Rust backend (miniz_oxide); a member asks for the
 # backend itself, so no C zlib is ever built.
 flate2 = { version = "1.1.10", default-features = false }
