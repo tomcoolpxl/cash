@@ -2,190 +2,60 @@
 
 ![cash logo](assets/cash_logo_small.png)
 
+[![CI](https://github.com/tomcoolpxl/cash/actions/workflows/ci.yml/badge.svg)](https://github.com/tomcoolpxl/cash/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/tomcoolpxl/cash)](https://github.com/tomcoolpxl/cash/releases)
+[![Licence](https://img.shields.io/github/license/tomcoolpxl/cash)](LICENSE)
+
 A bash-language shell whose execution model is **Win32**, hosted in Windows Terminal.
+No POSIX emulation layer, no VM, no `msys-2.0.dll` underneath: the processes, paths and
+handles are native, and the scripts are ordinary bash.
 
-Avoided:
+It runs Terraform wrappers, CI glue and pipelines with `xargs`, `sed`, `grep` and `jq`
+unchanged, and it carries the tools a bare Windows machine lacks, so that installing cash
+gives a complete Bash: the coreutils, `awk`, `sed`, `grep`, `diff`, `find`, `xargs`,
+`tar`, `zip`, `7z`, `rar`, `gzip`, `xz`, `zstd`, `top`, `lsof`, `ss`, and about 250 in all.
 
-- a POSIX emulation layer
-- a VM
-- `msys-2.0.dll` underneath
+## See it
 
-The target is running ordinary bash scripts on Windows - Terraform wrappers, CI glue, pipelines with
-`xargs`, `sed`, `grep`, `jq` - where the processes, paths and handles are all genuinely
-native.
+<table>
+  <tr>
+    <td align="center" width="50%"><b>Paths</b>: <code>C:\</code>, <code>C:/</code> and <code>/c/</code> all work, <code>pwd</code> prints one spelling<br>
+      <img src="assets/demos/paths.gif" width="480" alt="cd with a backslash path, a /c/ path and ~; pwd prints C:/ every time; shopt -s unixpaths switches to /c/"></td>
+    <td align="center" width="50%"><b>A bash script</b>, nothing installed: <code>find</code>, <code>xargs</code>, <code>grep</code>, <code>sed</code>, <code>awk</code> are inside <code>cash.exe</code><br>
+      <img src="assets/demos/script.gif" width="480" alt="a script with find, xargs, grep, sed and awk runs; type -a shows every tool comes from cash.exe"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>The prompt</b>: highlighting, a command that does not exist turns red, suggestions from history, Ctrl-R<br>
+      <img src="assets/demos/prompt.gif" width="480" alt="typing at the prompt with syntax highlighting, a red unknown command, a dimmed history suggestion and the Ctrl-R picker"></td>
+    <td align="center"><b>Directories</b>: Alt-← and Alt-→ step through where you have been, <code>z</code> jumps, Alt-E picks<br>
+      <img src="assets/demos/directories.gif" width="480" alt="Alt-Left steps back through recent directories, z jumps by name, Alt-E opens the croot picker"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Jobs</b>: Ctrl-Z stops a program, <code>bg</code> and <code>fg</code> resume it, Ctrl-C gives 130, <code>kill %1</code> ends a job<br>
+      <img src="assets/demos/jobs.gif" width="480" alt="Ctrl-Z prints Stopped, bg and jobs and fg work, Ctrl-C ends the program with status 130, kill %1 ends a background job"></td>
+    <td align="center"><b>Who holds this port, who holds this file</b>: <code>ss</code>, <code>lsof</code>, <code>fuser -k</code><br>
+      <img src="assets/demos/ports.gif" width="480" alt="ss -ltn lists listeners, lsof -i :8080 names the process, kill $(lsof -t -i:8080) ends it, fuser finds who has a file open"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>top</b>, procps style, with meters, sorting and a process tree<br>
+      <img src="assets/demos/top.gif" width="480" alt="top running with CPU and memory meters, sorted by memory, then as a tree"></td>
+    <td align="center"><b>The archivers</b>: <code>tar</code>, <code>zip</code>, <code>7z</code> and <code>rar</code>, built in<br>
+      <img src="assets/demos/archivers.gif" width="480" alt="tar, zip, 7z and rar each make an archive of the same directory, and ls -l shows the four"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Help</b>: <code>man</code> is a browser, <code>help</code> prints, a missing command names its package<br>
+      <img src="assets/demos/help.gif" width="480" alt="figlet prints big letters, bat not found names the winget and scoop packages, help -d describes commands, man sed opens the page browser"></td>
+    <!-- sextant.gif is recorded by hand (assets/demos/README.md); once it is there:
+    <td align="center"><b>sextant</b>, a shooter drawn with text, because a shell should have one<br>
+      <img src="assets/demos/sextant.gif" width="480" alt="the sextant game running in Windows Terminal"></td>
+    -->
+  </tr>
+</table>
 
-## Why bother
-
-Windows already has Git Bash, MSYS2, WSL and Cygwin. They work by making Windows pretend
-to be Unix. cash starts from the other end: keep the bash language, and make the
-execution model native Windows.
-
-## In numbers
-
-- Compatibility: ~900 scripts from ~50 projects give the same output as in Git Bash 5.3.
-- Tools: ~250 commands built in, among them tar, zip, 7z, rar, gzip, bzip2, xz and zstd,
-  all without anything else installed.
-- Tests: 9,000+ run on every release.
-
-## Design decisions worth knowing
-
-Full rationale in [spec.md](spec.md); the short version:
-
-| | |
-| --- | --- |
-| **Paths** | `C:/foo` is canonical. `C:\foo`, `/c/foo`, `/tmp`, `/dev/null` are all accepted; `pwd` always prints `C:/foo`. |
-| **Arguments** | Never rewritten. No guessing which argv entries are paths — that is where MSYS2 needed `MSYS2_ARG_CONV_EXCL`. |
-| **`PATH`** | The one translated variable: `:`-separated for scripts, `;`-separated for children. |
-| **Ctrl-C** | Escalates. The grace period is the *second* Ctrl-C, not a timer, because `terraform apply` can legitimately take minutes to stop cleanly — and killing it holds the state lock. |
-| **CRLF** | `\r\n` terminates a line wherever cash interprets line boundaries. Pipes between external programs stay byte-transparent. |
-| **Exit codes** | Truncate like bash, except crashes map to `128 + n` — an access violation is `139`, just like a segfault. Naive truncation would report `0xC0000100` as success. |
-| **Shell robustness** | Release builds unwind panics. An unexpected panic while processing an interactive command is reported, sets status 1, and returns to the prompt; startup and non-interactive panics stop safely with status 1 instead of aborting the process. |
-
-cash's deliberate divergences from bash are documented in [spec.md](spec.md) §4.
-That list is meant to stay short.
-
-cash reports Bash 5.3.15 through `$BASH_VERSION`: every Bash 5.3 change is implemented,
-checked against Git Bash 5.3.15, or documented as a deliberate difference
-([audit](research/bash-reference/bash-5.3-audit.md)). Among the 5.3 additions: `${ command; }` runs a substitution in the current shell,
-preserving changes to shell variables, while `${| command; }` expands a temporary
-`REPLY` and leaves command output on stdout. `compgen -V name` stores candidates
-in the indexed array `name` instead of printing them; no matches clear the array
-and return status 1. `source -p PATH file` and `. -p PATH file` use an explicit
-source search path. These additions do not imply full Bash 5.3 compatibility.
-The [Bash source comparison](research/bash-reference/README.md) records the
-behavioral probes and how to rerun them.
-Known gaps in the advertised Bash 5.2 interface are tracked in the
-[Bash 5.2 gap audit](research/bash-reference/bash-5.2-gaps.md).
-The central [project roadmap](ROADMAP.md) keeps the feature order explicit: Bash 5.2,
-native `awk` and `sed`, and the bundled userland (`stat`, `tty`, `install`, `pathchk`,
-`nohup`, `who`, `users`, `pinky`, `logname`, `hostid`) are done; Bash 5.3 is in progress,
-with every script-observable item probed against a real Bash 5.3 in the
-[Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md).
-The selected source candidates and release gates are recorded in the
-[`posixutils-rs` AWK evaluation](research/posixutils-rs-evaluation.md) and
-[`uutils/sed` evaluation](research/uutils-sed-evaluation.md).
-Since 1.5.0 the console, clipboard and the small tools a bare Windows machine lacks are
-built in too: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `xdg-open`,
-`pbcopy`/`pbpaste`, `watch`, `free`, `nice`/`renice`, `flock` and `nc`, each checked
-against its Linux original where one exists (ROADMAP item 19). `help` lists them under
-their kinds, and `help installing` covers the install and its optional steps.
-
-History and job-control scripts can use `history -n`/`-r`/`-p`, `fc` editor mode,
-and `jobs -n`. `BASH_COMMAND` preserves the command text before expansion, assigning
-`SECONDS` resets its signed live counter, and symbolic `umask` forms round-trip even on
-Windows, where the mask is remembered rather than applied to ACL-based file creation.
-Windows does not load Bash C-ABI builtin modules: `enable -f` and `enable -d` report
-"dynamic loading not available" with Bash-compatible status 2.
-Missing and deliberately limited command-line options are tracked separately in the
-[builtin option audit](research/builtin-option-gaps.md), including cash's native Windows
-`ps`, `pgrep`, `tree`, `top`, `find`, and `xargs` implementations.
-
-Interactive commands are persisted in `~/.cash_history`. Removing that file does not
-erase entries already loaded by a running shell; use `history -c` to clear memory and
-`history -w` to replace the file with the cleared history. Cash's test harness gives
-interactive cases an isolated temporary home, so test commands never enter user history.
-
-Interactive `read -e` and `read -E` support editable `-i` text, cursor movement, insertion,
-Backspace/Delete, Home/End, and the common Ctrl-A/E/U/K/W controls. `read -s` and
-timeouts continue to apply while editing. `-E` is accepted with the same editor but does
-not yet add Bash completion. This is a compact built-in editor; GNU Readline history,
-completion, and custom `bind` keymaps are outside that surface. The remaining `read`
-details and source-level comparisons are in the
-[Bash 5.2 gap audit](research/bash-reference/bash-5.2-gaps.md). A source-level
-[Rustyline evaluation](research/rustyline-evaluation.md) records why Cash uses it as a
-source reference rather than adding another prompt backend or replacing the
-descriptor-aware `read` editor.
-
-## At the prompt
-
-The prompt borrows what fish does well, without giving up Bash's language:
-
-- **Syntax highlighting** is on: keywords, strings, variables and options are coloured,
-  and a command that does not exist turns red before Enter, in every part of a pipeline.
-  Whether it exists comes from a background listing of `PATH`, so typing never waits on
-  the disk (spec D59). `--enable-highlighting=false`, or `syntax-highlighting = false`
-  under `[ui]` in `%APPDATA%\cash\config.toml`, turns it off.
-- **Suggestions from history** appear dimmed as you type; → accepts one.
-- **A history picker**: Ctrl-R lists the history below the line, each command once,
-  newest first; typing filters it, Enter puts the command on the line and Tab runs it.
-  Ctrl-R again shows what ran in the current directory (D79).
-- **Alt-.** inserts the previous command's last argument (again: the one before), and
-  **Ctrl-X Ctrl-E** opens the line in `$VISUAL`/`$EDITOR` and runs what you save, as in
-  Bash.
-- **Abbreviations**: `abbr -a gco git checkout`, and `gco` becomes `git checkout` on the
-  line when you press Space or Enter, so history keeps the full command (D60). The options
-  are fish's.
-- **A collapsing prompt**: set `CASH_TRANSIENT_PS1` (it takes PS1's escapes) and a
-  command's prompt shrinks to it once the line is entered, so scrollback shows commands,
-  not status blocks (D61). With Starship:
-  `CASH_TRANSIENT_PS1='$(starship module character --status="$STARSHIP_CMD_STATUS")'`.
-- **Directory history**: on an empty line, Alt-← and Alt-→ step back and forward through the
-  directories you have been in; `prevd`, `nextd` and `cdh` do it by name (D62).
-- **A directory jump**: `z cash` goes to the directory matching `cash` you go to most, ranked
-  across sessions as zoxide ranks them; `z -i` picks from a list, Tab after `z` offers
-  the matches, and Alt-E's Alt-H lists the same directories (D80).
-- **croot, a file and directory picker**: Alt-E opens a tree below the command line. Typing
-  filters it, the arrows walk it, and Enter picks: on an empty line or after `cd` it
-  goes there, after any other command it inserts the path. `croot` does the same from
-  scripts (`cd "$(croot)"`); `help croot` says more (D73).
-- **Completions with descriptions** for 700+ commands — git, winget, docker, kubectl,
-  terraform, cargo, npm — when [carapace](https://github.com/carapace-sh/carapace-bin) is
-  installed (`scoop install extras/carapace-bin`). A completion script you source for a
-  command always wins (D63). Without carapace, git still completes as in Git Bash, with
-  Git for Windows' own completion script.
-
-## Help
-
-`help` lists every builtin by kind, each with a line about it, and marks the ones that
-hide a Windows program of the same name (`find`, `sort`, `more`, `timeout`, ...).
-`cash help` says the same from PowerShell or cmd.
-
-```bash
-cash help sed               # a builtin's page: Windows notes, then its own options
-cash help topics            # paths, crlf, elevation, job-control, keys, config, vars, ...
-cash help differences       # where cash knowingly differs from Bash, and why
-cash help search CRLF       # every page and topic that mentions it
-```
-
-Bash's `help -d`, `-s` and `-m` work as before. The pages and topics are markdown in
-`crates/cash-builtins/src/helpdocs`, with one entry for every builtin in `builtins.md`;
-a test fails when a builtin has none.
-
-## Layout
-
-```
-crates/cash              the binary
-crates/cash-win32        the Win32 semantics layer — job objects, signals, paths, encoding
-crates/cash-core         shell runtime: expansion, control flow, traps
-crates/cash-parser       bash grammar — tokenizer and parser
-crates/cash-builtins     the standard builtins
-crates/cash-interactive  line editing, history, completion
-crates/cash-shell        the shell library that crates/cash drives
-crates/cash-coreutils-builtins  uutils coreutils, as builtins
-crates/cash-sed          sed, from uutils
-crates/cash-awk          awk, from posixutils-rs
-crates/cash-bc           bc, from posixutils-rs
-crates/cash-test-harness runs the YAML compatibility cases
-vendor/                  patched copies of crossterm, reedline and uutils crates
-tests/                   the differential corpus and the git-prompt check, with frozen output
-packaging/               the Scoop manifest
-xtask/                   test orchestration
-spec.md                  the decisions, with the reasoning behind each
-NOTICE                   brush attribution and the list of modifications
-```
-
-The `cash-core`, `cash-parser`, `cash-builtins`, `cash-interactive`, `cash-shell`,
-`cash-coreutils-builtins` and `cash-test-harness` crates are **absorbed from brush** at
-upstream commit `737dd57` and modified. Both projects are MIT, so this is a
-straightforward absorption rather than a dependency; see [NOTICE](NOTICE) for attribution
-and the list of changes. `cash-sed`, `cash-awk` and `cash-bc` were absorbed later, from
-uutils and posixutils-rs.
-
-Nothing is upstreamed. The trade is a coherent codebase instead of a patched copy of
-someone else's, at the cost of porting future upstream improvements by hand.
-
-`cash-win32` stays a separate crate so the Windows semantics and the shell language
-remain separable.
+The clips are rendered from the tapes in [assets/demos](assets/demos) with
+[VHS](https://github.com/charmbracelet/vhs). `sextant`, the shooter drawn with text, is
+not among them: its font is one cash sends the terminal, which only Windows Terminal
+draws, so its clip is a screen recording.
 
 ## Install
 
@@ -196,259 +66,204 @@ scoop bucket add tomcoolpxl https://github.com/tomcoolpxl/scoop-bucket
 scoop install cash
 ```
 
-Scoop puts `cash` on PATH, and Windows Terminal lists a `cash` profile from its next
-start. If you have neither a `~/.bashrc` nor a `~/.cashrc`, the first install writes a
-starter `~/.bashrc`, read by cash and by Git Bash: a prompt with the directory and git
-branch, a large shared history, the usual aliases and `ls` with icons. `cash --init-rc`
-writes it later, when there is still neither file. `cash.exe` carries its own C runtime, so nothing else needs installing. Scoop will
-not upgrade an app while it runs: close the cash windows first, or run `scoop config
-ignore_running_processes true`. With that set, Scoop still lists the running cash, your
-own window among them, before it goes on. Each version gets a directory of its own, so a
-running `cash.exe` is never overwritten: an open window keeps the old version until it
-closes.
-
-Without Scoop, from 1.6.0 on, the setup on the [releases
+Scoop puts `cash` on PATH and Windows Terminal lists a `cash` profile from its next
+start. Without Scoop, the setup on the [releases
 page](https://github.com/tomcoolpxl/cash/releases) (`cash-vX.Y.Z-setup.exe`) installs
-cash for your account alone, without admin: under `%LOCALAPPDATA%\Programs\cash`, in the
-same versioned layout, with the Terminal profile, `cash` on PATH, and, ticked by default,
-the bundled tools as programs on PATH too (`ls.exe`, `sed.exe`, `awk.exe`, ...), so
-editors, `make` and scripts outside cash find them. An unticked task runs Scoop's own
-installer for those who want the rest of their tools the easy way. For scripts and
-winget: `cash-vX.Y.Z-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`, with
-`/DIR=` and `/TASKS=links,scoop`. Upgrade with `cash --update` (`--check` only looks);
-open windows keep their version, new ones get the new one. Uninstall from Settings, Apps:
-your `~/.bashrc`, history and config stay. The setup is unsigned: a browser download
-gets SmartScreen's "unknown publisher" prompt once (winget and Scoop downloads do not).
-`help installing` has the details, and a winget package follows from this installer
-(ROADMAP item 18).
+cash for your account alone, without admin, with the Terminal profile, `cash` on PATH
+and, ticked by default, the bundled tools as programs on PATH too (`ls.exe`, `sed.exe`,
+`awk.exe`, ...), so that editors, `make` and scripts outside cash find them. For scripts
+and winget: `cash-vX.Y.Z-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`. Upgrade
+with `cash --update`.
 
 **Portable**: unpack the release zip anywhere and run `cash.exe`. That one file is the
-whole shell: the C runtime is linked in, and every tool and help page is inside it; the
-licence notices travel beside it in the zip. At its first interactive prompt a portable
-cash offers once to put itself on your PATH, to add the Windows Terminal profile and to
-put its tools on PATH for other programs, and remembers your answers; Enter means no. The
-same things stay explicit commands at any time: `cash --terminal-profile`
-(`--remove-terminal-profile` undoes it) and `cash --link-tools --add-to-path`
-(`--unlink-tools`). `cash --update --check` tells a portable cash when a newer zip is on
-the releases page.
+whole shell: the C runtime is linked in, and every tool and help page is inside it. At its
+first prompt it offers once to put itself on PATH and to add the Terminal profile; Enter
+means no.
 
-## Build
+If you have neither a `~/.bashrc` nor a `~/.cashrc`, the first install writes a starter
+`~/.bashrc`, read by cash and by Git Bash: a prompt with the directory and git branch, a
+large shared history, the usual aliases and `ls` with icons. `cash help installing` has
+every detail, the install's optional steps among them.
 
-```bash
-cargo build                                    # target\debug\cash.exe
-cargo xtask ci quick                           # format check, clippy, docs, the quick tests
-cargo xtask test slow                          # the slow tests: cash.exe's, rar's, sed's
-cargo xtask ci full                            # all of it, as before a release
-powershell -File scripts\tidy.ps1 -Report      # delete unused build output, show sizes
-```
+## Why bother
 
-Windows 11 (or Windows 10 1809+, for ConPTY). Rust 1.99, which `rust-toolchain.toml` pins
-and rustup installs on the first build; it is also the oldest Rust that builds cash. The tests run through cargo-nextest (`cargo binstall
-cargo-nextest`), which gives each test a process of its own.
+Windows already has Git Bash, MSYS2, WSL and Cygwin. They work by making Windows pretend
+to be Unix. cash starts from the other end: keep the bash language, and make the
+execution model native Windows.
 
-Build output is disposable, and each checkout and worktree has its own `target\`:
+In numbers:
 
-- **Profiles.** `dev` and `test` keep only line numbers as debug info (enough for panic
-  backtraces), `--profile debugging` keeps all of it. `release` is thin LTO and builds
-  quickly; `dist`, fat LTO with one codegen unit, is what the release workflow ships.
-- **The shell you use** is a released one, installed by Scoop (above). Nothing runs from
-  `target\`, so any of it can be deleted at any time.
-- **Cleanup.** `scripts\tidy.ps1` deletes build directories not built for a week, what removed
-  worktrees leave behind, and old installed copies, skipping anything in use; `-All`
-  takes every build directory. Claude Code runs it when a session starts
-  (`.claude\settings.json`). Do not point worktrees at one shared target directory: cargo
-  locks it, so builds queue behind each other, and it can mix up the worktrees' crates
-  ([cargo#12516](https://github.com/rust-lang/cargo/issues/12516)).
-- **Features.** Local builds use the default features, so that clippy and the tests share
-  one build; CI also lints with `--all-features`.
-- **Tests that drive `cash.exe`** are modules of one test executable,
-  `crates/cash/tests/it`: add a file there and a `mod` line to its `main.rs`, rather than
-  a new file directly under `tests/`, which would be one more executable linking the
-  whole shell.
+- Compatibility: ~900 scripts from ~50 projects give the same output as in Git Bash 5.3.
+- Tools: ~250 commands built in, among them tar, zip, 7z, rar, gzip, bzip2, xz and zstd,
+  all without anything else installed.
+- Tests: 9,000+ run on every release.
 
-Source files use LF even on Windows. `.gitattributes` defines Git's line-ending
-policy, and `.editorconfig` asks editors to save matching endings. Windows scripts
-(`.bat`, `.cmd`, `.ps1`) use CRLF; byte-sensitive CRLF/BOM fixtures are exempt from
-normalization. No global `core.autocrlf` change is needed.
+cash reports Bash 5.3 through `$BASH_VERSION`: every Bash 5.3 change is implemented,
+checked against Git Bash 5.3, or documented as a deliberate difference. `cash help
+differences` lists where it knowingly differs from Bash and why, and
+[docs/compatibility.md](docs/compatibility.md) has the audits behind that.
 
-Git's line-ending conversion warnings concern files on disk, not child-process
-output. `xargs` prefers enabled cash builtins, so `xargs echo` uses cash's `echo`
-regardless of which `echo.exe` is on `PATH`. Explicit executable paths bypass builtins.
+## What is different
 
-## Windows Terminal
+The full reasoning is in [docs/spec.md](docs/spec.md); the short version:
 
-`cash --terminal-profile`, which Scoop runs on install, adds a `cash` profile with the
-logo and command marks on: each command gets a mark on the scrollbar, green or red by
-its exit status once the prompt reports it (below). Its GUID is
-`{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}`. To make it the default, or give it a font and
-colours, add an entry with that GUID to Windows Terminal's `settings.json` (Settings →
-Open JSON file) holding only your own settings; the program and icon keep coming from the
-install, so upgrades need nothing. If your `newTabMenu` lists profiles one by one, the
-install adds cash to the end of it, and uninstalling takes it out; nothing else in the
-file changes. Ctrl+↑/Ctrl+↓ jump between marks with the
-two actions below. The profile asks for a Nerd Font when the machine has one, so that
-`ls --icons` draws its file icons: a Cascadia one, else the Nerd Font your other
-Terminal profiles use, else any monospaced one. With none, `scoop install
-nerd-fonts/CascadiaMono-NF`, then `cash --terminal-profile` again, gives it one.
+| | |
+| --- | --- |
+| **Paths** | `C:/foo` is canonical. `C:\foo`, `/c/foo`, `/tmp` and `/dev/null` are all accepted; `pwd` always prints `C:/foo`. `shopt -s unixpaths` spells paths as Git Bash does, for the scripts that need it. |
+| **Arguments** | Never rewritten. cash never guesses which argv entries are paths, which is where MSYS2 needs `MSYS2_ARG_CONV_EXCL`. |
+| **`PATH`** | The one translated variable: `:`-separated for scripts, `;`-separated for children. |
+| **Jobs and signals** | Every pipeline and background job runs in a Windows job object of its own: `kill %1` ends the whole tree, Ctrl-Z suspends, `fg` and `bg` resume, and nothing cash starts outlives cash being killed. |
+| **Ctrl-C** | Escalates. The grace period is the *second* Ctrl-C, not a timer, because `terraform apply` can legitimately take minutes to stop cleanly, and killing it holds the state lock. |
+| **CRLF** | `\r\n` terminates a line wherever cash interprets line boundaries. Pipes between external programs stay byte-transparent. |
+| **Exit codes** | Truncate like bash, except crashes map to `128 + n`: an access violation is `139`, just like a segfault. Naive truncation would report `0xC0000100` as success. |
+| **Robustness** | Release builds unwind panics. An unexpected panic while processing an interactive command is reported, sets status 1, and returns to the prompt; startup and non-interactive panics stop safely with status 1 instead of aborting the process. |
 
-```jsonc
-"defaultProfile": "{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}",
-"profiles": { "list": [ {
-    "guid": "{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}",
-    "source": "cash",
-    "startingDirectory": "%USERPROFILE%",
-    "font": { "face": "UbuntuSansMono Nerd Font" }
-} ] },
-"actions": [
-    { "command": { "action": "scrollToMark", "direction": "previous" }, "id": "User.scrollToMark.previous" },
-    { "command": { "action": "scrollToMark", "direction": "next" }, "id": "User.scrollToMark.next" }
-],
-"keybindings": [
-    { "id": "User.scrollToMark.previous", "keys": "ctrl+up" },
-    { "id": "User.scrollToMark.next", "keys": "ctrl+down" }
-]
-```
+`sh` and `bash` resolve to cash itself, ahead of `PATH`. The alternative on Windows is
+`C:\WINDOWS\system32\bash.exe`, the WSL launcher: without this, a script running `bash
+helper.sh` would silently continue under Linux.
 
-A build of your own, outside an install, needs a whole profile instead: any GUID, the
-same in `defaultProfile`, a `name`, and `commandline` set to that `cash.exe`. The marks'
-colours come from the prompt, which has to send Microsoft's
-[shell-integration sequences](https://learn.microsoft.com/windows/terminal/tutorials/shell-integration):
-`OSC 133;A` and `B` around `PS1`, `C` in `PS0`, `D;$?` when a command ends, and `OSC 9;9`
-with the directory in Windows form so that a new tab or split pane opens where you are. In
-`~/.bashrc`, set from `PROMPT_COMMAND` so the exit status is the last command's:
+## At the prompt
+
+The prompt borrows what fish does well, without giving up Bash's language:
+
+- **Syntax highlighting** is on: keywords, strings, variables and options are coloured,
+  and a command that does not exist turns red before Enter, in every part of a pipeline.
+  Whether it exists comes from a background listing of `PATH`, so typing never waits on
+  the disk.
+- **Suggestions from history** appear dimmed as you type; → accepts one.
+- **A history picker**: Ctrl-R lists the history below the line, each command once,
+  newest first; typing filters it, Enter puts the command on the line and Tab runs it.
+  Ctrl-R again shows what ran in the current directory.
+- **Alt-.** inserts the previous command's last argument, and **Ctrl-X Ctrl-E** opens the
+  line in `$VISUAL`/`$EDITOR` and runs what you save, as in Bash.
+- **Abbreviations**: `abbr -a gco git checkout`, and `gco` becomes `git checkout` on the
+  line when you press Space or Enter, so history keeps the full command. The options are
+  fish's.
+- **A collapsing prompt**: set `CASH_TRANSIENT_PS1` (it takes PS1's escapes) and a
+  command's prompt shrinks to it once the line is entered, so scrollback shows commands,
+  not status blocks. With Starship:
+  `CASH_TRANSIENT_PS1='$(starship module character --status="$STARSHIP_CMD_STATUS")'`.
+- **Directory history**: on an empty line, Alt-← and Alt-→ step back and forward through
+  the directories you have been in; `prevd`, `nextd` and `cdh` do it by name.
+- **A directory jump**: `z cash` goes to the directory matching `cash` you go to most,
+  ranked across sessions as zoxide ranks them; `z -i` picks from a list and Tab after `z`
+  offers the matches.
+- **croot, a file and directory picker**: Alt-E opens a tree below the command line.
+  Typing filters it, the arrows walk it, and Enter picks: on an empty line or after `cd`
+  it goes there, after any other command it inserts the path. `croot` does the same from
+  scripts (`cd "$(croot)"`).
+- **Completions with descriptions** for 700+ commands, git, winget, docker, kubectl,
+  terraform, cargo and npm among them, when
+  [carapace](https://github.com/carapace-sh/carapace-bin) is installed
+  (`scoop install extras/carapace-bin`). Without it, git still completes as in Git Bash,
+  with Git for Windows' own completion script.
+
+`cash help keys` lists every key.
+
+## Help
+
+`help` lists every builtin by kind, each with a line about it, and marks the ones that
+hide a Windows program of the same name (`find`, `sort`, `more`, `timeout`, ...). `man`
+opens the same pages in a full-screen browser; `cash help` says the same from PowerShell
+or cmd.
 
 ```bash
-__wt_prompt() {
-    local status=$? cwd=${PWD//\//\\}
-    PS1="\[\e]133;D;$status\e\\\\\]\[\e]133;A\e\\\\\]\[\e]9;9;${cwd//\\/\\\\}\e\\\\\]\w \$ \[\e]133;B\e\\\\\]"
-}
-[[ -n $WT_SESSION ]] && { PROMPT_COMMAND=__wt_prompt; PS0='\[\e]133;C\e\\\]'; }
+cash help sed               # a builtin's page: Windows notes, then its own options
+cash help topics            # paths, crlf, elevation, job-control, keys, config, vars, ...
+cash help differences       # where cash knowingly differs from Bash, and why
+cash help search CRLF       # every page and topic that mentions it
+man sed                     # the page in a browser; links, search, the arrows
 ```
 
-The directory's backslashes are doubled because in `PS1` a lone backslash starts an escape
-(`\t` would print the time). Git Bash, whose `$PWD` is `/c/...`, needs it turned into
-`C:\...` first.
+A command typed at the prompt that is not installed gets the package to install it with,
+`install it: winget install jqlang.jq, or scoop install jq`, for the tools people miss most.
+Run `cash doctor` to see what this machine has: it reports what cash would run, names
+missing tools, BusyBox applets masquerading as fuller implementations, DOS `find` and
+`sort` winning over the Unix ones, and Store aliases whose app is not installed.
 
 ## Userland
 
 cash carries the whole of uutils coreutils, plus a set written for Windows because the
-name resolves to something worse there: `find` and `xargs`, `ps`, `pgrep`, `pstree`, `tree` and
-`top`, `less`/`more`,
-`which`, `where`, `chmod`, `hostname`, and `coolfetch`.
-
-`figlet` prints text in big letters, as FIGlet 2.2.5 does, from FIGlet's and TOIlet's
-fonts; 23 of them are built in (`figlet -f slant Hello`), and any other is read from a
-font directory.
-
-`sextant` is a game: a shooter drawn in the terminal with text, two by three pixels to a
-cell in full colour, from a soft font cash sends the terminal, so no font needs anything.
-`man sextant` has the keys.
-
-`where` is Windows' `where.exe` with options spelled with dashes: `where git` lists every
-`git` along the current directory and PATH, `where -r . '*.log'` searches a tree, and
-`-q`, `-f`, `-t` and `where -?` work as `/q`, `/f`, `/t` and `/?` do there. Paths print
-as `C:/…`, like everything else cash prints.
-
-`ls` takes what lsd adds to it: `ls --icons` puts a Nerd Font glyph before each name
-when Windows Terminal draws the tab in a Nerd Font, and no icon anywhere else, so never
-an empty box (`--icons-theme=fancy` for the glyphs regardless), `--tree` draws directories
-as a tree,
-names are coloured by kind and extension from `LS_COLORS` or `dircolors`' defaults, and
-`--group-directories-first`, `-X`, `-v` and `-U` sort as in GNU ls. `ls -l` colours
-every column as lsd does: permission letters, your files' owner, sizes by magnitude and
-dates by age. For icons every time,
-put `alias ls='ls --icons'` in `~/.cashrc`. With `-l`, `w` says whether you may write the
-file by its access list; `--attributes` adds Windows' `darhs` letters, and files both
-hidden and system stay out of a listing without `-a`, as in Explorer.
-
-Inside cash, `which ls` prints `C:/…/cash.exe/ls`, a path only cash can run. For programs
-outside cash (Python's `subprocess`, a `.bat` file, an editor), `cash --link-tools [DIR]`
-makes a hard link to `cash.exe` for each tool, `ls.exe`, `sort.exe` and so on, in DIR or
-in `bin` next to `cash.exe`. The links take no space. With `--add-to-path` the directory
-goes at the front of your user PATH, which Windows puts after the machine's, so
-System32's own `find` and `sort` still win for `.bat` files; `%VAR%` entries already
-there stay as they are. Re-run it after upgrading cash, which `cash doctor` reminds you
-of (Scoop does it for you); `cash --unlink-tools` takes the links and the PATH entry
-away again.
+name resolves to something worse there: `find` and `xargs`, `ps`, `pgrep`, `pstree`,
+`tree` and `top`, `less` and `more`, `which`, `where`, `chmod`, `hostname`, and
+`coolfetch`.
 
 The first rule for what cash carries was **does the tool have to agree with cash about
-something cash owns?** `find` prints paths, so it owes D3 one spelling; `xargs` builds
-command lines, which on Windows are strings the callee re-splits (D32); `ps` and `top`
-print pids that `kill` must accept (D22). Since the installer (D75), the aim is wider:
-install cash and have a complete Bash, so the tools a bare machine misses most, `grep`,
-`diff` and the archivers, are carried too ([decisions.md](decisions.md), D76 and D78).
+something cash owns?** `find` prints paths, so it owes cash one spelling; `xargs` builds
+command lines, which on Windows are strings the callee re-splits; `ps` and `top` print
+pids that `kill` must accept. Since the installer, the aim is wider: install cash and
+have a complete Bash, so the tools a bare machine misses most, `grep`, `diff` and the
+archivers, are carried too.
 
-`top` uses the familiar procps overview with uptime, task and CPU summaries, physical
-memory, and a live process table, refreshed every 3 seconds as procps does. It draws on
-the terminal's alternate screen and overwrites each frame in one piece, so it neither
-flickers nor fills the scrollback, and quitting puts your screen back. Press `?` or `h`
-for its compact help; `P`, `M`, `T`, and `N` sort by CPU, memory, accumulated CPU time,
-and PID, while the arrow and page keys scroll. CPU and memory show as meters, as in htop;
-`t` and `m` switch them to procps's text or hide them, and `1` gives each processor its
-own. It is in colour on a terminal (`z` turns colour off; `NO_COLOR` too): figures in
-bold, your processes as `ls` colours your files, the sort column picked out, and
-processes that ran in the last sample in bold. `V` shows the process tree, `o` or `/`
-only names containing some text (`=` shows all again), `d` changes the interval, and `k`
-sends a signal by `kill`'s rules. Enter, Space, or `r`
-refreshes immediately, and `q` or Escape exits. Batch mode (`top -b`) remains plain text
-for pipes and logs. Sampling is local and cheap: one snapshot of every process and
-thread, each process's CPU and memory, and machine CPU, uptime and memory; a process's
-account is looked up once. The load average follows Linux's definition, tasks running or
-waiting for a processor: processors busy over the interval plus threads ready to run,
-exponentially averaged over 1, 5, and 15 minutes. Windows does not preserve that history
-before `top` starts, and the value does not include Linux's uninterruptible sleep state.
-Swap, nice values, and the Linux buffer/cache split are omitted. `Commit`
-shows Windows committed memory against its limit and peak. `PRI` is the
-Windows base scheduling priority; on supported Windows releases, `SHR` is the shared part
-of the resident working set. The `S` column means no CPU time accrued in the latest
-sample; `R` means some did.
+- **`awk` and `sed`** are native, and keep Windows files intact: a CRLF line is matched
+  without its CR, so `$` works, and is written back as CRLF. A program that names `\r`
+  (`sed 's/\r$//'`) sees the real line, and `CASH_EOL=lf` (or `sed -b`) gives Linux
+  behaviour everywhere. `dos2unix` and `unix2dos` convert files between the two.
+- **`grep`, `diff` and `cmp`**: `grep` with GNU grep's options, messages and exit codes on
+  ripgrep's engine, its patterns read by the same translator as the bundled `sed`, so the
+  two agree; `diff` and `cmp` from uutils diffutils, checked byte for byte against GNU's.
+- **The archivers**: `tar`, `zip`, `unzip`, `7z`, `rar`, `unrar`, `gzip`, `bzip2`, `xz`
+  and `zstd`, in pure Rust, with the originals' options.
+- **Processes**: pids are Windows' own, so `ps -ef`, `pgrep`, `pstree -p` and `top` give
+  numbers `kill` accepts. `top` is the procps overview with meters as in htop: `P`, `M`,
+  `T` and `N` sort, `V` shows the tree, `k` sends a signal, `q` quits.
+- **Who holds what**: `fuser` and `lsof` answer "who holds this file" and "who owns this
+  port" from the Restart Manager and the socket tables: `fuser -k file.txt`, `kill
+  $(lsof -t -i:8080)` and `lsof +D build/` work, and `lsof -p PID` lists what a process
+  holds open, as Sysinternals' handle.exe does. `ss -tulpn`, `ss -ltn` and `ss -tn state
+  established` print iproute2's layout, so port-wait loops written for Linux work
+  unchanged.
+- **`ls`** takes what lsd adds to it: `ls --icons` puts a Nerd Font glyph before each name
+  when Windows Terminal draws the tab in a Nerd Font, `--tree` draws directories as a
+  tree, names are coloured by kind and extension, and `ls -l` colours every column.
+  `--attributes` adds Windows' `darhs` letters.
+- **The console and the clipboard**: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`,
+  `uuidgen`, `xdg-open`, `pbcopy` and `pbpaste`, `watch`, `free`, `nice` and `renice`,
+  `flock` and `nc`, each checked against its Linux original where one exists.
+- **`sudo`** elevates in this terminal, with the command's output here and its status
+  back, through UAC and nothing else; `sudo -u USER` runs as another account. `cash help
+  elevation` says what escapes cash's job and why.
+- **`figlet`** prints text in big letters, as FIGlet 2.2.5 does, from FIGlet's and
+  TOIlet's fonts, 23 of them built in. **`sextant`** is a game: a shooter drawn in the
+  terminal with text, in full colour, from a soft font cash sends the terminal.
+- **`where`** is Windows' `where.exe` with options spelled with dashes, printing paths as
+  `C:/…`, like everything else cash prints.
 
-Process IDs use native Windows numbers throughout. `$$` and `$BASHPID` keep their Bash
-spellings, `$PID` is the equivalent direct spelling familiar from Windows, and `$PPID`
-is the native parent process ID. `ps -efj` adds parent and Windows base-priority columns;
-`pstree [-p] [PID]` renders the native parent tree; and `pgrep -P PID` or
-`pgrep --parent PID` selects native children. Their output can be passed directly to
-cash's `kill`.
+Inside cash, `which ls` prints `C:/…/cash.exe/ls`, a path only cash can run. For programs
+outside cash (Python's `subprocess`, a `.bat` file, an editor), `cash --link-tools`
+makes a hard link to `cash.exe` for each tool, `ls.exe`, `sort.exe` and so on; the
+installer does it by default, and `cash --unlink-tools` takes them away again.
 
-`fuser` and `lsof` answer "who holds this file" and "who owns this port" from the
-Restart Manager and the socket tables: `fuser -k file.txt`, `kill $(lsof -t -i:8080)` and
-`lsof +D build/` work, and `lsof` alone or `lsof -p PID` lists the files processes hold
-open, as Sysinternals' handle.exe does; the Windows limits are in spec D50. `ss -tulpn`, `ss -ltn` and
-`ss -tn state established` print iproute2's layout from the same socket tables (spec
-D51), so port-wait loops written for Linux work unchanged.
+A Git for Windows or Microsoft Coreutils copy of a tool on `PATH` stays reachable by its
+path, and `type -a grep` lists it. Explicit executable paths bypass builtins.
 
-`tree [DIRECTORY]` renders a sorted filesystem hierarchy without following directory
-links or junctions. Its useful common options are built in: `-a`, `-d`, `-L LEVEL`,
-`-f`, `--dirsfirst`, and `--noreport`.
+## Windows Terminal
 
-**It now bundles native `awk` and `sed` implementations** (providing complete POSIX
-pattern scanning, text stream transformation, in-place file editing, and script processing
-without external dependencies). They keep Windows files intact: a CRLF line is matched
-without its CR, so `$` works, and is written back as CRLF. A program that names `\r`
-(`sed 's/\r$//'`) sees the real line, and `CASH_EOL=lf` (or `sed -b`) gives Linux behaviour
-everywhere. `dos2unix` and `unix2dos` convert files between the two.
-**`grep`, `diff` and `cmp` are built in too** (since 1.7.0): `grep` with GNU grep's
-options, messages and exit codes on ripgrep's engine, its patterns read by the same
-translator as the bundled `sed`, so the two agree; `diff` and `cmp` from uutils
-diffutils, checked byte for byte against GNU's. A Git for Windows or Microsoft
-Coreutils copy on `PATH` stays reachable by its path, and `type -a grep` lists it.
+`cash --terminal-profile`, which the installs run for you, adds a `cash` profile with the
+logo and command marks on: each command gets a mark on the scrollbar, green or red by its
+exit status, and Ctrl+↑ and Ctrl+↓ jump between them. The profile asks for a Nerd Font
+when the machine has one, so that `ls --icons` draws its file icons. To make it the
+default, or give it a font and colours, add an entry with its GUID to Windows Terminal's
+`settings.json` holding only your own settings; the program and icon keep coming from the
+install, so upgrades need nothing.
+[docs/windows-terminal.md](docs/windows-terminal.md) has that entry, the key bindings for
+the marks, and the prompt sequences that make them work in any `~/.bashrc`.
 
-Run `cash doctor` to see what this machine has. It reports what **cash** would run, not
-what is on `PATH` — a builtin is never reported as missing, and a DOS tool in System32 is
-never reported as shadowing something cash carries. It names missing `sed`, BusyBox
-applets masquerading as fuller implementations, DOS `find`/`sort` winning over the Unix
-ones, and Store aliases whose target app is not installed. None of those announce
-themselves.
+## Building and contributing
 
-`sh` and `bash` resolve to cash itself, ahead of `PATH`. On Windows the alternative is
-`C:\WINDOWS\system32\bash.exe`, which is the WSL launcher: without this, a script
-running `bash helper.sh` would silently continue under Linux. A real bash is still
-reachable by full path. `cash` resolves to itself too, so `cash doctor` works inside cash
-even when a terminal profile starts it by full path and its directory is not on `PATH`.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the build, the tests and the layout of the
+workspace. The shell language crates are **absorbed from
+[brush](https://github.com/reubeno/brush)** and modified; `sed`, `awk` and `bc` from
+uutils and posixutils-rs; see [NOTICE](NOTICE) for attribution and the list of changes.
+Nothing is upstreamed: the trade is a coherent codebase instead of a patched copy of
+someone else's, at the cost of porting future upstream improvements by hand.
 
-Worth knowing: the answer depends on which shell launched cash, because it inherits that
-shell's `PATH`.
+The project's records are in [docs](docs): the [spec](docs/spec.md) with every decision
+and its reasoning, the [decisions](docs/decisions.md) by topic, the
+[roadmap](docs/ROADMAP.md), and what was [done](docs/DONE.md) in which release. What
+is still open is in [TODO.md](TODO.md).
 
 ## Licence
 
-MIT. Vendored brush is MIT, © Reuben Olinsky.
+MIT. Vendored brush is MIT, © Reuben Olinsky. The licences of the other absorbed code
+are in [licenses](licenses) and [NOTICE](NOTICE).

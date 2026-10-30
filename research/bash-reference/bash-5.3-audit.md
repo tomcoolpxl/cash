@@ -3,7 +3,7 @@
 This document reviews the complete upstream Bash 5.3 release (`NEWS` and git reference commit `9c465866`)
 and classifies every change relative to Cash's Win32 execution model and roadmap.
 
-In accordance with [ROADMAP.md](../../ROADMAP.md), Cash does not claim `BASH_VERSION=5.3` until
+In accordance with [ROADMAP.md](../../docs/ROADMAP.md), Cash does not claim `BASH_VERSION=5.3` until
 each applicable item is audited, implemented, or documented as a deliberate divergence.
 
 ## Evidence
@@ -104,7 +104,7 @@ Found later, in a script that called `jobs` before `wait` (2026-09-30):
   Bash, a job `jobs` has shown is no longer `wait -n`'s to return, except by pid or in
   POSIX mode; a plain `wait` forgets it; `jobs -p` reports nothing; and in POSIX mode
   `wait PID` forgets a status once it has returned it. What is left is in
-  [open-issues.md](../../open-issues.md), item 8.
+  [open-issues.md](../../docs/open-issues.md), item 8.
 
 ### Known remaining differences
 

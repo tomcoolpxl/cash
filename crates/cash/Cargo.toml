@@ -63,7 +63,7 @@ path = "tests/conpty_interactive_tests.rs"
 name = "pty-oracle"
 path = "tests/pty_oracle.rs"
 
-# open-issues.md item 1: how fast the line editor keeps up on a ConPTY, against PowerShell.
+# docs/open-issues.md item 1: how fast the line editor keeps up on a ConPTY, against PowerShell.
 # A measurement, ignored and run by hand; the command is in the file's doc.
 [[test]]
 name = "pty-latency"

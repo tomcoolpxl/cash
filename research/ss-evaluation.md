@@ -4,7 +4,7 @@
 
 **Decided and implemented 2026-09-25** (ROADMAP item 9). The evaluation below was written
 as a discussion document; the decisions taken on it are D51 in
-[decisions.md](../decisions.md), and `-i`, refused at first, came in phase 19.
+[decisions.md](../docs/decisions.md), and `-i`, refused at first, came in phase 19.
 
 The rest of the document records what the four suggested projects could contribute and
 what the shared socket-table layer for `ss`, `fuser`, and an `lsof` subset looks like.

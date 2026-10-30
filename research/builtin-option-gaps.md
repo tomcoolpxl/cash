@@ -23,7 +23,7 @@ implements the behavior incompletely.
 |---|---|---:|---|
 | `ps` | `-j` and therefore `-efj` worked but `ps --help` did not advertise it. | Small | Fixed in this audit: `-j` is a declared option and help explains its Windows base-priority view. |
 | `xargs -I` | Cash split replacement input on spaces. GNU/POSIX replacement mode consumes one logical line per item, so `a b` must remain one item. | Small | Fixed in this audit, including CRLF input, leading blanks, blank lines, and preserved trailing blanks. |
-| `xargs -P N` | The option is accepted but execution is serial. This obeys the numeric upper bound while missing the reason users specify `-P`. | Medium | Decided 2026-10-11: N at once ([decisions.md](../decisions.md)). |
+| `xargs -P N` | The option is accepted but execution is serial. This obeys the numeric upper bound while missing the reason users specify `-P`. | Medium | Decided 2026-10-11: N at once ([decisions.md](../docs/decisions.md)). |
 | `xargs -I{}` | The common attached-value spelling is treated as the command name; only `-I {}` works. | Small | Fixed since. |
 | `declare -t` | Function tracing is accepted but not recorded. | Medium | Implemented since: a traced function inherits DEBUG and RETURN, as in Bash; `declare -p` shows no `t`, as Bash's does. |
 | `bind -m vi-*` | Mutating bindings under a vi keymap is silently ignored. | Large | Decided 2026-10-11: refused by name. |

@@ -9,7 +9,7 @@
 //! depends on. It also leaves the door open to upstreaming the crate later, per §6.1.
 //!
 //! Decisions implemented here are referenced by their spec identifiers (`D6`, `D13`, …);
-//! see `spec.md` at the repository root.
+//! see `docs/spec.md`.
 
 #[cfg(not(windows))]
 compile_error!("cash builds only on Windows (spec D43)");

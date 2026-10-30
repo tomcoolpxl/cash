@@ -6,7 +6,7 @@
 started as "is `cash --link-tools` tested, and should cash put its directory on PATH?" and
 widened to how cash gets installed at all, as a normal user without admin. Decided with
 the user by pick list, and again on 2026-10-06 (DONE.md phase 22) with Velopack and a
-per-user MSI weighed; the decisions are in [decisions.md](../decisions.md) (D38, D65,
+per-user MSI weighed; the decisions are in [decisions.md](../docs/decisions.md) (D38, D65,
 D75). Not asked, so left as it is: x64 only; an ARM64 build waits for a machine to test
 it on.
 

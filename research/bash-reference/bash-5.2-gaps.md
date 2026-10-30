@@ -3,7 +3,7 @@
 This is a focused audit of cash's advertised Bash 5.2 interface, not a claim
 that every Bash 5.2 feature has been tested. It covers features introduced in
 5.2 and older Bash features that cash exposes but does not finish. It excludes
-Bash 5.3-only features and deliberate Windows divergences in [spec.md](../../spec.md)
+Bash 5.3-only features and deliberate Windows divergences in [spec.md](../../docs/spec.md)
 §4.
 
 Source: the Bash 5.2 section of the cloned GNU Bash `NEWS` at

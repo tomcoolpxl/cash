@@ -1,6 +1,6 @@
 """Copy the hand-maintained fields of packaging/scoop/cash.json (notes, suggest, hooks)
 into a Scoop bucket's bucket/cash.json, keeping the bucket's version, url and hash, which
-its Excavator action owns (RELEASING.md, step 7).
+its Excavator action owns (docs/RELEASING.md, step 7).
 
     python scripts/sync-bucket.py C:\\path\\to\\scoop-bucket\\bucket\\cash.json
 """

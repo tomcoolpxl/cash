@@ -1,7 +1,7 @@
 //! How fast the line editor keeps up on a ConPTY, measured against PowerShell's.
 //!
 //! A measurement, not a pass/fail test: it prints what it finds, and fails only when a
-//! shell leaves the screen wrong. It answered `open-issues.md` item 1 and is here to answer
+//! shell leaves the screen wrong. It answered `docs/open-issues.md` item 1 and is here to answer
 //! it again, after a change to the line editor or crossterm for instance (see
 //! `crates/cash-reedline` and `crates/cash-crossterm`). Run it from the repository root:
 //!

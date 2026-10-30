@@ -40,7 +40,7 @@ SOFTWARE.
 ### Modifications
 
 Changes made to the absorbed code are marked in-source with `cash (Dnn)`
-comments referencing the decision in [spec.md](spec.md). As of absorption:
+comments referencing the decision in [spec.md](docs/spec.md). As of absorption:
 
 - `brush-parser`: `case` constructs are consumed whole inside command
   substitution, in both the tokenizer and the word parser (§9.1)

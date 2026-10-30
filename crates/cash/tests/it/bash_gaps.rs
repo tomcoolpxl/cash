@@ -1817,7 +1817,7 @@ fn wait_reports_the_status_of_a_finished_job_that_jobs_has_shown() {
     );
 }
 
-/// Every difference from Bash 5.3 in `open-issues.md` entry 8, each script in a fresh
+/// Every difference from Bash 5.3 in `docs/open-issues.md` entry 8, each script in a fresh
 /// cash, and Git Bash 5.3.15's answer (TODO 5.1).
 #[test]
 fn jobs_and_wait_answer_as_bash_53_does() {

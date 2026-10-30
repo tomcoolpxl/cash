@@ -296,7 +296,7 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   `select`'s `fnmatch` serves both (UnZip's `*` crosses `/` unless `-W`).
 - **Decided in the phase**, under the instruction to finish phase 30 without stopping,
   and confirmed by the user on 2026-10-11: the deflate engine, the numeric owner and the
-  host a zip names ([decisions.md](../decisions.md), archives).
+  host a zip names ([decisions.md](../docs/decisions.md), archives).
 - **Beyond Info-ZIP's unzip**, added on the user's word the same day: `WinZip`'s AES on
   RustCrypto's `aes`, `hmac`, `pbkdf2` and `sha1`; PPMd on `ppmd-rust`; PKZIP 1's
   shrunk, reduced and imploded members through the `zip` crate's own decoders, its only
@@ -487,7 +487,7 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
 
 The family, the two crates, what moves onto the shared parts (all eleven option parsers
 in the groundwork, not later), the order, 7z (3.14) and rar and unrar (3.15): in
-[decisions.md](../decisions.md), D78 and the archive decisions after it.
+[decisions.md](../docs/decisions.md), D78 and the archive decisions after it.
 
 ## 8. Open, decided later in their phases
 

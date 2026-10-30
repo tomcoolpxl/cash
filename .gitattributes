@@ -30,6 +30,9 @@ crates/cash/tests/man-examples/** -text
 # Binaries
 # A sixel picture is ASCII, but one line of escape sequences that no diff can show.
 *.six binary
+*.gif binary
+*.png binary
+*.ico binary
 *.exe binary
 *.dll binary
 *.pdb binary

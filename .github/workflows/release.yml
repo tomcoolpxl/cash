@@ -223,7 +223,7 @@ jobs:
         shell: pwsh
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-        # Grouped by Conventional Commits type; see RELEASING.md, "Commit messages".
+        # Grouped by Conventional Commits type; see docs/RELEASING.md, "Commit messages".
         run: ./.github/scripts/release-notes.ps1 -Tag $env:TAG -Out release-notes.md
 
       - name: Publish GitHub Release

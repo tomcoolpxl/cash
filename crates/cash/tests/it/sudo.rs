@@ -1,7 +1,7 @@
 //! `sudo`, `su` and `sudoedit` as far as a test can take them without a UAC prompt or a
 //! password: their help and refusals, `sudo -l`, `sudoedit` on a file it leaves alone,
 //! and the elevated side's wrapper, which needs no elevation to run. In a shell already
-//! elevated (CI's), what runs in place runs. `scripts/try-sudo.md` lists the rest, for a
+//! elevated (CI's), what runs in place runs. `docs/try-sudo.md` lists the rest, for a
 //! person at a real UAC prompt.
 
 #![allow(

@@ -9,7 +9,7 @@
 # under "Breaking changes". Subjects without a known type go under "Other", so history
 # from before the convention still appears. A commit a later one took back is left out
 # when its hash is in .github/release-notes-skip.txt. A release's own opening lines, when
-# it has any, are .github/release-notes/<tag>.md. See RELEASING.md, "Commit messages".
+# it has any, are .github/release-notes/<tag>.md. See docs/RELEASING.md, "Commit messages".
 
 param(
     [Parameter(Mandatory)][string]$Tag,

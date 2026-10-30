@@ -1,7 +1,7 @@
 # BusyBox gap analysis
 
 > **Discussion document, partly decided.** The decisions taken are in
-> [decisions.md](../decisions.md); this is the analysis they were based on.
+> [decisions.md](../docs/decisions.md); this is the analysis they were based on.
 
 Already planned elsewhere and not re-proposed here: `dos2unix`/`unix2dos` (ROADMAP 7),
 `fuser` and an `lsof` subset (ROADMAP 8), and an `ss` subset (ROADMAP 9).
@@ -11,7 +11,7 @@ Already planned elsewhere and not re-proposed here: `dos2unix`/`unix2dos` (ROADM
 The tier-1 questions were put to the user on 2026-09-25, the tier-2 ones on 2026-10-06
 (DONE.md phase 21), after a second look at this machine with Git for Windows' `usr/bin`
 off `PATH` and BusyBox uninstalled. What was chosen is in
-[decisions.md](../decisions.md) (D54 to D57, D74, D76, D77); the rest of this document is
+[decisions.md](../docs/decisions.md) (D54 to D57, D74, D76, D77); the rest of this document is
 the evidence.
 
 ## Method
@@ -137,7 +137,7 @@ CRLF, command resolution)? A yes strengthens the case beyond "it is missing".
 | `run-parts` | 9k. Scripts rarely use it on Windows. | S | **Agrees with cash**: "executable" must mean D8 resolution (PATHEXT), not a mode bit. `--test`, `--list`, `--regex`, `-a`, `--exit-on-error`. |
 | `script`, `scriptreplay` | 6.5k. | M–L | A ConPTY recorder is plausible (cash owns ConPTY), but timing files and `-c` add surface. |
 | `mountpoint` | `mountpoint -q` usage is low. | S | `GetVolumePathNameW`: a drive root or mounted-directory junction is a mount point. `-d` (device number) refused. |
-| `logger` | Moderate on Linux, low on Windows. | S | `ReportEventW` into the Application log. An unregistered source works but Event Viewer shows a "description not found" warning, and registering a source needs admin. Decided 2026-10-11: built ([decisions.md](../decisions.md)). |
+| `logger` | Moderate on Linux, low on Windows. | S | `ReportEventW` into the Application log. An unregistered source works but Event Viewer shows a "description not found" warning, and registering a source needs admin. Decided 2026-10-11: built ([decisions.md](../docs/decisions.md)). |
 | `mkpasswd`, `cryptpw` | Rare (cloud-init hashes). | S | `sha-crypt`/`md5-crypt` crates (RustCrypto, MIT/Apache-2.0). **Shadowing trap:** Git's `mkpasswd.exe` is Cygwin's `/etc/passwd` generator, a completely different tool. |
 | `chown`, `chgrp` | Appear in install scripts. uutils excludes them on Windows. | M | Setting an owner needs `SeRestorePrivilege`/`SeTakeOwnershipPrivilege`, and there are no POSIX groups. Decided 2026-10-11: warn and return 0, as D34. |
 | `ed` | Some scripts use `ed -s file <<<`. | M | posixutils-rs `editors/ed` import. |

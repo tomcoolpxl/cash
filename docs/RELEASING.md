@@ -26,7 +26,7 @@ The Cash project uses Cargo workspace package inheritance (`version.workspace = 
 - `cash-test-harness`
 - `xtask`
 
-The authoritative version is declared in the root [Cargo.toml](Cargo.toml) under:
+The authoritative version is declared in the root [Cargo.toml](../Cargo.toml) under:
 
 ```toml
 [workspace.package]
@@ -66,7 +66,7 @@ type(scope): description
   this convention is mostly like that.
 
 A commit taken back by a later one before a release would still be listed; put its hash
-in [`.github/release-notes-skip.txt`](.github/release-notes-skip.txt), with `#` and why,
+in [`.github/release-notes-skip.txt`](../.github/release-notes-skip.txt), with `#` and why,
 and the notes leave it out.
 
 A release that needs a few words of its own before the commits (what it is about, as
@@ -138,12 +138,12 @@ git push origin v0.9.2
 ```
 
 ### 6. Automated GitHub Release
-When a tag matching `v*.*.*` is pushed, the [Release Workflow](.github/workflows/release.yml) automatically:
+When a tag matching `v*.*.*` is pushed, the [Release Workflow](../.github/workflows/release.yml) automatically:
 1. Compiles the shipped binary with the fully optimized `dist` profile (`cargo build
    --profile dist --bin cash`: fat LTO, one codegen unit) and checks that it imports no C
    runtime DLL. The `release` profile, for local builds, trades a little speed for a much
    quicker build.
-2. Measures it against [`perf-budget.toml`](perf-budget.toml) with `cargo xtask perf`:
+2. Measures it against [`perf-budget.toml`](../perf-budget.toml) with `cargo xtask perf`:
    its size, and cash's own start (the median of 30 `cash -c true` less that of a bare
    `cmd /c exit`). The figures go in the job's summary; a build over a limit stops the
    release. A release that needs more raises the limit in a commit of its own that says
@@ -151,15 +151,15 @@ When a tag matching `v*.*.*` is pushed, the [Release Workflow](.github/workflows
    for a less optimized build.
 3. Bundles `cash.exe`, `README.md`, `LICENSE`, `NOTICE`, `licenses/` and
    `THIRD-PARTY-LICENSES.html` (written by `cargo about` from
-   [`.github/about`](.github/about)) into `cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`.
+   [`.github/about`](../.github/about)) into `cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`.
 4. Computes the SHA-256 checksum file.
 5. Compiles the per-user installer, `cash-vX.Y.Z-setup.exe`, from the same files with
-   Inno Setup ([`packaging/inno/cash.iss`](packaging/inno/cash.iss)), with its own
+   Inno Setup ([`packaging/inno/cash.iss`](../packaging/inno/cash.iss)), with its own
    `.sha256`. It installs under `%LOCALAPPDATA%\Programs\cash\X.Y.Z` and runs
    `cash --install-finish`; `cash --update` on an installed cash fetches the next
    release's zip from the same page, so the zip's name must stay as it is.
 6. Creates a new GitHub Release whose notes are the commits since the previous tag,
-   grouped by type ([`.github/scripts/release-notes.ps1`](.github/scripts/release-notes.ps1)),
+   grouped by type ([`.github/scripts/release-notes.ps1`](../.github/scripts/release-notes.ps1)),
    and attaches the zip, the installer and both checksums.
 
 ### 7. Scoop
@@ -167,13 +167,13 @@ Nothing to do. The bucket, [`tomcoolpxl/scoop-bucket`](https://github.com/tomcoo
 runs Scoop's Excavator action every few hours: `checkver` finds the new release, and
 `autoupdate` points `bucket/cash.json` at its zip and `.sha256`. So the zip's name must stay
 `cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`. The manifest's source is
-[`packaging/scoop/cash.json`](packaging/scoop/cash.json); a change to its hooks or notes
+[`packaging/scoop/cash.json`](../packaging/scoop/cash.json); a change to its hooks or notes
 is copied to the bucket by hand (`python scripts/sync-bucket.py PATH\to\bucket\cash.json`
 copies every field but the version, url and hash).
 
 ### 8. winget
 From the installer (`InstallerType: inno`, `Scope: user`), package
-`tomcoolpxl.cash`. The templates are in [`packaging/winget`](packaging/winget), with
+`tomcoolpxl.cash`. The templates are in [`packaging/winget`](../packaging/winget), with
 `@VERSION@` and `@SHA256@` to replace (the hash from the setup's `.sha256` asset; the
 tokens are deliberately not bare words, since `ManifestVersion` and `InstallerSha256`
 contain them). Write the three filled files to `packaging/winget/out` (ignored by git),

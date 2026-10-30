@@ -126,7 +126,7 @@ without asking, and any process of the user's could try to be the one it grants 
 ## 6. The choices
 
 Made by the user on 2026-10-10, by pick list, and amended on 2026-10-11 (section 8); they
-are in [decisions.md](../decisions.md), under sudo and elevation.
+are in [decisions.md](../docs/decisions.md), under sudo and elevation.
 
 ## 7. What the probes showed
 
@@ -158,7 +158,7 @@ the exported variables as `NAME=value` words, within Windows' 32,000 characters.
 
 ## 8. As another account, without gsudo
 
-Asked for by the user on 2026-10-11, by pick list ([decisions.md](../decisions.md), sudo
+Asked for by the user on 2026-10-11, by pick list ([decisions.md](../docs/decisions.md), sudo
 and elevation).
 
 gsudo starts its own helper as USER with USER's password, read at the console

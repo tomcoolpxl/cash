@@ -11,30 +11,30 @@ Feature work follows the sequence below.
 
 | Order | Workstream | Status | Detailed source |
 | ---: | --- | --- | --- |
-| 1 | Finish the advertised Bash 5.2 interface | **Complete** | [Bash 5.2 remaining plan](research/bash-reference/bash-5.2-remaining-plan.md) and [gap audit](research/bash-reference/bash-5.2-gaps.md) |
-| 2 | Absorb and port a native `awk` | **Complete** | [`posixutils-rs` AWK evaluation](research/posixutils-rs-evaluation.md) |
-| 3 | Absorb and integrate a native `sed` | **Complete** | [`uutils/sed` evaluation](research/uutils-sed-evaluation.md) |
+| 1 | Finish the advertised Bash 5.2 interface | **Complete** | [Bash 5.2 remaining plan](../research/bash-reference/bash-5.2-remaining-plan.md) and [gap audit](../research/bash-reference/bash-5.2-gaps.md) |
+| 2 | Absorb and port a native `awk` | **Complete** | [`posixutils-rs` AWK evaluation](../research/posixutils-rs-evaluation.md) |
+| 3 | Absorb and integrate a native `sed` | **Complete** | [`uutils/sed` evaluation](../research/uutils-sed-evaluation.md) |
 | 4 | Expand bundled userland | **Complete** | `stat`, `tty`, `install`, `pathchk`, `nohup`, `who`, `users`, `pinky`, `logname`, `hostid` |
-| 5 | Bash 5.3 compatibility work | **Complete** (cash reports `BASH_VERSION=5.3.15`) | [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md): every item probed against Bash 5.3.15, by script and on a ConPTY |
-| 6 | Differential corpus fixes | **Active** | [`tests/corpus`](tests/corpus): sourced sed/awk/Bash one-liners run against Git Bash 5.3 with GNU sed and gawk |
+| 5 | Bash 5.3 compatibility work | **Complete** (cash reports `BASH_VERSION=5.3.15`) | [Bash 5.3 audit](../research/bash-reference/bash-5.3-audit.md): every item probed against Bash 5.3.15, by script and on a ConPTY |
+| 6 | Differential corpus fixes | **Active** | [`tests/corpus`](../tests/corpus): sourced sed/awk/Bash one-liners run against Git Bash 5.3 with GNU sed and gawk |
 | 7 | Line-ending controls: sed `-b`, `CASH_EOL`, `dos2unix`/`unix2dos` | **Complete** | Section 7 below; spec D49 |
 | 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
-| 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](research/ss-evaluation.md); spec D51 |
-| 10 | BusyBox-gap tools | **Complete** (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`; `ping`; doctor's BusyBox check) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
+| 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](../research/ss-evaluation.md); spec D51 |
+| 10 | BusyBox-gap tools | **Complete** (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`; `ping`; doctor's BusyBox check) | [BusyBox gap analysis and decisions](../research/busybox-gap-analysis.md); spec D54 |
 | 11 | Graceful Ctrl-C and `TERM` for cash's own jobs (process groups) | **Complete** | Section 11 below; spec D13, D21 |
 | 12 | A path a script can exec for a bundled tool | **Complete** | Section 12 below; [open issue 4](open-issues.md) |
 | 13 | `bc` against GNU bc | **Complete** | Section 13 below; spec D56 |
-| 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | **Complete** | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
+| 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | **Complete** | Section 14 below; [Bash 5.3 audit](../research/bash-reference/bash-5.3-audit.md) |
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | **Complete** (cash reports `BASH_VERSION=5.3.15`) | Section 15 below |
 | 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | **Complete** | Section 16 below; spec D65 |
 | 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, directory history, carapace completions | **Complete** | Section 17 below; spec D59–D63 |
-| 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** (Scoop since 1.1.0; the per-user installer, the portable zip's first-prompt offer and `cash --update` since 1.6.0; winget manifests validated, submission to come) | [Packaging evaluation and decisions](research/packaging-evaluation.md); section 18 below; spec D38, D65 |
+| 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** (Scoop since 1.1.0; the per-user installer, the portable zip's first-prompt offer and `cash --update` since 1.6.0; winget manifests validated, submission to come) | [Packaging evaluation and decisions](../research/packaging-evaluation.md); section 18 below; spec D38, D65 |
 | 19 | Console, clipboard and the remaining small tools: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `xdg-open`, `pbcopy`/`pbpaste`, `watch`, `free`, `nice`/`renice`, `flock`, `nc` | **Complete** (1.5.0, 2026-10-06) | Section 19 below; spec D74; DONE.md phase 21 |
 | 20 | `grep`, `diff` and `cmp`: the standing rule reversed under "install cash, have everything" | **Complete** (1.7.0, 2026-10-06) | DONE.md phase 23; spec D76 |
 | 21 | `gzip`, `gunzip` and `zcat` in pure Rust | **Complete** (1.8.0, 2026-10-06) | DONE.md phase 24; spec D77 |
 | 22 | Compatibility corners: `/dev/tcp`, `command_not_found_handle`, kept `abbr`, kinder refusals, `getconf`, `locale` | **Complete** (1.8.0, 2026-10-06) | DONE.md phase 25; spec D77 |
-| 23 | Archive and compression tools on shared parts: `bzip2`, `xz`, `zstd` and their names, `tar`, `zip`/`unzip`/`zipinfo` | **Complete** (1.9.0, 2026-10-07: the compressors, `tar`, and `zip`, `unzip`, `zipinfo`) | [Design](research/archive-tools-design.md); DONE.md phases 29–30; spec D78 |
-| 24 | The prompt and paths: a Ctrl-R history picker, the `z` directory jump, every path spelling everywhere, and a guard on size and speed | **Complete** (1.12.0, 2026-10-10) | [Design](research/prompt-history-and-jump-design.md); DONE.md phase 34; spec D79, D80 |
+| 23 | Archive and compression tools on shared parts: `bzip2`, `xz`, `zstd` and their names, `tar`, `zip`/`unzip`/`zipinfo` | **Complete** (1.9.0, 2026-10-07: the compressors, `tar`, and `zip`, `unzip`, `zipinfo`) | [Design](../research/archive-tools-design.md); DONE.md phases 29–30; spec D78 |
+| 24 | The prompt and paths: a Ctrl-R history picker, the `z` directory jump, every path spelling everywhere, and a guard on size and speed | **Complete** (1.12.0, 2026-10-10) | [Design](../research/prompt-history-and-jump-design.md); DONE.md phase 34; spec D79, D80 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -65,8 +65,8 @@ the first feature priority. Work through the existing plan in its own phase orde
    job diffed focused probes against a real Bash 5.2 until 2026-09-28, when cash became
    Windows-only (spec D43).
 
-The [remaining plan](research/bash-reference/bash-5.2-remaining-plan.md) owns the probe
-matrix and implementation sequence. The [gap audit](research/bash-reference/bash-5.2-gaps.md)
+The [remaining plan](../research/bash-reference/bash-5.2-remaining-plan.md) owns the probe
+matrix and implementation sequence. The [gap audit](../research/bash-reference/bash-5.2-gaps.md)
 owns observed results and status.
 
 This workstream is complete when every listed 5.2 NEWS item and older advertised-interface
@@ -105,7 +105,7 @@ The implementation sequence is:
    updating `cash doctor`, README, and the specification.
 
 The detailed evidence and gate are in
-[research/posixutils-rs-evaluation.md](research/posixutils-rs-evaluation.md). Complete gawk
+[research/posixutils-rs-evaluation.md](../research/posixutils-rs-evaluation.md). Complete gawk
 extensions remain outside the initial gate.
 
 ## 3. Add native `sed` (Complete & Verified)
@@ -170,7 +170,7 @@ compiler panic on `for` loops with an empty clause.
 run unchanged: JSON.sh, spark, getoptions, mo, ansi, nvm.sh's helpers, semver-tool,
 wait-for-it, shUnit2, shFlags, bashmarks, two git-extras commands, z, bash-tpl,
 bash-yaml, rbenv, git-flow AVH and bats-core
-([`tests/corpus/SOURCES.md`](tests/corpus/SOURCES.md)). `run.ps1 -Freeze` writes Git Bash's
+([`tests/corpus/SOURCES.md`](../tests/corpus/SOURCES.md)). `run.ps1 -Freeze` writes Git Bash's
 output beside each case, and the `it` test `corpus_goldens` checks cash against it on every
 CI run. Each fix has a focused regression; besides those named in the commit history, the
 corpus exposed `(( count[$word]++ ))` storing every word under key `0` (associative
@@ -231,7 +231,7 @@ subset of the address/port expressions. `Recv-Q`/`Send-Q` print `0`; `-p` adds
 `service=NAME` for svchost PIDs; `-i` and the options with no Windows backing are refused,
 and netstat-style flags (`-ano`) get a hint with the `ss` spelling. Windows' own
 `netstat.exe` is not shadowed. Decisions and the full option matrix:
-[research/ss-evaluation.md](research/ss-evaluation.md).
+[research/ss-evaluation.md](../research/ss-evaluation.md).
 
 **Status: complete.** Checked against iproute2 7.2 in WSL for `-tulpn`, `-tlnp`, `-tan`,
 `-uan`, `-tunap`, `-H`, `-Q`, `-4`/`-6`, state filters and `-s`. `service=` comes from
@@ -241,7 +241,7 @@ unit tests in `cash-builtins`.
 
 ## 10. BusyBox-gap tools
 
-From the [BusyBox gap analysis](research/busybox-gap-analysis.md), the agreed set, D54 to
+From the [BusyBox gap analysis](../research/busybox-gap-analysis.md), the agreed set, D54 to
 D57 and D35 in [decisions.md](decisions.md): 1 `pkill`, `pidof`, `killall`; 2 `getopt`,
 `rev`, `clear`, `reset`; 3 POSIX `bc`; 4 a Linux-flag `ping`; 5 `cash doctor` flagging
 BusyBox shims that break scripts.
@@ -398,7 +398,7 @@ Closed by item 18: the Scoop manifest offers carapace at install time through `s
 
 The question began with `cash --link-tools`: is it tested, and should cash put its directory
 on PATH? It widened to installing cash as a normal user, without admin. The research,
-with sources, is in [the packaging evaluation](research/packaging-evaluation.md).
+with sources, is in [the packaging evaluation](../research/packaging-evaluation.md).
 Decided with the user on 2026-09-28 and again on 2026-10-06: D38, D65 and D75 in
 [decisions.md](decisions.md).
 
@@ -411,7 +411,7 @@ Work, in order:
 3. **Done.** `--link-tools --add-to-path` and `--unlink-tools` (D65). A link Windows
    will not delete is renamed aside instead of stopping the refresh halfway.
 4. **Done.** `--terminal-profile` and `--remove-terminal-profile` (D38).
-5. **Done.** [`packaging/scoop/cash.json`](packaging/scoop/cash.json), the README's
+5. **Done.** [`packaging/scoop/cash.json`](../packaging/scoop/cash.json), the README's
    install section, and RELEASING's Scoop step.
 6. **Done, 2026-09-28.** `tomcoolpxl/cash` is public; 1.1.0 is released with these
    commands; [`tomcoolpxl/scoop-bucket`](https://github.com/tomcoolpxl/scoop-bucket),
@@ -433,7 +433,7 @@ time, the gap left open in item 17.
 ## 19. Console, clipboard and the remaining small tools
 
 A second look (2026-10-06) at what a clean Windows machine with cash still lacks, after
-the [BusyBox gap analysis](research/busybox-gap-analysis.md) adopted its tier 1 (item
+the [BusyBox gap analysis](../research/busybox-gap-analysis.md) adopted its tier 1 (item
 10). Every name below resolves to nothing on a bare Windows install, none belongs to a
 program in System32, and each either has to agree with something cash owns (the console
 modes, encoding, the clipboard, the descriptor table, process ids, command resolution)
