@@ -35,8 +35,9 @@ crate = "crates/cash-archive/src/sevenz"
 name = "sevenz-rust2"
 version = "0.23.0"
 # 0.24.0 (2026-10-16): its CRC fix is for a writer cash replaced with 7-Zip's own rules,
-# and cash copies raw blocks itself.
-reviewed = "0.24.0"
+# and cash copies raw blocks itself. 0.24.1 (2026-10-30) only bumps lzma-rust2, which
+# Dependabot tracks for cash.
+reviewed = "0.24.1"
 
 [[upstream]]
 crate = "crates/cash-uutils"
@@ -49,8 +50,10 @@ name = "diffutils"
 version = "0.6.0"
 repository = "https://github.com/uutils/diffutils"
 revision = "7aa5409c2ed723c7b9768ef4cd10f4176cf78f45"
-# 2026-10-17: the commits since change only CI and a benchmark dependency.
-reviewed = "8af2bedef1f82771d8479b0d021e29b6bb321262"
+# 2026-10-17: the commits since change only CI and a benchmark dependency. 2026-10-30,
+# to c4bd69cb: hunk merging, the context format's `!` marks and `cmp -n 1K` were already
+# as GNU has them in cash's rewrite; `cmp -b`'s padding fix (7d74753c) ported.
+reviewed = "c4bd69cba54794b3474f4bbe33b27b916cd68db3"
 
 [[upstream]]
 crate = "crates/cash-sed"
@@ -59,8 +62,9 @@ version = "0.2.0"
 repository = "https://github.com/uutils/sed"
 revision = "c46dd6dab61a6a571bf08cb6b333e4fe1f3636c3"
 # 2026-10-17: its fixes ported by their tests, against GNU sed; what was not taken is in
-# research/uutils-sed-evaluation.md.
-reviewed = "b002a1e894da02434406e2ebeceb66c442e4c755"
+# research/uutils-sed-evaluation.md. 2026-10-30, to 42bffb9d: every case already as GNU
+# has it (the same file says which); the literal matcher's Arc needle (3b464d11) taken.
+reviewed = "42bffb9d3018a586a889c790bea4be58e249586a"
 
 [[upstream]]
 crate = "crates/cash-awk"

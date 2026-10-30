@@ -155,3 +155,16 @@ The tests expect upstream's error format (`<script argument 1>:1:3: error:`); ca
 are GNU's (`-e expression #1, char 2:`), so those expectations are in GNU's words. Not
 taken: the rich diagnostics drawn under the error at a terminal (`a05d7434`, a new
 dependency and not GNU's), and the Unix-only `e` test, whose cases were checked by hand.
+
+## Upstream since `b002a1e8` (reviewed 2026-10-30, to `42bffb9d`)
+
+uutils sed's 20 commits after `b002a1e8` were looked through by their tests, each case
+run through GNU sed 4.9 and cash-sed from a script file, GNU deciding: a backslash inside
+a bracket expression (`[\w]`, `[a\]bc]`; `ff460d7c`, `dc249bd1`), an unknown escape
+giving its bare character in `s`, `y` and `a` (`ec718dca`), `\<` and `\>` choosing the
+regex matcher (`d804abda`), an ERE quantifier with nothing to repeat refused as `Invalid
+preceding regular expression` (`539b1525`), `--posix` disabling the GNU escapes
+(`591042a5`, `6c33aad8`), and back-references in byte mode (`330476ab`, with
+fancy-regex's byte mode). cash-sed gave GNU's answer in every case already, so nothing
+was ported from them. Taken: the literal matcher's needle in an `Arc`, which is cloned
+for every input line (`3b464d11`). The rest are dependency bumps and test layout.
