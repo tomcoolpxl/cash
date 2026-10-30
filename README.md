@@ -10,12 +10,16 @@ A bash-language shell whose execution model is **Win32**, hosted in Windows Term
 No POSIX emulation layer, no VM, no `msys-2.0.dll` underneath: the processes, paths and
 handles are native, and the scripts are ordinary bash.
 
+**One binary is the whole Linux command line, native on Windows.** `cash.exe` is the
+shell and the tools in one file: Bash 5.3, the coreutils, `awk`, `sed`, `grep`, `diff`,
+`find`, `xargs`, `tar`, `zip`, `7z`, `rar`, `gzip`, `xz`, `zstd`, `top`, `lsof`, `ss`,
+about 250 in all, each a Win32 program. Put that file on a bare Windows machine and it
+has a complete Bash environment, with nothing else to install.
+
 <img src="assets/cash-terminal.png" width="100%" alt="cash 2.3.0 in Windows Terminal: coolfetch's logo and summary of the machine, then the prompt">
 
-It runs Terraform wrappers, CI glue and pipelines with `xargs`, `sed`, `grep` and `jq`
-unchanged, and it carries the tools a bare Windows machine lacks, so that installing cash
-gives a complete Bash: the coreutils, `awk`, `sed`, `grep`, `diff`, `find`, `xargs`,
-`tar`, `zip`, `7z`, `rar`, `gzip`, `xz`, `zstd`, `top`, `lsof`, `ss`, and about 250 in all.
+Terraform wrappers, CI glue and pipelines with `xargs`, `sed`, `grep` and `jq` run
+unchanged, and print what Bash 5.3 prints.
 
 ## See it
 

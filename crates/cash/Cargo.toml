@@ -1,6 +1,6 @@
 [package]
 name = "cash"
-description = "Cool Again Shell — a bash-language shell whose execution model is Win32"
+description = "Cool Again Shell - one binary with Bash 5.3 and the Unix tools, native on Windows (Win32)"
 version.workspace = true
 authors.workspace = true
 categories.workspace = true
