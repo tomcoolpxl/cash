@@ -1,6 +1,8 @@
-# Help: figlet, a missing command names its package, help topics, and man's browser.
+# Help: figlet, a missing command names its package, help -d, and man's browser.
 Output help.gif
 Require cash
+Set Width 1000
+Set Height 560
 Source "_settings.tape"
 
 Type "figlet -f slant cash"

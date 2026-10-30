@@ -4,6 +4,8 @@
 # and are terminated five seconds later, which is a long wait in a clip.)
 Output jobs.gif
 Require cash
+Set Width 1000
+Set Height 560
 Source "_settings.tape"
 
 Type "cmd /c 'ping -n 100 127.0.0.1 > nul'"

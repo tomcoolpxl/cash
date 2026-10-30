@@ -1,6 +1,8 @@
 # The archivers: tar, zip, 7z and rar make an archive of the same directory, built in.
 Output archivers.gif
 Require cash
+Set Width 1000
+Set Height 560
 Source "_settings.tape"
 
 Type "cd .."

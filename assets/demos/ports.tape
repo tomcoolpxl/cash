@@ -2,6 +2,8 @@
 Output ports.gif
 Require cash
 Require python
+Set Width 1000
+Set Height 560
 Source "_settings.tape"
 
 Type "python -m http.server 8080 > /dev/null 2>&1 &"

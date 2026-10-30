@@ -11,13 +11,13 @@ real history.
 
 | clip | shows |
 | --- | --- |
-| paths | `cd C:\...` unquoted, `cd /c/...`, `pwd` printing `C:/...`, a `/c/` glob, a Windows program getting its own spelling, `shopt -s unixpaths` |
+| paths | `cd C:\...` unquoted, `cd /c/...`, `pwd` printing `C:/...`, a `/c/` glob, Program Files with its space in both spellings, PowerShell given `$PWD`, an argument reaching cmd as typed, `shopt -s unixpaths` |
 | script | a script with `find`, `xargs`, `grep`, `sed` and `awk` running, `type` showing them as builtins, `$BASH_VERSION` |
 | prompt | a suggestion from history, a red unknown command, highlighting, the Ctrl-R picker |
-| directories | back and forward through recent directories, `z`, Alt-E's picker |
+| directories | back and forward through recent directories, `z`, Alt-E's picker to go to a directory and, after a command, to insert a path (Enter picks, Esc closes; Ctrl-Enter, which does both, reaches cash as a plain Enter from VHS); the keys are named in typed comment lines |
 | jobs | Ctrl-Z, `jobs`, `bg`, `fg`, Ctrl-C giving 130, `kill %1` |
 | ports | `ss -ltn`, `lsof -i :8080`, `kill $(lsof -t ...)`, a file `rm` cannot delete, `fuser -v`, `fuser -k` |
-| top | `top`, sorted by memory, then as a tree |
+| top | `top`, a meter for each core (`1`, two to a row), sorted by memory, then as a tree |
 | archivers | `tar`, `zip`, `7z` and `rar` of the same directory, `unrar l`, `type` |
 | help | `figlet`, the install hint for a missing command, `help -d`, `man sed` |
 | sextant | the game, recorded by hand (below) |

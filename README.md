@@ -19,16 +19,16 @@ gives a complete Bash: the coreutils, `awk`, `sed`, `grep`, `diff`, `find`, `xar
 
 <table>
   <tr>
-    <td align="center" width="50%"><b>Paths</b>: <code>C:\</code>, <code>C:/</code> and <code>/c/</code> all work, <code>pwd</code> prints one spelling<br>
-      <img src="assets/demos/paths.gif" width="480" alt="cd with a backslash path, a /c/ path and ~; pwd prints C:/ every time; shopt -s unixpaths switches to /c/"></td>
+    <td align="center" width="50%"><b>Paths</b>: <code>C:\</code>, <code>C:/</code> and <code>/c/</code> all work, spaces too; <code>pwd</code> prints one spelling; arguments are never rewritten<br>
+      <img src="assets/demos/paths.gif" width="480" alt="cd with a backslash path and with a /c/ path, pwd prints C:/ every time, Program Files with its space in both spellings, PowerShell gets $PWD, cmd gets an argument as typed, shopt -s unixpaths switches to /c/"></td>
     <td align="center" width="50%"><b>A bash script</b>, nothing installed: <code>find</code>, <code>xargs</code>, <code>grep</code>, <code>sed</code>, <code>awk</code> are inside <code>cash.exe</code><br>
       <img src="assets/demos/script.gif" width="480" alt="a script with find, xargs, grep, sed and awk runs; type -a shows every tool comes from cash.exe"></td>
   </tr>
   <tr>
     <td align="center"><b>The prompt</b>: highlighting, a command that does not exist turns red, suggestions from history, Ctrl-R<br>
       <img src="assets/demos/prompt.gif" width="480" alt="typing at the prompt with syntax highlighting, a red unknown command, a dimmed history suggestion and the Ctrl-R picker"></td>
-    <td align="center"><b>Directories</b>: Alt-← and Alt-→ step through where you have been, <code>z</code> jumps, Alt-E picks<br>
-      <img src="assets/demos/directories.gif" width="480" alt="Alt-Left steps back through recent directories, z jumps by name, Alt-E opens the croot picker"></td>
+    <td align="center"><b>Directories</b>: Alt-← and Alt-→ step through where you have been, <code>z</code> jumps, Alt-E picks a directory or inserts a path<br>
+      <img src="assets/demos/directories.gif" width="480" alt="Alt-Left steps back through recent directories, z jumps by name, Alt-E opens the croot picker to go to a directory and, after a command, to insert its path"></td>
   </tr>
   <tr>
     <td align="center"><b>Jobs</b>: Ctrl-Z stops a program, <code>bg</code> and <code>fg</code> resume it, Ctrl-C gives 130, <code>kill %1</code> ends a job<br>
@@ -37,8 +37,8 @@ gives a complete Bash: the coreutils, `awk`, `sed`, `grep`, `diff`, `find`, `xar
       <img src="assets/demos/ports.gif" width="480" alt="ss -ltn lists listeners, lsof -i :8080 names the process, kill $(lsof -t -i:8080) ends it, fuser finds who has a file open"></td>
   </tr>
   <tr>
-    <td align="center"><b>top</b>, procps style, with meters, sorting and a process tree<br>
-      <img src="assets/demos/top.gif" width="480" alt="top running with CPU and memory meters, sorted by memory, then as a tree"></td>
+    <td align="center"><b>top</b>, procps style, with a meter for each core, sorting and a process tree<br>
+      <img src="assets/demos/top.gif" width="480" alt="top running with CPU and memory meters, then a meter for each of sixteen cores, sorted by memory, then as a tree"></td>
     <td align="center"><b>The archivers</b>: <code>tar</code>, <code>zip</code>, <code>7z</code> and <code>rar</code>, built in<br>
       <img src="assets/demos/archivers.gif" width="480" alt="tar, zip, 7z and rar each make an archive of the same directory, and ls -l shows the four"></td>
   </tr>

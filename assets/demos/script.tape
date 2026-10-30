@@ -2,6 +2,8 @@
 # is inside cash.exe.
 Output script.gif
 Require cash
+Set Width 1000
+Set Height 560
 Source "_settings.tape"
 
 Type "cat scripts/report.sh"

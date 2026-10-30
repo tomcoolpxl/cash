@@ -1,12 +1,11 @@
-# Shared by every demo tape (`Source _settings.tape`): the window, the font and the
-# colours of Windows Terminal's Campbell scheme, then cash started from cmd, hidden.
-# VHS starts a shell from a fixed list, so the tape starts cmd and types `cash` into it.
+# Shared by every demo tape (`Source "_settings.tape"`, after its own `Set Width` and
+# `Set Height`): the font, the colours of Windows Terminal's Campbell scheme, then cash
+# started from cmd, hidden. VHS starts a shell from a fixed list, so the tape starts cmd
+# and types `cash` into it.
 
 Set Shell cmd
 Set FontFamily "Cascadia Mono"
 Set FontSize 20
-Set Width 1000
-Set Height 560
 Set Padding 20
 Set Framerate 15
 Set TypingSpeed 60ms

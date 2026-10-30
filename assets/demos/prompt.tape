@@ -2,6 +2,8 @@
 # highlighting as you type, and the Ctrl-R picker.
 Output prompt.gif
 Require cash
+Set Width 1000
+Set Height 560
 Source "_settings.tape"
 
 Type@120ms "gre"
