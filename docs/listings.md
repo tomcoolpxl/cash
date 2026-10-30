@@ -33,8 +33,17 @@ cash sorts first. The line:
 Pull request: <https://github.com/TaKO8Ki/awesome-alternatives-in-rust/pull/167>, opened
 2026-10-30 from the fork `tomcoolpxl/awesome-alternatives-in-rust`, branch `add-cash`.
 
-## Later: each needs 50 GitHub stars
+## Later: each needs GitHub stars
 
+- **Scoop's Extras bucket** (<https://github.com/ScoopInstaller/Extras>), so that
+  `scoop install extras/cash` works with no bucket to add. The package request form
+  (its issue template, 2026-10-30) requires ticking "reasonably well-known and widely
+  used (e.g. if it's a GitHub project, it should have at least 100 stars and/or 50
+  forks)", and the contributing guide wants that issue before the pull request, which
+  closes it; the main bucket wants 500 stars. The manifest is the bucket's
+  `bucket/cash.json` as Excavator keeps it, with `"license": "MIT"` as a plain string;
+  the pull request title is `cash: Add version X.Y.Z`, and a `/verify` comment starts
+  their checks. The fork `tomcoolpxl/Extras` exists, made 2026-10-30, untouched.
 - **awesome-rust** (<https://github.com/rust-unofficial/awesome-rust>): "Applications",
   "System tools", beside brush-shell, cicada, fish, nushell and ion. Over 50 stars, or
   2,000 crates.io downloads, or an equivalent metric named in the pull request. Format:
