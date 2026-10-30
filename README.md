@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/tomcoolpxl/cash/actions/workflows/ci.yml/badge.svg)](https://github.com/tomcoolpxl/cash/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/tomcoolpxl/cash)](https://github.com/tomcoolpxl/cash/releases)
-[![Licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+[![Licence](https://img.shields.io/github/license/tomcoolpxl/cash)](LICENSE)
 
 A bash-language shell whose execution model is **Win32**, hosted in Windows Terminal.
 No POSIX emulation layer, no VM, no `msys-2.0.dll` underneath: the processes, paths and
