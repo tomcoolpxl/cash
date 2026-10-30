@@ -78,8 +78,9 @@ and in the fewest places it can.
   user's shell is always a new cash, as Windows raises no running process (see
   `help elevation`).
 - `kill -STOP` and Ctrl-Z suspend a program's threads; Windows has no `SIGSTOP`.
-- `kill -TERM` ends a console program at once, and gives a program with a window five
-  seconds after asking it to close. A cash script that another process sends `TERM`
+- `kill -TERM` ends a console program at once, gives a background job a Ctrl-Break and
+  a second, and gives a program with a window five seconds after asking it to close. A
+  cash script that another process sends `TERM`
   ends at once too, its `TERM` and `EXIT` traps not run; Ctrl-C and `kill -TERM $$` do
   run them. `kill 0` reaches the jobs cash started, and `kill -1` is refused.
 - `$!` of a background job that starts no program is a number of cash's own (4n + 1),

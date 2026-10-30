@@ -97,17 +97,27 @@ fn kill_term_sends_a_background_job_ctrl_break_then_terminates_it() {
         dir.path(),
         true,
         "ping.exe -n 30 127.0.0.1 > \"$T/ping.out\" & p=$!\n\
-         sleep 1; kill -TERM $p; sleep 1\n\
+         sleep 1; start=$(date +%s%N); kill -TERM $p; sleep 0.3\n\
          grep -q '%' \"$T/ping.out\" && echo broke || echo 'no ctrl-break'\n\
          kill -0 $p 2>/dev/null && echo asked\n\
-         wait $p; echo \"status=$?\"",
+         wait $p; echo \"status=$?\"\n\
+         echo \"took $(( ($(date +%s%N) - start) / 1000000 ))\"",
     );
     assert!(out.contains("broke\n"), "{out}");
-    // A second after TERM the ping is still running, so the pid is still its own.
+    // Right after TERM the ping is still running, so the pid is still its own.
     assert!(out.contains("asked\n"), "{out}");
     // `wait` returns when the grace period ends the ping, with TERM's status. A ping that
     // nothing ended would keep `wait` for its 30 echoes, and then report 0.
     assert!(out.contains("status=143\n"), "{out}");
+    // A console job that ignores the Ctrl-Break gets a second, not the five seconds a
+    // program with a window gets to offer to save (ping carries on after printing its
+    // statistics). The bound leaves room for a slow runner and stays well under five.
+    let took: u64 = out
+        .lines()
+        .find_map(|line| line.strip_prefix("took "))
+        .and_then(|n| n.trim().parse().ok())
+        .unwrap_or(u64::MAX);
+    assert!((300..3500).contains(&took), "wait took {took} ms: {out}");
 }
 
 #[test]

@@ -77,7 +77,8 @@ Windows has no signals; cash delivers each one as the nearest thing Windows has.
   reaches that process alone.
 - `TERM`, `HUP`, `INT` and `QUIT` ask: a program with a window gets `WM_CLOSE`, as from
   its close button, and is terminated if it still runs five seconds later; a background
-  job gets a Ctrl-Break; any other console program is terminated at once.
+  job gets a Ctrl-Break, and is terminated if it still runs a second later; any other
+  console program is terminated at once.
 - `KILL` (`-9`) terminates at once.
 - `STOP` and `CONT` suspend and resume the program's threads.
 - `kill -l` lists Linux's 31 signals by Linux's numbers (`USR1` is 10; Git Bash says

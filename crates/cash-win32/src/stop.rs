@@ -13,6 +13,13 @@
 //! terminated at once. One that was asked and is still running after the grace period
 //! is terminated then, from a background thread holding a handle to it, so a pid Windows
 //! has since reused cannot be hit.
+//!
+//! A background job at the prompt leads a process group of its own (D13), so it can be
+//! asked with a Ctrl-Break, the one console control event that can be aimed. A program
+//! handles that event within milliseconds or not at all: a cash script runs its trap,
+//! Python raises its interrupt, `ping` prints its statistics and carries on, PowerShell
+//! ignores it. So a console job gets a second after the Ctrl-Break, not the five an
+//! editor gets to offer to save, since Bash's `kill %1` ends such a job at once.
 
 use std::collections::HashMap;
 use std::io;
@@ -31,8 +38,13 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 
 use crate::handle::open_process;
 
-/// How long an asked program has to exit before it is terminated.
+/// How long a program asked through its window has to exit before it is terminated.
 pub const GRACE: Duration = Duration::from_secs(5);
+
+/// How long a console job asked with a Ctrl-Break has to exit before it is terminated.
+///
+/// A program handles the event within milliseconds or ignores it.
+pub const BREAK_GRACE: Duration = Duration::from_secs(1);
 
 struct Search {
     pid: u32,
@@ -78,9 +90,11 @@ unsafe extern "system" fn ask(hwnd: HWND, lparam: LPARAM) -> i32 {
     TRUE
 }
 
-/// Asks process `pid` to stop and returns at once (D21): a program with a window is
-/// asked to close and terminated if it is still running after `grace`; one without is
-/// terminated now.
+/// Asks process `pid` to stop and returns at once (D21).
+///
+/// A program with a window is asked to close and terminated if it is still running
+/// after `grace`; a console job cash started as a group leader gets a Ctrl-Break and
+/// [`BREAK_GRACE`]; one that is neither is terminated now.
 ///
 /// A process terminated exits with `status`, which the caller sets to POSIX's 128 + the
 /// signal's number, so `wait` reports what Bash reports.
@@ -89,11 +103,18 @@ pub fn request_stop(pid: u32, grace: Duration, status: u32) -> io::Result<()> {
 
     // A process cash started in a group of its own (a background job at the prompt) can
     // be sent a Ctrl-Break, which console programs handle as an interrupt. It is asked
-    // that way as well as through any windows, and terminated if it outlasts the grace.
+    // that way as well as through any windows, and terminated if it outlasts the grace:
+    // the window's when it has one to close, the Ctrl-Break's short one otherwise.
     let broke = interrupt_group(pid);
-    if close_windows(pid) == 0 && !broke {
+    let asked = close_windows(pid);
+    if asked == 0 && !broke {
         return terminate_handle(&handle, status);
     }
+    let grace = if asked == 0 {
+        BREAK_GRACE.min(grace)
+    } else {
+        grace
+    };
 
     // The thread owns the handle from here on, and closes it when it ends.
     let millis = u32::try_from(grace.as_millis()).unwrap_or(u32::MAX);

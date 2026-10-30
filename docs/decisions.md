@@ -1050,6 +1050,18 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   leftovers (recommended) and another corpus round. Not picked: POSIX `TZ` rules, raw
   bytes in place of U+FFFD. The round's suites (the user's pick of four not in the
   corpus): makeself, dehydrated, oh-my-bash and nb.
+- **The phase after 2.3.1** (the user, 2026-10-31, from a pick list, in this order): the
+  three Dependabot bumps taken on main by hand (lzma-rust2 0.24, parse_datetime 0.17,
+  rstest 0.28; recommended); `kill %1` on a console job that ignores Ctrl-Break
+  (recommended), with the user's pick of the three ways offered: **a short wait of about
+  a second for a console job**, Ctrl-Break first so that a script run as the job gets its
+  trap, a windowed program keeping its five seconds for `WM_CLOSE`; turned down: the
+  wording alone, and terminating at once with no Ctrl-Break; the console font after a
+  PowerShell in Windows Console; a corpus round of bash-git-prompt, basher, n, fzf's
+  shell files and bashly's generated examples, the downloads approved with the pick;
+  repository topics and the community files, not picked the phase before; and jobs
+  without a console with the `set -m` leftover. Not picked: the winget pull request
+  moved to 2.3.1.
 - **The phase after 2.3.0** (the user, 2026-10-30, from a pick list, in this order): the
   socket state `ss` and `lsof` read on this machine, found making the README's clips
   (recommended); cash on Scoop's Extras bucket; the upstream changes of issue 14 (sed,

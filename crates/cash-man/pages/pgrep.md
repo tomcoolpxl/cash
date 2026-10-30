@@ -62,8 +62,9 @@ Exit status: 0 when a process was found; 1 when none was; 2 for a bad option.
 - Names match in any case, and `.exe` is optional on either side: `pidof notepad`,
   `pidof NOTEPAD.EXE` and `pgrep -x notepad` all find `notepad.exe`.
 - Signals go as `kill` sends them: `TERM` asks a program with a window to close and
-  ends it after five seconds, ends a console program at once; `KILL` ends at once;
-  `STOP` and `CONT` suspend and resume.
+  ends it after five seconds, gives a background job a Ctrl-Break and a second, ends
+  any other console program at once; `KILL` ends at once; `STOP` and `CONT` suspend
+  and resume.
 - They never signal the shell running them, Windows' own system processes (`csrss`,
   `lsass`, `winlogon`, ...) or service accounts' processes. A process you may not open
   is skipped, not reported as a failure.

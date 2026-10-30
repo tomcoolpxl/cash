@@ -3290,3 +3290,24 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   and not yet listening (state 100, `Get-NetTCPConnection`'s `Bound`), and keeps a
   connection's state; `help ss` and `help lsof` say so. Three unit tests in `cash-win32`
   cover the rule, and the five `ss` and `lsof` tests that failed on this machine pass.
+- **`kill %1` takes five seconds on a background job that ignores Ctrl-Break**
+  (2026-10-30, making the README's jobs clip, `assets/demos/jobs.tape`): on
+  `cmd /c 'ping -n 100 127.0.0.1 > nul' &` and on `powershell -c 'sleep 100' &`, started
+  at the prompt, `jobs` three seconds after `kill %1` still says `Running`, and
+  `Terminated` comes at the next prompt after that; `python -c 'import time;
+  time.sleep(100)' &` is `Terminated` at once. So the Ctrl-Break goes out, and the job
+  is terminated five seconds later when it ignored it, as a windowed program is after
+  `WM_CLOSE`. `help job-control` reads as if only the windowed program gets those five
+  seconds ("a console program is ended at once, unless it is a background job, which
+  gets a Ctrl-Break"): say there that the background job, too, is terminated after
+  five seconds. In Bash, `kill %1` ends ping at once; whether the wait should be
+  shorter for a console job is a choice to make there. Done 2026-10-31 (the user's
+  pick, docs/decisions.md): reproduced in a console with `set -m`, where a Python that
+  ignores `SIGBREAK` and `ping` under `cmd` both lived 5.0 s after `kill %1`; in a
+  script without job control the job is terminated at once, as before, since it leads
+  no group a Ctrl-Break could be aimed at. A console job that was sent a Ctrl-Break now
+  gets a second before it is terminated (`stop::BREAK_GRACE`): a program handles the
+  event within milliseconds or ignores it, and Bash's `kill %1` ends such a job at
+  once; a program with a window keeps its five seconds for `WM_CLOSE`. `help
+  job-control`, `help kill` and `help pgrep` say so; the job-group test now checks that
+  `wait` returns within about a second, and failed with five.

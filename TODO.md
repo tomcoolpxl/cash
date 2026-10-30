@@ -25,6 +25,27 @@ for working through it. What is done, phases and findings, is in docs/DONE.md.
 
 ---
 
+## This phase (2026-10-31)
+
+Picked by the user from a pick list (docs/decisions.md, "The phase after 2.3.1"), in
+this order:
+
+1. the three Dependabot bumps taken on main by hand: lzma-rust2 0.22 to 0.24,
+   parse_datetime 0.17, rstest 0.28, with the full suite; Dependabot closes its pull
+   requests itself once main has the versions;
+2. `kill %1` on a console job that ignores Ctrl-Break (under "Found along the way"): a
+   short wait of about a second for a console job, five for a windowed program, and
+   `help job-control` saying so;
+3. Windows Console redrawing cash in another font after a PowerShell (under "Found along
+   the way"), reproduced in a conhost window here;
+4. a corpus round: bash-git-prompt, basher with its bats tests, n, fzf's shell files and
+   bashly's generated examples, each licence confirmed before its download;
+5. repository topics and the community files: a security policy, a code of conduct and
+   issue templates;
+6. jobs without a console (under "Traps, signals and jobs" below): job control in an
+   interactive cash whose input is a pipe, and a `set -m` script's job that ended
+   before `wait`.
+
 ## The phase before (2026-10-30, done, released as 2.3.1)
 
 Picked by the user from the stock-taking of 2026-10-30 (docs/decisions.md): the socket
@@ -406,19 +427,6 @@ What the phases now in docs/DONE.md left open, each where its phase says more. N
   the standard handles, would lift the limit.
 
 ## Found along the way
-
-- **`kill %1` takes five seconds on a background job that ignores Ctrl-Break**
-  (2026-10-30, making the README's jobs clip, `assets/demos/jobs.tape`): on
-  `cmd /c 'ping -n 100 127.0.0.1 > nul' &` and on `powershell -c 'sleep 100' &`, started
-  at the prompt, `jobs` three seconds after `kill %1` still says `Running`, and
-  `Terminated` comes at the next prompt after that; `python -c 'import time;
-  time.sleep(100)' &` is `Terminated` at once. So the Ctrl-Break goes out, and the job
-  is terminated five seconds later when it ignored it, as a windowed program is after
-  `WM_CLOSE`. `help job-control` reads as if only the windowed program gets those five
-  seconds ("a console program is ended at once, unless it is a background job, which
-  gets a Ctrl-Break"): say there that the background job, too, is terminated after
-  five seconds. In Bash, `kill %1` ends ping at once; whether the wait should be
-  shorter for a console job is a choice to make there.
 
 - **Windows Console redrew cash in another font after a PowerShell** (the user,
   2026-10-24, in Windows Sandbox: Windows 11 Enterprise 24H2, build 26100, no Windows

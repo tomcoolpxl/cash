@@ -43,8 +43,8 @@ itself. At the prompt, Ctrl-Z is the line editor's undo.
 
 - `kill %1` reaches the job's whole tree; `kill 1234` that one process.
 - `kill` and `kill -TERM` ask first: a program with a window gets `WM_CLOSE`, as from its
-  close button, and five seconds before it is terminated; a console program is ended at
-  once, unless it is a background job, which gets a Ctrl-Break.
+  close button, and five seconds before it is terminated; a background job gets a
+  Ctrl-Break, and a second; any other console program is ended at once.
 - `kill -9` terminates at once. A killed program's status is 128 plus the signal number:
   143 for `TERM`, 137 for `KILL`.
 - `kill -STOP` and `kill -CONT` suspend and resume, as Ctrl-Z and `fg` do.
