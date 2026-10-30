@@ -19,6 +19,9 @@ updates:
       - dependency-name: crossterm
       - dependency-name: "uu_*"
       - dependency-name: uucore
+      # parse_datetime moves with uu_date, which names its version: a newer one beside it
+      # would ship two copies, and `touch -d` would read dates otherwise than `date -d`.
+      - dependency-name: parse_datetime
 
   # The pinned commits in .github/workflows.
   - package-ecosystem: github-actions

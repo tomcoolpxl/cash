@@ -283,7 +283,7 @@ pub fn decompress(
 ) -> Result<u64, Broken> {
     let (read, alone) = match format {
         Format::Xz => (xz_streams(input, output, single_stream)?, false),
-        Format::Lzip => (drive(&mut LzipStream::new(), input, output)?, false),
+        Format::Lzip => (drive(&mut LzipStream::new(true), input, output)?, false),
         Format::Lzma => {
             // The decoder takes all it is given; what it took past the stream's end
             // it gives back, and that follows the stream as much as the rest does.
