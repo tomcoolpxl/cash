@@ -428,15 +428,6 @@ What the phases now in docs/DONE.md left open, each where its phase says more. N
 
 ## Found along the way
 
-- **Windows Console redrew cash in another font after a PowerShell** (the user,
-  2026-10-24, in Windows Sandbox: Windows 11 Enterprise 24H2, build 26100, no Windows
-  Terminal, cash 2.2.0 from the Start menu). After `powershell -c "irm get.scoop.sh |
-  iex"`, which stopped at once on the execution policy, the whole window, the text
-  before it too, was drawn in a small, half-height bitmap-like font. A console's font
-  changes with its code page, so the code page probably changed; not yet looked into.
-  Reproduce in the Sandbox with `powershell -c exit`, compare with Git Bash in the same
-  console, and see whether cash's UTF-8 code page or PowerShell's exit is what changes it.
-
 - **No scheduled tasks** (the user, 2026-10-23): an elevated step, such as a samply or
   wpr profile, stays one the user runs by hand (`sudo pwsh -File ...`); a task with
   highest privileges that cash or Claude could start later was turned down as dangerous.

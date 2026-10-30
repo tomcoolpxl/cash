@@ -32,8 +32,9 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use windows_sys::Win32::Foundation::{FALSE, STILL_ACTIVE};
 use windows_sys::Win32::System::Console::{
-    CTRL_BREAK_EVENT, CTRL_C_EVENT, GenerateConsoleCtrlEvent, SetConsoleCP, SetConsoleCtrlHandler,
-    SetConsoleOutputCP,
+    CONSOLE_FONT_INFOEX, CTRL_BREAK_EVENT, CTRL_C_EVENT, GenerateConsoleCtrlEvent,
+    GetCurrentConsoleFontEx, SetConsoleCP, SetConsoleCtrlHandler, SetConsoleOutputCP,
+    SetCurrentConsoleFontEx,
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
@@ -284,24 +285,61 @@ const EXTENDED_FLAGS: u32 = 0x0080;
 /// [`repair_before_prompt`] to put back.
 static STARTING_INPUT: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
 
-/// Remembers the console's input settings as cash starts, before any program can change
-/// them, for [`repair_before_prompt`]. Without a console, nothing is remembered.
+/// The console's font as cash started, for [`repair_before_prompt`] to put back.
+static STARTING_FONT: std::sync::OnceLock<CONSOLE_FONT_INFOEX> = std::sync::OnceLock::new();
+
+/// `TMPF_TRUETYPE` in a font's family: a TrueType font, not a raster one.
+const TRUETYPE: u32 = 0x04;
+
+/// Remembers the console's input settings and its font as cash starts, before any
+/// program can change them, for [`repair_before_prompt`]. Without a console, nothing is
+/// remembered.
 pub fn remember_starting_modes() {
     use std::os::windows::io::AsRawHandle as _;
     use windows_sys::Win32::System::Console::GetConsoleMode;
 
-    let Ok(input) = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open("CONIN$")
-    else {
-        return;
+    let open = |name: &str| {
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(name)
     };
-    let mut mode = 0u32;
-    // SAFETY: an open console handle owned by `input`, and a valid out-parameter.
-    if unsafe { GetConsoleMode(input.as_raw_handle(), &raw mut mode) } != 0 {
-        let _ = STARTING_INPUT.set(mode & SETTINGS);
+    if let Ok(input) = open("CONIN$") {
+        let mut mode = 0u32;
+        // SAFETY: an open console handle owned by `input`, and a valid out-parameter.
+        if unsafe { GetConsoleMode(input.as_raw_handle(), &raw mut mode) } != 0 {
+            let _ = STARTING_INPUT.set(mode & SETTINGS);
+        }
     }
+    if let Ok(output) = open("CONOUT$")
+        && let Some(font) = console_font(&output)
+    {
+        let _ = STARTING_FONT.set(font);
+    }
+}
+
+/// The font of the console `output` draws with, if it reports one.
+fn console_font(output: &std::fs::File) -> Option<CONSOLE_FONT_INFOEX> {
+    // SAFETY: a plain record of integers and a name, which the call fills in.
+    let mut font: CONSOLE_FONT_INFOEX = unsafe { std::mem::zeroed() };
+    font.cbSize = u32::try_from(std::mem::size_of::<CONSOLE_FONT_INFOEX>()).unwrap_or(u32::MAX);
+    // SAFETY: an open console handle owned by `output`, and a valid out-parameter whose
+    // size is set.
+    (unsafe { GetCurrentConsoleFontEx(output.as_raw_handle(), FALSE, &raw mut font) } != 0)
+        .then_some(font)
+}
+
+/// Whether a program left a raster font where cash started with a TrueType one, given
+/// the two fonts' families.
+///
+/// Windows PowerShell 5.1, run in a Windows Console window whose code page is UTF-8,
+/// which cash's is, switches the console to the raster `Terminal` font, 8 by 12 pixels,
+/// and the whole window is redrawn in it (seen 2026-10-24 in Windows Sandbox, and in a
+/// console `cmd` owned, so it is PowerShell's doing; PowerShell 7 and the code pages
+/// 437 and 1252 leave the font alone). Only that way round is put back: a raster font
+/// cash started with was chosen, and stays.
+const fn raster_replaced_truetype(starting: u32, current: u32) -> bool {
+    starting & TRUETYPE != 0 && current & TRUETYPE == 0
 }
 
 /// The input mode to have at a prompt, given the `current` one and the settings cash
@@ -351,6 +389,9 @@ pub struct Repaired {
     pub code_page: bool,
     /// A program ran, and the terminal reset was sent.
     pub terminal: bool,
+    /// A program left a raster font where cash started with a TrueType one, and the
+    /// starting font was put back.
+    pub font: bool,
 }
 
 /// Puts back, before a prompt, the console state a program may have left wrong (D68).
@@ -360,7 +401,8 @@ pub struct Repaired {
 /// what is wrong is changed, silently: VT input off, and the input settings as cash
 /// started ([`remember_starting_modes`]); processed output, wrapping and VT processing on,
 /// and line feeds returning to the margin; the UTF-8 code page (D41); and, when a program
-/// ran since the last prompt, [`TERMINAL_RESET`]. The line editor's own raw mode is its
+/// ran since the last prompt, [`TERMINAL_RESET`], and the starting font where the program
+/// left a raster one ([`raster_replaced_truetype`]). The line editor's own raw mode is its
 /// business and is left to it. Without a console, nothing is done.
 pub fn repair_before_prompt() -> Repaired {
     use std::io::Write as _;
@@ -420,6 +462,15 @@ pub fn repair_before_prompt() -> Repaired {
             .write_all(TERMINAL_RESET.as_bytes())
             .and_then(|()| output.flush())
             .is_ok();
+        if let Some(starting) = STARTING_FONT.get()
+            && let Some(current) = console_font(&output)
+            && raster_replaced_truetype(starting.FontFamily, current.FontFamily)
+        {
+            // SAFETY: an open console handle owned by `output`, and the font record
+            // remembered at the start, alive for the call.
+            repaired.font =
+                unsafe { SetCurrentConsoleFontEx(output.as_raw_handle(), FALSE, starting) } != 0;
+        }
     }
     repaired
 }
@@ -745,6 +796,20 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Only a raster font in place of the TrueType one cash started with is put back:
+    /// a raster font chosen before cash started stays, and a TrueType font a program
+    /// changed to another TrueType font is the user's choice.
+    #[test]
+    fn only_a_raster_font_in_place_of_a_truetype_one_is_put_back() {
+        const CONSOLAS: u32 = 0x36;
+        const TERMINAL: u32 = 0x30;
+        assert!(raster_replaced_truetype(CONSOLAS, TERMINAL));
+        assert!(!raster_replaced_truetype(TERMINAL, TERMINAL));
+        assert!(!raster_replaced_truetype(TERMINAL, CONSOLAS));
+        assert!(!raster_replaced_truetype(CONSOLAS, CONSOLAS));
+        assert!(!raster_replaced_truetype(CONSOLAS, 0x04));
+    }
 
     /// A second Ctrl-C soon after the first is the key pressed twice; only one that comes
     /// once the first has waited two seconds says the shell is stuck.

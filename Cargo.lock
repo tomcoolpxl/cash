@@ -578,6 +578,7 @@ dependencies = [
  "unicode-width 0.2.2",
  "uuid",
  "which",
+ "windows-sys 0.61.2",
  "winresource",
 ]
 

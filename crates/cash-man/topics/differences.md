@@ -137,6 +137,10 @@ and in the fewest places it can.
   `bind '"\C-r": reverse-search-history'` puts the search back (see `help keys`).
 - `exec -a NAME` and `exec -l` are refused for programs other than cash: Windows cannot
   give a program an `argv[0]` of its own.
+- In a Windows Console window (no Windows Terminal), Windows PowerShell 5.1 switches the
+  font to the raster one, 8 by 12 pixels, when the console's code page is UTF-8, as
+  cash's is; the whole window is redrawn in it. cash puts its starting font back at the
+  next prompt. PowerShell 7 and the other code pages leave the font alone.
 
 ## Not there
 

@@ -64,6 +64,8 @@ mod completion_scripts;
 // D40: completion is the one part of the shell with no command-line surface, so these
 // drive a `Shell` directly.
 mod completion_windows;
+// D68: the font of a Windows Console window after a program switched it to a raster one.
+mod console_font;
 // `column`, util-linux's, against its golden output and on its own.
 mod column_builtin;
 // coolfetch system banner.

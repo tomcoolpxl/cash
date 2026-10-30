@@ -88,6 +88,15 @@ cash-man = { workspace = true }
 cash-test-harness = { workspace = true, features = ["insta"] }
 # The pseudo console the terminal tests drive cash on (W32-12).
 cash-win32 = { workspace = true, features = ["pseudo-console"] }
+# The console-window test starts cash in a console of its own, minimized, attaches to it
+# and types into it: a windowless console draws with no font.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Console",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
 assert_cmd = { workspace = true }
 # Checks the Windows Terminal profile GUID against Terminal's own derivation (UUIDv5).
 uuid = { workspace = true, features = ["v5"] }

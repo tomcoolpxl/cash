@@ -3311,3 +3311,23 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   once; a program with a window keeps its five seconds for `WM_CLOSE`. `help
   job-control`, `help kill` and `help pgrep` say so; the job-group test now checks that
   `wait` returns within about a second, and failed with five.
+- **Windows Console redrew cash in another font after a PowerShell** (the user,
+  2026-10-24, in Windows Sandbox: Windows 11 Enterprise 24H2, build 26100, no Windows
+  Terminal, cash 2.2.0 from the Start menu). After `powershell -c "irm get.scoop.sh |
+  iex"`, which stopped at once on the execution policy, the whole window, the text
+  before it too, was drawn in a small, half-height bitmap-like font. Done 2026-10-31 (the
+  user's pick): reproduced here on build 26300 in a minimized console window, read with
+  `GetCurrentConsoleFontEx` from a process attached to it. It is Windows PowerShell 5.1
+  (5.1.26100.9818): run in a console whose code page is UTF-8, it switches the font from
+  the TrueType default (Consolas 7x16) to the raster `Terminal` 8x12, in a console `cmd`
+  owns as much as in cash's, so cash's UTF-8 code page (D41) is what exposes it; the
+  code pages 437 and 1252 and PowerShell 7 leave the font alone, and so do a code page
+  change by itself, `cmd`, Python, a title change and the screen-buffer calls. Git Bash
+  never sees it since MSYS leaves the console at its OEM code page. cash now remembers
+  the console's font as it starts, with the input settings, and puts it back before the
+  prompt after a program ran, where that program left a raster font in place of a
+  TrueType one (D68, `console::raster_replaced_truetype`); a raster font chosen before
+  cash started stays. `help differences` says so. A unit test covers the rule, and an
+  integration test starts cash in a minimized console window of its own, sets the raster
+  font from outside as PowerShell does, runs `cmd /c exit` through cash and reads the
+  font back; it failed without the fix.
