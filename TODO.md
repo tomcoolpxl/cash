@@ -25,6 +25,17 @@ for working through it. What is done, phases and findings, is in docs/DONE.md.
 
 ---
 
+## The phase before (2026-10-30, done, released as 2.3.1)
+
+Picked by the user from the stock-taking of 2026-10-30 (docs/decisions.md): the socket
+state `ss` and `lsof` read on this machine, found making the README's clips (Windows 11
+26H2 reports a listener's state as 0 or a connection's; a TCP row without a peer is a
+listener now, in docs/DONE.md); cash on Scoop's Extras bucket (left waiting: its request
+form needs 100 stars, docs/listings.md); the upstream changes of issue 14 (`cmp -b`'s
+padding ported, the rest already as GNU has it, upstreams.toml); and Show HN and Reddit
+drafts for the user to post (docs/announcements.md). On the way: the README's one-binary
+pitch and the package descriptions, and the ports clip rendered again with 2.3.1.
+
 ## The phase before (2026-10-24, done, released as 2.2.0)
 
 Picked by the user: the raw escape codes before the first prompt in Windows Console;
