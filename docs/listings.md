@@ -11,9 +11,9 @@ software that is not open source ([decisions](decisions.md), section 10).
 
 <https://github.com/oils-for-unix/oils/wiki/Alternative-Shells>, section "Active / New
 POSIX Shells", where Brush and GSH (a POSIX shell for Windows) are. The page says it is
-editable and asks for links to significant shells; any GitHub account can edit it. The
-entry, in the section's style (link, two hyphens, the project's own words in italics,
-then notes), placed right after Brush:
+editable and asks for links to significant shells; any GitHub account can edit it.
+Added 2026-10-30 under the user's account, right after Brush, in the section's style
+(link, two hyphens, the project's own words in italics, then notes):
 
 ```markdown
 [cash](https://github.com/tomcoolpxl/cash) -- *A bash-language shell whose execution model is Win32, hosted in Windows Terminal.  No POSIX emulation layer, no VM, no msys-2.0.dll underneath.*  Bash 5.3 compatible: about 900 scripts from 50 projects give the same output as Git Bash 5.3.  Written in Rust, absorbed from Brush and modified; carries the Unix userland (coreutils, sed, awk, grep, find, tar, zip, 7z, rar, lsof, ss, top) built in, so a bare Windows machine gets a complete Bash.
