@@ -409,15 +409,6 @@ What the phases now in docs/DONE.md left open, each where its phase says more. N
   five seconds. In Bash, `kill %1` ends ping at once; whether the wait should be
   shorter for a console job is a choice to make there.
 
-- **`ss -ltn` printed `UNCONN` for a listening socket** (2026-10-30, making the
-  README's ports clip, `assets/demos/ports.tape`): with `python -m http.server 8080 &`
-  up for two seconds, `ss -ltn` listed `0.0.0.0:8080` and `[::]:8080` with State
-  `UNCONN`, where iproute2 prints `LISTEN`; `lsof -i :8080` found the same socket and
-  printed it `(CLOSED)`, and `lsof -i` on this machine prints `(CLOSED)` on every row,
-  System's listeners included. So the state is read wrong for every socket, not only
-  this one: the TCP tables' state field, or its mapping to iproute2's numbering. Compare
-  with `netstat -ano`, which says `LISTENING`.
-
 - **Windows Console redrew cash in another font after a PowerShell** (the user,
   2026-10-24, in Windows Sandbox: Windows 11 Enterprise 24H2, build 26100, no Windows
   Terminal, cash 2.2.0 from the Start menu). After `powershell -c "irm get.scoop.sh |

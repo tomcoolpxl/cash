@@ -71,5 +71,8 @@ program and loaded modules, and the TCP and UDP tables with their owning process
   directory cannot be seen.
 - `lsof`'s FD column is `txt`, `mem` or `-`; DEVICE and NODE are `-` (`TCP` or `UDP` for
   sockets). `lsof -p PID` does not list the process's data files.
+- A TCP socket without a peer is `(LISTEN)` whatever state Windows reports for it:
+  Windows 11 26H2 gives a listener no state, or a connection's, and `netstat` drops the
+  row.
 - Refused: `fuser -m`, `-c`, `-M` and `-w`; `lsof -U`, `lsof` with no selection, and
   lsof's field and repeat modes.

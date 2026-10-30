@@ -216,6 +216,23 @@ fn rows<T: Copy>(buffer: &[u64]) -> Vec<T> {
         .collect()
 }
 
+/// The state of a TCP row. Windows 11 26H2 (build 26300) reports a listening socket's
+/// state as 0, which is no state, or as one only a connection can be in (`CLOSED`,
+/// `FIN_WAIT1`), and a second read can say otherwise; `netstat` drops such rows, and
+/// the builds before report `LISTEN`. So the peer decides, not the number: a TCP row
+/// without a peer is a listener, unless Windows marks it bound and not yet listening
+/// (100, the `Bound` state `Get-NetTCPConnection` names). A row with a peer keeps the
+/// state Windows reports.
+const fn tcp_state(raw: u32, has_peer: bool) -> TcpState {
+    const BOUND: u32 = 100;
+    let state = TcpState::from_mib(raw);
+    if has_peer || raw == BOUND {
+        state
+    } else {
+        TcpState::Listen
+    }
+}
+
 fn tcp(family: u16) -> io::Result<Vec<Socket>> {
     let buffer = fetch_table(|table, size| {
         // SAFETY: `table` is null or a buffer of `*size` bytes; `size` is writable.
@@ -234,7 +251,8 @@ fn tcp(family: u16) -> io::Result<Vec<Socket>> {
         rows::<MIB_TCPROW_OWNER_PID>(&buffer)
             .into_iter()
             .map(|row| {
-                let state = TcpState::from_mib(row.dwState);
+                let has_peer = row.dwRemoteAddr != 0 || port(row.dwRemotePort) != 0;
+                let state = tcp_state(row.dwState, has_peer);
                 Socket {
                     proto: Proto::Tcp,
                     local: SocketAddr::new(
@@ -254,7 +272,8 @@ fn tcp(family: u16) -> io::Result<Vec<Socket>> {
         rows::<MIB_TCP6ROW_OWNER_PID>(&buffer)
             .into_iter()
             .map(|row| {
-                let state = TcpState::from_mib(row.dwState);
+                let has_peer = row.ucRemoteAddr != [0; 16] || port(row.dwRemotePort) != 0;
+                let state = tcp_state(row.dwState, has_peer);
                 Socket {
                     proto: Proto::Tcp,
                     local: v6_addr(row.ucLocalAddr, row.dwLocalPort, row.dwLocalScopeId),
@@ -423,7 +442,8 @@ pub fn sockets_with_owners(protos: &[Proto], v4: bool, v6: bool) -> io::Result<V
             match (proto, family == AF_INET) {
                 (Proto::Tcp, true) => {
                     all.extend(rows::<MIB_TCPROW_OWNER_MODULE>(&buffer).iter().map(|row| {
-                        let state = TcpState::from_mib(row.dwState);
+                        let has_peer = row.dwRemoteAddr != 0 || port(row.dwRemotePort) != 0;
+                        let state = tcp_state(row.dwState, has_peer);
                         Socket {
                             proto,
                             local: SocketAddr::new(
@@ -447,7 +467,8 @@ pub fn sockets_with_owners(protos: &[Proto], v4: bool, v6: bool) -> io::Result<V
                 }
                 (Proto::Tcp, false) => {
                     all.extend(rows::<MIB_TCP6ROW_OWNER_MODULE>(&buffer).iter().map(|row| {
-                        let state = TcpState::from_mib(row.dwState);
+                        let has_peer = row.ucRemoteAddr != [0; 16] || port(row.dwRemotePort) != 0;
+                        let state = tcp_state(row.dwState, has_peer);
                         Socket {
                             proto,
                             local: v6_addr(row.ucLocalAddr, row.dwLocalPort, row.dwLocalScopeId),
@@ -1173,6 +1194,39 @@ pub fn service_names() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tcp_row_without_a_peer_is_a_listener_whatever_state_windows_reports() {
+        use windows_sys::Win32::NetworkManagement::IpHelper::MIB_TCP_STATE_CLOSED;
+        // Windows 11 26H2 reports 0, CLOSED or FIN_WAIT1 for a listener; the builds
+        // before report LISTEN.
+        for raw in [
+            0,
+            MIB_TCP_STATE_CLOSED.cast_unsigned(),
+            MIB_TCP_STATE_FIN_WAIT1.cast_unsigned(),
+            MIB_TCP_STATE_LISTEN.cast_unsigned(),
+        ] {
+            assert_eq!(tcp_state(raw, false), TcpState::Listen, "state {raw}");
+        }
+    }
+
+    #[test]
+    fn a_bound_socket_that_does_not_listen_is_not_a_listener() {
+        assert_eq!(tcp_state(100, false), TcpState::Closed);
+    }
+
+    #[test]
+    fn a_connection_keeps_the_state_windows_reports() {
+        assert_eq!(
+            tcp_state(MIB_TCP_STATE_ESTAB.cast_unsigned(), true),
+            TcpState::Established
+        );
+        assert_eq!(
+            tcp_state(MIB_TCP_STATE_FIN_WAIT1.cast_unsigned(), true),
+            TcpState::FinWait1
+        );
+        assert_eq!(tcp_state(0, true), TcpState::Closed);
+    }
 
     #[test]
     fn the_services_file_names_the_well_known_ports() {

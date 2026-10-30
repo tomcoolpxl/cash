@@ -1050,6 +1050,13 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   leftovers (recommended) and another corpus round. Not picked: POSIX `TZ` rules, raw
   bytes in place of U+FFFD. The round's suites (the user's pick of four not in the
   corpus): makeself, dehydrated, oh-my-bash and nb.
+- **The phase after 2.3.0** (the user, 2026-10-30, from a pick list, in this order): the
+  socket state `ss` and `lsof` read on this machine, found making the README's clips
+  (recommended); cash on Scoop's Extras bucket; the upstream changes of issue 14 (sed,
+  diffutils, sevenz-rust2); and Show HN and Reddit drafts for the user to post
+  (recommended), nothing posted from here. Not picked: repository topics and the
+  community files (code of conduct, security policy, issue templates), and a This Week
+  in Rust entry.
 - **`tput` honours `TERM=dumb`** (the user, 2026-10-23, from a pick list, recommended):
   a dumb terminal has auto margins, its columns and lines, a bell, a carriage return and
   a line feed, as ncurses' does, so Emacs' shell, IDE terminals and CI that set it get no

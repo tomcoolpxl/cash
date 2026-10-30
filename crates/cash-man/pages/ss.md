@@ -54,7 +54,10 @@ Exit status: 0, or 1 for an option or a filter it does not take.
 
 It reads Windows' TCP and UDP tables, IPv4 and IPv6. `-p` prints `fd=-`, and a service
 inside `svchost.exe` is named (`service=NAME`); UDP sockets have no peer and are always
-`UNCONN`. Windows collects a connection's statistics only once an elevated shell switches
+`UNCONN`. A TCP socket without a peer is `LISTEN` whatever state Windows reports for it:
+Windows 11 26H2 gives a listener no state, or a connection's, and `netstat` drops the
+row; a socket bound and not yet listening stays `UNCONN`. Windows collects a
+connection's statistics only once an elevated shell switches
 them on: `ss -i` shows the SYN's MSS values, and `sudo ss -i` switches collection on (it
 stays on until the connection closes) and shows round-trip times, windows and counts;
 until then Recv-Q and Send-Q print `0`. `dev NAME` matches an IPv6 socket's scope; other

@@ -3273,3 +3273,20 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   font's, `--glyphs` shows both, `--demo` plays by itself. Crate `cash-sextant`; the
   page is on F1 and `man`. Checked in an interactive cash in a pseudo-console: it draws
   with the soft font, `q` quits, the prompt comes back with status 0.
+- **`ss -ltn` printed `UNCONN` for a listening socket** (2026-10-30, making the
+  README's ports clip, `assets/demos/ports.tape`): with `python -m http.server 8080 &`
+  up for two seconds, `ss -ltn` listed `0.0.0.0:8080` and `[::]:8080` with State
+  `UNCONN`, where iproute2 prints `LISTEN`; `lsof -i :8080` found the same socket and
+  printed it `(CLOSED)`, and `lsof -i` on this machine prints `(CLOSED)` on every row,
+  System's listeners included. Done 2026-10-30: it is Windows 11 26H2 (build 26300,
+  on this machine since the 2026-10-29 update), not cash's reading. `GetExtendedTcpTable`
+  and NSI report a listener's state as 0, which is no state, or as `CLOSED` or
+  `FIN_WAIT1`, and differently at the next read: of 293 rows, 117 without a peer had
+  state 0, and three fresh listeners (IPv4-only, IPv6-only, dual-stack) all had 0.
+  `netstat` drops such rows, PowerShell's `Get-NetTCPConnection` prints a blank state,
+  and an independent report on the same build saw psutil print `NONE`
+  (d-s-t/ansys-analyze-worker#11); build 26200 and CI's Windows report `LISTEN`.
+  cash now takes a TCP row without a peer for a listener unless Windows marks it bound
+  and not yet listening (state 100, `Get-NetTCPConnection`'s `Bound`), and keeps a
+  connection's state; `help ss` and `help lsof` say so. Three unit tests in `cash-win32`
+  cover the rule, and the five `ss` and `lsof` tests that failed on this machine pass.
