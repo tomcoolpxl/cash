@@ -30,11 +30,8 @@ cash sorts first. The line:
 * [cash](https://github.com/tomcoolpxl/cash) - A Bash 5.3 shell for Windows on the Win32 execution model, with the Unix userland built in
 ```
 
-Pull request title: `Add cash under bash/PowerShell/fish`. Body: "cash is a Bash-
-language shell for Windows written in Rust: native Win32 processes, paths and job
-objects rather than a POSIX emulation layer, with coreutils, sed, awk, grep and the
-archivers built in. It replaces Git Bash and MSYS2 for running bash scripts on
-Windows."
+Pull request: <https://github.com/TaKO8Ki/awesome-alternatives-in-rust/pull/167>, opened
+2026-10-30 from the fork `tomcoolpxl/awesome-alternatives-in-rust`, branch `add-cash`.
 
 ## Later: each needs 50 GitHub stars
 
