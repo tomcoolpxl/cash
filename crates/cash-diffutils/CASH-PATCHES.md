@@ -84,6 +84,9 @@ and `cmp_cases.sh`. Every change is listed here.
   `cmp (cash): GNU diffutils 3.12's options, from uutils diffutils`.
 - `cmp: EOF on 'x' ...` quotes the name as GNU does: `‘x’` when the locale names UTF-8,
   `'x'` otherwise (`utils::quote`).
+- `-b` prints the two bytes one space apart whatever the second is: upstream padded
+  the first byte's column to two when the second byte was 0x7F or above (`141 a  303
+  M-C`, GNU: `141 a 303 M-C`), and fixed the same on 2026-10-26 (`7d74753c`).
 - `is_posix_locale`, which chooses `char` over `byte` in the message, is cash's rule:
   only a locale named `C` or `POSIX` is POSIX; none named is UTF-8, as it is for the
   rest of cash (GNU takes none named as `C`).

@@ -27,7 +27,7 @@ echo "== -n N"; cmp -n 5 c1 c2; echo "rc=$?"; cmp -n 6 c1 c2; echo "rc=$?"; cmp 
 echo "== -n with EOF"; cmp -n 100 c1 c3; echo "rc=$?"; cmp -n 4 c1 c3; echo "rc=$?"
 echo "== suffixes"; printf 'aaaaaaaaaaaaaaaa' > w1; printf 'aaaaaaaaaaaaaaab' > w2; cmp -i 1k w1 w2; echo "rc=$?"; cmp -n 1K w1 w2; echo "rc=$?"; cmp -i 2kB w1 w2; echo "rc=$?"
 echo "== -l widths"; cmp -l w1 w2; printf 'aaaaaaaaab' > w3; cmp -l w1 w3; echo "rc=$?"; cmp -l w3 w1
-echo "== -b high bytes"; printf '\377\n' > h1; printf '\177\n' > h2; printf '\001\n' > h3; printf ' \n' > h4; cmp -b h1 h2; cmp -lb h1 h2; cmp -b h3 h4; cmp -lb h3 h4
+echo "== -b high bytes"; printf '\377\n' > h1; printf '\177\n' > h2; printf '\001\n' > h3; printf ' \n' > h4; cmp -b h1 h2; cmp -lb h1 h2; cmp -b h3 h4; cmp -lb h3 h4; printf 'a' > h5; printf '\303' > h6; cmp -b h5 h6; cmp -lb h5 h6
 echo "== differing lengths, long"; seq 1 3000 > big1; seq 1 3000 | sed 's/^2999$/x/' > big2; cmp big1 big2; echo "rc=$?"; cmp -l big1 big2; head -c 5000 big1 > big3; cmp big1 big3; echo "rc=$?"
 echo "== stdin"; printf 'abc\n' | cmp - c3; echo "rc=$?"; printf 'abd\n' | cmp c3; echo "rc=$?"; printf 'abd\n' | cmp c3 -; echo "rc=$?"; printf 'abc\n' | cmp -l - c3; echo "rc=$?"
 echo "== missing"; cmp nosuch c1; echo "rc=$?"; cmp c1 nosuch; echo "rc=$?"; cmp -s nosuch c1; echo "rc=$?"

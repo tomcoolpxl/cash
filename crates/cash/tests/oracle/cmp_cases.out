@@ -90,6 +90,8 @@ h1 h2 differ: byte 1, line 1 is 377 M-^? 177 ^?
 1 377 M-^? 177 ^?
 h3 h4 differ: byte 1, line 1 is   1 ^A  40  
 1   1 ^A    40  
+h5 h6 differ: byte 1, line 1 is 141 a 303 M-C
+1 141 a    303 M-C
 == differing lengths, long
 big1 big2 differ: byte 13884, line 2999
 rc=1
