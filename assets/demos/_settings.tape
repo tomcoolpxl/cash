@@ -1,10 +1,13 @@
 # Shared by every demo tape (`Source "_settings.tape"`, after its own `Set Width` and
 # `Set Height`): the font, the colours of Windows Terminal's Campbell scheme, then cash
 # started from cmd, hidden. VHS starts a shell from a fixed list, so the tape starts cmd
-# and types `cash` into it.
+# and types `cash` into it. The font is the Nerd Font build of Cascadia Mono
+# (`scoop install nerd-fonts/CascadiaMono-NF`): Cascadia as Windows ships it predates
+# the sextant glyphs the sextant clip draws with. A `Set` after this `Source` comes too
+# late for the font: the terminal is open by then.
 
 Set Shell cmd
-Set FontFamily "Cascadia Mono"
+Set FontFamily "CaskaydiaMono NF"
 Set FontSize 20
 Set Padding 20
 Set Framerate 15

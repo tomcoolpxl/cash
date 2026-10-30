@@ -45,17 +45,13 @@ gives a complete Bash: the coreutils, `awk`, `sed`, `grep`, `diff`, `find`, `xar
   <tr>
     <td align="center"><b>Help</b>: <code>man</code> is a browser, <code>help</code> prints, a missing command names its package<br>
       <img src="assets/demos/help.gif" width="480" alt="figlet prints big letters, bat not found names the winget and scoop packages, help -d describes commands, man sed opens the page browser"></td>
-    <!-- sextant.gif is recorded by hand (assets/demos/README.md); once it is there:
-    <td align="center"><b>sextant</b>, a shooter drawn with text, because a shell should have one<br>
-      <img src="assets/demos/sextant.gif" width="480" alt="the sextant game running in Windows Terminal"></td>
-    -->
+    <td align="center"><b>sextant</b>, a shooter drawn with text, two by three pixels to a cell, because a shell should have one<br>
+      <img src="assets/demos/sextant.gif" width="480" alt="the sextant game playing itself: a wave of enemies, dives, shots and the player's ship, drawn two by three pixels to a terminal cell"></td>
   </tr>
 </table>
 
 The clips are rendered from the tapes in [assets/demos](assets/demos) with
-[VHS](https://github.com/charmbracelet/vhs). `sextant`, the shooter drawn with text, is
-not among them: its font is one cash sends the terminal, which only Windows Terminal
-draws, so its clip is a screen recording.
+[VHS](https://github.com/charmbracelet/vhs), all of them by `scripts\render-demos.ps1`.
 
 ## Install
 

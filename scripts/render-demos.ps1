@@ -1,7 +1,8 @@
 # Renders the README's demo clips: assets\demos\*.tape -> assets\demos\*.gif, through VHS,
 # then gifsicle shrinks them. Needs vhs, ttyd, ffmpeg, gifsicle and Scoop's chromium on
-# this machine (`scoop install vhs ttyd ffmpeg gifsicle extras/chromium`), and the
-# released cash on PATH. sextant.gif is recorded by hand: assets\demos\README.md.
+# this machine (`scoop install vhs ttyd ffmpeg gifsicle extras/chromium`), the released
+# cash on PATH, and the clips' font, the Nerd Font build of Cascadia Mono
+# (`scoop bucket add nerd-fonts; scoop install nerd-fonts/CascadiaMono-NF`).
 #
 #   powershell -File scripts\render-demos.ps1            # every tape
 #   powershell -File scripts\render-demos.ps1 paths top  # these two
