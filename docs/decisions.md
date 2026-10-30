@@ -1239,6 +1239,12 @@ no); requiring a font with the sextants. Tests are light, as the user asked: the
 - **The release zip's name never changes**: `cash --update` and Scoop depend on it.
 - **The blank first Terminal tab after an update stays** (the user, 2026-10-06): it is
   Windows Terminal's first launch of a rewritten fragment, not cash's start.
+- **No listing on remade.wiki** (the user, 2026-10-30): the catalog lists independent
+  reimplementations of software that is not open source, and its policy says a rewrite
+  of an open-source program does not normally qualify. cash is its own thing built on
+  free software, Bash's language and brush's code, not a stand-in for a commercial
+  product, so the request was drafted, read and dropped. An awesome list is the place
+  to be found instead.
 
 ## 11. Building, testing and releasing
 
