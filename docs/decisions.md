@@ -1070,6 +1070,18 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   complaint does not reach the maintainer privately. Turned down: the address in the
   code of conduct alone, the address in both files, another alias, a Discussions
   category for conduct reports.
+- **The phase after 2.3.2** (the user, 2026-10-31, from a pick list, in this order):
+  Dependabot's parking_lot 0.13 taken on main by hand, with its two stale pull requests
+  updated onto main (recommended); the winget submission answered at 2.3.2 with the
+  manifest schema version the repository accepts (recommended); `exit N` in a function
+  the `EXIT` trap calls (recommended); `read -t` keeping the line typed before its
+  timeout at a console; POSIX `TZ` rules with daylight saving; and a corpus round of
+  git-secrets, pyenv-virtualenv, jenv, goenv, neofetch and shdoc, every source group
+  picked, the round itself confirmed in a second question since it was not among the
+  first picks. Not picked: `eval 'break 1 2'` in a subshell ending with 2, and 7z at
+  7-Zip's speed (parked: a match-finder thread means taking lzma-rust2 in as cash's own).
+  Looked at for the list: Bash's patches 5.3.16 to 20 (Git Bash is at 5.3.15) are macOS
+  and readline display fixes with nothing for cash.
 - **The phase after 2.3.0** (the user, 2026-10-30, from a pick list, in this order): the
   socket state `ss` and `lsof` read on this machine, found making the README's clips
   (recommended); cash on Scoop's Extras bucket; the upstream changes of issue 14 (sed,
