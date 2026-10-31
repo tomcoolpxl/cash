@@ -156,11 +156,14 @@ slow-timeout = { period = "30s", terminate-after = 3 }
 # bashunit and git-subrepo joined (2026-10-19); past 90 s on CI's four cores once bashdb,
 # bash_unit, bats-file, composure and direnv did, and past four periods since
 # (2026-10-20); 169 s on a debug build once makeself, dehydrated, oh-my-bash and nb's two
-# cases joined (2026-10-23). A case that hangs is ended by its own timeout and named.
+# cases joined (2026-10-23); 349 s on CI, and a retry, before git-secrets and goenv
+# joined, each about two minutes alone on a debug build and trimmed to that, so the
+# budget is ten minutes (2026-10-31). A case that hangs is ended by its own timeout and
+# named.
 [[profile.default.overrides]]
 filter = 'binary(it) and test(=corpus_goldens::every_corpus_case_gives_the_oracles_output)'
 threads-required = 8
-slow-timeout = { period = "30s", terminate-after = 12 }
+slow-timeout = { period = "30s", terminate-after = 20 }
 
 # Makes about forty git repositories (15 s idle) and runs 115 prompt cases in them, eight
 # at a time (25 s idle; tests/git-prompt-differential.sh).

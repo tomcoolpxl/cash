@@ -286,6 +286,26 @@ fn copy_fixtures(from: &Path, to: &Path) {
     }
 }
 
+/// The test's PATH without the build's directories, which cargo puts first for a test:
+/// a program a case started through git's own shell found cash's `awk.exe` there
+/// (git-secrets' provider, 2026-10-31), where the runner's environment has Git's awk,
+/// and MSYS took the awk program for a path. A case sees the PATH `run.ps1` gives it.
+fn path_without_the_build() -> std::ffi::OsString {
+    let target = std::env::var_os("CARGO_TARGET_DIR").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"),
+        PathBuf::from,
+    );
+    let target = target.canonicalize().unwrap_or(target);
+    let kept = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .filter(|entry| {
+            !entry
+                .canonicalize()
+                .is_ok_and(|entry| entry.starts_with(&target))
+        })
+        .collect::<Vec<_>>();
+    std::env::join_paths(kept).expect("a PATH without the build")
+}
+
 /// Runs `script` as `run.ps1` runs it under cash: `-c`, `LC_ALL=C`, standard input a
 /// pipe already closed, killed after its [`timeout_of`] times [`DEBUG_SLOWER`]. Its
 /// standard output with CRLF as LF, and its status.
@@ -295,6 +315,7 @@ fn run_case(script: &str, dir: &Path) -> (String, String) {
         .args(["--noprofile", "--norc", "-c", script])
         .current_dir(dir)
         .env("LC_ALL", "C")
+        .env("PATH", path_without_the_build())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

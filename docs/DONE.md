@@ -3503,10 +3503,12 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   (2026-10-31, the phase after 2.3.2, every source the pick list offered picked): six
   sources not in the corpus, frozen from Git Bash 5.3 on Windows, each with its
   licence, its terms in `tests/corpus/SOURCES.md`. git-secrets at 7d6b970: its bats
-  suite, the scans of files, standard input, the index and the history, the hooks
-  installed and run by git on a commit, the pattern and provider lists; the directory's
-  path, which two failing tests print, hidden in both spellings (`pwd -W` for the
-  Windows one). pyenv-virtualenv at 7d821a6: the five files of its suite that pass whole
+  suite's scan file and pre-commit hook (the commit-msg and prepare-commit-msg files,
+  the same hook machinery again, left out for time), the scans of files, standard
+  input, the index and the history, the hooks installed, the pattern and provider lists,
+  and the hook itself run by git on a commit; the directory's path, which two failing
+  tests print, hidden in both spellings (`pwd -W` for the Windows one).
+  pyenv-virtualenv at 7d821a6: the five files of its suite that pass whole
   under Git Bash on Windows (activate, deactivate, envs, pip, version), its commands
   stubbed as the suite stubs them, through copies of its stub script, where `ln -s`
   copies. jenv at a771525, whose own suite wants the JDKs of a Docker image: two JDKs
@@ -3515,13 +3517,18 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   doctor; under `shopt -s unixpaths`, since jenv walks a directory up with `${root%/*}`
   until it is empty, which a Windows-spelled path never is, and with the shell named to
   `jenv init`, since `ps -p $PPID -o args=` fails in both shells and the fallback is
-  `$SHELL`. goenv at d8c9cd6: its bats suite but the version test, whose top-level
-  code reads a file through bats' own path, the parent-shell detection, and the tests
-  that reach a hook, an alias or a file through a symbolic link, which Windows gives
-  Git Bash as a copy and cash as a copy that says so or a directory link; the tests
-  that need a `go` of the machine fail the same way in both shells, and the runner's
-  root is hidden, since goenv cuts its own path at the first `goenv` in it, which the
-  runner's directory holds. neofetch 7.1.0: its version,
+  `$SHELL`. goenv at d8c9cd6: ten files of its bats suite, two minutes of its eight
+  under cash (the dispatcher, commands, completions, help, rehash, shims, the version
+  file read, version-name, version-origin, and init without the parent-shell
+  detection); left out for time exec, global, local, prefix, installed, the shell
+  integration, version, versions, whence and which, and for Windows the version test
+  and the dispatcher's help with no argument, which read goenv's version from a path
+  goenv cuts at the first `goenv` in its own, the fixture directory or one above it by
+  where the case runs, and the tests that reach a hook, an alias or a file through a
+  symbolic link, which Windows gives Git Bash as a copy and cash as a copy that says so
+  or a directory link; a `go` of the machine fails a test the same way in both shells.
+  The goldens test, at 349 s of its 360 on CI before the round, has ten minutes now.
+  neofetch 7.1.0: its version,
   help, the configuration it prints and a run with every machine-bound item disabled,
   under an exported `uname` of MSYS's shape, since its Windows detection knows only
   Cygwin's and MSYS's names, and with the Shell and Terminal lines dropped (a disabled
