@@ -3380,3 +3380,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   ended 1 with every test passing; such a program now runs in the nearest directory above
   that exists. Written down in TODO.md: `exit N` in a function the `EXIT` trap calls ends
   the shell with 0.
+- **Topics and community files, and the contact in them** (2026-10-31, the phase after
+  2.3.1): twelve repository topics; SECURITY.md with the supported version, how to report
+  and what counts as a vulnerability in a shell; the Contributor Covenant 2.1 as
+  CODE_OF_CONDUCT.md; two issue forms, one for a command that behaves otherwise than Bash
+  (the command, both outputs, the versions, the terminal and the install) and one for a
+  request. The contact in the two files was first the address on the repository's
+  commits, put there without asking; the user chose GitHub's channels instead, no address
+  anywhere: private vulnerability reporting is on for the repository and SECURITY.md
+  points at the Security tab's Report a vulnerability button, which opens a draft
+  advisory only the maintainer sees; the code of conduct names GitHub's Report abuse
+  form, which GitHub Support handles, and says the project has no private address.
