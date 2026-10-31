@@ -25,8 +25,10 @@
 //! is the reader on top of it that the shell's own readers use. It shows what is typed,
 //! unless asked not to, and collects a line the way a terminal driver does.
 
+use std::collections::VecDeque;
 use std::io;
 use std::os::windows::io::{AsHandle, AsRawHandle as _, OwnedHandle};
+use std::sync::{Mutex, PoisonError};
 use std::time::Instant;
 
 use windows_sys::Win32::Foundation::{HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
@@ -34,8 +36,10 @@ use windows_sys::Win32::System::Console::{
     CONSOLE_SCREEN_BUFFER_INFO, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT,
     ENABLE_VIRTUAL_TERMINAL_INPUT, GetConsoleMode, GetConsoleScreenBufferInfo,
     GetNumberOfConsoleInputEvents, INPUT_RECORD, KEY_EVENT, ReadConsoleInputW, SetConsoleMode,
+    WriteConsoleInputW,
 };
 use windows_sys::Win32::System::Threading::{INFINITE, WaitForSingleObject};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::VkKeyScanW;
 
 /// The Alt key. A character entered as Alt and digits on the number pad arrives when Alt
 /// is released, the one key release that carries a character to read.
@@ -204,6 +208,113 @@ impl Keys {
             }
         }
     }
+
+    /// Puts `characters` back at the head of the console's queue, for whoever reads it
+    /// next, as a terminal keeps the line typed so far when a reader's time runs out:
+    /// the records that arrived meanwhile go after them. Each character is written as
+    /// the key that types it, pressed and released, so that a program collecting a line
+    /// from the console takes it as typed; a reader of the queue takes the character.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the console's queue could not be read or written.
+    pub fn put_back(&self, characters: &[char]) -> io::Result<()> {
+        let handle: HANDLE = self.input.as_raw_handle();
+        let mut queued = 0u32;
+        // SAFETY: an open console input handle owned by `self.input`, and a valid
+        // out-parameter.
+        if unsafe { GetNumberOfConsoleInputEvents(handle, &raw mut queued) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: an all-zero INPUT_RECORD is a valid value for the out-parameters.
+        let mut arrived: Vec<INPUT_RECORD> = vec![unsafe { std::mem::zeroed() }; queued as usize];
+        if queued > 0 {
+            let mut read = 0u32;
+            // SAFETY: as above, with room for `queued` records; the queue holds that many,
+            // so this returns at once.
+            if unsafe { ReadConsoleInputW(handle, arrived.as_mut_ptr(), queued, &raw mut read) }
+                == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            arrived.truncate(read as usize);
+        }
+        let mut records: Vec<INPUT_RECORD> =
+            characters.iter().flat_map(|&ch| key_records(ch)).collect();
+        records.append(&mut arrived);
+        let count = u32::try_from(records.len()).map_err(io::Error::other)?;
+        let mut written = 0u32;
+        // SAFETY: as above, with `count` initialised records.
+        if unsafe { WriteConsoleInputW(handle, records.as_ptr(), count, &raw mut written) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+}
+
+/// The records that type `ch`: its key pressed and released, carrying the character; a
+/// character outside the basic plane is two of each, a UTF-16 unit apiece, as the console
+/// makes of one typed. A character with no key on the keyboard layout goes without one.
+fn key_records(ch: char) -> Vec<INPUT_RECORD> {
+    let mut units = [0u16; 2];
+    let units = ch.encode_utf16(&mut units);
+    let mut records = Vec::with_capacity(units.len() * 2);
+    for &unit in units.iter() {
+        // SAFETY: a plain call with a scalar argument. The low byte is the key; -1 says
+        // the layout has none.
+        let scan = unsafe { VkKeyScanW(unit) };
+        let key = u16::from(u8::try_from(scan & 0xFF).unwrap_or(0));
+        for down in [1, 0] {
+            // SAFETY: an all-zero INPUT_RECORD is valid; the key's fields follow.
+            let mut record: INPUT_RECORD = unsafe { std::mem::zeroed() };
+            record.EventType = u16::try_from(KEY_EVENT).unwrap_or_default();
+            record.Event.KeyEvent.bKeyDown = down;
+            record.Event.KeyEvent.wRepeatCount = 1;
+            record.Event.KeyEvent.wVirtualKeyCode = key;
+            record.Event.KeyEvent.uChar.UnicodeChar = unit;
+            records.push(record);
+        }
+    }
+    records
+}
+
+/// Characters a reader put back into the console's queue when its time ran out
+/// ([`Keys::put_back`]) that the screen already shows, each with the columns it took: the
+/// reader that takes them next shows them no second time. Stale once anything else took
+/// them, which a character other than the one expected next says.
+static SHOWN_AHEAD: Mutex<VecDeque<(char, usize)>> = Mutex::new(VecDeque::new());
+
+/// Notes `line` as put back and shown.
+fn note_shown_ahead(line: &[(char, usize)]) {
+    let mut shown = SHOWN_AHEAD.lock().unwrap_or_else(PoisonError::into_inner);
+    shown.clear();
+    shown.extend(line.iter().copied());
+}
+
+/// The columns `ch` was shown in, when it is the next character put back; otherwise
+/// `None`, and what was noted is forgotten, since the queue went another way.
+fn shown_ahead(ch: char) -> Option<usize> {
+    let mut shown = SHOWN_AHEAD.lock().unwrap_or_else(PoisonError::into_inner);
+    match shown.front() {
+        Some(&(front, columns)) if front == ch => {
+            shown.pop_front();
+            Some(columns)
+        }
+        Some(_) => {
+            shown.clear();
+            None
+        }
+        None => None,
+    }
+}
+
+/// Forgets the characters noted as put back and shown: for the prompt, whose line editor
+/// takes them from the queue and shows them as part of its line, as readline does.
+pub fn forget_shown_ahead() {
+    SHOWN_AHEAD
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clear();
 }
 
 impl Drop for Keys {
@@ -313,7 +424,8 @@ impl Terminal {
 
     /// The next character, or `None` when `deadline` passed first. Collecting a line,
     /// that is its first character, once it has been ended; what was typed of a line
-    /// that was not ended in time is dropped, as a terminal hands a reader none of it.
+    /// not ended in time goes back into the console's queue for the next reader, as a
+    /// terminal keeps it ([`Keys::put_back`]), and is shown no second time.
     ///
     /// Ctrl-C is handed over as [`CTRL_C`], at once and without the line it was typed
     /// in; Ctrl-D as [`CTRL_D`], after what there was of the line.
@@ -327,7 +439,9 @@ impl Terminal {
         }
         if !self.collects_lines {
             let ch = self.key(deadline)?;
-            if let Some(ch) = ch {
+            if let Some(ch) = ch
+                && shown_ahead(ch).is_none()
+            {
                 self.show(ch);
             }
             return Ok(ch);
@@ -337,6 +451,13 @@ impl Terminal {
         let mut line: Vec<(char, usize)> = Vec::new();
         loop {
             let Some(ch) = self.key(deadline)? else {
+                // The line begun stays for the next reader, as a terminal keeps it: back
+                // into the queue, and noted as shown.
+                if !line.is_empty() {
+                    let characters: Vec<char> = line.iter().map(|&(ch, _)| ch).collect();
+                    self.keys.put_back(&characters)?;
+                    note_shown_ahead(&line);
+                }
                 return Ok(None);
             };
             match ch {
@@ -377,7 +498,7 @@ impl Terminal {
                     break;
                 }
                 _ => {
-                    let columns = self.show(ch);
+                    let columns = shown_ahead(ch).unwrap_or_else(|| self.show(ch));
                     line.push((ch, columns));
                 }
             }

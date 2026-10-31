@@ -3419,3 +3419,16 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   the trap ran no `exit`, the status before it stands. Eleven cases through `-c`, a
   script file and standard input match Git Bash 5.3, a subshell's own `EXIT` trap among
   them.
+- **`read -t` keeps the line typed before its time ran out** (2026-10-31, docs/open-issues.md
+  item 11, picked by the user for the phase after 2.3.2): at a console, the keys typed
+  into a `read -t` that ran out were dropped, where a terminal keeps the line begun for
+  the next reader (Git Bash 5.3 at a console: `read -t 3 x` with `abc` typed gives
+  `x=[]` and 142, and the `read y` after it `abcdef` once `def` and Enter follow, the
+  screen showing `abcdef` once). cash's console reader puts the line back into the
+  console's input queue, as the keys that type it, ahead of what arrived meanwhile, so
+  that whoever reads next gets it, a program collecting a line too; and it notes them as
+  shown, so that its next reader shows them no second time, and the prompt's line
+  editor, which shows what it takes, forgets the note. `read -n` and `-N` keep saving
+  the characters read into the variable, as Bash does, and `-s` shows nothing either
+  time. A window test types into a cash of its own and reads its screen; the console
+  window helpers of the font test moved to `console_window.rs` for it.

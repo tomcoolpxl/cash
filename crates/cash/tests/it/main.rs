@@ -66,6 +66,8 @@ mod completion_scripts;
 mod completion_windows;
 // D68: the font of a Windows Console window after a program switched it to a raster one.
 mod console_font;
+mod console_read;
+mod console_window;
 // `column`, util-linux's, against its golden output and on its own.
 mod column_builtin;
 // coolfetch system banner.

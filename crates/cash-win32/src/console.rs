@@ -411,6 +411,10 @@ pub fn repair_before_prompt() -> Repaired {
         GetConsoleCP, GetConsoleMode, GetConsoleOutputCP, SetConsoleMode,
     };
 
+    // Keys a `read -t` put back into the queue when its time ran out are the prompt's
+    // now, and its line editor shows them as part of its line, as readline does.
+    crate::conin::forget_shown_ahead();
+
     let mut repaired = Repaired::default();
     let open = |name: &str| {
         std::fs::OpenOptions::new()

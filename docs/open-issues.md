@@ -236,9 +236,9 @@ is known to bother anyone, and each would cost more than it is worth until one d
   Ctrl-C working, since a console collecting a line makes an event of it.
 - **Keys typed past the count of `-n` are shown when something reads them,** not when
   they are typed: a console shows keys only while something reads them.
-- **A line not ended when `-t` runs out is dropped.** A terminal keeps it for the next
-  read. Keeping it means putting the keys back into the console's queue, and not showing
-  them a second time when they are read again.
+- **A line not ended when `-t` runs out stays for the next read** since 2.4.0
+  (2026-10-31, picked by the user): the keys go back into the console's queue, and cash's
+  next reader shows them no second time; a program reading the console gets them too.
 - **An answer to a terminal query that arrives before `read` has begun** can be taken by
   an older console host for itself; Windows Terminal passes it through. The keys are
   taken before the prompt is shown, so a script that asks after its prompt is safe.
