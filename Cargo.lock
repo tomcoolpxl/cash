@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "cash"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "cash-archive"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "aes",
  "aho-corasick",
@@ -608,7 +608,7 @@ dependencies = [
 
 [[package]]
 name = "cash-awk"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "cash-win32",
  "clap",
@@ -624,7 +624,7 @@ dependencies = [
 
 [[package]]
 name = "cash-bc"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "bigdecimal",
  "clap",
@@ -632,7 +632,7 @@ dependencies = [
 
 [[package]]
 name = "cash-builtins"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "blake2s_simd",
@@ -682,7 +682,7 @@ dependencies = [
 
 [[package]]
 name = "cash-core"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -718,7 +718,7 @@ dependencies = [
 
 [[package]]
 name = "cash-coreutils-builtins"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "cash-uutils",
  "uu_arch",
@@ -791,7 +791,7 @@ dependencies = [
 
 [[package]]
 name = "cash-diffutils"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "cash-getopt",
  "cash-win32",
@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "cash-figlet"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "cash-archive",
  "unicode-width 0.2.2",
@@ -816,11 +816,11 @@ dependencies = [
 
 [[package]]
 name = "cash-getopt"
-version = "2.3.1"
+version = "2.3.2"
 
 [[package]]
 name = "cash-interactive"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "bon",
  "cash-builtins",
@@ -846,7 +846,7 @@ dependencies = [
 
 [[package]]
 name = "cash-man"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "cash-picker",
  "flate2",
@@ -855,7 +855,7 @@ dependencies = [
 
 [[package]]
 name = "cash-parser"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "bon",
@@ -877,7 +877,7 @@ dependencies = [
 
 [[package]]
 name = "cash-picker"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "cash-win32",
  "crossterm",
@@ -890,7 +890,7 @@ dependencies = [
 
 [[package]]
 name = "cash-reedline"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "cash-win32",
  "chrono",
@@ -914,7 +914,7 @@ dependencies = [
 
 [[package]]
 name = "cash-sed"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "assert_fs",
  "cash-win32",
@@ -933,14 +933,14 @@ dependencies = [
 
 [[package]]
 name = "cash-sextant"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "crossterm",
 ]
 
 [[package]]
 name = "cash-shell"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "cash-awk",
@@ -977,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "cash-test-harness"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -997,7 +997,7 @@ dependencies = [
 
 [[package]]
 name = "cash-uutils"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "bigdecimal",
  "cash-win32",
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "cash-win32"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "proptest",
  "tempfile",
@@ -6460,7 +6460,7 @@ checksum = "32ac00cd3f8ec9c1d33fb3e7958a82df6989c42d747bd326c822b1d625283547"
 
 [[package]]
 name = "xtask"
-version = "2.3.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "clap",
