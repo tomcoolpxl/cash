@@ -1,5 +1,5 @@
 # winget locale manifest for cash. Replace @VERSION@; ReleaseNotesUrl follows the tag.
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.28.0.schema.json
 PackageIdentifier: tomcoolpxl.cash
 PackageVersion: @VERSION@
 PackageLocale: en-US
@@ -30,4 +30,4 @@ Documentations:
 - DocumentLabel: README
   DocumentUrl: https://github.com/tomcoolpxl/cash#readme
 ManifestType: defaultLocale
-ManifestVersion: 1.6.0
+ManifestVersion: 1.28.0

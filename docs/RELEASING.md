@@ -177,8 +177,10 @@ From the installer (`InstallerType: inno`, `Scope: user`), package
 `@VERSION@` and `@SHA256@` to replace (the hash from the setup's `.sha256` asset; the
 tokens are deliberately not bare words, since `ManifestVersion` and `InstallerSha256`
 contain them). Write the three filled files to `packaging/winget/out` (ignored by git),
-validate with `winget validate --manifest packaging\winget\out` (schema 1.6.0, which
-every winget accepts), test with `winget install --manifest packaging\winget\out` on a
+validate with `winget validate --manifest packaging\winget\out` (schema 1.28.0, the version
+the repository merges; it refused 1.6.0 as deprecated on 2026-10-30, and its validation
+guide names 1.12.0 as the oldest it still takes), test with `winget install --manifest
+packaging\winget\out` on a
 machine without a Scoop cash (the setup refuses to run beside one), and open the pull
 request on `microsoft/winget-pkgs` by hand for the first version (`wingetcreate
 submit`, or a fork and PR), under `manifests/t/tomcoolpxl/cash/X.Y.Z/`. Later versions can go through

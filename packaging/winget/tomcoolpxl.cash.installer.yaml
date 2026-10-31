@@ -1,7 +1,7 @@
 # winget installer manifest for cash: the per-user Inno Setup installer from the releases
 # page (packaging/inno/cash.iss). Replace @VERSION@ and @SHA256@ (from the setup's .sha256
 # asset). The installer type cannot change once published.
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.28.0.schema.json
 PackageIdentifier: tomcoolpxl.cash
 PackageVersion: @VERSION@
 InstallerType: inno
@@ -26,4 +26,4 @@ Installers:
   InstallerUrl: https://github.com/tomcoolpxl/cash/releases/download/v@VERSION@/cash-v@VERSION@-setup.exe
   InstallerSha256: @SHA256@
 ManifestType: installer
-ManifestVersion: 1.6.0
+ManifestVersion: 1.28.0

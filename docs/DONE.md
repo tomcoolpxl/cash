@@ -3391,3 +3391,20 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   points at the Security tab's Report a vulnerability button, which opens a draft
   advisory only the maintainer sees; the code of conduct names GitHub's Report abuse
   form, which GitHub Support handles, and says the project has no private address.
+- **Dependabot: parking_lot 0.13 on main, the stale pull requests updated** (2026-10-31,
+  the phase after 2.3.2, from the user's pick list): parking_lot 0.13 dropped its `const_*`
+  constructors, which cash-crossterm's event reader was made with; `Mutex::new`, const
+  since 0.12, replaces it, and Dependabot closed its pull request once main had the
+  version. cached 4.0.3, the newest, still asks for 0.12, so the tree carries both copies
+  until it moves. The install-action and cargo-group pull requests failed only on
+  bash-git-prompt's golden, fixed on main after their branches were cut; both were
+  updated onto main.
+- **winget: the submission answered at 2.3.2** (2026-10-31): the bot refused the 2.2.0
+  manifests' schema version 1.6.0 as deprecated and waited for the author. The templates
+  in packaging/winget and the pull request's files are at 1.28.0, the version the
+  repository merges today (its validation guide names 1.12.0 as the oldest it still
+  takes), and `winget validate` passes them. The pull request's branch carries the 2.3.2
+  manifests in place of 2.2.0's, in one commit made through the API: the released
+  installer's hash, and `FileExtensions: sh` with the `sh` task back, since the installer
+  associates `.sh` since 2.3.0 (D87) and the 2.2.0 one did not; the title follows.
+  docs/RELEASING.md step 8 names the schema version.
