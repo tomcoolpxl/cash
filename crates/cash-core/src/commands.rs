@@ -1057,10 +1057,13 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     let empty_env = empty_env || env_changes.ignore_environment;
 
     // Use the shell's current working dir, or the one `#!/usr/bin/env -C` names, by its
-    // short name where it is too long for Windows to start a program in.
+    // short name where it is too long for Windows to start a program in; and where the
+    // directory has been deleted (a script removing its own temporary directory from
+    // inside it), the nearest one above it that still exists, since Windows starts no
+    // program in a deleted one.
     let dir = match &env_changes.chdir {
         Some(dir) => context.shell.absolute_path(Path::new(dir)),
-        None => context.shell.working_dir().to_path_buf(),
+        None => cash_win32::path::nearest_existing(context.shell.working_dir()),
     };
     let dir = cash_win32::path::process_directory(&dir)
         .map_err(|e| error::ErrorKind::FailedToExecuteCommand(context.command_name.clone(), e))?;

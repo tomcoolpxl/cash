@@ -4018,6 +4018,28 @@ fn a_job_that_ended_before_a_plain_wait_stays_listed_until_jobs_shows_it() {
 }
 
 #[test]
+fn a_program_started_from_a_deleted_directory_runs_in_the_nearest_parent() {
+    // A bats teardown removes its temporary directory from inside it; every program the
+    // shell started after that failed with "Not a directory" and 126, and bats took the
+    // 126 for a retry. Windows starts no program in a deleted directory, so the program
+    // gets the nearest one above that exists; Git Bash's child inherits the deleted one.
+    let (code, out) = output(
+        r#"tmp=$(mktemp -d); mkdir "$tmp/d"; cd "$tmp/d" && rm -rf "$tmp/d"
+           rm -f "$tmp/x"; echo "rm: $?"
+           here=$(cmd /c cd | tr -d '\r'); echo "in: ${here##*\\}"; echo "expected: ${tmp##*/}"
+           cd / && rmdir "$tmp""#,
+    );
+    assert_eq!(code, 0, "{out}");
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0], "rm: 0", "{out}");
+    assert_eq!(
+        lines[1].trim_start_matches("in: "),
+        lines[2].trim_start_matches("expected: "),
+        "{out}"
+    );
+}
+
+#[test]
 fn an_interactive_shell_run_through_pipes_starts_without_job_control() {
     // Bash turns job control on only where its standard error is a terminal: `cash -i
     // -c` run by a program through pipes has `$-` without `m` and monitor off, and

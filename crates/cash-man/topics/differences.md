@@ -64,8 +64,10 @@ and in the fewest places it can.
 - Descriptors above 2 reach builtins and cash's own tools, not Windows programs. `/dev/stdout` and `/dev/fd/N` share the descriptor rather than reopen the
   file.
 - `[ -s file ]` is false for App Execution Aliases, which are empty files.
-- A bundled tool cannot delete the shell's current directory: it runs as a process in that
-  directory, and Windows keeps a process's directory.
+- A script that deletes the shell's current directory from inside it (`rm -rf` of its
+  own temporary directory, as a test's teardown does) goes on, and a program it then
+  starts runs in the nearest directory above that still exists: Windows starts no
+  program in a deleted directory, where Linux lets a child inherit it.
 
 ## Processes, jobs and signals
 

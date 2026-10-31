@@ -276,6 +276,22 @@ pub fn process_directory(dir: &Path) -> std::io::Result<PathBuf> {
     )))
 }
 
+/// `dir`, or the nearest directory above it that still exists, for a program to start
+/// in.
+///
+/// Windows cannot start a program in a directory that was deleted: `CreateProcess` fails
+/// with `ERROR_DIRECTORY`, "Not a directory", where Linux lets a child inherit the
+/// deleted directory. A script that removes its own temporary directory from inside it,
+/// as a bats teardown does, then starts programs again, as it does under Git Bash; what
+/// is started sees the nearest parent as its directory (found 2026-10-31, basher's bats
+/// suite in the corpus: every test ended with status 126, and bats ran it again).
+#[must_use]
+pub fn nearest_existing(dir: &Path) -> PathBuf {
+    dir.ancestors()
+        .find(|ancestor| ancestor.is_dir())
+        .map_or_else(|| dir.to_path_buf(), Path::to_path_buf)
+}
+
 /// The 8.3 short form of the directory `plain` (backslashes, no `\\?\`), without `\\?\`.
 #[must_use]
 pub fn short_name(plain: &str) -> Option<String> {
@@ -669,6 +685,18 @@ pub fn windows_argument(arg: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A directory that exists is its own; one that was deleted gives the nearest
+    /// existing one above it, and a path with no existing ancestor stays as it was.
+    #[test]
+    fn a_program_s_directory_falls_back_to_the_nearest_existing_one() {
+        let dir = std::env::temp_dir();
+        assert_eq!(nearest_existing(&dir), dir);
+        let gone = dir.join("cash-nearest-existing-gone").join("deeper");
+        assert_eq!(nearest_existing(&gone), dir);
+        let nowhere = Path::new(r"\\?\Q:\no\such\place");
+        assert_eq!(nearest_existing(nowhere), nowhere);
+    }
 
     #[test]
     fn a_climb_past_a_drive_s_top_or_slash_reaches_slash() {
