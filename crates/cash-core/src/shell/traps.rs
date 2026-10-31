@@ -24,16 +24,25 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Box::pin(self.run_string(command, source_info, params))
     }
 
-    /// Runs any exit steps for the shell.
+    /// Runs the shell's exit steps at its end: its `EXIT` trap, if any.
     ///
-    /// This currently includes invoking the `EXIT` trap handler, if any.
-    pub async fn on_exit(&mut self) -> Result<(), error::Error> {
-        if self.traps.handles(TrapSignal::Exit) {
-            self.invoke_trap_handler(TrapSignal::Exit, &self.default_exec_params())
-                .await?;
+    /// Returns the status an `exit` in the trap asked for, in its commands or in a
+    /// function they call, which is then the shell's, as in Bash; `None` when the trap
+    /// ran no `exit`, and the status before it stands. Dropped, as it was, `exit 3` in a
+    /// function the trap called left the shell ending with 0; bats ends its runs so.
+    pub async fn on_exit(&mut self) -> Result<Option<u8>, error::Error> {
+        if !self.traps.handles(TrapSignal::Exit) {
+            return Ok(None);
         }
-
-        Ok(())
+        let result = self
+            .invoke_trap_handler(TrapSignal::Exit, &self.default_exec_params())
+            .await?;
+        if !result.is_exit() {
+            return Ok(None);
+        }
+        let status = result.exit_code.into();
+        self.last_exit_status = status;
+        Ok(Some(status))
     }
 
     /// `exit` in the shell itself: runs its `EXIT` trap there and then, as Bash does, so

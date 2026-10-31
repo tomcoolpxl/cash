@@ -3408,3 +3408,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   installer's hash, and `FileExtensions: sh` with the `sh` task back, since the installer
   associates `.sh` since 2.3.0 (D87) and the 2.2.0 one did not; the title follows.
   docs/RELEASING.md step 8 names the schema version.
+- **`exit N` in a function the `EXIT` trap calls ended the shell with 0** (2026-10-31,
+  found probing bats in the corpus round, fixed in the phase after 2.3.2): at the shell's
+  end, a script's, standard input's or a `-c` string's, the `EXIT` trap ran and its
+  result was dropped, so an `exit` in its commands, direct (`trap "echo trap; exit 4;
+  echo after" EXIT`) or in a function they called, left the shell ending with the status
+  before the trap; only an `exit` of the script's own, which runs the trap where it is
+  called, took the trap's status. `on_exit` hands the trap's status back now, and the
+  script, the command string and the interactive shell end with it, as Bash does; when
+  the trap ran no `exit`, the status before it stands. Eleven cases through `-c`, a
+  script file and standard input match Git Bash 5.3, a subshell's own `EXIT` trap among
+  them.

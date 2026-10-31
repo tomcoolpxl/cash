@@ -4449,3 +4449,52 @@ fn globignore_splits_its_patterns_as_bash_does() {
         "c1 zz\nzz\nb1 c1 zz\na1 b1 c1 zz"
     );
 }
+
+#[test]
+fn an_exit_in_the_exit_trap_or_in_a_function_it_calls_is_the_shell_s_status() {
+    // At the shell's end the `EXIT` trap ran and its result was dropped, so an `exit 3` in
+    // its commands, or in a function they called, left the shell ending with the status
+    // before the trap; Bash ends with the trap's 3, and a bats run's `exit "$status"` sits
+    // in such a function. `exit` itself already ran the trap where it was called. The
+    // statuses are Git Bash 5.3's, through -c, a script file and standard input alike.
+    for (script, expected_code, expected_out) in [
+        (
+            r#"f() { exit 3; }; trap "echo trap; f; echo after" EXIT; echo body"#,
+            3,
+            "body\ntrap",
+        ),
+        (
+            r#"trap "echo trap; exit 4; echo after" EXIT; echo body"#,
+            4,
+            "body\ntrap",
+        ),
+        (
+            r#"f() { exit 3; }; g() { f; }; trap "g" EXIT; false"#,
+            3,
+            "",
+        ),
+        (r#"trap "false" EXIT; true"#, 0, ""),
+        (r#"trap "true" EXIT; false"#, 1, ""),
+        (r#"f() { exit 3; }; trap "f" EXIT; exit 7"#, 3, ""),
+        (r#"trap 'echo $?; exit' EXIT; false"#, 1, "1"),
+        (r#"f() { exit 3; }; trap "f" EXIT; (exit 5)"#, 3, ""),
+        (
+            r#"trap "echo in; exit 4" EXIT; (trap "exit 6" EXIT; echo sub); echo "sub: $?""#,
+            4,
+            "sub\nsub: 6\nin",
+        ),
+        (
+            r#"tmp=$(mktemp -d); printf '%s\n' 'f() { exit 3; }' 'trap "echo trap; f; echo after" EXIT' 'echo body' > "$tmp/s.sh"
+               "$BASH" "$tmp/s.sh"; echo "script: $?"; "$BASH" < "$tmp/s.sh"; echo "stdin: $?"; rm -r "$tmp""#,
+            0,
+            "body\ntrap\nscript: 3\nbody\ntrap\nstdin: 3",
+        ),
+    ] {
+        let (code, out) = output(script);
+        assert_eq!(
+            (code, out.as_str()),
+            (expected_code, expected_out),
+            "{script}"
+        );
+    }
+}

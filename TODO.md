@@ -418,14 +418,6 @@ What the phases now in docs/DONE.md left open, each where its phase says more. N
 
 ## Found along the way
 
-- **`exit N` in a function the `EXIT` trap calls ends the shell with 0** (2026-10-31,
-  found probing bats in the corpus round): `f() { exit 3; }; trap "echo trap; f; echo
-  after" EXIT; echo body` prints `body` and `trap`, stops before `after` as Bash does,
-  and exits 0 where Bash exits 3; `trap "exit 4" EXIT` gives 4 in both, and so does an
-  `exit` in a function the trap's function calls directly. `run_exit_trap_for_exit`
-  takes the trap's status only when the handler's result `is_exit()`, which a
-  function's `exit` may not carry out of a list.
-
 - **No scheduled tasks** (the user, 2026-10-23): an elevated step, such as a samply or
   wpr profile, stays one the user runs by hand (`sudo pwsh -File ...`); a task with
   highest privileges that cash or Claude could start later was turned down as dangerous.

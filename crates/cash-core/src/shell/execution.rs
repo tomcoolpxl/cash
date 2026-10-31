@@ -234,7 +234,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // A sourced file that does not parse fails `source` with 2, as in Bash, and the
         // script goes on, in POSIX mode too; a script that is run ends.
         let fatal = !matches!(call_type, callstack::ScriptCallType::Source);
-        let result = self
+        let mut result = self
             .run_text(&text, whole, TextOrigin::Whole, source_info, params, fatal)
             .await
             .map_err(|e| e.located_at(self.error_prefix()));
@@ -252,9 +252,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
 
         // The script's `EXIT` trap runs while it is still the script, as in Bash: its
         // positional parameters, `BASH_SOURCE` and `$0`. Run after the frame was gone, the
-        // trap saw no `$@`. Its own result is ignored, as before.
-        if matches!(call_type, callstack::ScriptCallType::Run) && result.is_ok() {
-            let _ = self.on_exit().await;
+        // trap saw no `$@`. An `exit` in the trap gives the script its status.
+        if matches!(call_type, callstack::ScriptCallType::Run)
+            && let Ok(script_result) = result.as_mut()
+            && let Ok(Some(status)) = self.on_exit().await
+        {
+            script_result.exit_code = crate::ExecutionExitCode::from(status);
         }
 
         let exited_frame = self.call_stack.pop();
@@ -332,12 +335,15 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // Execute the command string.
         let params = self.default_exec_params();
         let source_info = SourceInfo::from("-c");
-        let result = self.run_string(command, &source_info, &params).await?;
+        let mut result = self.run_string(command, &source_info, &params).await?;
 
         self.end_command_string_mode()?;
 
-        // Give the shell a chance to run on-exit tasks, but ignore the result.
-        let _ = self.on_exit().await;
+        // The `EXIT` trap runs; an `exit` in it gives the command string its status, and
+        // its errors are let go, as before.
+        if let Ok(Some(status)) = self.on_exit().await {
+            result.exit_code = crate::ExecutionExitCode::from(status);
+        }
 
         Ok(result)
     }
