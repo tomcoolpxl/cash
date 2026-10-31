@@ -1,0 +1,45 @@
+1..10
+ok 1 n ls # just plain node
+ok 2 n list # mixed node and nightly
+ok 3 auto, missing file
+ok 4 auto .n-node-version, no eol
+ok 5 auto .n-node-version, unix eol
+ok 6 auto .n-node-version, Windows eol
+ok 7 auto .n-node-version, leading v
+ok 8 auto .n-node-version, first line only
+ok 9 auto .n-node-version, from sub directory
+ok 10 auto .node-version, from sub directory
+bats: 0
+== version
+11.0.0
+== ls
+node/4.9.1
+node/10.15.0
+node/12.22.12
+== which and bin
+PREFIX/n/versions/node/10.15.0/bin/node
+PREFIX/n/versions/node/12.22.12/bin/node
+which 8.0.0: 1
+== run and exec
+node v10.15.0 --check app.js
+node v4.9.1 -e 1
+PATH starts at PREFIX/n/versions/node/12.22.12/bin
+== rm
+4.9.1 (4.9.1) not in downloads cache
+rm: 0
+node/4.9.1
+node/10.15.0
+node/12.22.12
+4.9.1 (4.9.1) not in downloads cache
+rm again: 0
+== prune
+node/4.9.1
+node/10.15.0
+node/12.22.12
+prune: 0
+== help
+Usage: n [options] [COMMAND] [args]
+
+Commands:
+
+  n                              Display downloaded Node.js versions and install selection

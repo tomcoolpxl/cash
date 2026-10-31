@@ -3351,3 +3351,32 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   printed a specification's actions before its `-o` options, where Bash prints the
   options first (`complete -o default -o nospace -v -F _f export`); fzf's completion.bash
   reads these lines back to keep the original completions. Fixed, with a test.
+- **A corpus round: bash-git-prompt, basher, n and fzf's shell integration** (2026-10-31,
+  the phase after 2.3.1, the user's pick of five sources not in the corpus; bashly's
+  generated example scripts are not in its repository, each example's `download` being
+  gitignored and made with Ruby, so it is left out). Each copied unchanged with its
+  licence, its terms in `tests/corpus/SOURCES.md`. bash-git-prompt at 4501746:
+  gitstatus.sh's eleven lines on a clone that is clean, changed, stashed, ahead and
+  detached, with the commit dates pinned so the hashes match between runs; gitprompt.sh
+  sourced, its themes listed, the prompt built for three of them, the exit statuses, the
+  truncated path and the help. basher at 7c3d238: its bats suite in the files that need
+  no symbolic link (Windows makes `ln -s` a copy, so `readlink` finds no link in either
+  shell), the listing tests but the verbose one, whose clone URL is the Windows spelling
+  of a path the test expects in Unix spelling; its `tests/vendor` submodules are the
+  bats-support and bats-assert fixtures, copied there by the case. n v11.0.0: the bats
+  tests that need no network, and its commands on versions made by hand with a stand-in
+  node; the partial-version lookup asks the network, and n refuses MSYS besides. fzf
+  v0.74.5: completion.bash and key-bindings.bash in a second interactive shell, with a
+  stand-in fzf that answers the first line holding the query and runs
+  `FZF_DEFAULT_COMMAND` as fzf does at a terminal: the completions set up, the `**`
+  trigger on a file, a directory, a variable and an alias through the compgen hooks,
+  `_fzf_setup_completion`, Ctrl-T and Alt-C. basher's and n's suites run under `shopt -s
+  unixpaths`, since bats wants a test's directory to start with `/`. Found and fixed:
+  `type -p` of a command cash carries printed nothing, so basher's dispatcher ran its own
+  name and looped until the run was stopped; `complete -p` printed a specification's
+  actions before its `-o` options; and a program started after the shell's current
+  directory was deleted failed with "Not a directory" and 126 (Windows starts none in a
+  deleted directory), which bats took for a retry, so each test ran twice and the suite
+  ended 1 with every test passing; such a program now runs in the nearest directory above
+  that exists. Written down in TODO.md: `exit N` in a function the `EXIT` trap calls ends
+  the shell with 0.

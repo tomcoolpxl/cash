@@ -1,0 +1,100 @@
+1..93
+ok 1 default BASHER_ROOT
+ok 2 inherited BASHER_ROOT
+ok 3 inherited XDG_DATA_HOME
+ok 4 inherited XDG_DATA_PREFIX overriden by inherited BASHER_ROOT
+ok 5 default BASHER_PREFIX
+ok 6 inherited BASHER_PREFIX
+ok 7 BASHER_PREFIX based on BASHER_ROOT
+ok 8 inherited BASHER_PACKAGES_PATH
+ok 9 BASHER_PACKAGES_PATH based on BASHER_PREFIX
+ok 10 default BASHER_INSTALL_BIN
+ok 11 inherited BASHER_INSTALL_BIN
+ok 12 BASHER_INSTALL_BIN based on BASHER_PREFIX
+ok 13 default BASHER_INSTALL_MAN
+ok 14 inherited BASHER_INSTALL_MAN
+ok 15 BASHER_INSTALL_MAN based on BASHER_PREFIX
+ok 16 without arguments prints usage
+ok 17 invalid package prints usage
+ok 18 too many arguments prints usage
+ok 19 install a specific version
+ok 20 does nothing if package is already present
+ok 21 using a different site
+ok 22 without setting BASHER_FULL_CLONE, clones a package with depth option
+ok 23 setting BASHER_FULL_CLONE to true, clones a package without depth option
+ok 24 setting BASHER_FULL_CLONE to false, clones a package with depth option
+ok 25 using ssh protocol
+ok 26 clones to custom folder
+ok 27 clones to custom folder with version
+ok 28 custom folder defaults to package name when not specified
+ok 29 does nothing if custom folder already exists
+ok 30 without arguments prints usage
+ok 31 lists commands
+ok 32 does not list hidden commands
+ok 33 without arguments, prints usage
+ok 34 without dependencies, does nothing
+ok 35 installs dependencies
+ok 36 command with no completion support
+ok 37 command with completion support
+ok 38 without args shows summary of common commands
+ok 39 invalid command
+ok 40 shows help for a specific command
+ok 41 replaces missing extended help with summary text
+ok 42 extracts only usage
+ok 43 multiline usage section
+ok 44 multiline extended help section
+ok 45 without enough arguments, prints a useful message
+ok 46 exports BASHER_ROOT
+ok 47 exports BASHER_PREFIX
+ok 48 exports BASHER_PACKAGES_PATH
+ok 49 adds cellar/bin to path
+ok 50 setup include function if it exists
+ok 51 doesn't setup include function if it doesn't exist
+ok 52 setup basher completions if available
+ok 53 does not setup basher completions if not available
+ok 54 setup package completions (bash)
+ok 55 setup package completions (zsh)
+ok 56 is sh-compatible
+ok 57 without arguments prints usage
+ok 58 incorrect argument prints usage
+ok 59 too many arguments prints usage
+ok 60 executes install steps in right order
+ok 61 with site, overwrites site
+ok 62 without site, uses github as default site
+ok 63 using ssh protocol
+ok 64 installs with custom version
+ok 65 empty version is ignored
+ok 66 doesn't fail
+ok 67 installs package with custom folder name
+ok 68 installs package with custom folder name and version
+ok 69 rejects invalid custom folder name format
+ok 70 displays nothing if there are no packages
+ok 71 displays outdated packages
+ok 72 ignore packages checked out with a tag or ref
+ok 73 without arguments, prints usage
+ok 74 outputs the package path
+ok 75 without arguments prints usage
+ok 76 with invalid arguments, prints usage
+ok 77 with too many arguments, prints usage
+ok 78 fails if package is not installed
+ok 79 removes package directory
+ok 80 removes binaries
+ok 81 does not remove other package directories and binaries
+ok 82 without arguments shows usage
+ok 83 with invalid argument, shows usage
+ok 84 with too many arguments, shows usage
+ok 85 upgrades a package to the latest version
+ok 86 upgrade includes man page changes
+ok 87 upgrade removes old binaries
+ok 88 upgrade -all upgrades all packages
+ok 89 without arguments, prints an error
+ok 90 with one argument, prints an error
+ok 91 when package is not installed, prints an error
+ok 92 when file doesn't exist, prints an error
+ok 93 sources a file into the current shell
+status: 0
+1..3
+ok 1 with arguments shows usage
+ok 2 list installed packages
+ok 3 verbose flag with arguments shows usage
+list: 0

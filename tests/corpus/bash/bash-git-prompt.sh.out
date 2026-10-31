@@ -1,0 +1,56 @@
+== clean
+main|.|.|origin/main|0|0|0|0|0|1|0|
+== staged, changed, untracked
+main|.|.|origin/main|1|0|1|1|0|0|0|
+== stashed, the untracked file kept
+main|.|.|origin/main|0|0|0|1|1|0|0|
+== ahead of origin
+main|_AHEAD_1|.|origin/main|0|0|0|1|0|0|0|
+== detached
+_PREHASH_9a15db4|.|.|^|0|0|0|1|0|0|1|
+== sourced
+prompt command: setLastCommandState
+== themes
+BlackOrWhite
+Chmike
+Crunch
+[0;31m*Default[0;0m
+Default_NoExitState
+Default_NoExitState_Ubuntu
+Default_Ubuntu
+Evermeet
+== prompt, Default
+\[[0;32m\]✔\[[0;0m\] \[[0;33m\]\w\[[0;0m\] [\[[0;35m\]${GIT_BRANCH}\[[0;0m\] ↑·1\[[0;0m\]|\[[0;36m\]…1\[[0;0m\]\[[0;0m\]] \n\[[0;37m\]$(date +%H:%M)\[[0;0m\] $ 
+== prompt, staged only
+\[[0;32m\]✔\[[0;0m\] \[[0;33m\]\w\[[0;0m\] [\[[0;35m\]${GIT_BRANCH}\[[0;0m\] ↑·1\[[0;0m\]|\[[1;32m\]✔\[[0;0m\]\[[0;0m\]] \n\[[0;37m\]$(date +%H:%M)\[[0;0m\] $ 
+On branch main
+Your branch is ahead of 'origin/main' by 1 commit.
+  (use "git push" to publish your local commits)
+
+nothing to commit, working tree clean
+== prompt, clean and ahead
+\[[0;32m\]✔\[[0;0m\] \[[0;33m\]\w\[[0;0m\] [\[[0;35m\]${GIT_BRANCH}\[[0;0m\] ↑·1\[[0;0m\]|\[[1;32m\]✔\[[0;0m\]\[[0;0m\]] \n\[[0;37m\]$(date +%H:%M)\[[0;0m\] $ 
+== prompt, Single_line
+\[[0;32m\]✔\[[0;0m\] \[[0;33m\]\w\[[0;0m\] [\[[0;35m\]${GIT_BRANCH}\[[0;0m\] ↑·1\[[0;0m\]|\[[1;32m\]✔\[[0;0m\]\[[0;0m\]] \n\[[0;37m\]$(date +%H:%M)\[[0;0m\] $ 
+== prompt, Solarized
+\[[0;32m\]✔\[[0;0m\] \[[0;33m\]\w\[[0;0m\] [\[[0;35m\]${GIT_BRANCH}\[[0;0m\] ↑·1\[[0;0m\]|\[[1;32m\]✔\[[0;0m\]\[[0;0m\]] \n\[[0;37m\]$(date +%H:%M)\[[0;0m\] $ 
+== prompt, Minimal
+\[[0;32m\]✔\[[0;0m\] \[[0;33m\]\w\[[0;0m\] [\[[0;35m\]${GIT_BRANCH}\[[0;0m\] ↑·1\[[0;0m\]|\[[1;32m\]✔\[[0;0m\]\[[0;0m\]] \n\[[0;37m\]$(date +%H:%M)\[[0;0m\] $ 
+== exit status
+0: 0
+1: 1
+2: 2
+126: 126
+127: 127
+130: INT
+143: TERM
+== truncated path
+~/one/two/three/four/five== outside a repository
+
+== help
+The git prompt format is [<BRANCH><TRACKING>|<LOCALSTATUS>]\[[0;0m
+
+BRANCH is a branch name, such as "\[[0;35mmaster\[[0;0m" or "\[[0;35mstage\[[0;0m", a tag name, or commit
+:hash\[[0;0m prefixed with ':\[[0;0m'.
+
+TRACKING indicates how the local branch differs from the

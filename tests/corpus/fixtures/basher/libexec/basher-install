@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#
+# Summary: Installs a package from github (or a custom site)
+#
+# Usage: basher install [--ssh] [site]/<package>[@ref] [folder]
+
+set -e
+
+use_ssh="false"
+
+case $1 in
+  --ssh)
+    use_ssh="true"
+    shift
+  ;;
+esac
+
+if [ "$#" -lt 1 -o "$#" -gt 2 ]; then
+  basher-help install
+  exit 1
+fi
+
+if [[ "$1" = */*/* ]]; then
+  IFS=/ read -r site user name <<< "$1"
+  package="${user}/${name}"
+else
+  IFS=/ read -r user name <<< "$1"
+  package="${user}/${name}"
+  site="github.com"
+fi
+
+# defaults to package's name, but allows custom folder name
+folder="$package"
+custom_folder=false
+if [ -n "$2" ]; then
+  if ! [[ "$2" =~ ^[^/]+/[^/]+$ ]]; then
+    basher-help install
+    echo "Optional argunment [folder] must be in the format <...>/<...>"
+    exit 1
+  fi
+  folder="$2"
+  custom_folder=true
+fi
+
+if [ -z "$package" ]; then
+  basher-help install
+  exit 1
+fi
+
+IFS=/ read -r user name <<< "$package"
+
+if [ -z "$user" ]; then
+  basher-help install
+  exit 1
+fi
+
+if [ -z "$name" ]; then
+  basher-help install
+  exit 1
+fi
+
+if [[ "$package" = */*@* ]]; then
+  IFS=@ read -r package ref <<< "$package"
+  if [ "$custom_folder" = "false" ]; then
+    folder="$package"
+  fi
+else
+  ref=""
+fi
+
+# Call basher-_clone with appropriate number of parameters
+if [ "$custom_folder" = "false" ]; then
+  # No custom folder - use original behavior
+  if [ -z "$ref" ]; then
+    basher-_clone "$use_ssh" "$site" "$package"
+  else
+    basher-_clone "$use_ssh" "$site" "$package" "$ref"
+  fi
+else
+  # Custom folder specified - pass all parameters
+  basher-_clone "$use_ssh" "$site" "$package" "$ref" "$folder"
+fi
+
+# Use folder for subsequent operations
+basher-_deps "$folder"
+basher-_link-bins "$folder"
+basher-_link-man "$folder"
+basher-_link-completions "$folder"

@@ -1,0 +1,36 @@
+== completions set up
+complete -a -F _fzf_alias_completion unalias
+complete -o bashdefault -o default -F _fzf_path_completion vim
+complete -o bashdefault -o dirnames -o nospace -F _fzf_dir_completion cd
+complete -o default -o nospace -v -F _fzf_var_completion export
+== defaults
+--height 40% --min-height 20+ --bind=ctrl-z:ignore --reverse --scheme=path
+ --multi
+== a file for vim
+[5n
+reply: src/lib
+== a file by a query
+[5n
+reply: src/lib/util.c
+== a directory for cd
+[5n
+reply: bin/
+== no trigger, the original completion
+reply: 
+== a variable for export
+[5n
+reply: FZF_TEST_ONE
+== an alias for unalias
+[5n
+reply: fzf_alias_a
+== a completion added
+complete -o bashdefault -o default -F _fzf_path_completion ag
+complete -o bashdefault -o default -F _fzf_path_completion rg
+usage: _fzf_setup_completion path|dir|var|alias|host|proc COMMANDS...
+usage: 1
+== Ctrl-T
+./README 
+vim ./README |13
+== Alt-C
+builtin cd -- PWD/src/lib
+inner status: 0
