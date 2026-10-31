@@ -1,0 +1,68 @@
+name: Something behaves otherwise than Bash
+description: A command, script or tool that gives another result in cash than in Bash or GNU
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The quickest way to a fix is a command that shows the
+        difference, with what cash printed and what Bash printed.
+  - type: textarea
+    id: command
+    attributes:
+      label: What you ran
+      description: The command or script, as typed; the smallest one that shows it.
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: cash
+    attributes:
+      label: What cash printed
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: bash
+    attributes:
+      label: What Bash printed
+      description: Git Bash, WSL or Linux, if you have one at hand. Leave it empty if not.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: cash version
+      description: The output of `cash --version`.
+      placeholder: cash 2.3.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: The output of `cmd /c ver`, or Settings, System, About.
+      placeholder: Microsoft Windows [Version 10.0.26100.6584]
+  - type: dropdown
+    id: terminal
+    attributes:
+      label: Where cash runs
+      options:
+        - Windows Terminal
+        - A Windows Console window (conhost)
+        - An IDE's terminal (VS Code, JetBrains)
+        - A script run by another program (CI, Task Scheduler, a pipeline)
+        - Other
+  - type: dropdown
+    id: install
+    attributes:
+      label: How cash was installed
+      options:
+        - Scoop
+        - The setup.exe from a release
+        - The zip from a release
+        - Built from source
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: What you expected, what you tried, the output of `cash doctor` if it says something.

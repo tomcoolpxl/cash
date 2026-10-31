@@ -1,0 +1,35 @@
+name: A tool or behaviour cash lacks
+description: A tool, option or behaviour of Bash or the Unix tools that cash does not have yet
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        cash carries about 250 tools and follows Bash 5.3 and the GNU tools. Tell us what
+        is missing and what you would use it for.
+  - type: textarea
+    id: what
+    attributes:
+      label: What is missing
+      description: The tool, option or behaviour, and what Bash or GNU does there.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What it would be used for
+      description: The script or workflow that needs it. A real example helps weigh it.
+    validations:
+      required: true
+  - type: textarea
+    id: now
+    attributes:
+      label: What cash does now
+      description: The output you get today, or the error.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: cash version
+      description: The output of `cash --version`.
+      placeholder: cash 2.3.1
