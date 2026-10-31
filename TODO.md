@@ -25,26 +25,21 @@ for working through it. What is done, phases and findings, is in docs/DONE.md.
 
 ---
 
-## This phase (2026-10-31)
+## The phase before (2026-10-31, done, released as 2.3.2)
 
 Picked by the user from a pick list (docs/decisions.md, "The phase after 2.3.1"), in
-this order:
-
-1. the three Dependabot bumps taken on main by hand: lzma-rust2 0.22 to 0.24,
-   parse_datetime 0.17, rstest 0.28, with the full suite; Dependabot closes its pull
-   requests itself once main has the versions;
-2. `kill %1` on a console job that ignores Ctrl-Break (under "Found along the way"): a
-   short wait of about a second for a console job, five for a windowed program, and
-   `help job-control` saying so;
-3. Windows Console redrawing cash in another font after a PowerShell (under "Found along
-   the way"), reproduced in a conhost window here;
-4. a corpus round: bash-git-prompt, basher with its bats tests, n, fzf's shell files and
-   bashly's generated examples, each licence confirmed before its download;
-5. repository topics and the community files: a security policy, a code of conduct and
-   issue templates;
-6. jobs without a console (under "Traps, signals and jobs" below): job control in an
-   interactive cash whose input is a pipe, and a `set -m` script's job that ended
-   before `wait`.
+this order, all in docs/DONE.md: the Dependabot bumps taken on main (lzma-rust2 0.24 and
+rstest 0.28; parse_datetime stays with uu_date, and dependabot.yml says so); `kill %1`
+on a console job that ignores its Ctrl-Break, terminated after a second now, not five;
+Windows Console's font after a PowerShell, which Windows PowerShell 5.1 switches to the
+raster one in a UTF-8 console, and cash puts back at the next prompt; a corpus round of
+bash-git-prompt, basher, n and fzf's shell integration (bashly's generated scripts are
+not in its repository); the repository topics, a security policy, a code of conduct and
+two issue forms; and job control off in an interactive cash run through pipes, with a
+finished job kept for `jobs` after a plain `wait`. Found and fixed on the way: `complete
+-p`'s option order, `type -p` of a carried tool, and a program started after the shell's
+directory was deleted. Left, under "Found along the way": `exit N` in a function the
+`EXIT` trap calls.
 
 ## The phase before (2026-10-30, done, released as 2.3.1)
 
