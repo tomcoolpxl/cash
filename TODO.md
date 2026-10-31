@@ -24,6 +24,23 @@ for working through it. What is done, phases and findings, is in docs/DONE.md.
   Longer notes on a thing that stays open belong in `docs/open-issues.md`.
 
 ---
+## The phase before (2026-10-31, done, released as 2.4.0)
+
+Picked by the user from a pick list (docs/decisions.md, "The phase after 2.3.2"), in
+this order, all in docs/DONE.md: parking_lot 0.13 taken on main by hand (its `const_*`
+constructors went) and Dependabot's two stale pull requests updated onto main; the
+winget submission answered at 2.3.2 with the manifest schema version the repository
+takes; `exit N` in a function the `EXIT` trap calls, which ended the shell with 0; a
+line typed before `read -t` ran out, kept for the next read as a terminal keeps it;
+POSIX `TZ` rules with daylight saving in the shell's own times (`date` had them); and a
+corpus round of git-secrets, pyenv-virtualenv, jenv, goenv, neofetch and shdoc. Found
+and fixed on the way: an awk function ending in an `if` that holds a `return` ran past
+its end, awk refused a backslash before CRLF and its `.` matched no newline, a
+directory's read-only attribute made `-w` false and `rm -rf` fail, `rm link` removed
+no link to a directory, and a `TMP` in Unix spelling lost every here-string of a cash a
+cash started. Left, under "Found along the way": a lowercase `${!name}` reading an
+environment variable (D31).
+
 
 ## The phase before (2026-10-31, done, released as 2.3.2)
 
