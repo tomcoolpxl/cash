@@ -402,7 +402,7 @@ pub struct Repaired {
 /// started ([`remember_starting_modes`]); processed output, wrapping and VT processing on,
 /// and line feeds returning to the margin; the UTF-8 code page (D41); and, when a program
 /// ran since the last prompt, [`TERMINAL_RESET`], and the starting font where the program
-/// left a raster one ([`raster_replaced_truetype`]). The line editor's own raw mode is its
+/// left a raster one (`raster_replaced_truetype`). The line editor's own raw mode is its
 /// business and is left to it. Without a console, nothing is done.
 pub fn repair_before_prompt() -> Repaired {
     use std::io::Write as _;
