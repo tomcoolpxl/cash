@@ -7,7 +7,9 @@
 // SPDX-License-Identifier: MIT
 // 
 
-WHITESPACE = _{ " " | "\t" | "\r" | "\\" ~ "\n" }
+// A backslash continues a line across its newline, a CRLF one too, as gawk reads a program
+// a Windows editor saved (shdoc's `printf(..., \` at the end of a line).
+WHITESPACE = _{ " " | "\t" | "\r" | "\\" ~ "\r"? ~ "\n" }
 COMMENT    = _{ "#" ~ (!"\n" ~ ANY)* ~ (&"\n" | &EOI) }
 
 string          = ${ "\"" ~ string_contents ~ "\"" }

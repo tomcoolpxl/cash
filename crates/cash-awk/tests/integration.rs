@@ -7298,3 +7298,30 @@ mod plib {
         pub type TempDir = tempfile::TempDir;
     }
 }
+
+#[test]
+fn test_awk_function_ending_in_an_if_with_a_return_comes_back() {
+    test_awk!(
+        function_ending_in_an_if_with_a_return_comes_back,
+        "tests/awk/function_ending_in_an_if_with_a_return_comes_back.txt"
+    );
+}
+
+#[test]
+fn test_awk_backslash_before_crlf_continues_the_line() {
+    // A program a Windows editor saved: a backslash before CRLF continues the line, as
+    // gawk reads it (shdoc's `printf(..., \` at the end of a line, 2026-10-31).
+    let dir = std::env::temp_dir().join(format!("cash-awk-crlf-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let program = dir.join("crlf.awk");
+    std::fs::write(
+        &program,
+        "BEGIN {\r\n    printf(\"%s|%s\\n\",\\\r\n        \"a\", \"b\")\r\n    x = 1 +\\\r\n        2\r\n    print x\r\n}\r\n",
+    )
+    .unwrap();
+    test_awk(
+        vec!["-f".to_string(), program.to_string_lossy().into_owned()],
+        "a|b\n3\n",
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -2567,8 +2567,30 @@ impl Compiler {
         self.compile_action(body, &mut instructions, &param_map)?;
         self.in_function = false;
 
-        // ensure that functions always return
-        if !matches!(instructions.opcodes.last(), Some(OpCode::Return)) {
+        // Every function returns at its end. A body ending with `if (c) { ...; return }`
+        // ends with a `Return` too, but the `if`'s jump over it lands past the function's
+        // code, and the caller's statements after the call were skipped, or the program
+        // ended (shdoc's handle_description, 2026-10-31): a jump that lands at the end
+        // needs a return there as much as a body without one does.
+        let end = instructions.len();
+        let lands_at_end = |index: usize, offset: i32| {
+            isize::try_from(offset)
+                .ok()
+                .and_then(|offset| index.checked_add_signed(offset))
+                == Some(end)
+        };
+        let jumps_to_end = instructions
+            .opcodes
+            .iter()
+            .enumerate()
+            .any(|(index, opcode)| match opcode {
+                OpCode::Jump(offset)
+                | OpCode::JumpIfFalse(offset)
+                | OpCode::JumpIfTrue(offset)
+                | OpCode::AdvanceIterOrJump(offset) => lands_at_end(index, *offset),
+                _ => false,
+            });
+        if jumps_to_end || !matches!(instructions.opcodes.last(), Some(OpCode::Return)) {
             let name_line_col = name.line_col();
             instructions.push(OpCode::PushUninitializedScalar, name_line_col);
             instructions.push(OpCode::Return, name_line_col);

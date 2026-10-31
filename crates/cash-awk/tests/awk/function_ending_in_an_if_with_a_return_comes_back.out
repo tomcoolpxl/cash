@@ -1,0 +1,6 @@
+begin after f
+in g after f
+begin after g
+h: [] [2]
+action after f
+NOT HANDLED: text

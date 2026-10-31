@@ -3447,3 +3447,18 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   changes an hour later than its own `M3.2.0,M11.1.0` and chrono-tz's zone, Cygwin's
   doing and not followed; and it knows no IANA name (`America/New_York` is GMT there),
   where cash's chrono-tz does.
+- **An awk function ending in an `if` that holds a `return` ran past its end** (2026-10-31,
+  found by shdoc in the corpus round after 2.3.2): the compiler added a function's
+  closing return only when its last opcode was not already a `Return`, and a body ending
+  with `if (c) { …; return }` ends with one, so the `if`'s jump over it, taken when the
+  condition was false, landed past the function's code: the caller's statements after
+  the call were skipped, or the program ended there and then. shdoc's
+  `handle_description` is such a function, and its callers' `reset()` never ran, so a
+  file's description leaked into every function's. A function gets its closing return
+  when a jump lands at its end as well; a test calls such a function from a rule's
+  action, from `BEGIN` and from another function.
+- **awk reads a backslash before CRLF as a continuation** (2026-10-31, shdoc again, whose
+  checkout here was CRLF): the grammar knew `\` before LF alone, where gawk takes the CR
+  too, as a Windows editor saves a program; `printf(…,\` at the end of a line was a
+  syntax error. The corpus fixtures are LF in the repository (`.gitattributes`), so the
+  case runs either way.
