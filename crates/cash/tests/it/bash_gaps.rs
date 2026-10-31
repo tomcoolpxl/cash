@@ -3966,6 +3966,81 @@ fn compgen_b_and_complete_p_list_in_the_same_order_every_run() {
         output("complete -W z c; complete -W x a; complete -W y b; complete -p").1,
         "complete -W 'x' a\ncomplete -W 'y' b\ncomplete -W 'z' c"
     );
+    // The `-o` options come before the actions, as Bash prints them (fzf's
+    // completion.bash reads `complete -p` back and keeps the original completions).
+    assert_eq!(
+        output(
+            "complete -o default -o nospace -v -F _f export; \
+             complete -a -o default -F _f unalias; complete -p export unalias"
+        )
+        .1,
+        "complete -o default -o nospace -v -F _f export\n\
+         complete -o default -a -F _f unalias"
+    );
+}
+
+#[test]
+fn a_job_that_ended_before_a_plain_wait_stays_listed_until_jobs_shows_it() {
+    // Bash 5.3 keeps a finished job that nothing reported in its table through a plain
+    // `wait`, and `jobs` shows it once, `Done` or `Exit N`; `wait -n`, `wait %1` and
+    // `wait PID` take it with its status; a job the wait itself collects is gone. Each
+    // script checked against Git Bash 5.3.
+    assert_eq!(
+        output("true & sleep 0.5; wait; jobs; echo \"jobs: $?\"; jobs; echo end"),
+        (
+            0,
+            "[1]+  Done                       true\njobs: 0\nend".into()
+        )
+    );
+    assert_eq!(
+        output("set -m; false & sleep 0.5; wait; echo \"wait: $?\"; jobs; echo end"),
+        (
+            0,
+            "wait: 0\n[1]+  Exit 1                     false\nend".into()
+        )
+    );
+    assert_eq!(
+        output("sleep 0.3 & wait; jobs; echo end"),
+        (0, "end".into())
+    );
+    assert_eq!(
+        output("true & sleep 0.5; wait; wait -n; echo \"wait -n: $?\"; jobs; echo end"),
+        (0, "wait -n: 0\nend".into())
+    );
+    assert_eq!(
+        output("set -m; true & sleep 0.5; wait; wait %1; echo \"wait %1: $?\"; jobs; echo end"),
+        (0, "wait %1: 0\nend".into())
+    );
+    assert_eq!(
+        output("true & p=$!; sleep 0.5; wait; wait $p; echo \"wait pid: $?\"; jobs; echo end"),
+        (0, "wait pid: 0\nend".into())
+    );
+}
+
+#[test]
+fn an_interactive_shell_run_through_pipes_starts_without_job_control() {
+    // Bash turns job control on only where its standard error is a terminal: `cash -i
+    // -c` run by a program through pipes has `$-` without `m` and monitor off, and
+    // `set -m` turns it on. Checked against Git Bash 5.3 (which also says "no job
+    // control in this shell" on standard error; cash says nothing).
+    let result = cash_command()
+        .args([
+            "--noprofile",
+            "--norc",
+            "-i",
+            "-c",
+            "echo \"$-\"; set -o | grep monitor; set -m; echo \"$-\"",
+        ])
+        .env("CASH_NO_OFFER", "1")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&result.stdout).trim_end(),
+        "hiBHc\nmonitor        \toff\nhimBHc",
+        "stderr: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
 }
 
 #[test]

@@ -167,6 +167,9 @@ pub struct CreateOptions<SE: extensions::ShellExtensions = extensions::DefaultSh
     /// Whether the shell is interactive.
     #[builder(default)]
     pub interactive: bool,
+    /// Whether job control (`set -m`) is on as the shell starts; unset, it is on in an
+    /// interactive shell. Bash turns it on only where its standard error is a terminal.
+    pub job_control: Option<bool>,
     /// Whether the shell is a login shell.
     #[builder(default)]
     pub login: bool,

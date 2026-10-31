@@ -45,9 +45,14 @@ fn run(dir: &Path, interactive: bool, body: &str) -> String {
     std::fs::write(&helper, CTRL_C_PS1).unwrap();
     let t = dir.to_string_lossy().replace('\\', "/");
     let script = dir.join("script.sh");
+    // The interactive cash here writes to a pipe, not a console, so job control starts
+    // off, as Bash's does; `set -m` turns it on, as at a prompt.
+    let monitor = if interactive { "set -m\n" } else { "" };
     std::fs::write(
         &script,
-        format!("T='{t}'\nctrlc() {{ powershell -NoProfile -File \"$T/ctrlc.ps1\"; }}\n{body}\n"),
+        format!(
+            "{monitor}T='{t}'\nctrlc() {{ powershell -NoProfile -File \"$T/ctrlc.ps1\"; }}\n{body}\n"
+        ),
     )
     .unwrap();
     // The test runner may start everything with Ctrl-C ignored, a flag Windows passes to

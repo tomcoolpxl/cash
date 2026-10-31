@@ -31,6 +31,10 @@ Background jobs started with `&` at the prompt lead a console group of their own
 keyboard's Ctrl-C passes them by. Under `fg`, cash relays Ctrl-C to such a job as a
 Ctrl-Break, and a second Ctrl-C ends the job's tree.
 
+Job control is on at a prompt whose standard error is the console, as Bash's is. An
+interactive cash whose output another program reads through a pipe (`cash -i -c` under
+a tool) starts with it off, `$-` without `m`, as Bash does there; `set -m` turns it on.
+
 ## Ctrl-Z
 
 Windows has no Ctrl-Z signal: it is a key, which programs that read the keyboard use as

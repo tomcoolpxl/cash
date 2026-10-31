@@ -321,6 +321,36 @@ impl CompleteCommand {
             s.push_str(special_name);
         }
 
+        // Bash prints the `-o` options before the actions (`complete -o default -o nospace
+        // -v -F _f export`), and fzf's completion.bash reads them back in that order.
+        if spec.options.bash_default {
+            s.push_str(" -o bashdefault");
+        }
+        if spec.options.default {
+            s.push_str(" -o default");
+        }
+        if spec.options.dir_names {
+            s.push_str(" -o dirnames");
+        }
+        if spec.options.file_names {
+            s.push_str(" -o filenames");
+        }
+        if spec.options.full_quote {
+            s.push_str(" -o fullquote");
+        }
+        if spec.options.no_quote {
+            s.push_str(" -o noquote");
+        }
+        if spec.options.no_sort {
+            s.push_str(" -o nosort");
+        }
+        if spec.options.no_space {
+            s.push_str(" -o nospace");
+        }
+        if spec.options.plus_dirs {
+            s.push_str(" -o plusdirs");
+        }
+
         for action in &spec.actions {
             s.push(' ');
 
@@ -352,34 +382,6 @@ impl CompleteCommand {
             };
 
             s.push_str(action_str);
-        }
-
-        if spec.options.bash_default {
-            s.push_str(" -o bashdefault");
-        }
-        if spec.options.default {
-            s.push_str(" -o default");
-        }
-        if spec.options.dir_names {
-            s.push_str(" -o dirnames");
-        }
-        if spec.options.file_names {
-            s.push_str(" -o filenames");
-        }
-        if spec.options.full_quote {
-            s.push_str(" -o fullquote");
-        }
-        if spec.options.no_quote {
-            s.push_str(" -o noquote");
-        }
-        if spec.options.no_sort {
-            s.push_str(" -o nosort");
-        }
-        if spec.options.no_space {
-            s.push_str(" -o nospace");
-        }
-        if spec.options.plus_dirs {
-            s.push_str(" -o plusdirs");
         }
 
         if let Some(glob_pattern) = &spec.glob_pattern {

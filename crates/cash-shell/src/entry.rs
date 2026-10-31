@@ -1131,6 +1131,10 @@ async fn instantiate_shell_from_args(
         .exit_after_one_command(args.exit_after_one_command)
         .login(login)
         .interactive(args.is_interactive())
+        // As Bash: job control starts on in an interactive shell whose standard error is
+        // a terminal, and off in one run through pipes by another program (`cash -i -c`
+        // under a test or a tool), where `set -m` still turns it on.
+        .job_control(args.is_interactive() && std::io::stderr().is_terminal())
         .command_string_mode(args.command.is_some())
         .no_editing(args.no_editing)
         .profile(cash_core::ProfileLoadBehavior::Skip)

@@ -229,14 +229,9 @@ path. The rest, by theme:
 - Bytes that are not UTF-8 become U+FFFD (`$'\xff'`, `read`, `%q`), and `$'\U'` above
   U+10FFFF.
 
-**Traps, signals and jobs** (done in the phase after 1.48.0, docs/DONE.md; left:)
-- An interactive cash with no console (`cash -i -c ...` with pipes, oh-my-bash's corpus
-  case) has job control on, `$-` holding `m`; Git Bash, which cannot take the terminal,
-  has it off. Turning it off where no console is would take job control from cash under
-  mintty, whose input is a pipe: to be looked at before changing.
-- With `set -m` a script's job that ended before a plain `wait` is gone after it (Bash
-  keeps it until `jobs` shows it as `Done`); one `fg` or `wait` collected leaves silently
-  in both.
+**Traps, signals and jobs**: done, in docs/DONE.md (the phase after 1.48.0; the two
+left over, job control through pipes and a job finished before a plain `wait`, in the
+phase after 2.3.1).
 
 **printf, and times**
 - A POSIX `TZ` with daylight-saving rules (`EST5EDT,M3.2.0/2,M11.1.0/2`) keeps standard

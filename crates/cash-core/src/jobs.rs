@@ -893,19 +893,43 @@ impl JobManager {
         }
     }
 
-    /// Waits for all managed jobs to complete.
+    /// Waits for all managed jobs to complete: the jobs this wait collected.
+    ///
+    /// A job that had ended before the wait, and that nothing has reported, stays in the
+    /// table as `Done` for `jobs` to show once, as in Bash 5.3, where `true & sleep 1;
+    /// wait; jobs` lists `[1]+ Done true`; a plain `wait` reports nothing itself. Of
+    /// those jobs, `$!`'s keeps its status for `wait PID`, unless something reported it;
+    /// one the wait itself collects does not.
     pub async fn wait_all(&mut self) -> Result<Vec<Job>, error::Error> {
-        // Of the jobs that finished before the wait, `$!`'s keeps its status for
-        // `wait PID`, unless something reported it; one the wait itself collects does
-        // not, as in Bash 5.3.
-        let mut done: Vec<Job> = self.poll()?.into_iter().map(|(job, _)| job).collect();
-        self.forget_on_plain_wait();
+        let mut ended_before = 0;
         for job in &mut self.jobs {
-            job.wait().await?;
+            if !matches!(job.state, JobState::Done) {
+                let _ = job.poll_done()?;
+            }
+            if matches!(job.state, JobState::Done) && !job.reap_counted {
+                job.reap_counted = true;
+                ended_before += 1;
+            }
         }
+        self.note_children_reaped(ended_before);
+        self.forget_on_plain_wait();
 
-        done.extend(self.sweep_completed_jobs());
-        Ok(done)
+        let mut collected = Vec::new();
+        let mut i = 0;
+        while i != self.jobs.len() {
+            if matches!(self.jobs[i].state, JobState::Done) {
+                i += 1;
+                continue;
+            }
+            self.jobs[i].wait().await?;
+            let job = self.take_out(i);
+            self.count_reaped(&job);
+            collected.push(job);
+        }
+        if !collected.is_empty() {
+            self.reannotate();
+        }
+        Ok(collected)
     }
 
     /// Polls all managed jobs for completion.
@@ -948,27 +972,6 @@ impl JobManager {
         }
 
         Ok(results)
-    }
-
-    fn sweep_completed_jobs(&mut self) -> Vec<Job> {
-        let mut completed_jobs = vec![];
-
-        let mut i = 0;
-        while i != self.jobs.len() {
-            if self.jobs[i].tasks.is_empty() {
-                let job = self.take_out(i);
-                self.count_reaped(&job);
-                completed_jobs.push(job);
-            } else {
-                i += 1;
-            }
-        }
-
-        if !completed_jobs.is_empty() {
-            self.reannotate();
-        }
-
-        completed_jobs
     }
 }
 

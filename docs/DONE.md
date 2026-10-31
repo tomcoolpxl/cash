@@ -3331,3 +3331,23 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   integration test starts cash in a minimized console window of its own, sets the raster
   font from outside as PowerShell does, runs `cmd /c exit` through cash and reads the
   font back; it failed without the fix.
+- **Jobs without a console, and a job finished before a plain `wait`** (left from the
+  phase after 1.48.0; the user's pick, done 2026-10-31). An interactive cash run through
+  pipes (`cash -i -c` under a test or another program, oh-my-bash's corpus case) had job
+  control on, `$-` holding `m`, where Git Bash has it off: Bash turns it on only where
+  its standard error is a terminal, and a later `set -m` turns it on all the same, with
+  `kill %1` and its Ctrl-Break working (checked 2026-10-31). cash now does the same, with
+  `job_control` among the shell's creation options, decided from `is_terminal` on
+  standard error; at a console, a pseudo console included, nothing changes. mintty was
+  the worry: cash does not run under it, and a native program's handles are pipes there,
+  so `set -m` would be the way there too. The job-group tests, which drive an interactive
+  cash through pipes, say `set -m` first, and `help job-control` says the rule. And a job
+  that had ended before a plain `wait`, unreported, left cash's table at the wait, where
+  Bash 5.3 lists it at the next `jobs` (`[1]+ Done true`, `Exit 1` for a failed one),
+  once; `wait -n`, `wait %1` and `wait PID` take it with its status, and a job the wait
+  itself collects leaves silently in both. `wait_all` now keeps such jobs as `Done` with
+  their notification pending, and `jobs` takes them out as it shows them; six scripts
+  are checked against Git Bash 5.3. Found beside it, in fzf's corpus case: `complete -p`
+  printed a specification's actions before its `-o` options, where Bash prints the
+  options first (`complete -o default -o nospace -v -F _f export`); fzf's completion.bash
+  reads these lines back to keep the original completions. Fixed, with a test.

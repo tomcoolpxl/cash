@@ -231,7 +231,9 @@ impl RuntimeOptions {
                 .disallow_overwriting_regular_files_via_output_redirection,
             do_not_execute_commands: create_options.do_not_execute_commands,
             enable_command_history: create_options.interactive,
-            enable_job_control: create_options.interactive,
+            enable_job_control: create_options
+                .job_control
+                .unwrap_or(create_options.interactive),
             exit_after_one_command: create_options.exit_after_one_command,
             read_commands_from_stdin: create_options.read_commands_from_stdin,
             command_string_mode: create_options.command_string_mode,
