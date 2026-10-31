@@ -36,17 +36,25 @@ pub fn set_ignore_case(ignore: bool) {
 }
 
 /// The engine of `translated`, ignoring case when `fold`.
+///
+/// A dot matches a newline: an awk string may hold one, and gawk's `.` takes it, so that
+/// `gensub("^.*$", "  &", "g", text "\n")` indents a text that ends in a newline (shdoc,
+/// 2026-10-31); `^` and `$` still mean the string's ends alone.
 fn engine(translated: &str, fold: bool) -> Result<MetaRegex, String> {
     match regex_syntax::ParserBuilder::new()
         .case_insensitive(fold)
+        .dot_matches_new_line(true)
         .build()
         .parse(translated)
     {
         Ok(hir) => {
             let hir = sort_alternations(hir);
+            let syntax = regex_automata::util::syntax::Config::new()
+                .case_insensitive(fold)
+                .dot_matches_new_line(true);
             MetaRegex::builder()
                 .build_from_hir(&hir)
-                .or_else(|_| MetaRegex::new(translated))
+                .or_else(|_| MetaRegex::builder().syntax(syntax).build(translated))
                 .map_err(|e| e.to_string())
         }
         Err(regex_syntax::Error::Parse(error)) => Err(error.kind().to_string()),

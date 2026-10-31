@@ -55,3 +55,27 @@ ls -A | wc -l",
     );
     assert_eq!((out.as_str(), code), ("dangling\nrc=0\n0\n", 0));
 }
+
+#[test]
+fn rm_removes_a_link_to_a_directory_itself_without_r() {
+    // `rm link` took a directory link for a directory and said "Is a directory", where
+    // GNU rm removes a symbolic link, to a directory or not, as it removes a file (jenv's
+    // remove of a version, 2026-10-31). Named with a slash, the link still means the
+    // directory, as GNU rm has it.
+    let dir = Scratch::new("rm-dir-link");
+    let (out, code) = run_in(
+        &dir,
+        r"mkdir -p target && echo keep > target/f && cmd /c 'mklink /J link target' > /dev/null
+[ -L link ] && echo linked
+rm link; echo rc=$?
+[ -e link ] || echo gone; cat target/f
+cmd /c 'mklink /J link2 target' > /dev/null; rm link2/ 2>&1; echo slash rc=$?; [ -e link2 ] && echo link2 kept",
+    );
+    assert_eq!(
+        (out.as_str(), code),
+        (
+            "linked\nrc=0\ngone\nkeep\nrm: cannot remove 'link2/': Is a directory\nslash rc=1\nlink2 kept\n",
+            0
+        )
+    );
+}

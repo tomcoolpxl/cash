@@ -622,9 +622,13 @@ pub fn remove(files: &[&OsStr], options: &Options) -> bool {
                 any_files_processed = true;
                 if metadata.is_dir() {
                     handle_dir(file, options, progress_bar.as_ref())
-                } else if is_symlink_dir(&metadata) {
+                } else if is_symlink_dir(&metadata) && uucore::fs::path_ends_with_terminator(file) {
                     remove_dir(file, options, progress_bar.as_ref())
                 } else {
+                    // cash: a link to a directory named without a slash is the link
+                    // alone, removed as a file is, with no `-r` or `-d`, as GNU rm takes
+                    // a symbolic link; `rm link` said "Is a directory" (jenv's remove of a
+                    // version, 2026-10-31). `remove_file` knows a directory link.
                     remove_file(file, options, progress_bar.as_ref())
                 }
             }

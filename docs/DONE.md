@@ -3473,3 +3473,16 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   clears one), and rm and rmdir take the attribute off where it stands in the way; a
   file's attribute stays what it was. Thirteen lines of a script match Git Bash 5.3, and
   the differences page says so.
+- **awk's `.` matches a newline** (2026-10-31, shdoc's `@option` case in the corpus round
+  after 2.3.2): an awk string may hold newlines, and gawk's `.` takes one, where the
+  regex engine's did not, so shdoc's `gensub("^.*$", "  &", "g", text "\n")`, which
+  indents a definition that ends in a newline, matched nothing and the option
+  descriptions came out unindented. The engine is built with the dot matching a newline;
+  `^` and `$` still mean the string's ends alone, and a negated bracket expression took a
+  newline already. A file test holds gawk's answers.
+- **`rm link` removed no link to a directory** (2026-10-31, jenv's remove of a version in the
+  corpus round): rm sent a directory link, a junction or a symbolic link to a directory,
+  down the directory path and said "Is a directory" without `-r` or `-d`, where GNU rm
+  removes a symbolic link, to a directory or not, as it removes a file. The link alone is
+  removed now, through RemoveDirectory, which takes a directory link without following
+  it; named with a slash, `rm link/`, it still means the directory, as GNU rm has it.

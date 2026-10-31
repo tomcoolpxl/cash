@@ -7325,3 +7325,8 @@ fn test_awk_backslash_before_crlf_continues_the_line() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn test_awk_dot_matches_a_newline_as_in_gawk() {
+    test_awk!(dot_matches_a_newline_as_in_gawk);
+}
