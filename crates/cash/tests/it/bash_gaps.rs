@@ -4476,7 +4476,7 @@ fn an_exit_in_the_exit_trap_or_in_a_function_it_calls_is_the_shell_s_status() {
         (r#"trap "false" EXIT; true"#, 0, ""),
         (r#"trap "true" EXIT; false"#, 1, ""),
         (r#"f() { exit 3; }; trap "f" EXIT; exit 7"#, 3, ""),
-        (r#"trap 'echo $?; exit' EXIT; false"#, 1, "1"),
+        (r"trap 'echo $?; exit' EXIT; false", 1, "1"),
         (r#"f() { exit 3; }; trap "f" EXIT; (exit 5)"#, 3, ""),
         (
             r#"trap "echo in; exit 4" EXIT; (trap "exit 6" EXIT; echo sub); echo "sub: $?""#,
@@ -4505,10 +4505,10 @@ fn tz_rules_with_daylight_saving_reach_the_shell_s_own_times() {
     // prompt's `\D{}`, `ls -l` and `history` kept standard time all year. The lines are
     // Git Bash 5.3's, whose Cygwin reads the rules.
     let (code, out) = output(
-        r#"TZ='EST5EDT,M3.2.0,M11.1.0' printf '%(%F %T %Z %z)T\n' 1784116800 1772953200 1793512800
+        r"TZ='EST5EDT,M3.2.0,M11.1.0' printf '%(%F %T %Z %z)T\n' 1784116800 1772953200 1793512800
            TZ='<+0330>-3:30' printf '%(%F %T %Z)T\n' 1784116800
            TZ='CET-1CEST,M3.5.0,M10.5.0/3' printf '%(%F %T %Z)T\n' 1774746000 1774745999
-           TZ='XYZ3ABC' printf '%(%F %T %Z %z)T\n' 1784116800 1772953200"#,
+           TZ='XYZ3ABC' printf '%(%F %T %Z %z)T\n' 1784116800 1772953200",
     );
     assert_eq!(code, 0, "{out}");
     assert_eq!(
