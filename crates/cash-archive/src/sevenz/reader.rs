@@ -27,6 +27,14 @@ use crate::sevenz::{
 
 const MAX_MEM_LIMIT_KB: usize = usize::MAX / 1024;
 
+/// The decoder nests one reader for each coder of a block. 7-Zip accepts at most 64 coders
+/// in a block.
+const MAX_BLOCK_CODERS: usize = 64;
+
+/// The bind pair lookups of a block scan all of its streams. 7-Zip accepts at most 64 input
+/// streams in a block.
+const MAX_BLOCK_IN_STREAMS: u64 = 64;
+
 pub struct BoundedReader<R: Read> {
     inner: R,
     remain: usize,
@@ -282,6 +290,10 @@ impl Archive {
         if nid == K_FILES_INFO {
             Self::read_files_info(header, archive, limit)?;
             nid = header.read_u8()?;
+        } else if !archive.blocks.is_empty() {
+            // The stream map is built from the files info. Without it, blocks cannot be
+            // mapped to entries.
+            return Err(Error::other("Header has streams but no files info"));
         }
         if nid != K_END {
             return Err(Error::BadTerminatedHeader(nid));
@@ -295,7 +307,11 @@ impl Archive {
         while nid != K_END {
             // Bound the skip length against the buffer: an unbounded value cast to `i64`
             // could go negative and seek backwards, re-reading the same bytes forever.
-            let property_size = bounded_count(read_variable_u64(header)?, limit, "propertySize")?;
+            let property_size = bounded_count(
+                read_variable_u64(header)?,
+                limit,
+                "propertySize exceeds the available input",
+            )?;
             header.seek(SeekFrom::Current(property_size as i64))?;
             nid = header.read_u8()?;
         }
@@ -368,10 +384,7 @@ impl Archive {
                 return Err(Error::Truncated);
             }
             _ => {
-                return Err(Error::other(format!(
-                    "Cannot handle next_header_size {}",
-                    start_header.next_header_size
-                )));
+                return Err(Error::other("Cannot handle next_header_size"));
             }
         }
 
@@ -394,7 +407,7 @@ impl Archive {
             .ok_or_else(|| Error::other("next header offset out of range"))?;
         reader.seek(SeekFrom::Start(header_pos))?;
 
-        let mut buf = vec![0; next_header_size_int];
+        let mut buf = try_vec(next_header_size_int, 0)?;
         reader.read_exact(&mut buf)?;
         if verify_crc && u64::from(crc32fast::hash(&buf)) != start_header.next_header_crc {
             return Err(Error::NextHeaderCrcMismatch);
@@ -413,12 +426,12 @@ impl Archive {
                 next_header_size_int,
                 thread_count,
             )?;
-            // Read the decoded header lazily instead of pre-allocating `buf_size` bytes:
-            // a crafted encoded header can declare a huge unpack size, and `resize`
-            // would allocate it all up front (OOM) before any data is produced. `take`
-            // caps the read at the declared size while `read_to_end` grows the buffer to
-            // match only what is actually decoded, so the allocation tracks real input.
-            buf.clear();
+            // Read the decoded header lazily. `take` caps the read at the declared unpack
+            // size, and `read_to_end` grows the buffer only with decoded data. `read_to_end`
+            // grows a buffer past its starting capacity first with an infallible allocation
+            // of twice that capacity and later with fallible ones. A new buffer starts
+            // without capacity, and its infallible growth holds at most 32 bytes.
+            buf = Vec::new();
             (&mut out_reader)
                 .take(buf_size as u64)
                 .read_to_end(&mut buf)
@@ -552,8 +565,12 @@ impl Archive {
         archive: &mut Self,
         limit: usize,
     ) -> Result<(), Error> {
-        let num_files = bounded_count(read_variable_u64(header)?, limit, "num files")?;
-        let mut files: Vec<ArchiveEntry> = vec![Default::default(); num_files];
+        let num_files = bounded_count(
+            read_variable_u64(header)?,
+            limit,
+            "num files exceeds the available input",
+        )?;
+        let mut files: Vec<ArchiveEntry> = try_vec(num_files, ArchiveEntry::default())?;
 
         let mut is_empty_stream: Option<BitSet> = None;
         let mut is_empty_file: Option<BitSet> = None;
@@ -598,7 +615,11 @@ impl Archive {
                         return Err(Error::other("file names length invalid"));
                     }
 
-                    let size = bounded_count(size, limit, "file names length")?;
+                    let size = bounded_count(
+                        size,
+                        limit,
+                        "file names length exceeds the available input",
+                    )?;
                     // let mut names = vec![0u8; size - 1];
                     // header.read_exact(&mut names)?;
                     let names_reader = NamesReader::new(header, size - 1);
@@ -623,9 +644,7 @@ impl Archive {
                     let times_defined = read_all_or_bits(header, num_files)?;
                     let external = header.read_u8()?;
                     if external != 0 {
-                        return Err(Error::other(format!(
-                            "kCTime Unimplemented:external={external}"
-                        )));
+                        return Err(Error::ExternalUnsupported);
                     }
                     for (i, file) in files.iter_mut().enumerate() {
                         file.has_creation_date = times_defined.contains(i);
@@ -638,9 +657,7 @@ impl Archive {
                     let times_defined = read_all_or_bits(header, num_files)?;
                     let external = header.read_u8()?;
                     if external != 0 {
-                        return Err(Error::other(format!(
-                            "kATime Unimplemented:external={external}"
-                        )));
+                        return Err(Error::ExternalUnsupported);
                     }
                     for (i, file) in files.iter_mut().enumerate() {
                         file.has_access_date = times_defined.contains(i);
@@ -653,9 +670,7 @@ impl Archive {
                     let times_defined = read_all_or_bits(header, num_files)?;
                     let external = header.read_u8()?;
                     if external != 0 {
-                        return Err(Error::other(format!(
-                            "kMTime Unimplemented:external={external}"
-                        )));
+                        return Err(Error::ExternalUnsupported);
                     }
                     for (i, file) in files.iter_mut().enumerate() {
                         file.has_last_modified_date = times_defined.contains(i);
@@ -668,9 +683,7 @@ impl Archive {
                     let times_defined = read_all_or_bits(header, num_files)?;
                     let external = header.read_u8()?;
                     if external != 0 {
-                        return Err(Error::other(format!(
-                            "kWinAttributes Unimplemented:external={external}"
-                        )));
+                        return Err(Error::ExternalUnsupported);
                     }
                     for (i, file) in files.iter_mut().enumerate() {
                         file.has_windows_attributes = times_defined.contains(i);
@@ -683,11 +696,19 @@ impl Archive {
                 K_DUMMY => {
                     // Bound the skip against the buffer: an unbounded value cast to `i64`
                     // could go negative and seek backwards, re-reading the same bytes forever.
-                    let skip = bounded_count(size, limit, "files-info property size")?;
+                    let skip = bounded_count(
+                        size,
+                        limit,
+                        "files-info property size exceeds the available input",
+                    )?;
                     header.seek(SeekFrom::Current(skip as i64))?;
                 }
                 _ => {
-                    let skip = bounded_count(size, limit, "files-info property size")?;
+                    let skip = bounded_count(
+                        size,
+                        limit,
+                        "files-info property size exceeds the available input",
+                    )?;
                     header.seek(SeekFrom::Current(skip as i64))?;
                 }
             }
@@ -744,7 +765,7 @@ impl Archive {
 
         let mut next_block_pack_stream_index = 0;
         let num_blocks = archive.blocks.len();
-        stream_map.block_first_pack_stream_index = vec![0; num_blocks];
+        stream_map.block_first_pack_stream_index = try_vec(num_blocks, 0)?;
         for i in 0..num_blocks {
             stream_map.block_first_pack_stream_index[i] = next_block_pack_stream_index;
             // A block's pack-stream span `[first .. first + packed_streams.len())` is later
@@ -766,7 +787,7 @@ impl Archive {
         // does not re-sum the preceding blocks every time it opens one, which
         // made extracting an archive of many non-solid blocks quadratic.
         let mut next_sub_stream_index: usize = 0;
-        stream_map.block_first_sub_stream_index = vec![0; num_blocks];
+        stream_map.block_first_sub_stream_index = try_vec(num_blocks, 0)?;
         for i in 0..num_blocks {
             stream_map.block_first_sub_stream_index[i] = next_sub_stream_index;
             next_sub_stream_index = next_sub_stream_index
@@ -776,7 +797,7 @@ impl Archive {
 
         let mut next_pack_stream_offset: u64 = 0;
         let num_pack_sizes = archive.pack_sizes.len();
-        stream_map.pack_stream_offsets = vec![0; num_pack_sizes];
+        stream_map.pack_stream_offsets = try_vec(num_pack_sizes, 0)?;
         for i in 0..num_pack_sizes {
             stream_map.pack_stream_offsets[i] = next_pack_stream_offset;
             next_pack_stream_offset = next_pack_stream_offset
@@ -786,8 +807,8 @@ impl Archive {
 
         // Files with data take the blocks' sub-streams in order; files without data may
         // stand anywhere between them (7-Zip puts them first, other writers need not).
-        stream_map.block_files = vec![Vec::new(); num_blocks];
-        stream_map.file_block_index = vec![None; archive.files.len()];
+        stream_map.block_files = try_vec(num_blocks, Vec::new())?;
+        stream_map.file_block_index = try_vec(archive.files.len(), None)?;
         let mut block_index = 0;
         for i in 0..archive.files.len() {
             if !archive.files[i].has_stream {
@@ -839,11 +860,14 @@ impl Archive {
         limit: usize,
     ) -> Result<(), Error> {
         archive.pack_pos = read_variable_u64(header)?;
-        let num_pack_streams =
-            bounded_count(read_variable_u64(header)?, limit, "num pack streams")?;
+        let num_pack_streams = bounded_count(
+            read_variable_u64(header)?,
+            limit,
+            "num pack streams exceeds the available input",
+        )?;
         let mut nid = header.read_u8()?;
         if nid == K_SIZE {
-            archive.pack_sizes = vec![0u64; num_pack_streams];
+            archive.pack_sizes = try_vec(num_pack_streams, 0u64)?;
             for i in 0..archive.pack_sizes.len() {
                 archive.pack_sizes[i] = read_variable_u64(header)?;
             }
@@ -852,7 +876,7 @@ impl Archive {
 
         if nid == K_CRC {
             archive.pack_crcs_defined = read_all_or_bits(header, num_pack_streams)?;
-            archive.pack_crcs = vec![0; num_pack_streams];
+            archive.pack_crcs = try_vec(num_pack_streams, 0)?;
             for i in 0..num_pack_streams {
                 if archive.pack_crcs_defined.contains(i) {
                     archive.pack_crcs[i] = u64::from(header.read_u32()?);
@@ -874,11 +898,18 @@ impl Archive {
     ) -> Result<(), Error> {
         let nid = header.read_u8()?;
         if nid != K_FOLDER {
-            return Err(Error::other(format!("Expected kFolder, got {nid}")));
+            return Err(Error::other("Expected kFolder"));
         }
-        let num_blocks = bounded_count(read_variable_u64(header)?, limit, "num blocks")?;
+        let num_blocks = bounded_count(
+            read_variable_u64(header)?,
+            limit,
+            "num blocks exceeds the available input",
+        )?;
 
-        archive.blocks.reserve_exact(num_blocks);
+        archive
+            .blocks
+            .try_reserve_exact(num_blocks)
+            .map_err(|_| Error::other("cannot allocate the blocks"))?;
         let external = header.read_u8()?;
         if external != 0 {
             return Err(Error::ExternalUnsupported);
@@ -890,16 +921,14 @@ impl Archive {
 
         let nid = header.read_u8()?;
         if nid != K_CODERS_UNPACK_SIZE {
-            return Err(Error::other(format!(
-                "Expected kCodersUnpackSize, got {nid}"
-            )));
+            return Err(Error::other("Expected kCodersUnpackSize"));
         }
 
         for block in &mut archive.blocks {
             // `total_output_streams` is bounded in `read_block`, but clamp the eager
             // reservation to `limit` as well so it can never over-allocate.
             let tos = block.total_output_streams;
-            block.unpack_sizes.reserve_exact(tos.min(limit));
+            block.unpack_sizes = try_with_capacity(tos.min(limit))?;
             for _ in 0..tos {
                 block.unpack_sizes.push(read_variable_u64(header)?);
             }
@@ -939,7 +968,11 @@ impl Archive {
         if nid == K_NUM_UNPACK_STREAM {
             total_unpack_streams = 0;
             for block in &mut archive.blocks {
-                let num_streams = bounded_count(read_variable_u64(header)?, limit, "numStreams")?;
+                let num_streams = bounded_count(
+                    read_variable_u64(header)?,
+                    limit,
+                    "numStreams exceeds the available input",
+                )?;
                 block.num_unpack_sub_streams = num_streams;
                 // Each sub-stream still consumes header bytes downstream, so the running
                 // total stays bounded by `limit`; reject anything larger up front.
@@ -951,14 +984,11 @@ impl Archive {
             nid = header.read_u8()?;
         }
 
-        let mut sub_streams_info = SubStreamsInfo::default();
-        sub_streams_info
-            .unpack_sizes
-            .resize(total_unpack_streams, Default::default());
-        sub_streams_info
-            .has_crc
-            .reserve_len_exact(total_unpack_streams);
-        sub_streams_info.crcs = vec![0; total_unpack_streams];
+        let mut sub_streams_info = SubStreamsInfo {
+            unpack_sizes: try_vec(total_unpack_streams, 0)?,
+            has_crc: try_bit_set(total_unpack_streams)?,
+            crcs: try_vec(total_unpack_streams, 0)?,
+        };
 
         let mut next_unpack_stream = 0;
         for block in &archive.blocks {
@@ -998,7 +1028,7 @@ impl Archive {
 
         if nid == K_CRC {
             let has_missing_crc = read_all_or_bits(header, num_digests)?;
-            let mut missing_crcs = vec![0; num_digests];
+            let mut missing_crcs = try_vec(num_digests, 0)?;
             for (i, missing_crc) in missing_crcs.iter_mut().enumerate() {
                 if has_missing_crc.contains(i) {
                     *missing_crc = u64::from(header.read_u32()?);
@@ -1039,8 +1069,15 @@ impl Archive {
     fn read_block<R: Read>(header: &mut R, limit: usize) -> Result<Block, Error> {
         let mut block = Block::default();
 
-        let num_coders = bounded_count(read_variable_u64(header)?, limit, "num coders")?;
-        let mut coders = Vec::with_capacity(num_coders);
+        let num_coders = bounded_count(
+            read_variable_u64(header)?,
+            limit,
+            "num coders exceeds the available input",
+        )?;
+        if num_coders > MAX_BLOCK_CODERS {
+            return Err(Error::other("Block has too many coders"));
+        }
+        let mut coders = try_with_capacity(num_coders)?;
         let mut total_in_streams: u64 = 0;
         let mut total_out_streams: u64 = 0;
         for _i in 0..num_coders {
@@ -1060,6 +1097,11 @@ impl Archive {
             } else {
                 coder.num_in_streams = read_variable_u64(header)?;
                 coder.num_out_streams = read_variable_u64(header)?;
+                // The block keeps one unpack size for each coder. 7-Zip rejects other
+                // output stream counts as well.
+                if coder.num_out_streams != 1 {
+                    return Err(Error::other("Coder must have exactly one output stream"));
+                }
             }
             // Each stream is referenced by a bind-pair/packed-stream entry that consumes
             // header bytes, so the totals cannot legitimately exceed `limit`. The counts are
@@ -1074,10 +1116,16 @@ impl Archive {
             if total_in_streams > limit as u64 || total_out_streams > limit as u64 {
                 return Err(Error::other("coder stream counts exceed available input"));
             }
+            if total_in_streams > MAX_BLOCK_IN_STREAMS {
+                return Err(Error::other("Block has too many input streams"));
+            }
             if has_attributes {
-                let properties_size =
-                    bounded_count(read_variable_u64(header)?, limit, "properties size")?;
-                let mut props = vec![0u8; properties_size];
+                let properties_size = bounded_count(
+                    read_variable_u64(header)?,
+                    limit,
+                    "properties size exceeds the available input",
+                )?;
+                let mut props = try_vec(properties_size, 0u8)?;
                 header.read_exact(&mut props)?;
                 coder.properties = props;
             }
@@ -1099,7 +1147,11 @@ impl Archive {
             return Err(Error::other("Total output streams can't be 0"));
         }
         let num_bind_pairs = total_out_streams - 1;
-        let mut bind_pairs = Vec::with_capacity(num_bind_pairs);
+        // The decoder builds the coders behind a stream once for every use of it. 7-Zip
+        // rejects a block that uses a stream twice as well.
+        let mut in_stream_used = try_vec(total_in_streams, false)?;
+        let mut out_stream_used = try_vec(total_out_streams, false)?;
+        let mut bind_pairs = try_with_capacity(num_bind_pairs)?;
         for _ in 0..num_bind_pairs {
             let bp = BindPair {
                 in_index: read_variable_u64(header)?,
@@ -1111,6 +1163,12 @@ impl Archive {
             if bp.in_index >= total_in_streams as u64 || bp.out_index >= total_out_streams as u64 {
                 return Err(Error::other("bind pair references an out-of-range stream"));
             }
+            let (in_index, out_index) = (bp.in_index as usize, bp.out_index as usize);
+            if in_stream_used[in_index] || out_stream_used[out_index] {
+                return Err(Error::other("bind pair references a stream used before"));
+            }
+            in_stream_used[in_index] = true;
+            out_stream_used[out_index] = true;
             bind_pairs.push(bp);
         }
         block.bind_pairs = bind_pairs;
@@ -1121,7 +1179,11 @@ impl Archive {
             ));
         }
         let num_packed_streams = total_in_streams - num_bind_pairs;
-        let mut packed_streams = vec![0; num_packed_streams];
+        // Decoding a block reads its first packed stream.
+        if num_packed_streams == 0 {
+            return Err(Error::other("Block has no packed streams"));
+        }
+        let mut packed_streams = try_vec(num_packed_streams, 0)?;
         if num_packed_streams == 1 {
             let mut index = u64::MAX;
             for i in 0..total_in_streams {
@@ -1136,7 +1198,14 @@ impl Archive {
             packed_streams[0] = index;
         } else {
             for packed_stream in &mut packed_streams {
-                *packed_stream = read_variable_u64(header)?;
+                let index = read_variable_u64(header)?;
+                if index >= total_in_streams as u64 || in_stream_used[index as usize] {
+                    return Err(Error::other(
+                        "packed stream references an out-of-range or used stream",
+                    ));
+                }
+                in_stream_used[index as usize] = true;
+                *packed_stream = index;
             }
         }
         block.packed_streams = packed_streams;
@@ -1148,18 +1217,45 @@ impl Archive {
 /// Validates an attacker-controlled count/size decoded from the header against an upper
 /// bound derived from the input (the number of bytes in the header buffer).
 ///
-/// Every counted element (a file, pack stream, coder, sub-stream, name byte, …) consumes
+/// Every counted element (a file, pack stream, coder, sub-stream, name byte, ...) consumes
 /// at least one header byte downstream, so a legitimate count can never exceed the buffer
 /// length. Rejecting anything larger stops a tiny archive from declaring a huge count and
 /// forcing an out-of-memory allocation, without rejecting any valid archive.
+///
+/// The `error` message is static. Memory can be exhausted when the count is rejected, and an
+/// error must not allocate.
 #[inline]
-fn bounded_count(value: u64, limit: usize, field: &str) -> Result<usize, Error> {
+fn bounded_count(value: u64, limit: usize, error: &'static str) -> Result<usize, Error> {
     if value > limit as u64 {
-        return Err(Error::other(format!(
-            "{field} ({value}) exceeds the available input ({limit} bytes)"
-        )));
+        return Err(Error::other(error));
     }
     Ok(value as usize)
+}
+
+/// Allocates an empty vector with room for `capacity` entries for a count from the archive
+/// header. Returns an error when the entries exceed the address space or the allocator fails.
+///
+/// The allocation errors of the reader carry static messages. Memory can be exhausted when
+/// they occur, and an error must not allocate.
+fn try_with_capacity<T>(capacity: usize) -> Result<Vec<T>, Error> {
+    let mut vec = Vec::new();
+    vec.try_reserve_exact(capacity)
+        .map_err(|_| Error::other("cannot allocate header entries"))?;
+    Ok(vec)
+}
+
+/// Allocates `len` copies of `value` for a count from the archive header. Returns an error
+/// when the entries exceed the address space or the allocator fails.
+fn try_vec<T: Clone>(len: usize, value: T) -> Result<Vec<T>, Error> {
+    let mut vec = try_with_capacity(len)?;
+    vec.resize(len, value);
+    Ok(vec)
+}
+
+/// Allocates a bit set of `bit_count` bits for a count from the archive header. Returns an
+/// error when the bits exceed the address space or the allocator fails.
+fn try_bit_set(bit_count: usize) -> Result<BitSet, Error> {
+    BitSet::try_with_capacity(bit_count).map_err(|_| Error::other("cannot allocate a bit set"))
 }
 
 fn read_variable_u64<R: Read>(reader: &mut R) -> io::Result<u64> {
@@ -1177,10 +1273,10 @@ fn read_variable_u64<R: Read>(reader: &mut R) -> io::Result<u64> {
     Ok(value)
 }
 
-fn read_all_or_bits<R: Read>(header: &mut R, size: usize) -> io::Result<BitSet> {
+fn read_all_or_bits<R: Read>(header: &mut R, size: usize) -> Result<BitSet, Error> {
     let all = header.read_u8()?;
     if all != 0 {
-        let mut bits = BitSet::with_capacity(size);
+        let mut bits = try_bit_set(size)?;
         for i in 0..size {
             bits.insert(i);
         }
@@ -1190,8 +1286,8 @@ fn read_all_or_bits<R: Read>(header: &mut R, size: usize) -> io::Result<BitSet> 
     }
 }
 
-fn read_bits<R: Read>(header: &mut R, size: usize) -> io::Result<BitSet> {
-    let mut bits = BitSet::with_capacity(size);
+fn read_bits<R: Read>(header: &mut R, size: usize) -> Result<BitSet, Error> {
+    let mut bits = try_bit_set(size)?;
     let mut mask = 0u32;
     let mut cache = 0u32;
     for i in 0..size {
@@ -1215,12 +1311,12 @@ struct NamesReader<'a, R: Read> {
 }
 
 impl<'a, R: Read> NamesReader<'a, R> {
-    fn new(reader: &'a mut R, max_bytes: usize) -> Self {
+    const fn new(reader: &'a mut R, max_bytes: usize) -> Self {
         Self {
             max_bytes,
             reader,
             read_bytes: 0,
-            cache: Vec::with_capacity(16),
+            cache: Vec::new(),
         }
     }
 }
@@ -1244,11 +1340,32 @@ impl<R: Read> Iterator for NamesReader<'_, R> {
             if u == 0 {
                 break;
             }
+            // A name can be as long as the header. Grow the buffer with fallible allocation.
+            if self.cache.len() == self.cache.capacity()
+                && self.cache.try_reserve(self.cache.len().max(16)).is_err()
+            {
+                return Some(Err(Error::other("cannot allocate an entry name")));
+            }
             self.cache.push(u);
         }
 
-        Some(String::from_utf16(&self.cache).map_err(|e| Error::other(e.to_string())))
+        Some(utf16_to_string(&self.cache))
     }
+}
+
+/// Decodes a UTF-16 name. The name is allocated with fallible allocation at its exact length.
+fn utf16_to_string(units: &[u16]) -> Result<String, Error> {
+    let mut len = 0;
+    for c in char::decode_utf16(units.iter().copied()) {
+        len += c
+            .map_err(|_| Error::other("entry name is invalid UTF-16"))?
+            .len_utf8();
+    }
+    let mut name = String::new();
+    name.try_reserve_exact(len)
+        .map_err(|_| Error::other("cannot allocate an entry name"))?;
+    name.extend(char::decode_utf16(units.iter().copied()).flatten());
+    Ok(name)
 }
 
 /// Reads a 7z archive file.
@@ -1413,10 +1530,7 @@ impl<R: Read + Seek> ArchiveReader<R> {
         const MAX_CODER_COUNT: usize = 32;
         let block = &archive.blocks[block_index];
         if block.coders.len() > MAX_CODER_COUNT {
-            return Err(Error::unsupported(format!(
-                "Too many coders: {}",
-                block.coders.len()
-            )));
+            return Err(Error::unsupported("Block has too many coders"));
         }
 
         if block.total_input_streams <= block.total_output_streams {
@@ -1524,11 +1638,7 @@ impl<R: Read + Seek> ArchiveReader<R> {
 
         let bp = block
             .find_bind_pair_for_in_stream(in_stream_index as u64)
-            .ok_or_else(|| {
-                Error::other(format!(
-                    "Couldn't find bind pair for stream {in_stream_index}"
-                ))
-            })?;
+            .ok_or_else(|| Error::other("Couldn't find bind pair for stream"))?;
         let index = bp.out_index as usize;
 
         Self::get_in_stream2(
@@ -1622,10 +1732,7 @@ impl<R: Read + Seek> ArchiveReader<R> {
             return Ok(Box::new(Bcj2Reader::new(inputs, uncompressed_len as u64)));
         }
 
-        Err(Error::unsupported(format!(
-            "Unsupported multi-input coder: {:?}",
-            coder.encoder_method_id()
-        )))
+        Err(Error::unsupported("Unsupported multi-input coder"))
     }
 
     /// Reads the entries in the archive's order, handing `each` those `wanted` says,

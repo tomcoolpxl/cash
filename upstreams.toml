@@ -36,8 +36,13 @@ name = "sevenz-rust2"
 version = "0.23.0"
 # 0.24.0 (2026-10-16): its CRC fix is for a writer cash replaced with 7-Zip's own rules,
 # and cash copies raw blocks itself. 0.24.1 (2026-10-30) only bumps lzma-rust2, which
-# Dependabot tracks for cash.
-reviewed = "0.24.1"
+# Dependabot tracks for cash. 0.24.2 (2026-10-30): its header checks (no files info,
+# no packed stream, a coder without an output, 64 coders or input streams at most, a
+# stream used twice), fallible allocation for the header's counts and names, and errors
+# that do not allocate were ported on 2026-10-31; its other fixes (an empty entry between
+# a solid block's files, unread entry data, the writer's short bit vectors, file times
+# past the clock) cash's own reader, writer and extraction already had, now with tests.
+reviewed = "0.24.2"
 
 [[upstream]]
 crate = "crates/cash-uutils"

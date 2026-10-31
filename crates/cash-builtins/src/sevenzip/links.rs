@@ -290,11 +290,11 @@ fn make_one(post: &PostLink, out_dir: &Path, level: u32) -> Result<(), String> {
                 post.shown
             )
         })?;
-        if let Some(time) = post.modified {
+        if let Some(modified) = post.modified.and_then(super::extract::system_time) {
             let _ = cash_win32::unix::set_times(
                 &post.path,
                 &cash_win32::unix::Times {
-                    modified: super::extract::system_time(time),
+                    modified,
                     accessed: None,
                     created: None,
                 },

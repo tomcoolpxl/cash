@@ -1082,6 +1082,15 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   7-Zip's speed (parked: a match-finder thread means taking lzma-rust2 in as cash's own).
   Looked at for the list: Bash's patches 5.3.16 to 20 (Git Bash is at 5.3.15) are macOS
   and readline display fixes with nothing for cash.
+- **The phase after 2.4.0** (the user, 2026-10-31, from a pick list, in this order):
+  sevenz-rust2 0.24.2's fixes ported to cash's 7z (recommended); gawk's own test suite
+  run against cash's awk and triaged, after the three awk bugs shdoc found (recommended);
+  D31 narrowed so that no lowercase name reads an all-caps variable (`$shell` stays
+  unset where `SHELL` is set), the fallback kept for Windows' mixed-case names and the
+  upper-cased lookup; and a corpus round of tfenv, log4sh, bash_ini_parser and
+  bats-detik. Not picked: liquidprompt; `eval 'break 1 2'` and two parser messages; a
+  plain `read`'s console editing; the unquoted `${v-$@}` split; 7z at 7-Zip's speed
+  (parked still).
 - **The phase after 2.3.0** (the user, 2026-10-30, from a pick list, in this order): the
   socket state `ss` and `lsof` read on this machine, found making the README's clips
   (recommended); cash on Scoop's Extras bucket; the upstream changes of issue 14 (sed,

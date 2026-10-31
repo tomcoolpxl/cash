@@ -55,10 +55,9 @@ pub fn add_decoder<I: Read>(
     threads: u32,
 ) -> Result<Decoder<I>, Error> {
     let Some(method) = EncoderMethod::by_id(coder.encoder_method_id()) else {
-        return Err(Error::UnsupportedCompressionMethod(format!(
-            "{:?}",
-            coder.encoder_method_id()
-        )));
+        let id = coder.encoder_method_id();
+        // The `Debug` text of a byte slice holds at most 5 bytes for each byte and 2 brackets.
+        return Err(unsupported_method(5 * id.len() + 2, format_args!("{id:?}")));
     };
     match method.id() {
         EncoderMethod::ID_COPY => Ok(Decoder::Copy(input)),
@@ -95,8 +94,7 @@ pub fn add_decoder<I: Read>(
         }
         EncoderMethod::ID_PPMD => {
             let (order, memory_size) = get_ppmd_order_memory_size(coder, max_mem_limit_kb)?;
-            let ppmd = Ppmd7Decoder::new(input, order, memory_size)
-                .map_err(|err| Error::other(err.to_string()))?;
+            let ppmd = Ppmd7Decoder::new(input, order, memory_size).map_err(ppmd_error)?;
             Ok(Decoder::Ppmd(Box::new(ppmd)))
         }
         EncoderMethod::ID_BZIP2 => {
@@ -158,10 +156,35 @@ pub fn add_decoder<I: Read>(
             let de = Aes256Sha256Decoder::new(input, &coder.properties, password)?;
             Ok(Decoder::Aes256Sha256(Box::new(de)))
         }
-        _ => Err(Error::UnsupportedCompressionMethod(
-            method.name().to_string(),
+        _ => Err(unsupported_method(
+            method.name().len(),
+            format_args!("{}", method.name()),
         )),
     }
+}
+
+/// A `PPMd` error as the crate's, without allocation: memory can be exhausted when the
+/// model memory is refused, and an error must not allocate.
+fn ppmd_error(err: ppmd_rust::Error) -> Error {
+    match err {
+        ppmd_rust::Error::RangeDecoderInitialization => {
+            Error::other("Could not initialize the range decoder")
+        }
+        ppmd_rust::Error::InvalidParameter => Error::other("Wrong PPMd parameter"),
+        ppmd_rust::Error::IoError(err) => err.into(),
+        ppmd_rust::Error::MemoryAllocation => Error::other("cannot allocate the PPMd memory"),
+    }
+}
+
+/// An unsupported method error whose `text`, of at most `max_len` bytes, names the method
+/// or its id. The text is allocated with fallible allocation and is empty when memory is
+/// exhausted.
+fn unsupported_method(max_len: usize, text: std::fmt::Arguments<'_>) -> Error {
+    let mut name = String::new();
+    if name.try_reserve_exact(max_len).is_ok() {
+        let _ = std::fmt::Write::write_fmt(&mut name, text);
+    }
+    Error::UnsupportedCompressionMethod(name)
 }
 
 fn get_ppmd_order_memory_size(coder: &Coder, max_mem_limit_kb: usize) -> Result<(u32, u32), Error> {

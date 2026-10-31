@@ -3542,3 +3542,27 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   every here-string of a cash a cash started. Written down in TODO.md: a lowercase
   `${!name}` reads an environment variable (D31). The fixtures were cloned
   CRLF and are LF in the repository, as `.gitattributes` has every text file.
+- **sevenz-rust2 0.24.2's hardening, ported to cash's 7z** (2026-10-31, the phase after
+  2.4.0, item 1): upstream's release of 2026-10-30 against crafted archives, read
+  change by change (`upstreams.toml`, reviewed 0.24.2). Ported into
+  `crates/cash-archive/src/sevenz`: a header with streams info but no files info is
+  refused, as 7-Zip refuses it (the blocks had no entries to map to); a block without a
+  packed stream, a coder without exactly one output stream, a block of more than 64
+  coders or 64 input streams (7-Zip's limits; a long chain of coders nested readers
+  until the stack ran out), and a block that binds or packs a stream twice (the decoder
+  built the coders behind it once per use) are refused while the header is read; every
+  count the header declares (files, blocks, streams, names, coder properties, the bit
+  fields of the CRC, empty-stream, time and attribute flags, the next header and the
+  decoded header) is allocated with fallible allocation and is an error, not an abort,
+  when the allocator refuses it; the header's errors, the PPMd decoder's and the unknown
+  method's are made without allocating, since memory may be gone when they are made.
+  Upstream's other fixes cash's own reader, writer and extraction already had, now
+  with tests on upstream's archives: an empty entry between a solid block's files
+  hides no file (the stream map lists each block's files), an entry left unread or half
+  read leaves the next one whole (every entry is finished before the next), the writer's
+  `kEmptyFile` and `kAnti` bit vectors hold one bit per entry without a stream, and a
+  file time past what the clock holds is left unset on extraction (`system_time` is
+  `NtTime::to_system_time` now, which also keeps times between 2185 and 30828 instead of
+  pinning them to 2185). Upstream's name index, WASM reader and `decompress` helpers
+  cash does not have. Eleven tests in `sevenz/tests.rs`, three of upstream's archives in
+  `tests/fixtures/7z`.

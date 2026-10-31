@@ -6,7 +6,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use cash_archive::sevenz::Problem;
 use cash_core::openfiles::OpenFiles;
@@ -962,10 +962,13 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         return Err(stop);
     }
     for (path, time) in directory_times.into_iter().rev() {
+        let Some(modified) = system_time(time) else {
+            continue;
+        };
         let _ = cash_win32::unix::set_times(
             &path,
             &cash_win32::unix::Times {
-                modified: system_time(time),
+                modified,
                 accessed: None,
                 created: None,
             },
@@ -1277,9 +1280,9 @@ fn auto_rename(path: &Path) -> Option<PathBuf> {
         .find(|p| fs::symlink_metadata(p).is_err())
 }
 
-pub(super) fn system_time(ticks: u64) -> SystemTime {
-    let epoch = SystemTime::UNIX_EPOCH - Duration::from_hours(3_234_576);
-    epoch + Duration::from_nanos(ticks.saturating_mul(100))
+/// The file time as the clock's time, or `None` past what the clock holds.
+pub(super) fn system_time(ticks: u64) -> Option<SystemTime> {
+    cash_archive::sevenz::NtTime::new(ticks).to_system_time()
 }
 
 /// The answer to the overwrite question.
@@ -1346,13 +1349,14 @@ fn write_file(
         stream.push(":Zone.Identifier");
         let _ = fs::write(&stream, zone);
     }
-    if let Some(time) = item.modified {
+    // A time past what the clock holds stays unset.
+    if let Some(modified) = item.modified.and_then(system_time) {
         let _ = cash_win32::unix::set_times(
             path,
             &cash_win32::unix::Times {
-                modified: system_time(time),
-                accessed: item.accessed.map(system_time),
-                created: item.created.map(system_time),
+                modified,
+                accessed: item.accessed.and_then(system_time),
+                created: item.created.and_then(system_time),
             },
         );
     }
