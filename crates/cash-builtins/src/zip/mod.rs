@@ -34,7 +34,7 @@ use cash_archive::zip::{Civil, Entry, flag, host};
 use cash_core::openfiles::OpenFiles;
 use cash_core::timefmt::Zone;
 use cash_core::{ExecutionResult, builtins};
-use chrono::{DateTime, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use clap::Parser;
 
 macro_rules! command {
@@ -143,21 +143,9 @@ impl Clock {
         else {
             return 0;
         };
-        let local = match &self.zone {
-            Zone::Local => chrono::Local
-                .from_local_datetime(&naive)
-                .earliest()
-                .map(|t| t.timestamp()),
-            Zone::Named(tz) => tz
-                .from_local_datetime(&naive)
-                .earliest()
-                .map(|t| t.timestamp()),
-            Zone::Fixed { offset, .. } => offset
-                .from_local_datetime(&naive)
-                .earliest()
-                .map(|t| t.timestamp()),
-        };
-        local.unwrap_or_else(|| naive.and_utc().timestamp())
+        self.zone
+            .local_to_unix(naive)
+            .unwrap_or_else(|| naive.and_utc().timestamp())
     }
 
     /// A member's time: its `UT` field's, else its MS-DOS time read as local.

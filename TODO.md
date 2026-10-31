@@ -229,10 +229,6 @@ left over, job control through pipes and a job finished before a plain `wait`, i
 phase after 2.3.1).
 
 **printf, and times**
-- A POSIX `TZ` with daylight-saving rules (`EST5EDT,M3.2.0/2,M11.1.0/2`) keeps standard
-  time all year (`timefmt::Zone::Fixed` drops the rules; a name chrono-tz knows,
-  `EST5EDT`, works): `printf %(...)T`, `date`. A rule engine for `Mm.w.d/time`, `Jn` and
-  `n` is a medium job, for a `TZ` rarely set on Windows.
 - Widths and precisions above INT_MAX, and `%(abde)Z`'s warning, are said otherwise.
 
 **POSIX mode**

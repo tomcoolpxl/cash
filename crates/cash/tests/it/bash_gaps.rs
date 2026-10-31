@@ -4498,3 +4498,28 @@ fn an_exit_in_the_exit_trap_or_in_a_function_it_calls_is_the_shell_s_status() {
         );
     }
 }
+
+#[test]
+fn tz_rules_with_daylight_saving_reach_the_shell_s_own_times() {
+    // `date`, uutils', read a POSIX `TZ` with rules all along; `printf %()T`, the
+    // prompt's `\D{}`, `ls -l` and `history` kept standard time all year. The lines are
+    // Git Bash 5.3's, whose Cygwin reads the rules.
+    let (code, out) = output(
+        r#"TZ='EST5EDT,M3.2.0,M11.1.0' printf '%(%F %T %Z %z)T\n' 1784116800 1772953200 1793512800
+           TZ='<+0330>-3:30' printf '%(%F %T %Z)T\n' 1784116800
+           TZ='CET-1CEST,M3.5.0,M10.5.0/3' printf '%(%F %T %Z)T\n' 1774746000 1774745999
+           TZ='XYZ3ABC' printf '%(%F %T %Z %z)T\n' 1784116800 1772953200"#,
+    );
+    assert_eq!(code, 0, "{out}");
+    assert_eq!(
+        out,
+        "2026-07-15 08:00:00 EDT -0400\n\
+         2026-03-08 03:00:00 EDT -0400\n\
+         2026-11-01 01:00:00 EST -0500\n\
+         2026-07-15 15:30:00 +0330\n\
+         2026-03-29 03:00:00 CEST\n\
+         2026-03-29 01:59:59 CET\n\
+         2026-07-15 10:00:00 ABC -0200\n\
+         2026-03-08 05:00:00 ABC -0200"
+    );
+}

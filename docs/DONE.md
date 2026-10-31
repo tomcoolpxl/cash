@@ -3432,3 +3432,18 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   the characters read into the variable, as Bash does, and `-s` shows nothing either
   time. A window test types into a cash of its own and reads its screen; the console
   window helpers of the font test moved to `console_window.rs` for it.
+- **POSIX `TZ` rules with daylight saving** (2026-10-31, found by the corpus round after
+  1.41.0, picked for the phase after 2.3.2): `TZ=EST5EDT,M3.2.0/2,M11.1.0/2` kept standard
+  time all year in the shell's own times, `printf %(...)T`, the prompt's `\D{}`,
+  `HISTTIMEFORMAT`, `ls -l` and the archive tools' listings; `date`, uutils', followed the
+  rules already. `timefmt::Zone` reads the whole POSIX form now: a name of three letters
+  or more, or quoted (`<+0330>-3:30`); the daylight name with an offset of its own or an
+  hour ahead; and the rules `Mm.w.d`, `Jn` and `n`, each with a time that may fall before
+  midnight or up to a week after (`/-1`, `/26`, `/167`), the United States' rules since
+  2007 when none are given, as glibc has it. South of the equator daylight time spans the
+  new year, and Ireland's winter is its daylight part. A wall time in the hour the clocks
+  go back is the earlier, and none in the hour they skip. Git Bash 5.3's table at the
+  transitions (Cygwin reads the rules) is the unit test. Git Bash puts a bare `EST5EDT`'s
+  changes an hour later than its own `M3.2.0,M11.1.0` and chrono-tz's zone, Cygwin's
+  doing and not followed; and it knows no IANA name (`America/New_York` is GMT there),
+  where cash's chrono-tz does.

@@ -115,7 +115,7 @@ fn apply_mode(mut mode: u32, changes: &[ModeChange], dir: bool) -> u32 {
 /// A date of `--mtime`, `-N` and `--newer-mtime`: `@SECONDS`, `YYYY-MM-DD[ HH:MM[:SS]]`
 /// in the shell's zone, or a file's own time when it names one.
 fn parse_date(text: &str, zone: &cash_core::timefmt::Zone, path: &Path) -> Option<Timestamp> {
-    use chrono::{NaiveDate, NaiveDateTime, TimeZone};
+    use chrono::{NaiveDate, NaiveDateTime};
     let text = text.trim();
     if text.starts_with(['/', '.']) || (path.exists() && !text.starts_with('@')) {
         return fs::metadata(path)
@@ -156,18 +156,7 @@ fn parse_date(text: &str, zone: &cash_core::timefmt::Zone, path: &Path) -> Optio
     let seconds = if utc {
         naive.and_utc().timestamp()
     } else {
-        match zone {
-            cash_core::timefmt::Zone::Local => chrono::Local
-                .from_local_datetime(&naive)
-                .earliest()?
-                .timestamp(),
-            cash_core::timefmt::Zone::Named(tz) => {
-                tz.from_local_datetime(&naive).earliest()?.timestamp()
-            }
-            cash_core::timefmt::Zone::Fixed { offset, .. } => {
-                offset.from_local_datetime(&naive).earliest()?.timestamp()
-            }
-        }
+        zone.local_to_unix(naive)?
     };
     Some(Timestamp::seconds(seconds))
 }
