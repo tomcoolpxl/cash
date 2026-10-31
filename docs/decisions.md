@@ -1062,6 +1062,14 @@ diffutils. Turned down: leaving them to Git Bash, a rule made for a cash beside 
   repository topics and the community files, not picked the phase before; and jobs
   without a console with the `set -m` leftover. Not picked: the winget pull request
   moved to 2.3.1.
+- **No address in the community files** (the user, 2026-10-31, from a pick list, asked
+  why the commit author's address was in SECURITY.md and CODE_OF_CONDUCT.md): GitHub's
+  channels only. SECURITY.md points at the Security tab's Report a vulnerability button
+  (private vulnerability reporting turned on for the repository that day), the code of
+  conduct at GitHub's Report abuse form, which GitHub Support handles, so a conduct
+  complaint does not reach the maintainer privately. Turned down: the address in the
+  code of conduct alone, the address in both files, another alias, a Discussions
+  category for conduct reports.
 - **The phase after 2.3.0** (the user, 2026-10-30, from a pick list, in this order): the
   socket state `ss` and `lsof` read on this machine, found making the README's clips
   (recommended); cash on Scoop's Extras bucket; the upstream changes of issue 14 (sed,

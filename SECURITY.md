@@ -7,11 +7,13 @@ Scoop. A fix goes out as a new release; earlier versions are not patched.
 
 ## Reporting a vulnerability
 
-Write to tom.cool@pxl.be, the maintainer, rather than opening a public issue, so that a
-fix can be out before the details are. Say which version (`cash --version`), which
-Windows build, what you did and what happened; a script that shows it is the most
-useful thing you can send. You will hear back within a week, and the fix's release notes
-credit you unless you ask otherwise.
+Report it through GitHub rather than in a public issue, so that a fix can be out before
+the details are: the [Report a vulnerability](https://github.com/tomcoolpxl/cash/security/advisories/new)
+button on the repository's Security tab opens a private advisory that only the
+maintainer sees. Say which version (`cash --version`), which Windows build, what you did
+and what happened; a script that shows it is the most useful thing you can attach. You
+will hear back within a week, and the fix's release notes credit you unless you ask
+otherwise.
 
 ## What counts
 
