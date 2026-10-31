@@ -347,15 +347,23 @@ fn apply(path: &Path, request: &Request) -> std::io::Result<()> {
         return path.metadata().map(|_| ());
     };
 
-    let mut permissions = path.metadata()?.permissions();
+    let metadata = path.metadata()?;
+    // A directory's read-only attribute bars no write into it on Windows (Explorer uses
+    // it to mark a customised directory), and it makes `rmdir` refuse the directory, so
+    // `-w` on a directory sets nothing, as Git Bash's chmod leaves a directory writable;
+    // `+w` still takes the attribute off one that has it.
+    if metadata.is_dir() && !writable {
+        return Ok(());
+    }
+    let mut permissions = metadata.permissions();
     permissions.set_readonly(!writable);
     std::fs::set_permissions(path, permissions)
 }
 
-/// How the file stands now, for `-v`.
+/// How the file stands now, for `-v`. A directory is writable whatever its attribute.
 fn describe(path: &Path) -> &'static str {
     match path.metadata() {
-        Ok(meta) if meta.permissions().readonly() => "read-only",
+        Ok(meta) if !meta.is_dir() && meta.permissions().readonly() => "read-only",
         Ok(_) => "writable",
         Err(_) => "unknown",
     }

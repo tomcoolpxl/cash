@@ -58,7 +58,11 @@ and in the fewest places it can.
 - `test -x` needs an execute permission and an executable kind of file (an extension in
   `PATHEXT`, or a `#!` line): Windows grants execute on every file.
 - `chmod` changes only the read-only attribute; `chmod -x` and the other bits Windows
-  cannot store warn or say nothing, and return 0.
+  cannot store warn or say nothing, and return 0. A directory's read-only attribute bars
+  no write into it on Windows (Explorer sets it to mark a customised directory), so
+  `chmod -w` sets it on no directory, `-w` finds a directory writable whatever the
+  attribute, and `rm` and `rmdir` take a directory that carries it, which Windows alone
+  refuses to remove.
 - `id`, `$UID` and `$EUID` give the account's RID, and 0 in an elevated shell, so
   `[ "$EUID" -eq 0 ]` means "running as Administrator".
 - Descriptors above 2 reach builtins and cash's own tools, not Windows programs. `/dev/stdout` and `/dev/fd/N` share the descriptor rather than reopen the

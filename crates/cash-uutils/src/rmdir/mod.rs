@@ -98,7 +98,33 @@ fn remove_single(path: &Path, opts: Opts) -> Result<(), Error<'_>> {
             translate!("rmdir-verbose-removing-directory", "util_name" => "rmdir", "path" => path.quote())
         );
     }
-    remove_dir(path).map_err(|error| Error { error, path })
+    remove_dir_even_read_only(path).map_err(|error| Error { error, path })
+}
+
+/// cash: removes an empty directory, its read-only attribute notwithstanding. Windows
+/// refuses to remove a directory that carries the attribute, which Explorer sets to mark a
+/// customised directory and which bars no write into it; the attribute is taken off and
+/// the removal asked again, as GNU rmdir takes a directory whatever its mode.
+#[expect(
+    clippy::permissions_set_readonly_false,
+    reason = "the attribute is the one thing in the way; Windows has no world-writable bit"
+)]
+fn remove_dir_even_read_only(path: &Path) -> std::io::Result<()> {
+    match remove_dir(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            let Ok(metadata) = std::fs::symlink_metadata(path) else {
+                return Err(error);
+            };
+            if !metadata.permissions().readonly() {
+                return Err(error);
+            }
+            let mut permissions = metadata.permissions();
+            permissions.set_readonly(false);
+            std::fs::set_permissions(path, permissions)?;
+            remove_dir(path)
+        }
+        result => result,
+    }
 }
 
 // POSIX: https://pubs.opengroup.org/onlinepubs/009696799/functions/rmdir.html

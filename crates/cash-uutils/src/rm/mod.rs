@@ -118,12 +118,39 @@ fn show_permission_denied_error(path: &Path) -> bool {
 
 /// Helper function to remove a directory and handle results
 fn remove_dir_with_feedback(path: &Path, options: &Options) -> bool {
-    match fs::remove_dir(path) {
+    match remove_dir_even_read_only(path) {
         Ok(_) => {
             report_verbose_write_error(verbose_removed_directory(path, options));
             false
         }
         Err(e) => show_removal_error(e, path),
+    }
+}
+
+/// cash: removes an empty directory, its read-only attribute notwithstanding. Windows
+/// refuses to remove a directory that carries the attribute, which Explorer sets to mark a
+/// customised directory and which bars no write into it; GNU rm removes a directory
+/// whatever its mode once it may write to the parent, so the attribute is taken off and
+/// the removal asked again.
+#[expect(
+    clippy::permissions_set_readonly_false,
+    reason = "the attribute is the one thing in the way; Windows has no world-writable bit"
+)]
+fn remove_dir_even_read_only(path: &Path) -> std::io::Result<()> {
+    match fs::remove_dir(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            let Ok(metadata) = fs::symlink_metadata(path) else {
+                return Err(error);
+            };
+            if !metadata.permissions().readonly() {
+                return Err(error);
+            }
+            let mut permissions = metadata.permissions();
+            permissions.set_readonly(false);
+            fs::set_permissions(path, permissions)?;
+            fs::remove_dir(path)
+        }
+        result => result,
     }
 }
 
@@ -766,7 +793,7 @@ fn remove_dir_recursive(
         }
 
         // Try removing the directory itself.
-        match fs::remove_dir(path) {
+        match remove_dir_even_read_only(path) {
             Err(_) if !error && !is_readable(path) => {
                 // For compatibility with GNU test case
                 // `tests/rm/unread2.sh`, show "Permission denied" in this

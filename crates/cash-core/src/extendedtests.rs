@@ -358,7 +358,8 @@ fn dev_test(
         P::FileExistsAndIsWritable => match &kind {
             FileKind::Pipe { writes, .. } => *writes,
             FileKind::Device | FileKind::Socket => true,
-            FileKind::File(metadata) => !metadata.permissions().readonly(),
+            // A directory's read-only attribute bars no write into it on Windows.
+            FileKind::File(metadata) => metadata.is_dir() || !metadata.permissions().readonly(),
             FileKind::Other => false,
         },
         _ => false,

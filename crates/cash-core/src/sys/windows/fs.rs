@@ -83,7 +83,9 @@ impl crate::sys::fs::PathExt for Path {
     }
 
     fn writable(&self) -> bool {
-        self.metadata().is_ok_and(|m| !m.permissions().readonly())
+        // A directory's read-only attribute bars no write into it on Windows.
+        self.metadata()
+            .is_ok_and(|m| m.is_dir() || !m.permissions().readonly())
     }
 
     fn executable(&self, extensions: &[String]) -> bool {

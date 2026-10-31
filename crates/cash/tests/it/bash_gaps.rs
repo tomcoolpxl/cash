@@ -4523,3 +4523,32 @@ fn tz_rules_with_daylight_saving_reach_the_shell_s_own_times() {
          2026-03-08 05:00:00 ABC -0200"
     );
 }
+
+#[test]
+fn a_directory_s_read_only_attribute_neither_bars_writing_nor_stops_rm() {
+    // Windows' read-only attribute on a directory bars no write into it (Explorer sets it
+    // to mark a customised directory), yet RemoveDirectory refuses a directory that has
+    // it. `chmod -w d` set the attribute, `[ -w d ]` then said not writable, and `rm -rf d`
+    // and `rmdir` ended with "Permission denied" (goenv's rehash tests, which Git Bash
+    // passes: its chmod leaves a directory writable). A directory is writable whatever
+    // the attribute, `chmod -w` sets it on no directory, and rm and rmdir take it off
+    // where it stands in the way. A file's read-only attribute stays what it was. The
+    // lines are Git Bash 5.3's.
+    let (code, out) = output(
+        r#"tmp=$(mktemp -d); cd "$tmp" || exit 1
+           mkdir d; touch d/f; chmod -w d
+           [ -w d ] && echo "d writable"; [[ -w d ]] && echo "d writable too"
+           touch d/g && echo "created in d"
+           rm -rf d; echo "rm -rf: $?"; [ -e d ] || echo "d gone"
+           mkdir e; chmod -w e; rmdir e; echo "rmdir: $?"; [ -e e ] || echo "e gone"
+           mkdir r; touch r/f; attrib +R r; rm -rf r; echo "rm -rf marked: $?"; [ -e r ] || echo "r gone"
+           touch x; chmod -w x; [ -w x ] || echo "x read-only"; rm -f x; echo "rm -f: $?"; [ -e x ] || echo "x gone"
+           cd / && rmdir "$tmp" && echo "tmp gone""#,
+    );
+    assert_eq!(code, 0, "{out}");
+    assert_eq!(
+        out,
+        "d writable\nd writable too\ncreated in d\nrm -rf: 0\nd gone\nrmdir: 0\ne gone\n\
+         rm -rf marked: 0\nr gone\nx read-only\nrm -f: 0\nx gone\ntmp gone"
+    );
+}

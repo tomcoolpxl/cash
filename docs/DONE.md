@@ -3462,3 +3462,14 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   too, as a Windows editor saves a program; `printf(…,\` at the end of a line was a
   syntax error. The corpus fixtures are LF in the repository (`.gitattributes`), so the
   case runs either way.
+- **A directory's read-only attribute neither bars writing nor stops rm** (2026-10-31, found
+  by goenv's rehash tests in the corpus round after 2.3.2): `chmod -w d` set Windows'
+  read-only attribute on a directory, `[ -w d ]` and `[[ -w d ]]` then said not writable,
+  and `rm -rf d` and `rmdir d` ended with "Permission denied", since RemoveDirectory
+  refuses a directory that carries the attribute, which bars no write into it (Explorer
+  sets it to mark a customised directory); the suite's teardown then failed for every
+  test after. Git Bash's chmod leaves a directory writable. A directory is writable
+  whatever its attribute, `chmod -w` sets the attribute on no directory (`+w` still
+  clears one), and rm and rmdir take the attribute off where it stands in the way; a
+  file's attribute stays what it was. Thirteen lines of a script match Git Bash 5.3, and
+  the differences page says so.
