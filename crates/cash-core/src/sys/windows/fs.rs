@@ -463,8 +463,11 @@ pub(crate) fn open_temp_with_contents(contents: &[u8]) -> std::io::Result<std::f
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(std::format!("cash-here-{}-{n}", std::process::id()));
+    let path =
+        cash_win32::path::temp_dir().join(std::format!("cash-here-{}-{n}", std::process::id()));
 
+    // The error names the file: "i/o error: The system cannot find the path specified"
+    // alone said nothing of where the temporary directory had gone (2026-10-31).
     let mut file = std::fs::OpenOptions::new()
         .create_new(true)
         .read(true)
@@ -472,7 +475,10 @@ pub(crate) fn open_temp_with_contents(contents: &[u8]) -> std::io::Result<std::f
         .share_mode(SHARE_ALL)
         .attributes(FILE_ATTRIBUTE_TEMPORARY)
         .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
-        .open(&path)?;
+        .open(&path)
+        .map_err(|error| {
+            std::io::Error::new(error.kind(), std::format!("{}: {error}", path.display()))
+        })?;
 
     file.write_all(contents)?;
     file.seek(SeekFrom::Start(0))?;
@@ -493,7 +499,7 @@ pub(crate) fn process_substitution_temp_path() -> PathBuf {
 
 /// The directory of this shell's process-substitution temp files.
 fn process_substitution_dir() -> PathBuf {
-    std::env::temp_dir().join(std::format!("cash-psub-{}", std::process::id()))
+    cash_win32::path::temp_dir().join(std::format!("cash-psub-{}", std::process::id()))
 }
 
 /// Removes the directory of this shell's process-substitution temp files as it exits,
@@ -510,7 +516,7 @@ pub(crate) fn remove_process_substitution_dir() {
 /// delete-pending file cannot be opened afresh. So this is D17's named fallback, a
 /// per-session directory swept at startup, keyed on whether the owning pid still exists.
 fn sweep_stale_process_substitution_dirs() {
-    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+    let Ok(entries) = std::fs::read_dir(cash_win32::path::temp_dir()) else {
         return;
     };
 

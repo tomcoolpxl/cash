@@ -186,7 +186,7 @@ mod tests {
         // With cmd in between, the `&` would have run `echo` and opened nothing.
         let error = open(
             "cash-no-such-file-7f3a.txt&echo injected",
-            &std::env::temp_dir(),
+            &crate::path::temp_dir(),
         );
         assert!(error.is_err());
     }

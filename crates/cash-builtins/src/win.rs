@@ -1646,7 +1646,7 @@ mod tests {
 
     #[test]
     fn a_copy_to_edit_is_named_after_its_file() {
-        let temp = std::env::temp_dir();
+        let temp = cash_win32::path::temp_dir();
         let copy = edit_copy(&temp, Path::new("C:/x/app.json"), b"{}").unwrap();
         let name = copy.file_name().unwrap().to_string_lossy().into_owned();
         assert!(name.starts_with("app.sudoedit-"), "{name}");

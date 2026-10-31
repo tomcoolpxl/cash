@@ -86,6 +86,32 @@ fn device_target(input: &str) -> Option<Target> {
     }
 }
 
+/// The directory for the shell's temporary files.
+///
+/// The first of `TMP`, `TEMP` and `TMPDIR` that names a directory, read as cash reads any
+/// path (`/c/work/tmp` and `/tmp` as well as `C:\work\tmp`), else what Windows gives,
+/// else the Windows directory's `Temp`. Rust's `std::env::temp_dir` asks `GetTempPath`,
+/// which hands `TMP` back as it stands: a script's `export TMP=/c/work/tmp` reached the
+/// cash processes it started, and their here-strings were made under `C:\c\work\tmp`
+/// and failed (pyenv-virtualenv's suite, 2026-10-31). `TMP` comes first, as Windows'
+/// own temporary files take it; `TMPDIR` serves a script that set only that.
+#[must_use]
+pub fn temp_dir() -> PathBuf {
+    let named = ["TMP", "TEMP", "TMPDIR"]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .map(|value| accept_path(&value.to_string_lossy()))
+        .find(|path| path.is_dir());
+    if let Some(path) = named {
+        return path;
+    }
+    let standard = std::env::temp_dir();
+    if standard.is_dir() {
+        return standard;
+    }
+    crate::fs::windows_directory().join("Temp")
+}
+
 /// Interpret a path-shaped string that is not a device.
 #[must_use]
 pub fn accept_path(input: &str) -> PathBuf {

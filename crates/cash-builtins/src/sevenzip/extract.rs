@@ -55,7 +55,8 @@ fn scan<SE: cash_core::ShellExtensions>(
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.subsec_nanos());
-        let path = std::env::temp_dir().join(format!("cash-7z-si-{}-{nanos}", std::process::id()));
+        let path =
+            cash_win32::path::temp_dir().join(format!("cash-7z-si-{}-{nanos}", std::process::id()));
         let size = fs::File::create(&path)
             .and_then(|mut file| io::copy(&mut env.context.stdin(), &mut file))
             .map_err(Stop::System)?;
@@ -1497,7 +1498,8 @@ mod tests {
 
     #[test]
     fn renamed_names_keep_their_extension() {
-        let dir = std::env::temp_dir().join(format!("cash-7z-rename-{}", std::process::id()));
+        let dir =
+            cash_win32::path::temp_dir().join(format!("cash-7z-rename-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("a.txt");
         assert_eq!(auto_rename(&path).unwrap(), dir.join("a_1.txt"));

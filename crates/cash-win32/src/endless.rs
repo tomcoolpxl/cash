@@ -80,7 +80,7 @@ fn zero_file() -> io::Result<File> {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!("cash-dev-zero-{}-{n}", std::process::id()));
+    let path = crate::path::temp_dir().join(format!("cash-dev-zero-{}-{n}", std::process::id()));
     let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)

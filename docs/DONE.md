@@ -3486,3 +3486,16 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   removes a symbolic link, to a directory or not, as it removes a file. The link alone is
   removed now, through RemoveDirectory, which takes a directory link without following
   it; named with a slash, `rm link/`, it still means the directory, as GNU rm has it.
+- **A `TMP` in Unix spelling lost every here-string of a cash a cash started**
+  (2026-10-31, pyenv-virtualenv's suite in the corpus round after 2.3.2): the suite
+  exports `TMP=$BATS_TEST_DIRNAME/tmp`, `/c/…/test/tmp` under `unixpaths`, and in each
+  cash that bats started with it a here-string failed with "i/o error: The system cannot
+  find the path specified" and read nothing, so bats ran no test at all. Rust's
+  `std::env::temp_dir` asks `GetTempPath`, which hands `TMP` back as it stands, and the
+  file was made under `C:\c\…`; a program started first set the environment right as a
+  side effect, which hid the cause for a while. The shell's temporary files (here-strings
+  and here-documents, process substitutions, `>(…)`'s files, captures, `fc`'s editor
+  file, the archive tools' scratch) take their directory from one helper now: the first
+  of `TMP`, `TEMP` and `TMPDIR` that names a directory, read as cash reads any path, else
+  Windows' own, else the Windows directory's `Temp`; and the error that remains names the
+  file. The case makes the suite's `test/tmp`, an empty directory upstream.

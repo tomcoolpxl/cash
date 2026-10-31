@@ -1010,7 +1010,7 @@ mod tests {
 
     /// A `LOCALAPPDATA` of its own, with the Store's `settings.json` and a fragment.
     fn install(name: &str, settings: &str, fragment: Option<&str>) -> PathBuf {
-        let local = std::env::temp_dir().join(format!("cash-win32-terminal-{name}"));
+        let local = crate::path::temp_dir().join(format!("cash-win32-terminal-{name}"));
         let _ = std::fs::remove_dir_all(&local);
         let state = local
             .join("Packages")
@@ -1067,7 +1067,7 @@ mod tests {
 
         for name in ["own", "defaults", "fragment", "none"] {
             let _ = std::fs::remove_dir_all(
-                std::env::temp_dir().join(format!("cash-win32-terminal-{name}")),
+                crate::path::temp_dir().join(format!("cash-win32-terminal-{name}")),
             );
         }
     }
@@ -1146,7 +1146,7 @@ mod tests {
 
         for name in ["cell-own", "cell-fragment", "cell-font"] {
             let _ = std::fs::remove_dir_all(
-                std::env::temp_dir().join(format!("cash-win32-terminal-{name}")),
+                crate::path::temp_dir().join(format!("cash-win32-terminal-{name}")),
             );
         }
     }

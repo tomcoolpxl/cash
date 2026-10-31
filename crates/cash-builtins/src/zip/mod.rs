@@ -419,8 +419,8 @@ fn open_archive(path: &Path) -> io::Result<Opened> {
     let mut pipe = std::fs::File::open(path)?;
     let mut attempt = 0_u32;
     let (spool, mut file) = loop {
-        let candidate =
-            std::env::temp_dir().join(format!("cash-zip-{}-{attempt}.tmp", std::process::id()));
+        let candidate = cash_win32::path::temp_dir()
+            .join(format!("cash-zip-{}-{attempt}.tmp", std::process::id()));
         match std::fs::OpenOptions::new()
             .read(true)
             .write(true)

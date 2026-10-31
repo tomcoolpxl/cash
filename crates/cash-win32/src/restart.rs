@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn an_unused_file_has_no_holders() {
-        let dir = std::env::temp_dir().join(format!("cash-rm-unused-{}", std::process::id()));
+        let dir = crate::path::temp_dir().join(format!("cash-rm-unused-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("unused.txt");
         std::fs::write(&file, "x").unwrap();
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn a_file_this_process_holds_names_this_process() {
-        let dir = std::env::temp_dir().join(format!("cash-rm-held-{}", std::process::id()));
+        let dir = crate::path::temp_dir().join(format!("cash-rm-held-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("held.txt");
         std::fs::write(&file, "x").unwrap();

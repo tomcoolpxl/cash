@@ -372,7 +372,7 @@ fn capture_file_path() -> std::path::PathBuf {
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     let n = SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("cash-capture-{}-{n}.tmp", std::process::id()))
+    crate::path::temp_dir().join(format!("cash-capture-{}-{n}.tmp", std::process::id()))
 }
 
 /// Re-render every path in a utility's output in cash's canonical spelling (D3).

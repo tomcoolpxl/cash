@@ -432,7 +432,7 @@ impl<SE: extensions::ShellExtensions> std::ops::DerefMut for ShellForCommand<'_,
 /// Writes the PowerShell runner script to the temp directory if it is not there yet, and
 /// returns its path.
 fn ensure_ps_runner() -> Result<PathBuf, error::Error> {
-    let runner_path = std::env::temp_dir().join("cash_ps_runner.ps1");
+    let runner_path = cash_win32::path::temp_dir().join("cash_ps_runner.ps1");
     if !runner_path.exists() {
         const RUNNER_CONTENT: &str = "\
 & ([scriptblock]::Create([System.IO.File]::ReadAllText($env:CASH_PS_SCRIPT))) @args\r\n\

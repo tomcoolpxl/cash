@@ -447,7 +447,8 @@ mod tests {
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("cash-kept-{}-{name}", std::process::id()));
+        let dir =
+            cash_win32::path::temp_dir().join(format!("cash-kept-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir

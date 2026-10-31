@@ -130,7 +130,7 @@ impl FcCommand {
             return Err(cash_core::ErrorKind::HistoryItemNotFound.into());
         }
 
-        let edit_path = std::env::temp_dir().join(format!(
+        let edit_path = cash_win32::path::temp_dir().join(format!(
             "cash-fc-{}-{}.sh",
             std::process::id(),
             EDIT_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed)

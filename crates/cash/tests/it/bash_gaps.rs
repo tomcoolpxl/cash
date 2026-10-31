@@ -4552,3 +4552,34 @@ fn a_directory_s_read_only_attribute_neither_bars_writing_nor_stops_rm() {
          rm -rf marked: 0\nr gone\nx read-only\nrm -f: 0\nx gone\ntmp gone"
     );
 }
+
+#[test]
+fn a_here_string_survives_a_tmp_in_unix_spelling_or_one_that_names_no_directory() {
+    // pyenv-virtualenv's suite exports `TMP=$BATS_TEST_DIRNAME/tmp`, `/c/…/test/tmp` under
+    // `unixpaths`, and the cash processes bats started with it lost every here-string:
+    // Windows' GetTempPath hands the spelling back as it stands, and the file was made
+    // under `C:\c\…`. The temporary directory is read as cash reads a path, and a `TMP`
+    // that names no directory falls back on Windows' own.
+    let dir = tempfile::tempdir().unwrap();
+    let unix = crate::common::unix_spelling(dir.path());
+    for (name, value) in [
+        ("TMP", unix.clone()),
+        ("TMPDIR", unix),
+        ("TMP", String::from("C:\\no-such-directory-for-cash")),
+        ("TEMP", String::from("/c/no-such-directory-for-cash")),
+    ] {
+        let result = cash_command()
+            .env(name, &value)
+            .args([
+                "--noprofile",
+                "--norc",
+                "-c",
+                "read x <<< hi; echo \"[$x]\"; cat <(echo psub)",
+            ])
+            .output()
+            .unwrap();
+        let out = String::from_utf8_lossy(&result.stdout).replace("\r\n", "\n");
+        let err = String::from_utf8_lossy(&result.stderr);
+        assert_eq!(out, "[hi]\npsub\n", "{name}={value}: {err}");
+    }
+}

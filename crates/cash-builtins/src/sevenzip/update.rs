@@ -1013,7 +1013,7 @@ fn temp_name<SE: cash_core::ShellExtensions>(
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let dir = match working_dir {
-        Some("") => std::env::temp_dir(),
+        Some("") => cash_win32::path::temp_dir(),
         Some(dir) => env.path(dir),
         None => arc_path.parent().map(PathBuf::from).unwrap_or_default(),
     };
