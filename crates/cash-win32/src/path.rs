@@ -698,6 +698,19 @@ mod tests {
         assert_eq!(nearest_existing(nowhere), nowhere);
     }
 
+    /// A directory too long for a program to start in, with no short name to fall back
+    /// on (it does not exist, so Windows has none for it), is refused with the reason.
+    #[test]
+    fn a_directory_too_long_without_a_short_name_says_why() {
+        let long = PathBuf::from(format!(r"C:\{}", "x".repeat(300)));
+        let error = process_directory(&long).unwrap_err().to_string();
+        assert!(
+            error.contains("too long for Windows to start a program in"),
+            "{error}"
+        );
+        assert!(error.contains("no short name"), "{error}");
+    }
+
     #[test]
     fn a_climb_past_a_drive_s_top_or_slash_reaches_slash() {
         let joined = |directory, name| unix_join(directory, name);

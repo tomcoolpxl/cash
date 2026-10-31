@@ -37,22 +37,28 @@ fn programs_start_in_a_directory_too_long_for_windows() {
 }
 
 #[test]
-fn a_directory_too_long_without_a_short_name_says_why() {
-    // A directory deleted under the shell has no short name.
+fn a_program_started_from_a_deleted_long_directory_runs_in_the_nearest_parent() {
+    // A directory deleted under the shell has no short name, and a program could not
+    // start: "the working directory is too long", 126. The program now starts in the
+    // nearest directory above that still exists, the scratch directory here, which the
+    // shell's own process holds and `rm -rf` cannot take (the message on standard error).
     let scratch = Scratch::new("long-directory-gone");
     let out = run_in(
         scratch.path(),
         &format!(
             "{INTO_A_LONG_DIRECTORY}top=$(cd \"$p\"/../../../../../..; pwd)
-            (cd /; rm -rf \"$top\")
-            cmd /c echo hi; echo \"rc=$?\""
+            (cd /; rm -rf \"$top\" 2> /dev/null)
+            cmd /c echo hi; echo \"rc=$?\"
+            here=$(cmd /c cd | tr -d '\\r'); echo \"${{here##*\\\\}}\""
         ),
     );
-    assert!(
-        out.stderr
-            .contains("cmd: the working directory is too long for Windows to start a program in"),
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let lines: Vec<&str> = out.stdout.lines().map(str::trim).collect();
+    assert_eq!(lines[..2], ["hi", "rc=0"], "{}", out.stderr);
+    assert_eq!(
+        lines[2],
+        scratch.path().file_name().unwrap().to_string_lossy(),
         "{}",
-        out.stderr
+        out.stdout
     );
-    assert_eq!(out.stdout, "rc=126");
 }

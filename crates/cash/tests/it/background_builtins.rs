@@ -208,14 +208,16 @@ fn a_builtin_started_with_an_ampersand_lets_the_shell_go_on_at_once() {
 #[test]
 fn a_command_a_builtin_starts_in_the_background_keeps_its_pid() {
     // `nohup server & echo $! > pid`: `$!` is the program's pid, not the job's number,
-    // so another shell can signal it. So is a pipeline's, its last command's.
+    // so another shell can signal it. So is a pipeline's, its last command's. A Windows
+    // pid is a multiple of 4, where a job's own number is 4n + 1; a machine up for long
+    // hands out pids past 100000, so the size says nothing.
     check(&[
         (
-            "nohup sleep 5 >/dev/null 2>&1 & p=$!; (( p < 100000 )) && kill -0 $p && echo pid; kill $p; wait",
+            "nohup sleep 5 >/dev/null 2>&1 & p=$!; (( p % 4 == 0 )) && kill -0 $p && echo pid; kill $p; wait",
             "pid",
         ),
         (
-            "echo x | sleep 5 & p=$!; (( p < 100000 )) && kill -0 $p && echo pid; kill $p; wait",
+            "echo x | sleep 5 & p=$!; (( p % 4 == 0 )) && kill -0 $p && echo pid; kill $p; wait",
             "pid",
         ),
     ]);

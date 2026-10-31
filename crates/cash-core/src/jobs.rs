@@ -895,23 +895,34 @@ impl JobManager {
 
     /// Waits for all managed jobs to complete: the jobs this wait collected.
     ///
-    /// A job that had ended before the wait, and that nothing has reported, stays in the
-    /// table as `Done` for `jobs` to show once, as in Bash 5.3, where `true & sleep 1;
-    /// wait; jobs` lists `[1]+ Done true`; a plain `wait` reports nothing itself. Of
-    /// those jobs, `$!`'s keeps its status for `wait PID`, unless something reported it;
-    /// one the wait itself collects does not.
+    /// Of the jobs that had ended before the wait, `$!`'s stays in the table as `Done`
+    /// when nothing has reported it, for `jobs` to show once and `wait PID` to collect,
+    /// as in Bash 5.3, where `true & sleep 1; wait; jobs` lists `[1]+ Done true` and a
+    /// plain `wait` reports nothing itself; the others leave with the wait, their
+    /// statuses forgotten (`wait $a` says the pid is no child), as does one the wait
+    /// itself collects.
     pub async fn wait_all(&mut self) -> Result<Vec<Job>, error::Error> {
-        let mut ended_before = 0;
-        for job in &mut self.jobs {
-            if !matches!(job.state, JobState::Done) {
-                let _ = job.poll_done()?;
+        let last = self.last_started_pid;
+        let mut ended_before = Vec::new();
+        let mut kept_unreported = 0;
+        for (index, job) in self.jobs.iter_mut().enumerate() {
+            if !matches!(job.state, JobState::Done) && job.poll_done()?.is_none() {
+                continue;
             }
-            if matches!(job.state, JobState::Done) && !job.reap_counted {
+            let kept =
+                job.notification_pending && last.is_some_and(|pid| job.all_pids().contains(&pid));
+            if !kept {
+                ended_before.push(index);
+            } else if !job.reap_counted {
                 job.reap_counted = true;
-                ended_before += 1;
+                kept_unreported += 1;
             }
         }
-        self.note_children_reaped(ended_before);
+        self.note_children_reaped(kept_unreported);
+        for index in ended_before.into_iter().rev() {
+            let job = self.take_out(index);
+            self.count_reaped(&job);
+        }
         self.forget_on_plain_wait();
 
         let mut collected = Vec::new();
@@ -926,9 +937,7 @@ impl JobManager {
             self.count_reaped(&job);
             collected.push(job);
         }
-        if !collected.is_empty() {
-            self.reannotate();
-        }
+        self.reannotate();
         Ok(collected)
     }
 
