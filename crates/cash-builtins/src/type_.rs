@@ -109,7 +109,18 @@ impl builtins::Command for TypeCommand {
 
             for resolved_type in resolved_types {
                 if self.show_path_only && !matches!(resolved_type, Resolved::File { .. }) {
-                    // Do nothing.
+                    // cash: a command cash carries that is a program elsewhere has the
+                    // path cash runs it by, `/usr/bin/NAME`, as `-P` prints it: basher's
+                    // `$(type -p greadlink readlink) "$name"` ran `$name`, its own
+                    // dispatcher, when this printed nothing, and looped (2026-10-31).
+                    if matches!(resolved_type, Resolved::Builtin)
+                        && crate::carried::carries_program(context.shell, name)
+                    {
+                        let path =
+                            std::path::PathBuf::from(cash_win32::path::system_tool_path(name));
+                        let rendered = context.shell.shown_path(&path);
+                        writeln!(context.stdout(), "{rendered}")?;
+                    }
                 } else if self.type_only {
                     match &resolved_type {
                         Resolved::Alias(_) => {

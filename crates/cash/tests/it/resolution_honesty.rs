@@ -630,6 +630,30 @@ fn type_cap_p_gives_a_command_cash_carries_as_git_bash_prints_it() {
 }
 
 #[test]
+fn type_small_p_gives_a_command_cash_carries_its_path_too() {
+    // `type -p readlink` printed nothing, as for a builtin of Bash's own, where Git Bash
+    // prints `/usr/bin/readlink`: basher's `$(type -p greadlink readlink | head -1) "$1"`
+    // then ran `$1`, its own dispatcher, and looped (the corpus round of 2026-10-31). A
+    // command cash carries is a program to a script, as `-P` already had it; Bash's own
+    // builtins still print nothing, and a name not found makes the status 1.
+    let out = cash(
+        r#"type -p readlink grep; type -p greadlink readlink; echo "status: $?"; type -p cd; echo "cd: $?""#,
+    );
+    assert_eq!(
+        out.stdout.lines().collect::<Vec<_>>(),
+        [
+            "/usr/bin/readlink",
+            "/usr/bin/grep",
+            "/usr/bin/readlink",
+            "status: 1",
+            "cd: 0"
+        ],
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn hash_t_renders_a_path_the_same_way_command_v_does() {
     // `hash -t` printed the cached path as the resolver had joined it:
     //
