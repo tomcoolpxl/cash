@@ -8,9 +8,11 @@ export HOME="$PWD/home"; mkdir -p "$HOME"
 export GIT_AUTHOR_NAME=A GIT_AUTHOR_EMAIL=a@example.com GIT_COMMITTER_NAME=A GIT_COMMITTER_EMAIL=a@example.com
 export TMPDIR="$PWD/tmp"; mkdir -p "$TMPDIR"
 # The two scan tests that fail print the files they scanned with the directory's path,
-# which git spells the Windows way and the shell the Unix way.
+# which git spells the Windows way and the shell the Unix way; git's own line names the
+# repository's path in its long form, where a short name (`RUNNER~1` on CI) is the
+# directory's, so that line is hidden by its shape.
 here=$PWD; windows=$(pwd -W)
-hide() { sed -e "s|$here|WORK|g" -e "s|$windows|WORK|g"; }
+hide() { sed -e "s|$here|WORK|g" -e "s|$windows|WORK|g" -e 's|Initialized empty Git repository in .*/tmp/test-repo/.git/|Initialized empty Git repository in WORK/tmp/test-repo/.git/|'; }
 cd git-secrets || exit 1
 bash ../bats-core/bin/bats --formatter tap test/git-secrets.bats test/pre-commit.bats | hide
 echo "status: ${PIPESTATUS[0]}"
