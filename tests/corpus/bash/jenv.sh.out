@@ -1,0 +1,92 @@
+== add
+[01;32mtemurin64-17.0.2 added[00;00m
+[01;32m17.0.2 added[00;00m
+[01;32m17.0 added[00;00m
+[01;32m17 added[00;00m
+[01;32moracle64-1.8.0.392 added[00;00m
+[01;32m1.8.0.392 added[00;00m
+[01;32m1.8 added[00;00m
+== add by alias
+[01;32mcustom added[00;00m
+== not a jdk
+[01;31mWORK/jdks is not a valid path to java installation[00;00m
+== init
+jenv has been updated, process to refresh plugin links
+shell: bash loaded: 1
+PATH starts at WORK/home/.jenv/shims
+== versions
+* system (set by WORK/home/.jenv/version)
+  1.8
+  1.8.0.392
+  17
+  17.0
+  17.0.2
+  custom
+  oracle64-1.8.0.392
+  temurin64-17.0.2
+== global
+17.0 (set by WORK/home/.jenv/version)
+17.0
+WORK/home/.jenv/version
+17.0
+== which, whence, prefix, javahome
+WORK/home/.jenv/versions/17.0/bin/java
+1.8
+1.8.0.392
+17
+17.0
+17.0.2
+custom
+oracle64-1.8.0.392
+temurin64-17.0.2
+WORK/home/.jenv/versions/17.0
+WORK/home/.jenv/versions/17.0
+== shims
+WORK/home/.jenv/shims/java
+openjdk version "17.0.2" 2022-01-18
+OpenJDK Runtime Environment Temurin-17.0.2+8 (build 17.0.2+8)
+OpenJDK 64-Bit Server VM Temurin-17.0.2+8 (build 17.0.2+8, mixed mode, sharing)
+java temurin17 -jar app.jar
+== local
+1.8
+1.8 (set by WORK/project/.java-version)
+java version "1.8.0_392"
+Java(TM) SE Runtime Environment (build 1.8.0_392-b08)
+Java HotSpot(TM) 64-Bit Server VM (build 25.392-b08, mixed mode)
+17.0 (set by WORK/home/.jenv/version)
+== shell
+temurin64-17.0.2 (set by JENV_VERSION environment variable)
+JENV_VERSION=temurin64-17.0.2
+17.0 (set by WORK/home/.jenv/version)
+== exec
+openjdk version "17.0.2" 2022-01-18
+OpenJDK Runtime Environment Temurin-17.0.2+8 (build 17.0.2+8)
+OpenJDK 64-Bit Server VM Temurin-17.0.2+8 (build 17.0.2+8, mixed mode, sharing)
+java oracle8 --help
+== export plugin
+You may restart your session to activate jenv export plugin
+export plugin activated
+ant
+export
+golo
+gradle
+JAVA_HOME=WORK/home/.jenv/versions/17.0
+== commands
+--version
+add
+commands
+completions
+disable-plugin
+doctor
+enable-plugin
+exec
+enable-plugin
+rehash
+shell
+shell-options
+== doctor
+[01;32m[OK]	JAVA_HOME variable probably set by jenv PROMPT[00;00m
+[01;32m[OK]	Java binaries in path are jenv shims[00;00m
+[01;32m[OK]	Jenv is correctly loaded[00;00m
+== version
+jenv 0.6.0

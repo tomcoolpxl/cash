@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+#
+# Summary: Display path to selected JAVA_HOME
+#
+# Usage: jenv javahome
+#
+set -e
+[ -n "$JENV_DEBUG" ] && set -x
+
+# Provide jenv completions
+if [ "$1" = "--complete" ]; then
+  exec jenv shims --short
+fi
+
+JENV_VERSION="$(jenv-version-name)"
+
+if [ "$JENV_VERSION" == "system" ]; then
+  echo "Using system JDK, no JAVA_HOME set!" >&2
+  exit 1
+fi
+
+JAVA_HOME="$JENV_ROOT/versions/$JENV_VERSION"
+echo "$JAVA_HOME"

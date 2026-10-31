@@ -1,0 +1,41 @@
+1..39
+ok 1 activate virtualenv from current version
+ok 2 activate virtualenv from current version with custom prompt
+ok 3 activate virtualenv from current version (quiet)
+ok 4 activate virtualenv from current version (verbose)
+ok 5 activate virtualenv from current version (without pyenv-virtualenv-init)
+ok 6 activate virtualenv from current version (fish)
+ok 7 activate virtualenv from current version (fish) (without pyenv-virtualenv-init)
+ok 8 activate virtualenv from command-line argument
+ok 9 activate virtualenv from command-line argument (without pyenv-virtualenv-init)
+ok 10 activate virtualenv from command-line argument (fish)
+ok 11 activate virtualenv from command-line argument (fish) (without pyenv-virtualenv-init)
+ok 12 unset invokes deactivate
+ok 13 should fail if the version is not a virtualenv
+ok 14 should fail if the version is not a virtualenv (quiet)
+ok 15 should fail if there are multiple versions
+ok 16 should fail if there are multiple virtualenvs (quiet)
+ok 17 should fail if the first version is not a virtualenv
+ok 18 activate if the first virtualenv is a virtualenv
+ok 19 do nothing if a 3rd-party virtualenv is active
+ok 20 do nothing if a 3rd-party virtualenv is active over ours
+ok 21 should fail if activate is invoked as a command
+ok 22 activate keeps VIRTUAL_ENV in agreement with PATH (issue 494)
+ok 23 deactivate virtualenv
+ok 24 deactivate virtualenv (quiet)
+ok 25 deactivate virtualenv (verbose)
+ok 26 deactivate virtualenv (with shell activation)
+ok 27 deactivate virtualenv (with shell activation) (quiet)
+ok 28 deactivate virtualenv which has been activated manually
+ok 29 deactivate virtualenv (fish)
+ok 30 deactivate virtualenv (fish) (quiet)
+ok 31 deactivate virtualenv (fish) (with shell activation)
+ok 32 deactivate virtualenv (fish) (with shell activation) (quiet)
+ok 33 deactivate virtualenv which has been activated manually (fish)
+ok 34 should fail if deactivate is invoked as a command
+ok 35 path should be handled properly even if there is 'envs' in PYENV_ROOT
+ok 36 install pip with ensurepip
+ok 37 install pip without using ensurepip
+ok 38 display virtualenv version
+ok 39 display venv version
+status: 0

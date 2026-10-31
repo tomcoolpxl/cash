@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# Summary: Uninstall a specific Python virtualenv
+#
+# Usage: pyenv virtualenv-delete [-f|--force] <virtualenv>
+#
+#    -f  Attempt to remove the specified virtualenv without prompting
+#        for confirmation. If the virtualenv does not exist, do not
+#        display an error message.
+#
+# See `pyenv virtualenvs` for a complete list of installed versions.
+#
+set -e
+[ -n "$PYENV_DEBUG" ] && set -x
+
+if [ -z "${PYENV_ROOT}" ]; then
+  PYENV_ROOT="$(pyenv-root)"
+fi
+
+# Provide pyenv completions
+if [ "$1" = "--complete" ]; then
+  exec pyenv virtualenvs --bare
+fi
+
+resolve_link() {
+  $(type -p greadlink readlink | head -1) "$1"
+}
+
+usage() {
+  pyenv-help virtualenv-delete 2>/dev/null
+  [ -z "$1" ] || exit "$1"
+}
+
+if [ -z "$PYENV_ROOT" ]; then
+  PYENV_ROOT="${HOME}/.pyenv"
+fi
+
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  usage 0
+fi
+
+unset FORCE
+if [ "$1" = "-f" ] || [ "$1" = "--force" ]; then
+  FORCE=true
+  shift
+fi
+
+[ "$#" -eq 1 ] || usage 1 >&2
+
+DEFINITION="$1"
+case "$DEFINITION" in
+"" | -* )
+  usage 1 >&2
+  ;;
+esac
+
+VERSION_NAME="${DEFINITION##*/}"
+# Must initialize because it might be set in the environment
+ENV_PREFIX=
+ENV_COMPAT_PREFIX="${PYENV_ROOT}/versions/${VERSION_NAME}"
+
+if [[ "${DEFINITION}" != "${DEFINITION%/envs/*}" ]]; then
+  ENV_PREFIX="${PYENV_ROOT}/versions/${DEFINITION}"
+  if [ -L "${ENV_COMPAT_PREFIX}" ]; then
+    if [[ "${ENV_PREFIX}" != "$(resolve_link "${ENV_COMPAT_PREFIX}" 2>/dev/null || true)" ]]; then
+      unset ENV_COMPAT_PREFIX
+    fi
+  fi
+else
+  if [ -L "${ENV_COMPAT_PREFIX}" ]; then
+    ENV_PREFIX="$(resolve_link "${ENV_COMPAT_PREFIX}" 2>/dev/null || true)"
+    if [[ "${ENV_PREFIX%/*/envs/*}" != "${PYENV_ROOT}/versions" ]]; then
+      echo "pyenv-virtualenv: \`${ENV_COMPAT_PREFIX}' is a symlink for unknown location." 1>&2
+      exit 1
+    fi
+  else
+    if pyenv-virtualenv-prefix "${VERSION_NAME}" 1>/dev/null 2>&1; then
+      ENV_PREFIX="${PYENV_ROOT}/versions/${VERSION_NAME}"
+      unset ENV_COMPAT_PREFIX
+    elif [ -z "$FORCE" ]; then
+      echo "pyenv-virtualenv: \`${DEFINITION}' is not a virtualenv." 1>&2
+      exit 1
+    fi
+  fi
+fi
+
+if [ ! -d "$ENV_PREFIX" ]; then
+  if [ -z "$FORCE" ]; then
+    echo "pyenv-virtualenv: virtualenv \`$VERSION_NAME' not installed" >&2
+    exit 1
+  else
+    exit 0
+  fi
+fi
+
+if [ -z "$FORCE" ]; then
+  read -p "pyenv-virtualenv: remove $ENV_PREFIX? (y/N) "
+  case "$REPLY" in
+  y* | Y* ) ;;
+  * ) exit 1 ;;
+  esac
+fi
+
+rm -rf "$ENV_PREFIX"
+if [ -L "$ENV_COMPAT_PREFIX" ]; then
+  rm -rf "$ENV_COMPAT_PREFIX"
+fi
+pyenv-rehash

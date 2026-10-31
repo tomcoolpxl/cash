@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+#
+# Summary: List all Python virtualenvs found in `$PYENV_ROOT/versions/*'.
+# Usage: pyenv virtualenvs [--bare] [--skip-aliases]
+#
+# List all virtualenvs found in `$PYENV_ROOT/versions/*' and its `$PYENV_ROOT/versions/envs/*'.
+
+set -e
+[[ -n $PYENV_DEBUG ]] && set -x
+
+if [[ -z $PYENV_ROOT ]]; then
+  PYENV_ROOT="${HOME}/.pyenv"
+fi
+
+unset bare
+unset skip_aliases
+# Provide pyenv completions
+for arg; do
+  case "$arg" in
+  --complete )
+    echo --bare
+    echo --skip-aliases
+    exit ;;
+  --bare ) bare=1 ;;
+  --skip-aliases ) skip_aliases=1 ;;
+  * )
+    pyenv-help --usage virtualenvs >&2
+    exit 1
+    ;;
+  esac
+done
+
+versions_dir="${PYENV_ROOT}/versions"
+
+if [[ ${BASH_VERSINFO[0]} -gt 3 ]]; then
+  declare -A current_versions
+else
+  current_versions=()
+fi
+if [[ -z $bare ]]; then
+  hit_prefix="* "
+  miss_prefix="  "
+  OLDIFS="$IFS"
+  IFS=:
+  if [[ ${BASH_VERSINFO[0]} -gt 3 ]]; then
+    for i in $(pyenv-version-name || true); do
+      current_versions["$i"]="1"
+    done
+  else
+    read -r -a current_versions <<< "$(pyenv-version-name || true)"
+  fi
+  IFS="$OLDIFS"
+fi
+
+exists() {
+  local car="$1"
+  local cdar
+  shift
+  for cdar in "$@"; do
+    if [ "${car}" == "${cdar}" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+print_version() {
+  local version="${1:?}"
+  if [[ -n $bare ]]; then
+    echo "$version"
+    return
+  fi
+  local path="${2:?}"
+  if [[ -L "$path" ]]; then
+    version_repr="$version --> $(readlink "$path")"
+  else
+    version_repr="$version (created from $(pyenv-virtualenv-prefix "$version" 2>/dev/null))"
+  fi
+  if [[ ${BASH_VERSINFO[0]} -gt 3 && ${current_versions["$1"]} ]] || \
+     { [[ ${BASH_VERSINFO[0]} -le 3 ]] && exists "$1" "${current_versions[@]}"; }; then
+    echo "${hit_prefix}${version_repr} (set by $(pyenv-version-origin))"
+  else
+    echo "${miss_prefix}${version_repr}"
+  fi
+}
+
+shopt -s dotglob
+shopt -s nullglob
+version_dir_entries=("$versions_dir"/*)
+venv_dir_entries=("$versions_dir"/*/envs/*)
+
+if sort --version-sort </dev/null >/dev/null 2>&1; then
+    # system sort supports version sorting
+    OLDIFS="$IFS"
+    IFS='||'
+
+    read -r -a version_dir_entries <<< "$(
+        printf "%s||" "${version_dir_entries[@]}" |
+        sort --version-sort
+    )"
+
+    read -r -a venv_dir_entries <<< "$(
+        printf "%s||" "${venv_dir_entries[@]}" |
+        sort --version-sort
+    )"
+
+    IFS="$OLDIFS"
+fi
+
+for env_path in "${venv_dir_entries[@]}"; do
+  if [[ -d ${env_path} ]]; then
+    print_version "${env_path#"${PYENV_ROOT}"/versions/}" "${env_path}"
+  fi
+done
+
+for env_path in "${version_dir_entries[@]}"; do
+  if [[ -d ${env_path} ]]; then
+    if [[ -L ${env_path} ]]; then
+      if [[ -z $skip_aliases ]]; then
+        print_version "${env_path#"${PYENV_ROOT}"/versions/}" "${env_path}"
+      fi
+    # Mimics the test from pyenv-virtualenv-prefix
+    # XXX: refactor itto a shared module ?
+    elif [[ -f "${env_path}/bin/activate" ]]; then
+      print_version "${env_path#"${PYENV_ROOT}"/versions/}" "${env_path}"
+    fi
+  fi
+done
+
+shopt -u dotglob
+shopt -u nullglob

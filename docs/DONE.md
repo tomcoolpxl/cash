@@ -3499,3 +3499,39 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   of `TMP`, `TEMP` and `TMPDIR` that names a directory, read as cash reads any path, else
   Windows' own, else the Windows directory's `Temp`; and the error that remains names the
   file. The case makes the suite's `test/tmp`, an empty directory upstream.
+- **A corpus round: git-secrets, pyenv-virtualenv, jenv, goenv, neofetch and shdoc**
+  (2026-10-31, the phase after 2.3.2, every source the pick list offered picked): six
+  sources not in the corpus, frozen from Git Bash 5.3 on Windows, each with its
+  licence, its terms in `tests/corpus/SOURCES.md`. git-secrets at 7d6b970: its bats
+  suite, the scans of files, standard input, the index and the history, the hooks
+  installed and run by git on a commit, the pattern and provider lists; the directory's
+  path, which two failing tests print, hidden in both spellings (`pwd -W` for the
+  Windows one). pyenv-virtualenv at 7d821a6: the five files of its suite that pass whole
+  under Git Bash on Windows (activate, deactivate, envs, pip, version), its commands
+  stubbed as the suite stubs them, through copies of its stub script, where `ln -s`
+  copies. jenv at a771525, whose own suite wants the JDKs of a Docker image: two JDKs
+  made by hand with a stand-in `java -version`, the aliases jenv reads from it, its init
+  script, versions, global, local and shell, the shims and exec, the export plugin and
+  doctor; under `shopt -s unixpaths`, since jenv walks a directory up with `${root%/*}`
+  until it is empty, which a Windows-spelled path never is, and with the shell named to
+  `jenv init`, since `ps -p $PPID -o args=` fails in both shells and the fallback is
+  `$SHELL`. goenv at d8c9cd6: its bats suite but the version test, whose top-level
+  code reads a file through bats' own path, the parent-shell detection, and the tests
+  that reach a hook, an alias or a file through a symbolic link, which Windows gives
+  Git Bash as a copy and cash as a copy that says so or a directory link; the tests
+  that need a `go` of the machine fail the same way in both shells, and the runner's
+  root is hidden, since goenv cuts its own path at the first `goenv` in it, which the
+  runner's directory holds. neofetch 7.1.0: its version,
+  help, the configuration it prints and a run with every machine-bound item disabled,
+  under an exported `uname` of MSYS's shape, since its Windows detection knows only
+  Cygwin's and MSYS's names, and with the Shell and Terminal lines dropped (a disabled
+  item still prints `${!name}`, `$shell` and `$term`, which cash reads as SHELL and
+  TERM, D31). shdoc at 52917b2: its twenty-six cases run through awk by a stand-in for
+  its test runner, with trailing blank lines left out of the comparison as the runner
+  has it. Found and fixed: an awk function ending in an `if` that holds a `return`
+  ran past its end; awk refused a backslash before CRLF as a continuation; awk's `.`
+  matched no newline; a directory's read-only attribute made `-w` false and `rm -rf`
+  fail; `rm link` removed no link to a directory; and a `TMP` in Unix spelling lost
+  every here-string of a cash a cash started. Written down in TODO.md: a lowercase
+  `${!name}` reads an environment variable (D31). The fixtures were cloned
+  CRLF and are LF in the repository, as `.gitattributes` has every text file.

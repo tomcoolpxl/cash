@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+# Summary: Configure the shell environment for jenv
+# Usage: eval "$(jenv init - [--no-rehash] [<shell>])"
+
+set -e
+[ -n "$JENV_DEBUG" ] && set -x
+
+print=""
+no_rehash=""
+for args in "$@"
+do
+  if [ "$args" = "-" ]; then
+    print=1
+		shift
+  fi
+
+  if [ "$args" = "--no-rehash" ]; then
+    no_rehash=1
+    shift
+  fi
+done
+
+shell="$1"
+if [ -z "$shell" ]; then
+  shell="$(ps -p "$PPID" -o 'args=' 2>/dev/null || true)"
+  shell="${shell%% *}"
+  shell="${shell##-}"
+  shell="${shell:-$SHELL}"
+  shell="${shell##*/}"
+fi
+
+resolve_link() {
+  if [ -L "$1" ]; then
+    $(type -P greadlink readlink | head -1) "$1"
+  fi
+}
+
+abs_dirname() {
+  local cwd="$(pwd)"
+  local path="$1"
+
+  while [ -n "$path" ]; do
+    cd "${path%/*}"
+    local name="${path##*/}"
+    path="$(resolve_link "$name" || true)"
+  done
+
+  pwd
+  cd "$cwd"
+}
+
+root="$(abs_dirname "$0")/.."
+
+if [ -z "$print" ]; then
+  case "$shell" in
+  bash )
+    profile='~/.bash_profile'
+    ;;
+  zsh )
+    profile='~/.zshrc'
+    ;;
+  ksh )
+    profile='~/.profile'
+    ;;
+  fish )
+    profile='~/.config/fish/config.fish'
+    ;;
+  * )
+    profile='your profile'
+    ;;
+  esac
+
+  { echo "# Load jenv automatically by adding"
+    echo "# the following to ${profile}:"
+    echo
+    case "$shell" in
+    fish )
+      echo 'status --is-interactive; and jenv init - | source'
+      ;;
+    * )
+      echo 'eval "$(jenv init -)"'
+      ;;
+    esac
+    echo
+  } >&2
+
+  exit 1
+fi
+
+mkdir -p "${JENV_ROOT}/"{shims,plugins,versions}
+
+case "$shell" in
+fish )
+  echo "set -gx PATH '${JENV_ROOT}/shims' \$PATH"
+  echo "set -gx JENV_SHELL $shell"
+  echo "set -gx JENV_LOADED 1"
+  echo "set -e JAVA_HOME"
+  echo "set -e JDK_HOME"
+  ;;
+bash | zsh )
+  echo 'export PATH="'${JENV_ROOT}'/shims:${PATH}"'
+  echo "export JENV_SHELL=$shell"
+  echo "export JENV_LOADED=1"
+  echo "unset JAVA_HOME"
+  echo "unset JDK_HOME"
+  ;;
+esac
+
+completion="${root}/completions/jenv.${shell}"
+if [ -r "$completion" ]; then
+  echo "source '$completion'"
+fi
+
+if [ -z "$no_rehash" ]; then
+  echo 'jenv rehash 2>/dev/null'
+fi
+
+echo "jenv refresh-plugins"
+
+for script in $(jenv-hooks init $shell); do
+  echo "source \"$script\""
+done
+
+commands=(`jenv-commands --sh`)
+case "$shell" in
+fish )
+  IFS=" "
+  cat <<EOS
+function jenv
+  set command \$argv[1]
+  set -e argv[1]
+
+  switch "\$command"
+  case ${commands[*]}
+    jenv "sh-\$command" \$argv | source
+  case '*'
+    command jenv "\$command" \$argv
+  end
+end
+EOS
+  ;;
+bash | zsh )
+  IFS="|"
+  cat <<EOS
+jenv() {
+  type typeset &> /dev/null && typeset command
+  command="\$1"
+  if [ "\$#" -gt 0 ]; then
+    shift
+  fi
+
+  case "\$command" in
+  ${commands[*]})
+    eval "\`jenv \"sh-\$command\" \"\$@\"\`";;
+  *)
+    command jenv "\$command" "\$@";;
+  esac
+}
+EOS
+  ;;
+esac

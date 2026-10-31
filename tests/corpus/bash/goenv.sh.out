@@ -1,0 +1,516 @@
+1..279
+ok 1 has completion support
+ok 2 has usage instructions
+ok 3 'commands' returns all commands
+ok 4 'commands --sh' returns only commands containing 'sh'
+ok 5 'commands --no-sh' returns only commands not containing 'sh'
+not ok 6 'commands --sh' with command  in path with spaces still returns it
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_line' in file test/./test_assert_helpers.bash, line 93,
+#  in test file test/goenv-commands.bats, line 131)
+#   `assert_line "hello"' failed
+# expected line `hello'
+ok 7 has usage instructions
+ok 8 it returns '--help' for command with no completion support
+ok 9 it returns '--help' as first argument for command with completion support
+ok 10 it returns specified command with completion support's completion suggestions
+ok 11 it returns as 'completion' commands only commands that have '# Provide goenv completions'
+ok 12 it forwards extra arguments to specified command with completion support
+ok 13 has usage instructions
+ok 14 fails with usage instructions when no command is specified
+ok 15 fails with version that's not installed but specified by GOENV_VERSION
+ok 16 fails with version that's not installed but specified by '.go-version' file
+ok 17 succeeds with version that's installed and specified by GOENV_VERSION
+ok 18 succeeds with version that's installed and specified by '.go-version' file
+ok 19 completes with names of executables for version that's specified by GOENV_VERSION environment variable
+ok 20 carries original IFS within hooks for version that's specified by GOENV_VERSION environment variable
+ok 21 forwards all arguments for command that's specified by GOENV_VERSION environment variable
+ok 22 when current set 'version' is 'system', it does not export GOPATH and GOROOT env variables
+ok 23 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 1, shell is 'bash', it does not export GOPATH or GOROOT
+ok 24 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 1, shell is 'zsh', it does not export GOPATH or GOROOT
+ok 25 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 1, shell is 'ksh', it does not export GOPATH or GOROOT
+ok 26 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 1, shell is 'fish', it does not export GOPATH or GOROOT
+ok 27 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 0, shell is 'bash', it exports 'GOPATH'
+ok 28 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 0, shell is 'ksh', it exports 'GOPATH'
+ok 29 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 0, shell is 'zsh', it exports 'GOPATH'
+ok 30 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 0, shell is 'fish', it exports 'GOPATH'
+ok 31 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'bash' and GOENV_GOPATH_PREFIX is empty, it exports 'GOROOT' and 'GOPATH'=$HOME/go/<version>
+ok 32 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'zsh' and GOENV_GOPATH_PREFIX is empty, it exports 'GOROOT' and 'GOPATH'=$HOME/go/<version>
+ok 33 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'ksh' and GOENV_GOPATH_PREFIX is empty, it exports 'GOROOT' and 'GOPATH'=$HOME/go/<version>
+ok 34 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'fish' and GOENV_GOPATH_PREFIX is empty, it exports 'GOROOT' and 'GOPATH'=$HOME/go/<version>
+ok 35 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'bash' and GOENV_GOPATH_PREFIX is present, it exports 'GOROOT' and 'GOPATH'=$HOME/go/<version>
+ok 36 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'ksh' and GOENV_GOPATH_PREFIX is present, it exports 'GOROOT' and 'GOPATH'=$HOME/go/<version>
+ok 37 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'zsh' and GOENV_GOPATH_PREFIX is present, it exports 'GOROOT' and 'GOPATH'=$HOME/go/<version>
+ok 38 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'fish' and GOENV_GOPATH_PREFIX is present, it exports 'GOROOT' and 'GOPATH'=$HOME/go/<version>
+ok 39 preserves LC_ALL environment variable when executing commands
+ok 40 LC_ALL remains unset if it was not set before
+ok 41 has usage instructions
+ok 42 global has completion support
+ok 43 defaults to 'system'
+ok 44 returns contents of GOENV_ROOT/version
+ok 45 returns contents of GOENV_ROOT/global
+ok 46 returns contents of GOENV_ROOT/default
+ok 47 writes specified version to GOENV_ROOT/version if version is installed
+ok 48 sets properly sorted latest global version when 'latest' version is given and any version is installed
+ok 49 sets latest global version when major version is given and any matching version is installed
+ok 50 fails setting latest global version when major or minor single number is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 51 sets latest global version when minor version is given as single number and any matching major.minor version is installed
+ok 52 sets latest global version when minor version is given as major.minor number and any matching version is installed
+ok 53 fails setting latest global version when major.minor number is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 54 fails writing specified version to GOENV_ROOT/version if version is not installed
+ok 55 reads version from GOENV_ROOT/{version,global,default} in the order they're specified
+ok 56 has usage instructions
+ok 57 without args shows summary of common commands
+ok 58 fails when command argument does not exist
+ok 59 shows help for a specific command that exists
+ok 60 replaces missing extended help with summary text for a specific command that exists
+ok 61 extracts only usage when '--usage' for a specific command that exists
+ok 62 multiline usage section is returned when '--usage' for a specific command that exists
+ok 63 multiline extended help section is returned for a specific command that exists
+ok 64 has usage instructions
+ok 65 installed has completion support
+ok 66 installed fails when no versions are installed
+ok 67 prints installed version when no arguments are given and there's a '.go-version' file in current dir
+ok 68 prints installed version '.go-version' file in parent directory when no arguments are given
+ok 69 sets installed version when version argument is given and matches at 'GOENV_ROOT/versions/<version>'
+ok 70 goenv installed sets properly sorted latest version when 'latest' version is given and any version is installed
+ok 71 goenv installed sets latest version when major version is given and any matching version is installed
+ok 72 goenv installed fails setting latest version when major or minor single number is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 73 goenv installed sets latest version when minor version is given as single number and any matching major.minor version is installed
+ok 74 goenv installed sets latest version when minor version is given as major.minor number and any matching version is installed
+ok 75 goenv installed fails setting latest version when major.minor number is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 76 fails setting installed version when version argument is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 77 has usage instructions
+ok 78 local has completion support
+ok 79 fails when no arguments are given and there's no '.go-version' file in current dir
+ok 80 prints local version when no arguments are given and there's a '.go-version' file in current dir
+ok 81 removes '.go-version' in current dir when '--unset' argument is given and there's a '.go-version' file in current dir
+ok 82 succeeds and does nothing when '--unset' argument is given and there's no '.go-version' file in current dir
+ok 83 prints local version '.go-version' file in parent directory when no arguments are given
+ok 84 reads local version '.go-version' file in current dir with priority over specified GOENV_DIR with '.go-version' file when no arguments are given
+ok 85 sets local version when version argument is given and matches at 'GOENV_ROOT/versions/<version>'
+ok 86 goenv local sets properly sorted latest version when 'latest' version is given and any version is installed
+ok 87 goenv local sets latest version when major version is given and any matching version is installed
+ok 88 goenv local fails setting latest version when major or minor single number is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 89 goenv local sets latest version when minor version is given as single number and any matching major.minor version is installed
+ok 90 goenv local sets latest version when minor version is given as major.minor number and any matching version is installed
+ok 91 goenv local fails setting latest version when major.minor number is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 92 fails setting local version when version argument is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 93 changes local existing version with version argument when version argument is given and does match at 'GOENV_ROOT/versions/<version>'
+ok 94 has usage instructions
+ok 95 has completion support
+ok 96 returns GOENV_ROOT/versions/<version> that matches current dir's '.go-version' file's version when no arguments and '.go-version' file exists
+ok 97 returns GOENV_ROOT/versions/<version> when only major.minor version is given and it matches the latest patch version installed
+ok 98 fails when no '.go-version' exists, version is system and there's no 'go' executable in PATH
+not ok 99 returns dir containing 'go' when no '.go-version' exists, GOENV_VERSION is system and there's 'go' executable in PATH
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv-prefix.bats, line 54)
+#   `assert_success "$GOENV_TEST_DIR"' failed
+# command failed with exit status 1
+not ok 100 system returns go if installed
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv-prefix.bats, line 63)
+#   `assert_success "$GOENV_TEST_DIR"' failed
+# command failed with exit status 1
+ok 101 fails when '.go-version' exists but it does not match any 'GOENV_ROOT/versions/<version>'
+ok 102 prints version prioritized from arguments rather than 'GOENV_VERSION' environment variable
+ok 103 prints version from 'GOENV_VERSION' environment variable when no arguments are given
+ok 104 goenv prefix displays properly sorted latest version when 'latest' version is given and any version is installed
+ok 105 goenv prefix displays latest version when major version is given and any matching version is installed
+ok 106 goenv local fails setting latest version when major or minor single number is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 107 goenv prefix displays latest version when minor version is given as single number and any matching major.minor version is installed
+ok 108 goenv prefix displays latest version when minor version is given as major.minor number and any matching version is installed
+ok 109 goenv local fails setting latest version when major.minor number is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 110 has usage instructions
+ok 111 creates 'GOENV_ROOT/shims' when it does not exist
+not ok 112 fails when shims directory at 'GOENV_ROOT/shims' is not writable
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_failure' in file test/./test_assert_helpers.bash, line 30,
+#  in test file test/goenv-rehash.bats, line 29)
+#   `assert_failure "goenv: cannot rehash: ${GOENV_ROOT}/shims isn't writable"' failed
+# expected failed exit status
+ok 113 fails when 'GOENV_ROOT/shims/.goenv-shim' is present, meaning rehash in progress or interrupted via SIGKILL
+ok 114 succeeds in creating executable shims for binaries present in 'GOENV_ROOT/versions/<version>/bin'
+ok 115 removes stale shims that are not present anymore in 'GOENV_ROOT/versions/<version>/bin' and rehashes
+ok 116 succeeds in creating shims for binaries present in 'GOENV_ROOT/versions/<version>/bin', even though 'version' contains spaces
+ok 117 carries original IFS within hooks
+ok 118 has usage instructions
+ok 119 returns current GOENV_ROOT
+ok 120 has usage instructions for goenv-sh-rehash
+ok 121 has completion support (but pointless)
+ok 122 when current set 'version' is 'system', it does not export GOPATH and GOROOT env variables
+ok 123 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 1, shell is 'bash', it only echoes rehash of binaries
+ok 124 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 1, shell is 'fish', it does not echo anything
+ok 125 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 1, shell is 'ksh', it only echoes rehash of binaries
+ok 126 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 1, shell is 'zsh', it only echoes rehash of binaries
+ok 127 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 0, shell is 'bash', it echoes export of 'GOPATH' and rehash of binaries
+ok 128 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 0, shell is 'ksh', it echoes export of 'GOPATH' and rehash of binaries
+ok 129 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 0, shell is 'zsh', it echoes export of 'GOPATH' and rehash of binaries
+ok 130 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 1, 'GOENV_DISABLE_GOPATH' is 0, shell is 'fish', it echoes only export of 'GOPATH'
+ok 131 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'bash' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go' and rehash of binaries
+ok 132 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_APPEND_GOPATH' is 1, shell is 'bash' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go' and rehash of binaries
+ok 133 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_PREPEND_GOPATH' is 1, shell is 'bash' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go' and rehash of binaries
+ok 134 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'ksh' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go' and rehash of binaries
+ok 135 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_APPEND_GOPATH' is 1, shell is 'ksh' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go' and rehash of binaries
+ok 136 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_PREPEND_GOPATH' is 1, shell is 'ksh' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go' and rehash of binaries
+ok 137 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'zsh' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go' and rehash of binaries
+ok 138 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_APPEND_GOPATH' is 1, shell is 'zsh' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go' and rehash of binaries
+ok 139 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_PREPEND_GOPATH' is 1, shell is 'zsh' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go' and rehash of binaries
+ok 140 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'fish' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go'
+ok 141 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_APPEND_GOPATH' is 1, shell is 'fish' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go'
+ok 142 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_PREPEND_GOPATH' is 1, shell is 'fish' and 'GOENV_GOPATH_PREFIX' is empty, it echoes export of 'GOROOT', 'GOPATH=$HOME/go'
+ok 143 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'bash' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT', 'GOPATH=<set>' and rehash of binaries
+ok 144 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_APPEND_GOPATH' is 1, shell is 'bash' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT', 'GOPATH=<set>' and rehash of binaries
+ok 145 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_PREPEND_GOPATH' is 1, shell is 'bash' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT', 'GOPATH=<set>' and rehash of binaries
+ok 146 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'ksh' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT', 'GOPATH=<set>' and rehash of binaries
+ok 147 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_APPEND_GOPATH' is 1, shell is 'ksh' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT', 'GOPATH=<set>' and rehash of binaries
+ok 148 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_PREPEND_GOPATH' is 1, shell is 'ksh' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT', 'GOPATH=<set>' and rehash of binaries
+ok 149 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'zsh' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT', 'GOPATH=<set>' and rehash of binaries
+ok 150 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_APPEND_GOPATH' is 1, shell is 'zsh' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT', 'GOPATH=<set>' and rehash of binaries
+ok 151 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_PREPEND_GOPATH' is 1, shell is 'zsh' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT', 'GOPATH=<set>' and rehash of binaries
+ok 152 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, shell is 'fish' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT' and 'GOPATH=<set>'
+ok 153 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_APPEND_GOPATH' is 1, shell is 'fish' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT' and 'GOPATH=<set>'
+ok 154 when current set 'version' is not 'system', 'GOENV_DISABLE_GOROOT' is 0, 'GOENV_DISABLE_GOPATH' is 0, 'GOENV_PREPEND_GOPATH' is 1, shell is 'fish' and 'GOENV_GOPATH_PREFIX' is present, it echoes export of 'GOROOT' and 'GOPATH=<set>'
+ok 155 creates 'GOENV_ROOT/shims' when it does not exist
+not ok 156 fails when shims directory at 'GOENV_ROOT/shims' is not writable
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_failure' in file test/./test_assert_helpers.bash, line 30,
+#  in test file test/goenv-sh-rehash.bats, line 462)
+#   `assert_failure "goenv: cannot rehash: ${GOENV_ROOT}/shims isn't writable"' failed
+# expected failed exit status
+ok 157 fails when 'GOENV_ROOT/shims/.goenv-shim' is present, meaning rehash in progress or interrupted via SIGKILL
+ok 158 succeeds in creating executable shims for binaries present in 'GOENV_ROOT/versions/<version>/bin'
+ok 159 removes stale shims that are not present anymore in 'GOENV_ROOT/versions/<version>/bin' and rehashes
+ok 160 succeeds in creating shims for binaries present in 'GOENV_ROOT/versions/<version>/bin', even though 'version' contains spaces
+ok 161 has usage instructions
+ok 162 has completion support
+ok 163 fails when there's no go version specified in arguments and in 'GOENV_VERSION' environment variable
+ok 164 prints 'GOENV_VERSION' when there's no go version specified in arguments, but there's one in 'GOENV_VERSION' environment variable
+ok 165 prints unset variable when '--unset' is given in arguments and shell is 'bash'
+ok 166 prints unset variable when '--unset' is given in arguments and shell is 'zsh'
+ok 167 prints unset variable when '--unset' is given in arguments and shell is 'ksh'
+ok 168 prints unset variable when '--unset' is given in arguments and shell is 'fish'
+ok 169 changes 'GOENV_VERSION' environment variable to specified shell version argument if it's installed in GOENV_ROOT/versions/<version> and shell is 'bash'
+ok 170 changes 'GOENV_VERSION' environment variable to specified shell version argument if it's installed in GOENV_ROOT/versions/<version> and shell is 'zsh'
+ok 171 changes 'GOENV_VERSION' environment variable to specified shell version argument if it's installed in GOENV_ROOT/versions/<version> and shell is 'ksh'
+ok 172 changes 'GOENV_VERSION' environment variable to specified shell version argument if it's installed in GOENV_ROOT/versions/<version> and shell is 'fish'
+ok 173 fails changing 'GOENV_VERSION' environment variable to specified shell version argument if version does not exist in GOENV_ROOT/versions/<version>
+ok 174 has usage instructions
+ok 175 has completion support
+ok 176 prints empty output when no arguments are given and no shims are present in 'GOENV_ROOT/shims/*'
+ok 177 prints found shims paths in alphabetic order when no arguments are given and shims are present in 'GOENV_ROOT/shims/*'
+ok 178 prints found shims names only in alphabetic order when '--short' argument is given and shims are present in 'GOENV_ROOT/shims/*'
+ok 179 has usage instructions
+ok 180 fails without arguments
+ok 181 fails for file specified in arguments that does not exist
+ok 182 fails for file specified in arguments that exists but is blank
+ok 183 reads go.mod file specified in arguments that exists and is not blank
+ok 184 reads go.mod file with toolchain specified in arguments that exists and is not blank
+ok 185 reads version file specified in arguments that exists and is not blank
+ok 186 reads version file without leading and trailing spaces, specified in arguments that exists and is not blank
+ok 187 reads version file without additional newlines, specified in arguments that exists and is not blank
+ok 188 reads version file that's not ending with newline, specified in arguments that exists and is not blank
+ok 189 reads version file that ends with carriage return, specified in arguments that exists and is not blank
+ok 190 skips relative path traversal
+ok 191 has usage instructions
+ok 192 prints usage instructions when 2 arguments aren't specified
+ok 193 succeeds when 2 arguments are specified, but version is non-existent
+ok 194 writes version to file when 2 arguments are specified and version is existent
+not ok 195 remove local version when 'system' version is given and any local version is installed
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv-version-file-write.bats, line 65)
+#   `assert_success "goenv: using system version instead of 4.5.6 now"' failed
+# command failed with exit status 1
+not ok 196 remove global version when 'system' version is given and any global version is installed
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv-version-file-write.bats, line 89)
+#   `assert_success "goenv: using system version instead of 4.5.6 now"' failed
+# command failed with exit status 1
+ok 197 has usage instructions
+ok 198 detects global 'version' file when no arguments are given and file exists at GOENV_ROOT/version
+ok 199 prints global file when no arguments are given and if no '.go-version' files exist neither in global nor in current dir
+ok 200 prints global file when no arguments are provided, go.mod exists and GOENV_GOMOD_VERSION_ENABLE is not set
+ok 201 prints current file when no arguments are given and if 'go.mod' exists and GOENV_GOMOD_VERSION_ENABLE = 1
+ok 202 prints current file when no arguments are given and if '.go-version' file exists in current directory
+ok 203 prints parent file when no arguments are given and if '.go-version' file exists in parent directory
+ok 204 topmost '.go-version' file has precedence when no arguments are given and if parent and current dir files exist
+ok 205 GOENV_DIR has precedence over PWD when no arguments are given and if in both dirs '.go-version' files exist
+ok 206 PWD is searched when no arguments are given and if GOENV_DIR yields no results if in PWD there's no '.go-version' file, but in GOENV_DIR there is
+ok 207 prints version file in target directory when a target directory is specified and there's a '.go-version' file there
+ok 208 fails when a target directory is specified and there's no '.go-version' file there, but in child dir there is a file there
+ok 209 fails when a target directory is specified and there's no '.go-version' file there, but a GOENV_DIR is given and there is a file there
+ok 210 fails when a target directory is specified and there's no '.go-version' file there
+ok 211 has usage instructions
+ok 212 prints 'system' when no version is present in GOENV_ROOT/versions
+ok 213 prints 'system' when 'GOENV_VERSION' environment variable is 'system' and does not check for existence
+ok 214 hooks can override version of specified 'GOENV_VERSION' environment variable if versions exist
+ok 215 carries original IFS within hooks when version exists or is 'system'
+ok 216 carries original IFS within hooks when version does not exist or is not 'system'
+ok 217 prints 'GOENV_VERSION' environment variable which has precedence over local '.go-version' file when versions exist
+ok 218 local '.go-version' file has precedence over 'GOENV_ROOT/version' file when versions exist
+ok 219 fails when version specified by 'GOENV_VERSION' environment variable is not existent
+ok 220 fails when one of the versions separated by ':' and specified by 'GOENV_VERSION' environment variable is not existing
+ok 221 prints version only while removing 'go' prefix in name when version exists
+ok 222 has usage instructions
+ok 223 prints GOENV_ROOT/version file regardless if it exists when no other '.go-version' files exist and no 'GOENV_VERSION_ORIGIN' (from hooks) and no 'GOENV_VERSION' environment variables are provided
+ok 224 prints GOENV_ROOT/version file if it exists and no 'GOENV_VERSION_ORIGIN' (from hooks) and no 'GOENV_VERSION' environment variables are provided
+ok 225 prints 'GOENV_VERSION' environment variable if it's specified in favor of local '.go-version' file
+ok 226 prints local file path if '.go-version' file exists and no 'GOENV_VERSION' environment variable is provided
+ok 227 prints 'GOENV_VERSION_ORIGIN' environment variable provided by hook in favor of 'GOENV_VERSION' environment variable specified and local '.go-version' file
+ok 228 carries original IFS within hooks
+ok 229 prints default 'GOENV_ROOT/version' file and doesn't inherit specified 'GOENV_VERSION_ORIGIN' environment variable
+ok 230 has usage instructions
+ok 231 uses system one when no version arguments are given
+ok 232 uses version from 'GOENV_VERSION' environment variable when no version arguments are given and version is present in GOENV_ROOT/versions/<version>
+ok 233 uses version from '.go-version' local file when no version arguments are given and version is present in GOENV_ROOT/versions/<version>
+ok 234 uses version from 'GOENV_ROOT/version' file when no version arguments are given and version is present in GOENV_ROOT/versions/<version>
+ok 235 uses versions separated by ':' from 'GOENV_ROOT/version' file when no version arguments are given and versions are present in GOENV_ROOT/versions/<version>
+ok 236 fails when versions separated by ':' from 'GOENV_VERSION' environment variable, no version arguments are given, but only one version is present in GOENV_ROOT/versions/<version>
+ok 237 With GOENV_GOMOD_VERSION_ENABLE=1 fails when versions separated by ':' from 'GOENV_VERSION' environment variable, no version arguments are given, but only one version is present in GOENV_ROOT/versions/<version>
+ok 238 has usage instructions
+ok 239 has completion support
+ok 240 fails and prints usage when no argument is given
+not ok 241 prints version when given executable argument is present in GOENV_ROOT/versions/<version>/bin/<binary>
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success_out' in file test/./test_assert_helpers.bash, line 20,
+#  in test file test/goenv-whence.bats, line 32)
+#   `assert_success_out <<OUT' failed
+# command failed with exit status 1
+not ok 242 prints version when '--path' argument is given and given executable argument is present in GOENV_ROOT/versions/<version>/bin/<binary>
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success_out' in file test/./test_assert_helpers.bash, line 20,
+#  in test file test/goenv-whence.bats, line 43)
+#   `assert_success_out <<OUT' failed
+# command failed with exit status 1
+not ok 243 does not print version when executable argument is present in GOENV_ROOT/versions/<version>/<binary>
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success_out' in file test/./test_assert_helpers.bash, line 20,
+#  in test file test/goenv-whence.bats, line 57)
+#   `assert_success_out <<OUT' failed
+# command failed with exit status 1
+ok 244 fails when given filename argument is present but not executable in GOENV_ROOT/versions/<version>/bin/<binary>
+ok 245 has usage instructions
+ok 246 has completion support
+ok 247 fails and prints usage when no command argument is given
+not ok 248 prints path to executable when 'GOENV_VERSION' environment variable is specified and executable argument is found in 'GOENV_ROOT/versions/<version>/bin/<executable>'
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv-which.bats, line 25)
+#   `assert_success "${GOENV_ROOT}/versions/1.10.3/bin/gofmt"' failed
+# command failed with exit status 127
+not ok 249 prints path to executable of first version specified when multiple versions separated by ':' from 'GOENV_VERSION' environment variable executable argument is found in 'GOENV_ROOT/versions/<version>/bin/<executable>'
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv-which.bats, line 36)
+#   `assert_success "${GOENV_ROOT}/versions/1.11.1/bin/gofmt"' failed
+# command failed with exit status 127
+ok 250 fails when specified version by 'GOENV_VERSION' environment variable is not installed
+ok 251 fails when specified versions separated by ':' from 'GOENV_VERSION' environment variable are not installed
+ok 252 fails when specified executable argument is not found for installed version specified in 'GOENV_VERSION' environment variable
+ok 253 fails when no executable found for system version specified in 'GOENV_VERSION' environment variable
+not ok 254 fails when executable found in other versions but not in version specified in 'GOENV_VERSION' environment variable
+# (from function `assert_equal' in file test/./test_assert_helpers.bash, line 53,
+#  from function `assert_output' in file test/./test_assert_helpers.bash, line 80,
+#  from function `assert_failure_out' in file test/./test_assert_helpers.bash, line 42,
+#  in test file test/goenv-which.bats, line 73)
+#   `assert_failure_out <<OUT' failed
+# expected: (newline not part of expected output)
+# goenv: 'gofmt' command not found
+#
+# The 'gofmt' command exists in these Go versions:
+#   1.10.3
+#   1.11.1
+# actual: (newline not actual output)
+# goenv: 'gofmt' command not found
+ok 255 carries original IFS within hooks
+not ok 256 prints executable found in version discovered from 'goenv-version-name' (GOENV_ROOT/version)
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv-which.bats, line 102)
+#   `assert_success "${GOENV_ROOT}/versions/1.6.1/bin/go"' failed
+# command failed with exit status 127
+not ok 257 prints executable found in PATH for 'system' specified by 'GOENV_VERSION' environment variable
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv-which.bats, line 109)
+#   `assert_success "${GOENV_TEST_DIR}/bin/kill-all-humans"' failed
+# command failed with exit status 127
+not ok 258 prints executable found in PATH for 'system' specified by 'GOENV_VERSION' environment variable excludes 'GOENV_ROOT/shims'
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv-which.bats, line 117)
+#   `assert_success "${GOENV_TEST_DIR}/bin/kill-all-humans"' failed
+# command failed with exit status 127
+ok 259 fails when executable is not found in PATH for 'system' specified by 'GOENV_VERSION' even though it's present in current dir
+ok 260 goenv has completion support
+not ok 261 fails and prints help when no command argument is given
+# (from function `assert_equal' in file test/./test_assert_helpers.bash, line 53,
+#  from function `assert_output' in file test/./test_assert_helpers.bash, line 80,
+#  from function `assert_failure_out' in file test/./test_assert_helpers.bash, line 42,
+#  in test file test/goenv.bats, line 49)
+#   `assert_failure_out <<OUT' failed
+# cat: CORPUS/bash__goenv/APP_VERSION: No such file or directory
+# expected: (newline not part of expected output)
+#
+# Usage: goenv <command> [<args>]
+#
+# Some useful goenv commands are:
+#    commands    List all available commands of goenv
+#    local       Set or show the local application-specific Go version
+#    global      Set or show the global Go version
+#    shell       Set or show the shell-specific Go version
+#    install     Install a Go version using go-build
+#    uninstall   Uninstall a specific Go version
+#    rehash      Rehash goenv shims (run this after installing executables)
+#    version     Show the current Go version and its origin
+#    versions    List all Go versions available to goenv
+#    which       Display the full path to an executable
+#    whence      List all Go versions that contain the given executable
+#
+# See 'goenv help <command>' for information on a specific command.
+# For full documentation, see: https://github.com/go-nv/goenv#readme
+# actual: (newline not actual output)
+# cat: CORPUS/bash__goenv/APP_VERSION: No such file or directory
+ok 262 Runs install when no command argument is given and GOENV_AUTO_INSTALL is set to 1
+ok 263 fails when invalid command argument is given
+ok 264 uses '$HOME/.goenv' as default 'GOENV_ROOT' when 'GOENV_ROOT' environment variable is blank
+ok 265 uses provided 'GOENV_ROOT' as default 'GOENV_ROOT' when 'GOENV_ROOT' environment variable is provided
+ok 266 uses 'PWD' as default 'GOENV_DIR' when no 'GOENV_DIR' is specified
+ok 267 uses provided 'GOENV_DIR' as default 'GOENV_DIR' when 'GOENV_DIR' environment variable is provided
+ok 268 fails when provided 'GOENV_DIR' environment variable cannot be changed current dir into
+ok 269 adds its own 'GOENV_ROOT/libexec' to PATH
+ok 270 adds plugin bin dirs 'GOENV_ROOT/{libexec,plugins}/<plugin>/<binary>' to PATH
+ok 271 'GOENV_HOOK_PATH' uses already defined 'GOENV_HOOK_PATH' in environment variable
+ok 272 'GOENV_HOOK_PATH' includes goenv built-in plugins paths
+ok 273 prints error when called with 'shell' subcommand, but GOENV_SHELL environment variable is not present
+ok 274 goenv sets properly sorted latest local version when 'latest' version is given to goenv and any version is installed
+ok 275 goenv sets latest local version when major version is given and any matching version is installed
+ok 276 goenv fails setting latest local version when major or minor single number is given and does not match at 'GOENV_ROOT/versions/<version>'
+ok 277 goenv sets latest local version when minor version is given as single number and any matching major.minor version is installed
+ok 278 goenv sets latest local version when minor version is given as major.minor number and any matching version is installed
+ok 279 goenv fails setting latest local version when major.minor number is given and does not match at 'GOENV_ROOT/versions/<version>'
+status: 1
+1..16
+ok 1 has usage instructions
+ok 2 has completion support
+ok 3 prints usage instructions when unknown arguments are given
+not ok 4 prints 'system' when no versions are installed other than 'go' executable in 'PATH'
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv-versions.bats, line 43)
+#   `assert_success "* system (set by ${GOENV_ROOT}/version)"' failed
+# command failed with exit status 1
+ok 5 fails with warning when no versions are installed and no 'go' executable in 'PATH'
+ok 6 prints empty output when '--bare' argument is given and no versions installed and no 'go' executable in 'PATH'
+ok 7 prints empty output when '--bare' argument is given and no versions installed and 'go' executable in 'PATH'
+not ok 8 prints all available versions and showing 'system' as currently selected one when version is installed and 'go' executable in 'PATH'
+# (from function `assert_equal' in file test/./test_assert_helpers.bash, line 53,
+#  from function `assert_output' in file test/./test_assert_helpers.bash, line 80,
+#  from function `assert_success_out' in file test/./test_assert_helpers.bash, line 24,
+#  in test file test/goenv-versions.bats, line 74)
+#   `assert_success_out <<OUT' failed
+# expected: (newline not part of expected output)
+# * system (set by TEST_DIR/root/version)
+#   1.10.1
+#   1.10.2
+#   1.10.3
+# actual: (newline not actual output)
+#   1.10.1
+#   1.10.2
+#   1.10.3
+ok 9 prints single version when no 'go' executable in 'PATH' and version is installed
+ok 10 prints single version when '--bare' argument is specified and version is installed
+not ok 11 prints specified version by 'GOENV_VERSION' environment variable as selected one and all versions when all versions are available and 'go' executable in PATH
+# (from function `assert_equal' in file test/./test_assert_helpers.bash, line 53,
+#  from function `assert_output' in file test/./test_assert_helpers.bash, line 80,
+#  from function `assert_success_out' in file test/./test_assert_helpers.bash, line 24,
+#  in test file test/goenv-versions.bats, line 104)
+#   `assert_success_out <<OUT' failed
+# expected: (newline not part of expected output)
+#   system
+# * 1.10.1 (set by GOENV_VERSION environment variable)
+#   1.11.1
+# actual: (newline not actual output)
+# * 1.10.1 (set by GOENV_VERSION environment variable)
+#   1.11.1
+ok 12 prints all available versions and does not specify version by 'GOENV_VERSION' environment variable when '--bare' argument is specified and all versions are available
+not ok 13 prints globally selected version by 'GOENV_ROOT/version' and all versions when all versions are installed and 'go' executable in PATH
+# (from function `assert_equal' in file test/./test_assert_helpers.bash, line 53,
+#  from function `assert_output' in file test/./test_assert_helpers.bash, line 80,
+#  from function `assert_success_out' in file test/./test_assert_helpers.bash, line 24,
+#  in test file test/goenv-versions.bats, line 129)
+#   `assert_success_out <<OUT' failed
+# expected: (newline not part of expected output)
+#   system
+#   1.10.3
+# * 1.11.1 (set by TEST_DIR/root/version)
+# actual: (newline not actual output)
+#   1.10.3
+# * 1.11.1 (set by TEST_DIR/root/version)
+not ok 14 prints local '.go-version' file as selected one and all available versions when all versions are installed and 'go' executable in PATH
+# (from function `assert_equal' in file test/./test_assert_helpers.bash, line 53,
+#  from function `assert_output' in file test/./test_assert_helpers.bash, line 80,
+#  from function `assert_success_out' in file test/./test_assert_helpers.bash, line 24,
+#  in test file test/goenv-versions.bats, line 144)
+#   `assert_success_out <<OUT' failed
+# expected: (newline not part of expected output)
+#   system
+# * 1.6.1 (set by TEST_DIR/.go-version)
+#   1.8.4
+# actual: (newline not actual output)
+# * 1.6.1 (set by TEST_DIR/.go-version)
+#   1.8.4
+ok 15 prints all available versions while ignoring non-directories in GOENV_ROOT/versions when all versions are installed
+ok 16 prints symlinks in GOENV_ROOT/versions when all versions are installed
+versions: 1
+1..2
+not ok 1 prefixes are collected for versions separated by ':' from 'GOENV_VERSION' environment variable
+# (from function `flunk' in file test/./test_assert_helpers.bash, line 7,
+#  from function `assert_success' in file test/./test_assert_helpers.bash, line 12,
+#  in test file test/goenv_ext.bats, line 13)
+#   `assert_success "${GOENV_TEST_DIR}:${GOENV_ROOT}/versions/1.11.1"' failed
+# command failed with exit status 1
+ok 2 uses dirname of file argument as 'GOENV_DIR' environment variable
+ext: 1
+1..29
+ok 1 has usage instructions
+ok 2 has completion support
+ok 3 does not create GOENV_ROOT/{shims,versions} when no '-' argument is given
+ok 4 prints usage snippet when no '-' argument is given, but shell given is 'bash'
+ok 5 prints usage snippet when no '-' argument is given, but shell given is 'zsh'
+ok 6 prints usage snippet when no '-' argument is given, but shell given is 'fish'
+ok 7 prints usage snippet when no '-' argument is given, but shell given is 'ksh'
+ok 8 prints usage snippet when no '-' argument is given, but shell given is none of the well known ones
+ok 9 creates shims and versions directories when '-' argument is given
+ok 10 includes 'goenv rehash' when '-' is specified and '--no-rehash' is not specified
+ok 11 does not include 'goenv rehash' when '-' and '--no-rehash' are specified
+ok 12 prints bootstrap script with auto-completion when '-' and 'bash' are specified
+ok 13 prints bootstrap script with auto-completion when '-' and 'zsh' are specified
+ok 14 prints bootstrap script with auto-completion when '-' and 'fish' are specified
+ok 15 prints bootstrap script without auto-completion when '-' and 'ksh' are specified
+ok 16 prints bootstrap script without auto-completion when '-' and unknown shell 'magicshell' are specified
+ok 17 does not include automatic version detection hook when GOENV_AUTOMATICALLY_DETECT_VERSION is not set for bash
+ok 18 does not include automatic version detection hook when GOENV_AUTOMATICALLY_DETECT_VERSION is 0 for bash
+ok 19 includes automatic version detection hook when GOENV_AUTOMATICALLY_DETECT_VERSION is 1 for bash
+ok 20 does not include automatic version detection hook when GOENV_AUTOMATICALLY_DETECT_VERSION is not set for zsh
+ok 21 does not include automatic version detection hook when GOENV_AUTOMATICALLY_DETECT_VERSION is 0 for zsh
+ok 22 includes automatic version detection hook when GOENV_AUTOMATICALLY_DETECT_VERSION is 1 for zsh
+ok 23 does not include automatic version detection hook when GOENV_AUTOMATICALLY_DETECT_VERSION is not set for fish
+ok 24 does not include automatic version detection hook when GOENV_AUTOMATICALLY_DETECT_VERSION is 0 for fish
+ok 25 includes automatic version detection hook when GOENV_AUTOMATICALLY_DETECT_VERSION is 1 for fish
+ok 26 includes PATH collision warning when system go exists and GOENV_PATH_ORDER is not front for bash
+ok 27 does not include PATH collision warning when GOENV_DISABLE_PATH_WARNING is set to 1
+ok 28 warning executes and shows message when system go exists and GOENV_PATH_ORDER not set
+ok 29 warning does not execute when GOENV_PATH_ORDER is set to front
+init: 0
+1..5
+ok 1 has completion support
+ok 2 prints usage help when no arguments are given
+ok 3 prints list of hooks ending with '.bash', for given command
+ok 4 prints lists of hooks with spaces in path for given command
+ok 5 prints list of hooks and resolves relative paths for given command
+hooks: 0

@@ -414,6 +414,15 @@ What the phases now in docs/DONE.md left open, each where its phase says more. N
 
 ## Found along the way
 
+- **A lowercase variable read through `${!name}` is an environment variable** (2026-10-31,
+  neofetch in the corpus round): variable names are case-insensitive in cash (D31), so
+  neofetch's `output="${!2}"` for an item named `shell` or `term`, whose function
+  `--disable` had unset, printed `$SHELL` and `$TERM`, where Bash prints nothing; the
+  case drops those lines. A script's own lowercase names collide with any environment
+  variable spelled in capitals (`shell`, `term`, `path`, `home`, `user`). D31 was
+  decided for Windows' own case-insensitive names; whether a name a script sets
+  itself, or reads indirectly, should fold case is the user's call.
+
 - **No scheduled tasks** (the user, 2026-10-23): an elevated step, such as a samply or
   wpr profile, stays one the user runs by hand (`sudo pwsh -File ...`); a task with
   highest privileges that cash or Claude could start later was turned down as dangerous.

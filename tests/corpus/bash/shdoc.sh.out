@@ -1,0 +1,66 @@
+== @deprecated-standalone.test.sh
+  same
+== @deprecated.test.sh
+  same
+== @function-declaration.test.sh
+  same
+== @name-and-@description.test.sh
+  same
+== @option.test.sh
+  same
+== @section.test.sh
+  same
+== @see.test.sh
+  same
+== @set.test.sh
+  same
+== @stderr.test.sh
+  same
+== @stdin.test.sh
+  same
+== @stdout.test.sh
+  same
+== function-in-@example.test.sh
+  same
+== function-tags.test.sh
+  same
+== global-tags.test.sh
+  same
+== help.test.sh
+  stdout matches
+  stdout has it
+  stdout has it
+  stdout has it
+  stderr empty
+  stdout matches
+  stderr empty
+  stdout matches
+  stderr empty
+== intervening-source-breaks-pending-docblock.test.sh
+  same
+== issue-12-no-space-in-function-declaration.test.sh
+  same
+== issue-25-missing-trailing-newline-in-see-also.test.sh
+  same
+== issue-30-list-heading-separation.test.sh
+  same
+== issue-4-whitespace-in-function-declaration.test.sh
+  same
+== issue-50-indented-function-description.test.sh
+  same
+== issue-56-function-opening-bracket-on-separate-line.test.sh
+  same
+== issue-84-underscore-function-links.test.sh
+  same
+== numbered-arguments.test.sh
+  same
+== table-of-contents.test.sh
+  same
+== undocumented-and-internal-functions-do-not-poison-next-docblock.test.sh
+  same
+== version
+shdoc v1.4
+
+== an undocumented script
+
+status: 0
