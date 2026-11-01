@@ -3630,3 +3630,29 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   `$path` and `$seconds` are unset until the script sets them, as in Bash. Tests in
   `acceptance.rs`; `help differences` and `help vars` say so; the neofetch case shows
   its Shell and Terminal lines again.
+- **A corpus round: tfenv, log4sh, bash_ini_parser and bats-detik** (2026-11-01, the
+  phase after 2.4.0, item 4, the four sources the user picked): frozen from Git Bash 5.3
+  on Windows, each with its licence, its terms in `tests/corpus/SOURCES.md`. tfenv at
+  de6ce2e (3.2.2): its commands suite, and its offline commands against three
+  versions installed by hand as stand-ins (list, use, version-name, pin, the terraform
+  shim, use latest, a version file with a CRLF and with comments, version-file,
+  resolve-version, uninstall and the errors of a version that is not there); the
+  remote is refused, so install, list-remote and the thirteen suites that need them
+  are left out; under `shopt -s unixpaths`, since tfenv-version-file walks a directory
+  up with `${root%/*}` until it is empty, which a Windows-spelled path never is (jenv
+  again). log4sh at 2ca6e1e: its repository is the 1.5 line whose own suite at the
+  root no longer matches the library (eleven of its twelve suites fail under Git Bash
+  too, `log4sh_resetConfiguration: command not found`), so the case exercises the
+  library itself: the hello world example, appenders and layouts configured in code
+  (console, a file, standard error, the priority, thread, MDC and percent patterns, a
+  threshold, the levels from TRACE to OFF, a piped message, SimpleLayout) and a
+  properties file; the patterns that print the clock (`%d`, `%r`) are masked or left
+  out. bash_ini_parser at 8fb95e3: its nine tests as its runner compares them, the
+  outputs written beside the test directory since one INI runs `ls .`; two differ from
+  what the tests expect under Bash 5.3 itself (an `eval` of a lone quote), and cash
+  differs the same way. bats-detik at 2ea9f37: six of its ten bats suites (utils, the
+  kubectl request, `verify` against a stand-in client, the linter), 73 tests, by the
+  bats-core fixture; the `try` suites wait between attempts and are left out for time;
+  the `ln` warning cash gives where bats links a test file goes to standard error,
+  which the golden does not hold. No difference between the shells was found beyond
+  these; the clones came CRLF and the fixtures are LF.

@@ -1,0 +1,74 @@
+== the commands suite
+tfenv: ### Test Suite: Commands (help, version, error paths)
+tfenv: ## tfenv help: verify output lists expected commands
+tfenv: ## tfenv help: passed
+tfenv: ## tfenv --version: verify output format
+awk: fatal: cannot open file `WORK/tfenv/CHANGELOG.md' for reading: No such file or directory
+tfenv: [ERROR] Failed to scrape version from CHANGELOG.md
+tfenv: Test Failed: tfenv --version output does not match expected format
+tfenv: ## tfenv -v: verify same as --version
+awk: fatal: cannot open file `WORK/tfenv/CHANGELOG.md' for reading: No such file or directory
+tfenv: [ERROR] Failed to scrape version from CHANGELOG.md
+tfenv: Test Failed: tfenv -v output does not match expected format
+tfenv: ## tfenv (no args): verify shows version and help, exits non-zero
+awk: fatal: cannot open file `WORK/tfenv/CHANGELOG.md' for reading: No such file or directory
+tfenv: [ERROR] Failed to scrape version from CHANGELOG.md
+Usage: tfenv <command> [<options>]
+
+Commands:
+   install       Install a specific version of Terraform
+   use           Switch a version to use
+   uninstall     Uninstall one or more versions of Terraform
+   list          List all installed versions
+   list-remote   List all installable versions
+   version-name  Print current version
+   init          Update environment to use tfenv correctly.
+   pin           Write the current active version to ./.terraform-version
+
+tfenv: ## tfenv (no args): passed
+tfenv: ## tfenv invalid-command: verify error message
+tfenv: ## tfenv invalid-command: passed
+tfenv: ## tfenv --help: verify exits zero and shows help
+tfenv: ## tfenv --help: passed
+tfenv: ===== The following commands tests failed =====
+tfenv: 	tfenv --version output does not match expected format
+tfenv: 	tfenv -v output does not match expected format
+tfenv: [ERROR] commands test failure(s)
+== three versions installed by hand
+  1.6.1 (unknown)
+  1.0.11 (unknown)
+  0.14.6 (unknown)
+tfenv: No default set. Set with 'tfenv use <version>'
+== use 1.0.11, pin, the shim
+tfenv: Switching default version to v1.0.11
+tfenv: Default version (when not overridden by .terraform-version or TFENV_TERRAFORM_VERSION) is now: 1.0.11
+1.0.11
+tfenv: Pinned version by writing "1.0.11" to WORK/work/.terraform-version
+1.0.11
+Terraform v1.0.11
+== use latest
+tfenv: Switching default version to v1.6.1
+tfenv: Default version (when not overridden by .terraform-version or TFENV_TERRAFORM_VERSION) is now: 1.6.1
+1.6.1
+== a version file with a CRLF, then with comments
+1.6.1
+0.14.6
+WORK/work/.terraform-version
+== resolve-version
+1.6.1:^1.6.1$
+latest:^1.0
+latest:^[0-9]\+\.[0-9]\+\.[0-9]\+$
+== uninstall
+tfenv: Uninstall Terraform v0.14.6
+tfenv: Terraform v0.14.6 is successfully uninstalled
+0.14.6
+status: 0
+* 1.6.1 (unknown) (set by WORK/config/version)
+  1.0.11 (unknown)
+== errors
+tfenv: [ERROR] Version directory for  is present, but the terraform binary is not! Manual intervention required.
+status: 1
+tfenv: [ERROR] No versions matching '^9.9.9$' found in local
+status: 1
+tfenv: [ERROR] usage: tfenv pin
+status: 1

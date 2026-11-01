@@ -1,0 +1,65 @@
+== test1: status 0
+1d0
+< ../read_ini.sh: eval: line 275: unexpected EOF while looking for matching `''
+9c8
+< var8:
+---
+> var8:VAR ' 8
+== test2: status 1
+as expected
+== test3: status 0
+as expected
+== test4: status 0
+as expected
+== test5: status 0
+as expected
+== test6: status 0
+as expected
+== test7: status 1
+as expected
+== test8: status 1
+as expected
+== test9: status 0
+1,30d0
+< test.sh
+< test1.ini
+< test1.out.correct
+< test1.sh
+< test2.ini
+< test2.out.correct
+< test2.sh
+< test3.ini
+< test3.out.correct
+< test3.sh
+< test4.ini
+< test4.out.correct
+< test4.sh
+< test5.ini
+< test5.out.correct
+< test5.sh
+< test6.ini
+< test6.out.correct
+< test6.sh
+< test7.ini
+< test7.out.correct
+< test7.sh
+< test8.ini
+< test8.out.correct
+< test8.sh
+< test9.ini
+< test9.out.correct
+< test9.sh
+< ../read_ini.sh: eval: line 275: unexpected EOF while looking for matching `''
+< ../read_ini.sh: eval: line 275: unexpected EOF while looking for matching `''
+32c2
+< var2:
+---
+> var2:' ls '.
+34c4
+< var4:
+---
+> var4:'
+36c6
+< var6:
+---
+> var6:'

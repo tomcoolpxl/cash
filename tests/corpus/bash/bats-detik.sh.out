@@ -1,0 +1,85 @@
+== test.utils.trim
+1..1
+ok 1 testing trim
+== test.utils.to_lower_case
+1..1
+ok 1 testing to_lower_case
+== test.utils.debug
+1..2
+ok 1 testing debug
+ok 2 testing reset_debug
+== test.detik.build_k8s_request
+1..5
+ok 1 verifying the generated request with the predefined 'status' parameter
+ok 2 verifying the generated request with the predefined 'port' parameter
+ok 3 verifying the generated request with the predefined 'targetPort' parameter
+ok 4 verifying the generated request with no additional parameter
+ok 5 verifying the generated request with a native column
+== test.detik.verify
+1..52
+ok 1 verifying the number of PODs with the lower-case syntax (exact number, plural)
+ok 2 verifying the number of PODs with the lower-case syntax (exact number, singular)
+ok 3 verifying the number of PODs with the lower-case syntax (exact number, singular mixed with plural)
+ok 4 verifying the number of PODs with the lower-case syntax (exact number, 0 as singular)
+ok 5 verifying the number of PODs with the lower-case syntax (exact number, 0 as plural)
+ok 6 verifying the number of PODs with upper-case letters
+ok 7 verifying the number of PODs with an extended pattern syntax (exact number, 0 as singular)
+ok 8 verifying the number of resources with their type including dots
+ok 9 verifying the number of PODs with upper-case letters (with a different K8s namespace)
+ok 10 verifying the syntax check (counting with invalid wording)
+ok 11 verifying the syntax check (counting with missing quotes)
+ok 12 verifying the syntax check (empty query)
+ok 13 verifying the number of PODs with an invalid name
+ok 14 verifying the number of PODs with a pattern name
+ok 15 verifying the number of PODs with an invalid pattern name
+ok 16 verifying the number of PODs with the lower-case syntax (multi-lines)
+ok 17 verifying the number of PODs with the lower-case syntax (multi-lines, without quotes)
+ok 18 verifying the number of PODs with the lower-case syntax (debug)
+ok 19 verifying the number of PODs with the lower-case syntax (debug and a different K8s namespace)
+ok 20 verifying the status of a POD with the lower-case syntax
+ok 21 verifying the status of a POD with a complex property
+ok 22 verifying the status of a POD with upper-case letters
+ok 23 verifying the syntax check (invalid wording)
+ok 24 verifying the syntax check (missing quotes)
+ok 25 verifying the status of a POD with the wrong value
+ok 26 verifying the status of a POD with an invalid name
+ok 27 verifying the status of a POD with a pattern name
+ok 28 verifying the status of a POD with an invalid pattern name
+ok 29 verifying the status of a POD with the lower-case syntax (multi-lines)
+ok 30 verifying the status of a POD with the lower-case syntax (multi-lines, without quotes)
+ok 31 verifying the status of a POD with the lower-case syntax (debug)
+ok 32 verifying the status of a POD with the lower-case syntax and a simple match
+ok 33 verifying the status of a POD with the lower-case syntax and a simple match with different case
+ok 34 verifying the status of a POD with the lower-case syntax and a simple match with case-insensitivy
+ok 35 verifying the status of a POD with the lower-case syntax and a simple match with an upper-case pattern
+ok 36 verifying the status of a POD with the lower-case syntax and a simple match with a lower-case pattern
+ok 37 verifying the status of a POD with the lower-case syntax and an exact match
+ok 38 verifying the status of a POD with a complex property and a partial match
+ok 39 verifying the syntax check (invalid wording, with a pattern match)
+ok 40 verifying the syntax check (missing quotes, with a pattern match)
+ok 41 verifying the status of a POD with the wrong value and a pattern match
+ok 42 verifying the status of a POD with an invalid name and a pattern match
+ok 43 verifying the status of a POD with a pattern name and a pattern match
+ok 44 verifying the status of a POD with an invalid pattern name and a pattern match
+ok 45 verifying the status of a POD with the lower-case syntax (multi-lines and pattern matching)
+ok 46 verifying the status of a POD with the lower-case syntax (multi-lines and pattern matching, without quotes)
+ok 47 verifying the status of a POD with the lower-case syntax (debug matching)
+ok 48 verifying the number of PODs with the lower-case syntax (more than, plural)
+ok 49 verifying the number of PODs with the lower-case syntax (less than, plural)
+ok 50 verifying the number of PODs with the lower-case syntax failure (more than, plural)
+ok 51 verifying the number of PODs with the lower-case syntax failure (less than, plural)
+ok 52 verifying the number of ec2nodeclass with the lower-case syntax (resource name with a number)
+== test.linter
+1..12
+ok 1 setup the global environment for this test
+ok 2 verifying the remove_surrounding_quotes function
+ok 3 verifying the verify_against_pattern function
+ok 4 checking the linter with a file that does not exist
+ok 5 checking the linter with a file without any error (with RUN)
+ok 6 checking the linter with a file without any error (without RUN)
+ok 7 checking the linter with a file with lint errors on TRY to VERIFY (without RUN)
+ok 8 checking the linter with a file with lint errors on TRY to VERIFY (with RUN)
+ok 9 checking the linter with a file with lint errors on TRY to FIND (without RUN)
+ok 10 checking the linter with a file with lint errors on TRY to FIND (with RUN)
+ok 11 checking the linter with a file with lint errors on VERIFY (with RUN)
+ok 12 checking the linter with a file with lint errors on VERIFY (without RUN)

@@ -1,0 +1,32 @@
+== hello world
+R [main] INFO shell  - Hello, world!
+status: 0
+== no configuration
+INFO [main] shell - Hello, world
+WARN [main] shell - a warning
+== every level
+at TRACE: trace debug info warn error fatal
+at DEBUG: debug info warn error fatal
+at INFO: info warn error fatal
+at WARN: warn error fatal
+at ERROR: error fatal
+at FATAL: fatal
+at OFF:
+== a file appender and a threshold
+INFO [main] shell - info: console only
+ERROR [main] shell - error: console and file
+-- the file
+[ERROR] error: console and file
+== standard error, the MDC and a percent
+FATAL [worker] shell - to all three
+err 42 100% to all three
+-- piped
+WARN [worker] shell - line one
+line two
+== simple layout
+INFO - simple
+== a properties file
+INFO shell  - from the properties file
+ERROR shell  - an error
+props.sh: INFO named by the file
+status: 0
