@@ -31,16 +31,13 @@ pub(crate) fn ere_escape_char(c: char) -> String {
     }
 }
 
-/// Build the stored value for field `index` from its text. POSIX 85511: a field
-/// created from `$0`/FS that "does not contain any characters" has the
-/// uninitialized value (so e.g. an empty field compares numerically equal to 0),
-/// while a non-empty field is a (possibly numeric) string.
+/// Build the stored value for field `index` from its text: a possibly numeric string.
+/// POSIX 85511 gives a field created from `$0`/FS that "does not contain any
+/// characters" the uninitialized value, which compares numerically equal to 0; gawk and
+/// BWK awk give it the null string, which compares as one (`$2 == 0` of `a::b` is false),
+/// and gawk's nfldstr test holds a field past NF to the same. It was uninitialized.
 fn make_field(value: AwkString, index: u32) -> AwkValue {
-    if value.is_empty() {
-        AwkValue::uninitialized_scalar().into_ref(AwkRefType::Field(index))
-    } else {
-        AwkValue::field_ref(value, index)
-    }
+    AwkValue::field_ref(value, index)
 }
 
 /// Splits a record into fields and calls the provided closure for each field.
@@ -190,9 +187,7 @@ impl Record {
     pub(crate) const MAX_FIELDS: usize = 1 << 24;
 
     fn new_field_cell(index: usize) -> Box<AwkValueRef> {
-        Box::new(AwkValueRef::new(
-            AwkValue::uninitialized_scalar().into_ref(AwkRefType::Field(index as u32)),
-        ))
+        Box::new(AwkValueRef::new(AwkValue::field_ref("", index as u32)))
     }
 
     /// Split `record` into `fields` (in place, reusing existing boxes), so the
@@ -226,13 +221,12 @@ impl Record {
         Ok(last_field)
     }
 
-    /// Reset fields `new_last + 1 ..= previous_last` to the uninitialized value
-    /// (the fields a now-shorter record no longer has). The boxes are kept, not
-    /// dropped — a pointer to one may still be live on the operand stack (e.g.
-    /// `$9 = ($0 = "a b")`), so dropping it would dangle that pointer; storage
-    /// therefore grows to a high-water mark but never shrinks. Only fields up to
-    /// `previous_last` are touched, since everything above it is already
-    /// uninitialized.
+    /// Reset fields `new_last + 1 ..= previous_last` to the null string (the fields a
+    /// now-shorter record no longer has). The boxes are kept, not dropped: a pointer to
+    /// one may still be live on the operand stack (e.g. `$9 = ($0 = "a b")`), so
+    /// dropping it would dangle that pointer; storage therefore grows to a high-water
+    /// mark but never shrinks. Only fields up to `previous_last` are touched, since
+    /// everything above it is already null.
     fn clear_fields_above(fields: &mut [Box<AwkValueRef>], new_last: usize, previous_last: usize) {
         let upper = previous_last.min(fields.len().saturating_sub(1));
         for (idx, cell) in fields
@@ -241,8 +235,7 @@ impl Record {
             .take(upper + 1)
             .skip(new_last + 1)
         {
-            *cell.get_mut() =
-                AwkValue::uninitialized_scalar().into_ref(AwkRefType::Field(idx as u32));
+            *cell.get_mut() = AwkValue::field_ref("", idx as u32);
         }
     }
 
@@ -267,7 +260,10 @@ impl Record {
             // SAFETY: the `RefCell` borrow keeps the storage in place, and a field is
             // only written between instructions, when no reference to it is read.
             Some(cell) => unsafe { (*cell.get()).clone() },
-            None => AwkValue::uninitialized_scalar().into_ref(AwkRefType::Field(index as u32)),
+            // A field past NF is the null string, as gawk and BWK awk have it, not the
+            // uninitialized value: `$1 == 0` on an empty line compares strings and is
+            // false (gawk's nfldstr test); it was true.
+            None => AwkValue::from("").into_ref(AwkRefType::Field(index as u32)),
         }
     }
 

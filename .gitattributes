@@ -18,6 +18,9 @@
 tests/fixtures/crlf/** -text
 tests/fixtures/bom/**  -text
 *.crlf  -text
+# gawk's own tests, byte for byte: one program is CRLF, and the expected outputs are
+# compared as bytes (tests/corpus/bash/gawk-tests.sh).
+tests/corpus/fixtures/gawk-tests/** -text
 # rars' archives and what they hold, byte for byte (rar13/README is CRLF).
 crates/cash-archive/tests/fixtures/rar/** -text
 *.bom   -text

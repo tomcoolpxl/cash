@@ -212,21 +212,24 @@ pub(crate) fn byte_offset_to_char_count(s: &str, byte: usize) -> usize {
     s.char_indices().take_while(|&(i, _)| i < byte).count()
 }
 
-/// `substr(s, m[, n])`: the at most `n`-character substring of `s` that begins
-/// at character position `m` (numbering from 1). Positions below 1 still consume
-/// part of `n`, matching nawk/gawk, so e.g. `substr("hello", -1, 3) == "h"`.
-/// `m` and `n` are assumed already truncated toward zero by the caller. The
-/// character window is `[max(m, 1), m + n)`; `take` naturally stops at the end
-/// of the string, so no length pre-scan or `Vec` is needed.
-pub(crate) fn substr(s: &str, m: i64, n: Option<i64>) -> String {
-    let start = m.max(1);
+/// `substr(s, m[, n])`: the at most `n`-character substring of `s` that begins at
+/// character position `m` (numbering from 1), with the arguments as gawk and BWK awk
+/// take them: a start below 1 is 1 and takes nothing off `n`, so `substr("hello", -1,
+/// 3)` is `hel`; both are truncated toward zero; a length below 1 gives the empty
+/// string. POSIX counts the positions from `m` itself (mawk's `h`), but scripts written
+/// for gawk rely on `substr(s, 0, n)` for the first `n` characters (gawk's substr test).
+pub(crate) fn substr(s: &str, m: f64, n: Option<f64>) -> String {
+    // The comparisons are false for NaN, which gawk takes as 1 and as no length.
+    let skip = if m >= 1.0 {
+        (m.trunc() - 1.0) as usize
+    } else {
+        0
+    };
     let count = match n {
         None => usize::MAX,
-        Some(n) => m.saturating_add(n).saturating_sub(start).max(0) as usize,
+        Some(n) if n >= 1.0 => n.trunc() as usize,
+        Some(_) => return String::new(),
     };
-    // `start >= 1`; a start past `usize::MAX` (only possible on a 32-bit `usize`)
-    // skips the whole string, yielding the empty substring.
-    let skip = usize::try_from(start - 1).unwrap_or(usize::MAX);
     s.chars().skip(skip).take(count).collect()
 }
 
@@ -299,28 +302,36 @@ pub(crate) fn gsub(
     let mut result = String::with_capacity(in_str.len());
     let mut last_match_end = 0;
 
+    // The replacement's backslashes as gawk reads them (its rules since 1996, not
+    // POSIX's): `\\\&` is `\&`, `\\\\` is `\\`, `\\&` is a backslash and the match, `\&`
+    // is `&`, and any other backslash stands for itself. POSIX's `\\` for one backslash
+    // made `gsub(/\\/, "\\\\")` leave a path as it was, where gawk doubles its
+    // backslashes (gawk's backgsub test).
     let mut repl_parts = Vec::new();
     let mut current_repl_part = String::new();
-    let mut repl_iter = repl.chars();
-    while let Some(c) = repl_iter.next() {
-        if c == '\\' {
-            match repl_iter.next() {
-                Some('\\') => current_repl_part.push('\\'),
-                Some('&') => current_repl_part.push('&'),
-                Some(c) => {
-                    current_repl_part.push('\\');
-                    current_repl_part.push(c);
-                }
-                None => {
-                    current_repl_part.push('\\');
-                    break;
-                }
-            }
-        } else if c == '&' {
-            repl_parts.push(current_repl_part);
-            current_repl_part = String::new();
+    let chars: Vec<char> = repl.chars().collect();
+    let mut at = 0;
+    while at < chars.len() {
+        let rest = &chars[at..];
+        if rest.starts_with(&['\\', '\\', '\\', '&']) {
+            current_repl_part.push_str("\\&");
+            at += 4;
+        } else if rest.starts_with(&['\\', '\\', '\\', '\\']) {
+            current_repl_part.push_str("\\\\");
+            at += 4;
+        } else if rest.starts_with(&['\\', '\\', '&']) {
+            current_repl_part.push('\\');
+            repl_parts.push(std::mem::take(&mut current_repl_part));
+            at += 3;
+        } else if rest.starts_with(&['\\', '&']) {
+            current_repl_part.push('&');
+            at += 2;
+        } else if rest[0] == '&' {
+            repl_parts.push(std::mem::take(&mut current_repl_part));
+            at += 1;
         } else {
-            current_repl_part.push(c);
+            current_repl_part.push(rest[0]);
+            at += 1;
         }
     }
     repl_parts.push(current_repl_part);
@@ -739,9 +750,9 @@ pub(crate) fn call_simple_builtin(
             let n = if argc == 2 {
                 None
             } else {
-                Some(stack.pop_scalar_value()?.scalar_as_f64().trunc() as i64)
+                Some(stack.pop_scalar_value()?.scalar_as_f64())
             };
-            let m = stack.pop_scalar_value()?.scalar_as_f64().trunc() as i64;
+            let m = stack.pop_scalar_value()?.scalar_as_f64();
             let s = stack
                 .pop_scalar_value()?
                 .scalar_to_string(&global_env.convfmt)?;

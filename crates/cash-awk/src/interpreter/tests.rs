@@ -1643,10 +1643,7 @@ fn test_modifying_nf_recomputes_record() {
         result.record.field(1),
         AwkValue::field_ref(maybe_numeric_string("1"), 1)
     );
-    assert_eq!(
-        result.record.field(2),
-        AwkValue::field_ref(AwkValue::uninitialized_scalar(), 2)
-    );
+    assert_eq!(result.record.field(2), AwkValue::field_ref("", 2));
 
     let instructions = vec![
         OpCode::GlobalScalarRef(SpecialVar::Nf as u32),

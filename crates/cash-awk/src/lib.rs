@@ -259,9 +259,12 @@ where
     if !parsed_args.program_files.is_empty() {
         let mut sources = Vec::new();
         for source_file in &parsed_args.program_files {
-            let mut contents = String::new();
+            // The program's bytes as awk keeps the data's: one that is not UTF-8 (a
+            // Latin-1 accent in a string or a regex) stays a byte, as gawk reads it; the
+            // file was refused as "stream did not contain valid UTF-8".
+            let mut bytes = Vec::new();
             if source_file == "-" {
-                if let Err(e) = std::io::stdin().read_to_string(&mut contents) {
+                if let Err(e) = std::io::stdin().read_to_end(&mut bytes) {
                     eprintln!("awk: could not read standard input: {e}");
                     return 1;
                 }
@@ -275,7 +278,7 @@ where
             } else {
                 match std::fs::File::open(interpreter::io::system_path(source_file)) {
                     Ok(mut file) => {
-                        if let Err(e) = file.read_to_string(&mut contents) {
+                        if let Err(e) = file.read_to_end(&mut bytes) {
                             eprintln!(
                                 "awk: {source_file}:1: error: cannot read source file \
                                  `{source_file}': {}",
@@ -294,7 +297,7 @@ where
                 }
             }
             sources.push(SourceFile {
-                contents,
+                contents: interpreter::io::bytes_to_string(bytes),
                 filename: source_file.clone(),
             });
         }

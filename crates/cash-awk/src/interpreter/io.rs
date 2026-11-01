@@ -125,7 +125,7 @@ const RAW_BYTE_BASE: u32 = 0x10_FF00;
 /// character kept as itself (`RAW_BYTE_BASE`), so that awk writes back the bytes it read,
 /// as gawk does. A line that was not UTF-8 was read as Latin-1 and written as UTF-8, so
 /// `awk '{ print }'` changed every Windows-1252 accent it passed.
-fn bytes_to_string(buf: Vec<u8>) -> String {
+pub(crate) fn bytes_to_string(buf: Vec<u8>) -> String {
     match String::from_utf8(buf) {
         Ok(s) => s,
         Err(e) => {

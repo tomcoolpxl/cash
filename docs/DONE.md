@@ -3566,3 +3566,67 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   pinning them to 2185). Upstream's name index, WASM reader and `decompress` helpers
   cash does not have. Eleven tests in `sevenz/tests.rs`, three of upstream's archives in
   `tests/fixtures/7z`.
+- **awk's `sub` and `gsub` read the replacement's backslashes as gawk does** (2026-10-31,
+  gawk's backgsub test): gawk's rules since 1996, not POSIX's: `\\\&` is `\&`, `\\\\` is
+  `\\`, `\\&` a backslash and the match, `\&` an `&`, and any other backslash stands for
+  itself, so `gsub(/\\/, "\\\\")` doubles a path's backslashes; POSIX's `\\` for one
+  backslash left the path as it was.
+- **awk's `substr` takes its arguments as gawk and BWK awk do** (2026-10-31, gawk's
+  substr test): a start below 1 is 1 and takes nothing off the length, so
+  `substr(s, 0, n)` and `substr(s, -1, 3)` give the first characters; both arguments are
+  truncated toward zero and a length below 1 gives the empty string. It counted the
+  positions from the start as POSIX reads it (mawk's `h` for `substr("hello", -1, 3)`).
+- **A field past NF, an empty field and a field NF cut off are the null string**
+  (2026-10-31, gawk's nfldstr test): as gawk and BWK awk have them, so `$1 == 0` on an
+  empty line and `$2 == 0` of `a::b` compare strings and are false. They were POSIX's
+  uninitialized value, numerically 0, and matched.
+- **A backslash before a CRLF continues a string and a regex literal** (2026-10-31,
+  gawk's crlf test): as gawk reads a program a Windows editor saved; the string was
+  unterminated and the regex ended the program with an error. The line between tokens
+  was done for shdoc in 2.4.0.
+- **awk reads its program files as bytes** (2026-10-31, gawk's getnr2tm, rebt8b1 and
+  regx8bit tests): a byte that is not UTF-8 (a Latin-1 accent in a regex or a string)
+  is kept as the data's bytes are, as gawk reads it; the file was refused with "stream
+  did not contain valid UTF-8".
+- **`getline < "file" ".txt"` reads `file` and joins `.txt` to what it returns**
+  (2026-10-31, gawk's inputred test): the file of `getline <` is an arithmetic
+  expression, as gawk's `simp_exp` and BWK awk's `term` have it, which a concatenation
+  ends; cash took the concatenation into the name, so `print getline < "file" ".txt"`
+  printed `-1` for `-1.txt`.
+- **gawk's own test suite against cash's awk** (2026-10-31, the phase after 2.4.0, item
+  2): gawk 5.4.0's `test/`, the version Git Bash ships, sorted by how its Makefile runs
+  each test: 419 run as `awk -f NAME.awk [< NAME.in]` with no option (the C locale, or
+  en_US.UTF-8 where the Makefile asks), 64 with an option cash's awk has none of
+  (`--lint`, `--posix`, `--re-interval`, `--traditional`, `--csv`, `-M`, `--debug`,
+  `--pretty-print`, `--non-decimal-data`, `--sandbox`) and 82 by a rule of their own
+  (processes, pipes, `/dev/fd`, timing, the profiler, the debugger, shared-library
+  extensions, locales), those two groups left out. Git Bash's gawk passes 417 of the
+  419 (the two left expect `gawk` in `ARGV[0]`); cash's awk passed 265 before this
+  phase's fixes and 273 after them. The 146 it fails are gawk's own extensions cash's
+  awk does not have (typeof, `@/regex/` constants, `@f()` indirect calls, namespaces,
+  `@include`, `|&` coprocesses, patsplit, strtonum, mktime, strftime, `switch`, FPAT,
+  FIELDWIDTHS, SYMTAB, FUNCTAB, PROCINFO, RT, ERRNO, the lint warnings, hexadecimal
+  and octal constants in a program, `\u` escapes, positional `printf` arguments, gawk's
+  random sequence), the wording of a diagnostic (a caret's column, a warning gawk alone
+  gives, the error for an array passed where a scalar is wanted, which cash lets pass),
+  the program's name, a byte that is not UTF-8 shown in a message, and three edges left
+  alone: `^` in a regex `RS` matching only at the input's start (rsstart2), `[^[]\x5b`
+  taken for an unbalanced bracket (regexpbad), and the order `biz(fy, fy = "fy")`
+  evaluates its arguments in (nastyparm). The 273 are the corpus case
+  `bash/gawk-tests.sh` with the fixture `gawk-tests/` (GPL-3.0-or-later test data, its
+  `COPYING` beside it, `tests/corpus/SOURCES.md`), frozen from Git Bash's gawk and
+  passing whole under cash; the fixture is kept byte for byte (`.gitattributes`), since
+  one program is CRLF and three are Latin-1.
+- **A lowercase variable read through `${!name}` is an environment variable**
+  (2026-10-31, neofetch in the corpus round; the phase after 2.4.0, item 3): variable
+  names are case-insensitive in cash (D31), so neofetch's `output="${!2}"` for an item
+  named `shell` or `term`, whose function `--disable` had unset, printed `$SHELL` and
+  `$TERM`, where Bash prints nothing. A script's own lowercase names collided with any
+  environment variable spelled in capitals (`shell`, `term`, `path`, `home`, `user`).
+  Done 2026-10-31, the user's pick: D31 narrowed so that only a name with a capital in
+  it is read in another case, as only such a name was already assigned in another case
+  (`Path=x` lands on `PATH`, `path=x` is the script's own); `$Path`, `$pATH` and
+  `$UserProfile` still read Windows' variable, `$Seconds` reads `SECONDS`, and `$shell`,
+  `$path` and `$seconds` are unset until the script sets them, as in Bash. Tests in
+  `acceptance.rs`; `help differences` and `help vars` say so; the neofetch case shows
+  its Shell and Terminal lines again.

@@ -489,8 +489,14 @@ pub fn escape_string_contents(s: &str) -> Result<Rc<str>, String> {
                             }
                         }
                     }
-                    // A backslash before a newline continues the line, as in gawk.
+                    // A backslash before a newline continues the line, as in gawk; before
+                    // a CRLF too, as gawk reads a program a Windows editor saved (its crlf
+                    // test): the string was unterminated.
                     '\n' => continue,
+                    '\r' if chars.peek() == Some(&'\n') => {
+                        chars.next();
+                        continue;
+                    }
                     // An escape awk does not define stands for the character itself, as
                     // gawk has it (`"\."` is `.`, `"\&"` is `&`), with its warning, once for
                     // each character; it was a parse error, so `split(s, parts, "\.")`
@@ -1139,6 +1145,15 @@ impl Compiler {
                         string_line_col,
                     ),
                 ))
+            }
+            // `getline < "file" ".txt"` is what `getline < "file"` returns joined to
+            // `.txt`, as in gawk (its inputred test): the file ends at the concatenation,
+            // and in a print a `>` after it is the redirection. It was a comparison of a
+            // plain `getline` with the name there.
+            Rule::getline_from_file => {
+                let mut instructions = Instructions::default();
+                self.compile_getline_from_file(primary, &mut instructions, locals)?;
+                Ok(Expr::new(ExprKind::Number, instructions))
             }
             Rule::simple_getline => {
                 let mut instructions = Instructions::default();
@@ -1827,41 +1842,52 @@ impl Compiler {
         locals: &LocalMap,
     ) -> Result<(), PestError> {
         let input_function = first_child(expr);
-        let line_col = input_function.line_col();
         match input_function.as_rule() {
             Rule::simple_getline => {
                 self.compile_simple_getline(input_function, instructions, locals)?;
             }
             Rule::getline_from_file | Rule::getline_from_file_cmp => {
-                let is_cmp = input_function.as_rule() == Rule::getline_from_file_cmp;
-                let mut inner = input_function.into_inner();
-                let lvalue = inner.child();
-                let file = if lvalue.as_rule() == Rule::lvalue {
-                    self.compile_lvalue_ref(lvalue, instructions, locals)?;
-                    inner.child()
-                } else {
-                    instructions.extend(Instructions::from_instructions_and_line_col(
-                        vec![OpCode::PushZero, OpCode::FieldRef],
-                        line_col,
-                    ));
-                    lvalue
-                };
-                let file_expr = self.compile_simple_binary_expr(file.into_inner(), locals)?;
-                instructions.extend(file_expr.instructions);
-                instructions.push(
-                    OpCode::CallBuiltin {
-                        function: BuiltinFunction::GetLineFromFile,
-                        argc: 2,
-                    },
-                    line_col,
-                );
-                if is_cmp {
-                    let comp = first_child(inner.child());
-                    self.compile_expr(inner.child(), instructions, locals)?;
-                    instructions.push(comparison_opcode(&comp), comp.line_col());
-                }
+                self.compile_getline_from_file(input_function, instructions, locals)?;
             }
             _ => not_in_grammar(&input_function, "input function"),
+        }
+        Ok(())
+    }
+
+    /// `getline [var] < file`, and with a comparison after the file.
+    fn compile_getline_from_file(
+        &self,
+        getline: Pair<Rule>,
+        instructions: &mut Instructions,
+        locals: &LocalMap,
+    ) -> Result<(), PestError> {
+        let line_col = getline.line_col();
+        let is_cmp = getline.as_rule() == Rule::getline_from_file_cmp;
+        let mut inner = getline.into_inner();
+        let lvalue = inner.child();
+        let file = if lvalue.as_rule() == Rule::lvalue {
+            self.compile_lvalue_ref(lvalue, instructions, locals)?;
+            inner.child()
+        } else {
+            instructions.extend(Instructions::from_instructions_and_line_col(
+                vec![OpCode::PushZero, OpCode::FieldRef],
+                line_col,
+            ));
+            lvalue
+        };
+        let file_expr = self.compile_simple_binary_expr(file.into_inner(), locals)?;
+        instructions.extend(file_expr.instructions);
+        instructions.push(
+            OpCode::CallBuiltin {
+                function: BuiltinFunction::GetLineFromFile,
+                argc: 2,
+            },
+            line_col,
+        );
+        if is_cmp {
+            let comp = first_child(inner.child());
+            self.compile_expr(inner.child(), instructions, locals)?;
+            instructions.push(comparison_opcode(&comp), comp.line_col());
         }
         Ok(())
     }
@@ -2853,11 +2879,11 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
 /// The text of a regex literal with each backslash and newline taken out: gawk's lexer
 /// joins the lines there, as in a string. An escaped backslash before a newline is kept.
 fn join_continued_lines(text: &str) -> Cow<'_, str> {
-    if !text.contains("\\\n") {
+    if !text.contains("\\\n") && !text.contains("\\\r\n") {
         return Cow::Borrowed(text);
     }
     let mut joined = String::with_capacity(text.len());
-    let mut chars = text.chars();
+    let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
         if c != '\\' {
             joined.push(c);
@@ -2865,6 +2891,10 @@ fn join_continued_lines(text: &str) -> Cow<'_, str> {
         }
         match chars.next() {
             Some('\n') => {}
+            // A CRLF too, as gawk reads a program a Windows editor saved (its crlf test).
+            Some('\r') if chars.peek() == Some(&'\n') => {
+                chars.next();
+            }
             Some(next) => {
                 joined.push('\\');
                 joined.push(next);

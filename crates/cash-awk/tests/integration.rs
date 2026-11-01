@@ -387,9 +387,10 @@ fn test_awk_high_field_assignment() {
 
 #[test]
 fn test_awk_uninitialized_field_comparison() {
-    // POSIX: nonexistent fields (85506) and empty fields from $0/FS (85511) have
-    // the uninitialized value, so they compare numerically equal to 0 while
-    // still being string-equal to "". Populated fields are unaffected.
+    // POSIX gives nonexistent fields (85506) and empty fields from $0/FS (85511) the
+    // uninitialized value, which compares numerically equal to 0; gawk and BWK awk give
+    // them the null string, which compares as a string, and gawk's own nfldstr test
+    // holds them to it. Populated fields are unaffected.
     test_awk(
         vec![
             "-F".to_string(),
@@ -397,7 +398,7 @@ fn test_awk_uninitialized_field_comparison() {
             "{ print ($5==0); print ($2==0); print ($2==\"\"); print ($1==\"a\") }".to_string(),
             "tests/awk/empty_fields.txt".to_string(),
         ],
-        "1\n1\n1\n1\n",
+        "0\n0\n1\n1\n",
     );
 }
 
