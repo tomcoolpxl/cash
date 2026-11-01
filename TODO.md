@@ -24,6 +24,21 @@ for working through it. What is done, phases and findings, is in docs/DONE.md.
   Longer notes on a thing that stays open belong in `docs/open-issues.md`.
 
 ---
+## The phase before (2026-11-01, done, released as 2.5.0)
+
+Picked by the user from a pick list (docs/decisions.md, "The phase after 2.4.0"), in
+this order, all in docs/DONE.md: sevenz-rust2 0.24.2's hardening ported to cash's 7z
+(the header checks, fallible allocation, errors that do not allocate; its other fixes
+cash's own reader, writer and extraction already had, now with tests); gawk 5.4.0's own
+test suite run against cash's awk, which fixed six differences (sub's backslashes by
+gawk's rules, substr's start below 1, fields past NF and empty fields as the null
+string, a backslash before a CRLF in a string or a regex, program files read as bytes,
+the file of `getline <` ending before a concatenation) and left 273 of its tests as a
+corpus case, the 146 others being gawk's own extensions, wording and three edges; D31
+narrowed so that a name all in lower case is never read in another case; and a corpus
+round of tfenv, log4sh, bash_ini_parser and bats-detik, which found no new difference.
+Left, under "Found along the way": gawk's extensions cash's awk has none of.
+
 ## The phase before (2026-10-31, done, released as 2.4.0)
 
 Picked by the user from a pick list (docs/decisions.md, "The phase after 2.3.2"), in
