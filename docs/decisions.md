@@ -367,9 +367,13 @@ through shims, which ties cash to Scoop.
 
 Windows supplies `Path`, `Temp` and `UserProfile`, so lookup ignores case for a variable
 inherited from Windows or set by cash as it starts (an exact match wins), and `PATH`,
-`HOME`, `TMPDIR` and `USER` are upper-cased on import; an unset `$seconds` reads
+`HOME`, `TMPDIR` and `USER` are upper-cased on import; an unset `$Seconds` reads
 `SECONDS`. A script's own variables are found by their exact name, as in Bash: shflags
-keeps `FLAGS_help` and `FLAGS_HELP` apart (the user, 2026-10-19). Turned down: Bash's
+keeps `FLAGS_help` and `FLAGS_HELP` apart (the user, 2026-10-19). Narrowed (the user,
+2026-10-31): only a name with a capital in it is read in another case, as only such a
+name is assigned in another case; a name all in lower case (`shell`, `term`, `path`,
+`home`, `seconds`) is a script's own and unset where Bash has it unset, since neofetch's
+`${!name}` for a disabled item read `SHELL` and `TERM`. Turned down: Bash's
 case-sensitive lookup, where `$PATH` is empty; folding every variable; limiting the
 fallback to exported names.
 

@@ -13,7 +13,8 @@ inherited from Windows is the same one in any spelling with a capital in it:
 script's own, as in Bash, so `for path in "$@"` and `local temp` leave `PATH` and
 `TEMP` alone. Your own variables keep their case: `$Foo` and `$FOO` are two, and with
 only `FLAGS_help` set, `$FLAGS_HELP` is empty, as in Bash. Only a variable from Windows,
-or one cash sets as it starts (`$seconds` reads `SECONDS`), is read in another case.
+or one cash sets as it starts, is read in another case, and only by a name with a
+capital in it: `$Seconds` reads `SECONDS`, and `$seconds` is unset until you set it.
 
 ## cash's own
 

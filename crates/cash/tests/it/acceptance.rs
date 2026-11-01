@@ -322,9 +322,23 @@ fn a_crash_can_never_be_reported_as_success() {
 
 #[test]
 fn environment_lookup_ignores_case() {
+    // A name with a capital in it reads Windows' variable in any spelling; one all in
+    // lower case is a script's own and unset, as in Bash (D31, narrowed 2026-10-31).
     assert_eq!(
-        cash(r#"[ -n "$PATH" ] && [ -n "$Path" ] && [ -n "$path" ] && echo all"#).stdout,
+        cash(r#"[ -n "$PATH" ] && [ -n "$Path" ] && [ -n "$pATH" ] && [ -z "$path" ] && echo all"#)
+            .stdout,
         "all"
+    );
+}
+
+#[test]
+fn a_lowercase_name_is_unset_beside_the_capitals_one() {
+    // neofetch disables an item by unsetting the function's `shell` or `term` and
+    // prints `${!name}`: Bash prints nothing, and cash printed `$SHELL` and `$TERM`.
+    assert_eq!(
+        cash(r#"name=shell; printf '[%s][%s][%s][%s]' "$shell" "${!name}" "${SHELL:+set}" "${Shell:+set}""#)
+            .stdout,
+        "[][][set][set]"
     );
 }
 
@@ -344,9 +358,9 @@ fn a_scripts_own_variable_is_not_read_in_another_case() {
     // value in `FLAGS_help` and its help in `FLAGS_HELP`, and `${FLAGS_HELP:-}` read the
     // flag's `0` for the help.
     assert_eq!(
-        cash(r#"FLAGS_help=0; export Mine=1; printf '[%s][%s][%s]' "${FLAGS_HELP-}" "$MINE" "${seconds+set}""#)
+        cash(r#"FLAGS_help=0; export Mine=1; printf '[%s][%s][%s][%s]' "${FLAGS_HELP-}" "$MINE" "${Seconds+set}" "${seconds+set}""#)
             .stdout,
-        "[][][set]"
+        "[][][set][]"
     );
 }
 

@@ -188,7 +188,8 @@ impl ShellEnvironment {
     }
 
     /// Records the variables set now, as the shell starts, as those a read of a name not
-    /// set finds in another case (D31): an unset `$seconds` reads `SECONDS`.
+    /// set, with a capital in it, finds in another case (D31): an unset `$Seconds` reads
+    /// `SECONDS`; `$seconds` is unset, as in Bash.
     ///
     /// A variable a script sets later is found by its exact name only, as in Bash:
     /// shflags keeps a flag's value in `FLAGS_help` and its help in `FLAGS_HELP`, and an
@@ -388,6 +389,15 @@ impl ShellEnvironment {
         // variable from Windows or cash's own start (`mark_started`): a script's own
         // `FLAGS_help` is not its `FLAGS_HELP`. Its folded spelling is made once for all
         // the scopes.
+        //
+        // Only a name with a capital in it, as an assignment folds (`inherited_spelling`):
+        // `$Path`, `$Temp` and `$UserProfile` read Windows' variable in any spelling, and
+        // a script's own `shell`, `term`, `path` or `home`, all in lower case, is unset
+        // where Bash has it unset. neofetch's `${!name}` for an item it had disabled read
+        // `SHELL` and `TERM` (the user, 2026-10-31).
+        if !name.as_ref().chars().any(char::is_uppercase) {
+            return None;
+        }
         let key = cash_win32::fold::name_key(name.as_ref());
         if !self.foldable.contains(&key) {
             return None;
