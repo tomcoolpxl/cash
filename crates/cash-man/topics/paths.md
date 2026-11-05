@@ -95,8 +95,11 @@ Backslash is Bash's escape character, so an unquoted `cd C:\Users\me` reaches `c
 At the interactive prompt, `shopt winpaths` (on by default there, off in scripts) lets
 a word that starts with a drive and a backslash, or with `\\` and a server's name, keep
 its backslashes, so a path pasted from Explorer works unquoted: `cd C:\Users\me`,
-`cd \\nas\share\docs`. `shopt -u winpaths` turns it off. Tab completes a path in the
-spelling it was typed in, backslashes included.
+`cd \\nas\share\docs`. A relative path spelled that way is one too when its directory
+exists and the word Bash would make of it names nothing: `cd dist\windows` enters
+`dist/windows`, where Bash looks for `distwindows`; with a file `ab` beside it, `a\b`
+still means `ab`, as in Bash. `shopt -u winpaths` turns it off. Tab completes a path in
+the spelling it was typed in, backslashes included: `dist\win` to `dist\windows\`.
 
 ## Network paths
 

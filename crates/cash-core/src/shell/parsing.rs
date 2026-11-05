@@ -126,6 +126,7 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
             tilde_expansion_after_colon: false,
             tilde_expansion_in_assignment_words: false,
             windows_drive_paths: self.options.windows_drive_paths,
+            relative_backslash_paths: false,
             aliases: None,
         }
     }

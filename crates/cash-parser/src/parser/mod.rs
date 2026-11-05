@@ -27,6 +27,11 @@ pub struct ParserOptions {
     /// Whether an unquoted word that starts with a drive and a backslash (`C:\`) keeps
     /// the backslashes in its leading unquoted run (cash's `winpaths`, D53).
     pub windows_drive_paths: bool,
+    /// Whether an unquoted relative word spelled the Windows way (`dist\windows`) keeps
+    /// its backslashes as a drive path does (cash's `winpaths`, D53). The shell sets it
+    /// for one word at a time, since whether the word names a path is the file system's
+    /// to say ([`crate::word::relative_backslash_readings`]).
+    pub relative_backslash_paths: bool,
     /// The aliases to expand as the tokens are read, as Bash expands them before parsing
     /// (`crate::alias`); `None` when aliases are not expanded.
     pub aliases: Option<crate::alias::Aliases>,
@@ -42,6 +47,7 @@ impl Default for ParserOptions {
             tilde_expansion_after_colon: false,
             tilde_expansion_in_assignment_words: false,
             windows_drive_paths: false,
+            relative_backslash_paths: false,
             aliases: None,
         }
     }
@@ -134,6 +140,7 @@ impl<R: std::io::BufRead> Parser<R> {
             tilde_expansion_after_colon,
             tilde_expansion_in_assignment_words: false,
             windows_drive_paths,
+            relative_backslash_paths: false,
             aliases: None,
         };
         Self { reader, options }

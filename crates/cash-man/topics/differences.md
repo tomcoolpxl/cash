@@ -33,8 +33,9 @@ and in the fewest places it can.
   script's own variables keep their case, as in Bash, and an all-lower-case name
   (`$shell`, `$path`) is a script's own, unset until the script sets it. A variable
   inherited from Windows is set in any spelling with a capital, `Path=x`.
-- At the prompt, an unquoted `C:\...` or `\\server\share` keeps its backslashes
-  (`shopt winpaths`; off in scripts).
+- At the prompt, an unquoted `C:\...` or `\\server\share` keeps its backslashes, and so
+  does a relative `dist\windows` whose directory exists where Bash's `distwindows` names
+  nothing (`shopt winpaths`; off in scripts).
 - `sh`, `bash` and `cash` always run cash, however they are started: otherwise `bash`
   is WSL's launcher and the script goes on under Linux. Started as `sh`,
   cash runs in POSIX mode, as Bash does.

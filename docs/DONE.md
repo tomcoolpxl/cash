@@ -3656,3 +3656,16 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   the `ln` warning cash gives where bats links a test file goes to standard error,
   which the golden does not hold. No difference between the shells was found beyond
   these; the clones came CRLF and the fixtures are LF.
+- **A relative path spelled the Windows way at the prompt** (2026-11-05, the user: Tab
+  on `cd dist\win` showed "NO RECORDS FOUND"): Bash reads `dist\win` as `distwin`, the
+  backslash an escape, and cash read it the same; `winpaths` (D53) kept backslashes only
+  in `C:\...` and `\\server` words. Done, the user's pick: with `winpaths`, an unquoted
+  relative word whose backslashes all precede characters a file name can start with (or
+  a wildcard) is the path it spells when the directory it names exists and the word Bash
+  makes of it names nothing; the shell decides per word from the file system and parses
+  the word with the parser's new `relative_backslash_paths`, which keeps the backslashes
+  as a drive path's are kept. `cd dist\windows`, `ls dist\windows`, `dist\*.txt` and Tab
+  (`dist\win` to `dist\windows\`) work; a file `ab` keeps `a\b` meaning `ab`, a word
+  naming nothing either way stays Bash's, and scripts are untouched. Tests in
+  `winpaths.rs`; `help paths` and `help differences` say so. The prompt's highlighting
+  still colours such a word as escapes, since it parses without the file system.

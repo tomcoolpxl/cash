@@ -3,6 +3,7 @@
 use std::borrow::Cow;
 use std::cmp::min;
 use std::io::Write as _;
+use std::path::Path;
 
 use cash_parser::word::{ParameterTransformOp, SubstringMatchKind};
 use itertools::Itertools;
@@ -957,6 +958,29 @@ struct WordExpander<'a, SE: extensions::ShellExtensions> {
 }
 
 /// The top-level syntaxes in which `"` and `'` are literal characters.
+/// cash (D53): whether the unquoted relative word `word`, spelled the Windows way
+/// (`dist\windows`), means the path it spells: at the prompt with `winpaths`, when the
+/// directory it names exists and the word Bash makes of it (`distwindows`) names nothing.
+/// `cd dist\windows` reached `cd` as `distwindows`, and Tab on `dist\win` found nothing
+/// (the user, 2026-11-05). Bash's reading wins where it names something, so a file `ab`
+/// keeps `a\b` meaning it; where neither reading names anything, Bash's holds too.
+pub(crate) fn takes_relative_backslash_path<SE: extensions::ShellExtensions>(
+    shell: &Shell<SE>,
+    word: &str,
+) -> bool {
+    if !shell.options().windows_drive_paths {
+        return false;
+    }
+    let Some((windows, bash)) = cash_parser::word::relative_backslash_readings(word) else {
+        return false;
+    };
+    let directory = windows
+        .rsplit_once('/')
+        .map_or(".", |(directory, _)| directory);
+    shell.absolute_path(Path::new(directory)).is_dir()
+        && !shell.absolute_path(Path::new(&bash)).exists()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LiteralQuotes {
     /// A heredoc body: only `\$`, `` \` `` and `\\` are escapes.
@@ -1190,6 +1214,11 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             }
             Some(LiteralQuotes::Prompt) => {
                 cash_parser::word::parse_prompt_word(word, &self.parser_options)?
+            }
+            None if takes_relative_backslash_path(self.shell, word) => {
+                let mut options = self.parser_options.clone();
+                options.relative_backslash_paths = true;
+                cash_parser::word::parse(word, &options)?
             }
             None => cash_parser::word::parse(word, &self.parser_options)?,
         };

@@ -195,3 +195,86 @@ async fn a_backslashed_drive_path_completes() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+/// A scratch directory with `dist/windows` in it and a file `ab`, and what `script` prints
+/// there with `winpaths` on.
+fn relative_paths_scratch() -> Scratch {
+    let dir = Scratch::new("winpaths-relative");
+    std::fs::create_dir_all(dir.join("dist/windows")).unwrap();
+    std::fs::write(dir.join("ab"), "").unwrap();
+    dir
+}
+
+fn in_scratch(dir: &Scratch, script: &str) -> String {
+    let here = dir.path().to_string_lossy().replace('\\', "/");
+    cash(&[
+        "-c",
+        &format!("cd '{here}' && shopt -s winpaths && {script}"),
+    ])
+}
+
+#[test]
+fn a_relative_path_spelled_the_windows_way_is_the_path() {
+    // `dist\windows` names a directory, and Bash's `distwindows` nothing: the word is
+    // the path, to `cd`, as an argument and as a glob (the user, 2026-11-05).
+    let dir = relative_paths_scratch();
+    let here = dir.path().to_string_lossy().replace('\\', "/");
+    assert_eq!(
+        in_scratch(&dir, r"cd dist\windows && pwd"),
+        format!("{here}/dist/windows")
+    );
+    // A glob's matches are spelled with slashes, as a drive path's are.
+    assert_eq!(
+        in_scratch(&dir, r"printf '[%s]\n' dist\windows dist\win*"),
+        "[dist\\windows]\n[dist/windows]"
+    );
+}
+
+#[test]
+fn bashs_reading_of_a_relative_word_wins_where_it_names_something() {
+    // A file `ab` exists, so `a\b` is `ab`, as in Bash; `x\y` names nothing either way
+    // and is Bash's `xy`; a space after a backslash is still an escape.
+    let dir = relative_paths_scratch();
+    assert_eq!(
+        in_scratch(&dir, r"printf '[%s]\n' a\b x\y dist\ windows"),
+        "[ab]\n[xy]\n[dist windows]"
+    );
+}
+
+#[test]
+fn a_relative_path_keeps_bashs_lexing_with_winpaths_off() {
+    let dir = relative_paths_scratch();
+    assert_eq!(
+        in_scratch(&dir, r"shopt -u winpaths; printf '[%s]\n' dist\windows"),
+        "[distwindows]"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_relative_path_spelled_the_windows_way_completes() -> anyhow::Result<()> {
+    use cash_builtins::ShellBuilderExt as _;
+
+    // Tab on `cd dist\win` found nothing: Bash's reading, `distwin`, names nothing. It
+    // completes to `dist\windows\`, in the spelling it was typed in.
+    let dir = relative_paths_scratch();
+    let mut shell = cash_core::Shell::builder()
+        .profile(cash_core::ProfileLoadBehavior::Skip)
+        .rc(cash_core::RcLoadBehavior::Skip)
+        .default_builtins(cash_builtins::BuiltinSet::BashMode)
+        .build()
+        .await?;
+    shell.options_mut().windows_drive_paths = true;
+    shell.set_working_dir(dir.path())?;
+
+    let line = r"cd dist\win";
+    let completions = shell.complete(line, line.len()).await?;
+    assert!(
+        completions
+            .candidates
+            .iter()
+            .any(|candidate| candidate.starts_with(r"dist\windows")),
+        "{line} completed to {:?}",
+        completions.candidates
+    );
+    Ok(())
+}

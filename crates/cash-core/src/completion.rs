@@ -1407,7 +1407,7 @@ fn quoted_as_typed(
     prefix: &str,
     options: &ProcessingOptions,
 ) -> (Vec<String>, ProcessingOptions) {
-    let winpaths = shell.options().windows_drive_paths && is_unquoted_drive_path(prefix);
+    let winpaths = keeps_backslashes(shell, prefix);
     (
         autoquote_candidates(candidates, prefix, options, winpaths, |name| {
             shell.absolute_path(Path::new(name)).is_dir()
@@ -1633,6 +1633,16 @@ fn escape_for_double_quotes(text: &str) -> String {
     out
 }
 
+/// Whether `token` keeps its backslashes under `winpaths` (D53): a `C:\...` or `\\server`
+/// word, or a relative word spelled the Windows way whose directory exists (`dist\win`,
+/// the user, 2026-11-05), which completes to `dist\windows\` in the spelling it was
+/// typed in.
+fn keeps_backslashes(shell: &Shell<impl extensions::ShellExtensions>, token: &str) -> bool {
+    shell.options().windows_drive_paths
+        && (is_unquoted_drive_path(token)
+            || crate::expansion::takes_relative_backslash_path(shell, token))
+}
+
 /// Whether `token` starts with a drive and a backslash (`C:\`), or a UNC path's `\\` and
 /// a name (`\\server`), and holds no quote that the expansion would have to see closed.
 fn is_unquoted_drive_path(token: &str) -> bool {
@@ -1658,8 +1668,7 @@ fn word_to_expand(
     token: &str,
     from_compgen: bool,
 ) -> String {
-    let keeps_backslashes = shell.options().windows_drive_paths && is_unquoted_drive_path(token);
-    if keeps_backslashes || from_compgen {
+    if from_compgen || keeps_backslashes(shell, token) {
         token.to_owned()
     } else if token.contains(['\'', '"']) {
         close_open_quote(token)

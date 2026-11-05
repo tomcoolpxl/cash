@@ -632,6 +632,8 @@ fn parse_unremembered(
         keep_path_backslashes(&mut pieces, false);
     } else if options.windows_drive_paths && starts_with_unc_backslashes(word) {
         keep_path_backslashes(&mut pieces, true);
+    } else if options.relative_backslash_paths && relative_backslash_readings(word).is_some() {
+        keep_path_backslashes(&mut pieces, false);
     }
 
     tracing::debug!(target: "expansion", "Parsed word '{}' => {{{:?}}}", word, pieces);
@@ -643,6 +645,48 @@ fn parse_unremembered(
 const fn starts_with_drive_backslash(word: &str) -> bool {
     let bytes = word.as_bytes();
     bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\'
+}
+
+/// The two readings of an unquoted relative word spelled the Windows way, `dist\windows`.
+///
+/// The path it spells with each backslash a separator (`dist/windows`), and the word Bash
+/// makes of it with each backslash an escape (`distwindows`). `None` for a word that is
+/// not one: no backslash, a backslash before anything but a character that can begin a
+/// file name or a wildcard (an escaped space or quote is Bash's), a quote, an expansion
+/// or a substitution anywhere, a leading backslash, tilde or drive, or an assignment
+/// (`x=a\b` keeps Bash's meaning, as `x=C:\y` does). The shell asks the file system which
+/// reading to take (cash's `winpaths` for relative paths, D53).
+pub fn relative_backslash_readings(word: &str) -> Option<(String, String)> {
+    if !word.contains('\\')
+        || word.starts_with(['\\', '~'])
+        || starts_with_drive_backslash(word)
+        || word.contains(['\'', '"', '`', '$', '='])
+    {
+        return None;
+    }
+    let mut windows = String::with_capacity(word.len());
+    let mut bash = String::with_capacity(word.len());
+    let mut chars = word.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            windows.push(c);
+            bash.push(c);
+            continue;
+        }
+        let next = chars.next()?;
+        if starts_a_path_component(next) {
+            windows.push('/');
+            windows.push(next);
+            bash.push(next);
+        } else if matches!(next, '*' | '?') {
+            windows.push('/');
+            windows.push(next);
+            bash.push(next);
+        } else {
+            return None;
+        }
+    }
+    Some((windows, bash))
 }
 
 /// Whether `word` begins `\\name`: a UNC path's two backslashes and a server's name
