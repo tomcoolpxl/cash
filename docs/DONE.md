@@ -3675,4 +3675,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   2.5.2: a backslash right after a separator is Bash's escape (a Windows path has no
   empty component), so `dist/\w` is `dist/w`; a stray `dist/\` completes as `dist/`
   does, the whole word replaced; and `dist\` typed the Windows way lists what is inside,
-  which its Bash reading, the directory itself, had blocked.
+  which its Bash reading, the directory itself, had blocked. The user asked whether a
+  test should have caught 2.5.1's fault: yes; the tests covered the words the rule was
+  meant for and none of the words that were already valid Bash and whose meaning it
+  could change. 2.5.3 closes the gap that was still open: outside completion the rule
+  took the directory's being there for enough, so `grep v\1` beside a directory `v` got
+  `v\1` for Bash's `v1`; now the path itself must exist (or the word holds a wildcard),
+  as the pick said, and the tests hold the words that must stay Bash's.

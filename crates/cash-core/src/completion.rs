@@ -1640,7 +1640,7 @@ fn escape_for_double_quotes(text: &str) -> String {
 fn keeps_backslashes(shell: &Shell<impl extensions::ShellExtensions>, token: &str) -> bool {
     shell.options().windows_drive_paths
         && (is_unquoted_drive_path(token)
-            || crate::expansion::takes_relative_backslash_path(shell, token))
+            || crate::expansion::takes_relative_backslash_path(shell, token, true))
 }
 
 /// Whether `token` starts with a drive and a backslash (`C:\`), or a UNC path's `\\` and
@@ -1727,6 +1727,21 @@ const fn completion_piece(text: String, is_glob: bool) -> patterns::PatternPiece
     }
 }
 
+/// How the word Tab completes is expanded: no command substitution runs, `compgen`'s word
+/// keeps its backslashes, and a relative path spelled the Windows way need only start.
+fn completion_expander_options(from_compgen: bool) -> expansion::ExpanderOptions {
+    expansion::ExpanderOptions {
+        execute_command_substitutions: false,
+        unquoted_backslash_handling: if from_compgen {
+            expansion::UnquotedBackslashHandling::Preserve
+        } else {
+            expansion::UnquotedBackslashHandling::default()
+        },
+        completing: true,
+        ..Default::default()
+    }
+}
+
 /// The file and directory names `token_to_complete` completes to. `from_compgen` is for the
 /// word `compgen -f` or `-d` was given, which Bash takes as it is: its quotes and
 /// backslashes are part of the name, where at the prompt they are the typed ones to
@@ -1741,15 +1756,7 @@ async fn get_file_completions(
     // Basic-expand the token-to-be-completed; it won't have been expanded to this point.
     let mut throwaway_shell = shell.clone();
     let params = throwaway_shell.default_exec_params();
-    let options = expansion::ExpanderOptions {
-        execute_command_substitutions: false,
-        unquoted_backslash_handling: if from_compgen {
-            expansion::UnquotedBackslashHandling::Preserve
-        } else {
-            expansion::UnquotedBackslashHandling::default()
-        },
-        ..Default::default()
-    };
+    let options = completion_expander_options(from_compgen);
     let to_expand = word_to_expand(shell, token_to_complete, from_compgen);
     let expanded_token = expansion::basic_expand_word_with_options(
         &mut throwaway_shell,

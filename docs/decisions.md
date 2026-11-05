@@ -319,10 +319,11 @@ its backslashes; elsewhere Bash's escape rules hold (`x=C:\y` keeps Bash's meani
 interactive shells, off in scripts. Turned down: quoting pasted text, impossible without
 bracketed paste on Windows; Bash's reading of `\\server\share` as `\servershare`.
 Widened (the user, 2026-11-05, from a pick list): a relative word spelled the Windows
-way (`dist\windows`) keeps its backslashes too, when the directory it names exists and
-the word Bash makes of it (`distwindows`) names nothing; the shell decides that per word
-from the file system, since the parser cannot. Bash's reading wins where it names
-something, and where neither does. Tab completes `dist\win` to `dist\windows\`. Turned
+way (`dist\windows`) keeps its backslashes too, when the path it names exists (or it
+holds a wildcard; for Tab's prefix, its directory) and the word Bash makes of it
+(`distwindows`) names nothing; the shell decides that per word from the file system,
+since the parser cannot. Bash's reading wins where it names something, and where neither
+does. Tab completes `dist\win` to `dist\windows\`. Turned
 down: completion alone, which would offer what Enter then refuses; leaving it as Bash,
 where Tab finds nothing for the spelling a Windows user types.
 

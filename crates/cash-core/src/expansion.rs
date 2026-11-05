@@ -132,6 +132,10 @@ pub(crate) struct ExpanderOptions {
     /// How to handle backslash-escape sequences encountered outside of any
     /// explicit quoting. See [`UnquotedBackslashHandling`] for details.
     pub unquoted_backslash_handling: UnquotedBackslashHandling,
+    /// Whether the word is the prefix Tab completes, which a relative path spelled the
+    /// Windows way need only start (`dist\win`); a command's word must name the path
+    /// ([`takes_relative_backslash_path`]).
+    pub completing: bool,
 }
 
 impl Default for ExpanderOptions {
@@ -142,6 +146,7 @@ impl Default for ExpanderOptions {
             execute_command_substitutions: true,
             pathname_expand: true,
             unquoted_backslash_handling: UnquotedBackslashHandling::default(),
+            completing: false,
         }
     }
 }
@@ -955,17 +960,24 @@ struct WordExpander<'a, SE: extensions::ShellExtensions> {
     /// Whether the word is a here-document's body, whose `${v-word}` words are read as
     /// inside double quotes, but for `$'...'`.
     heredoc: bool,
+    /// Whether the word is the prefix Tab completes ([`ExpanderOptions::completing`]).
+    completing: bool,
 }
 
 /// cash (D53): whether the unquoted relative word `word`, spelled the Windows way
 /// (`dist\windows`), means the path it spells: at the prompt with `winpaths`, when the
-/// directory it names exists and the word Bash makes of it (`distwindows`) names nothing.
-/// `cd dist\windows` reached `cd` as `distwindows`, and Tab on `dist\win` found nothing
-/// (the user, 2026-11-05). Bash's reading wins where it names something, so a file `ab`
-/// keeps `a\b` meaning it; where neither reading names anything, Bash's holds too.
+/// path exists and the word Bash makes of it (`distwindows`) names nothing. `cd
+/// dist\windows` reached `cd` as `distwindows`, and Tab on `dist\win` found nothing (the
+/// user, 2026-11-05). Bash's reading wins where it names something, so a file `ab` keeps
+/// `a\b` meaning it; where neither reading names anything, Bash's holds too, so `v\1`
+/// beside a directory `v` is still `v1`. A word with a wildcard names what the glob
+/// finds, and needs only its directory. When `completing`, the word is a prefix and only
+/// its directory must exist (`dist\win`); `dist\` typed for Tab names the directory in
+/// both readings, and its backslash says what is wanted is inside it.
 pub(crate) fn takes_relative_backslash_path<SE: extensions::ShellExtensions>(
     shell: &Shell<SE>,
     word: &str,
+    completing: bool,
 ) -> bool {
     if !shell.options().windows_drive_paths {
         return false;
@@ -979,9 +991,13 @@ pub(crate) fn takes_relative_backslash_path<SE: extensions::ShellExtensions>(
     if !shell.absolute_path(Path::new(directory)).is_dir() {
         return false;
     }
-    // `dist\` typed for Tab names the directory in both readings; the backslash says
-    // what is wanted is inside it.
-    word.ends_with('\\') || !shell.absolute_path(Path::new(&bash)).exists()
+    if word.ends_with('\\') {
+        return completing;
+    }
+    if shell.absolute_path(Path::new(&bash)).exists() {
+        return false;
+    }
+    completing || windows.contains(['*', '?']) || shell.absolute_path(Path::new(&windows)).exists()
 }
 
 /// The top-level syntaxes in which `"` and `'` are literal characters.
@@ -1008,6 +1024,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             in_double_quotes: false,
             literal_quotes: None,
             heredoc: false,
+            completing: false,
         }
     }
 
@@ -1034,6 +1051,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             in_double_quotes: false,
             literal_quotes: None,
             heredoc: false,
+            completing: options.completing,
         }
     }
 
@@ -1219,7 +1237,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             Some(LiteralQuotes::Prompt) => {
                 cash_parser::word::parse_prompt_word(word, &self.parser_options)?
             }
-            None if takes_relative_backslash_path(self.shell, word) => {
+            None if takes_relative_backslash_path(self.shell, word, self.completing) => {
                 let mut options = self.parser_options.clone();
                 options.relative_backslash_paths = true;
                 cash_parser::word::parse(word, &options)?

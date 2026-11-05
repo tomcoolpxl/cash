@@ -201,6 +201,8 @@ async fn a_backslashed_drive_path_completes() -> anyhow::Result<()> {
 fn relative_paths_scratch() -> Scratch {
     let dir = Scratch::new("winpaths-relative");
     std::fs::create_dir_all(dir.join("dist/windows")).unwrap();
+    std::fs::create_dir_all(dir.join("v")).unwrap();
+    std::fs::write(dir.join("dist/f.txt"), "").unwrap();
     std::fs::write(dir.join("ab"), "").unwrap();
     dir
 }
@@ -239,6 +241,18 @@ fn bashs_reading_of_a_relative_word_wins_where_it_names_something() {
     assert_eq!(
         in_scratch(&dir, r"printf '[%s]\n' a\b x\y dist\ windows dist/\windows"),
         "[ab]\n[xy]\n[dist windows]\n[dist/windows]"
+    );
+}
+
+#[test]
+fn a_relative_word_whose_path_does_not_exist_is_bashs() {
+    // The directory `v` exists, but no `v/1`, so `grep v\1` gets Bash's `v1`; `dist\typo`
+    // is `disttypo` the same way (2.5.2 took the directory's being there for enough). A
+    // file that is there is the path, and a wildcard names what it finds.
+    let dir = relative_paths_scratch();
+    assert_eq!(
+        in_scratch(&dir, r"printf '[%s]\n' v\1 dist\typo dist\f.txt dist\*.txt"),
+        "[v1]\n[disttypo]\n[dist\\f.txt]\n[dist/f.txt]"
     );
 }
 
@@ -299,13 +313,13 @@ async fn a_backslash_after_a_slash_or_at_the_end_completes_as_each_reading_has_i
     shell.options_mut().windows_drive_paths = true;
     shell.set_working_dir(dir.path())?;
 
-    for (line, candidate) in [
-        (r"cd dist/\w", "dist/windows"),
-        (r"cd dist/\", "dist/windows"),
-        (r"cd dist\", r"dist\windows"),
+    for (line, candidates) in [
+        (r"cd dist/\w", vec!["dist/windows"]),
+        (r"cd dist/\", vec!["dist/f.txt", "dist/windows"]),
+        (r"cd dist\", vec![r"dist\f.txt", r"dist\windows"]),
     ] {
         let completions = shell.complete(line, line.len()).await?;
-        assert_eq!(completions.candidates, [candidate], "{line}");
+        assert_eq!(completions.candidates, candidates, "{line}");
         assert_eq!(
             (completions.insertion_index, completions.delete_count),
             (3, line.len() - 3),
