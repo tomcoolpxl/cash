@@ -957,7 +957,6 @@ struct WordExpander<'a, SE: extensions::ShellExtensions> {
     heredoc: bool,
 }
 
-/// The top-level syntaxes in which `"` and `'` are literal characters.
 /// cash (D53): whether the unquoted relative word `word`, spelled the Windows way
 /// (`dist\windows`), means the path it spells: at the prompt with `winpaths`, when the
 /// directory it names exists and the word Bash makes of it (`distwindows`) names nothing.
@@ -977,10 +976,15 @@ pub(crate) fn takes_relative_backslash_path<SE: extensions::ShellExtensions>(
     let directory = windows
         .rsplit_once('/')
         .map_or(".", |(directory, _)| directory);
-    shell.absolute_path(Path::new(directory)).is_dir()
-        && !shell.absolute_path(Path::new(&bash)).exists()
+    if !shell.absolute_path(Path::new(directory)).is_dir() {
+        return false;
+    }
+    // `dist\` typed for Tab names the directory in both readings; the backslash says
+    // what is wanted is inside it.
+    word.ends_with('\\') || !shell.absolute_path(Path::new(&bash)).exists()
 }
 
+/// The top-level syntaxes in which `"` and `'` are literal characters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LiteralQuotes {
     /// A heredoc body: only `\$`, `` \` `` and `\\` are escapes.

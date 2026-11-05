@@ -233,11 +233,12 @@ fn a_relative_path_spelled_the_windows_way_is_the_path() {
 #[test]
 fn bashs_reading_of_a_relative_word_wins_where_it_names_something() {
     // A file `ab` exists, so `a\b` is `ab`, as in Bash; `x\y` names nothing either way
-    // and is Bash's `xy`; a space after a backslash is still an escape.
+    // and is Bash's `xy`; a space after a backslash is still an escape; a backslash right
+    // after a slash is Bash's escape too, since a Windows path has no empty component.
     let dir = relative_paths_scratch();
     assert_eq!(
-        in_scratch(&dir, r"printf '[%s]\n' a\b x\y dist\ windows"),
-        "[ab]\n[xy]\n[dist windows]"
+        in_scratch(&dir, r"printf '[%s]\n' a\b x\y dist\ windows dist/\windows"),
+        "[ab]\n[xy]\n[dist windows]\n[dist/windows]"
     );
 }
 
@@ -276,5 +277,40 @@ async fn a_relative_path_spelled_the_windows_way_completes() -> anyhow::Result<(
         "{line} completed to {:?}",
         completions.candidates
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_backslash_after_a_slash_or_at_the_end_completes_as_each_reading_has_it()
+-> anyhow::Result<()> {
+    use cash_builtins::ShellBuilderExt as _;
+
+    // `dist/\w` is Bash's `dist/w` (a Windows path has no empty component), so Tab gives
+    // `dist/windows`; it gave `dist/\indows`, the typed `dist/\` put back on the name
+    // (the user, 2026-11-05, in 2.5.1). A stray `dist/\` completes as `dist/` does, the
+    // whole word replaced. `dist\` typed the Windows way lists what is inside.
+    let dir = relative_paths_scratch();
+    let mut shell = cash_core::Shell::builder()
+        .profile(cash_core::ProfileLoadBehavior::Skip)
+        .rc(cash_core::RcLoadBehavior::Skip)
+        .default_builtins(cash_builtins::BuiltinSet::BashMode)
+        .build()
+        .await?;
+    shell.options_mut().windows_drive_paths = true;
+    shell.set_working_dir(dir.path())?;
+
+    for (line, candidate) in [
+        (r"cd dist/\w", "dist/windows"),
+        (r"cd dist/\", "dist/windows"),
+        (r"cd dist\", r"dist\windows"),
+    ] {
+        let completions = shell.complete(line, line.len()).await?;
+        assert_eq!(completions.candidates, [candidate], "{line}");
+        assert_eq!(
+            (completions.insertion_index, completions.delete_count),
+            (3, line.len() - 3),
+            "{line} replaces its whole word"
+        );
+    }
     Ok(())
 }

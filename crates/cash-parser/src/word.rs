@@ -652,10 +652,12 @@ const fn starts_with_drive_backslash(word: &str) -> bool {
 /// The path it spells with each backslash a separator (`dist/windows`), and the word Bash
 /// makes of it with each backslash an escape (`distwindows`). `None` for a word that is
 /// not one: no backslash, a backslash before anything but a character that can begin a
-/// file name or a wildcard (an escaped space or quote is Bash's), a quote, an expansion
-/// or a substitution anywhere, a leading backslash, tilde or drive, or an assignment
-/// (`x=a\b` keeps Bash's meaning, as `x=C:\y` does). The shell asks the file system which
-/// reading to take (cash's `winpaths` for relative paths, D53).
+/// file name or a wildcard (an escaped space or quote is Bash's), a backslash right after
+/// a separator (`dist/\w` is Bash's `dist/w`, as a Windows path has no empty component),
+/// a quote, an expansion or a substitution anywhere, a leading backslash, tilde or drive,
+/// or an assignment (`x=a\b` keeps Bash's meaning, as `x=C:\y` does). A backslash at the
+/// end, as Tab sees `dist\` typed, is a separator with nothing after it. The shell asks
+/// the file system which reading to take (cash's `winpaths` for relative paths, D53).
 pub fn relative_backslash_readings(word: &str) -> Option<(String, String)> {
     if !word.contains('\\')
         || word.starts_with(['\\', '~'])
@@ -667,21 +669,26 @@ pub fn relative_backslash_readings(word: &str) -> Option<(String, String)> {
     let mut windows = String::with_capacity(word.len());
     let mut bash = String::with_capacity(word.len());
     let mut chars = word.chars();
+    let mut after_separator = false;
     while let Some(c) = chars.next() {
         if c != '\\' {
             windows.push(c);
             bash.push(c);
+            after_separator = c == '/';
             continue;
         }
-        let next = chars.next()?;
-        if starts_a_path_component(next) {
+        if after_separator {
+            return None;
+        }
+        let Some(next) = chars.next() else {
+            windows.push('/');
+            break;
+        };
+        if starts_a_path_component(next) || matches!(next, '*' | '?') {
             windows.push('/');
             windows.push(next);
             bash.push(next);
-        } else if matches!(next, '*' | '?') {
-            windows.push('/');
-            windows.push(next);
-            bash.push(next);
+            after_separator = false;
         } else {
             return None;
         }

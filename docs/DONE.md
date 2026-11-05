@@ -3669,3 +3669,10 @@ the ansi case timed out under load; `croot`'s top line keeping its mode in sight
   naming nothing either way stays Bash's, and scripts are untouched. Tests in
   `winpaths.rs`; `help paths` and `help differences` say so. The prompt's highlighting
   still colours such a word as escapes, since it parses without the file system.
+  Released as 2.5.1; found at once by the user: Tab on `cd dist/\w` gave `dist/\indows`,
+  since the rule took the backslash after the slash for a separator, the typed `dist/\`
+  was the directory put back on the name found, and the `w` went with it. Fixed in
+  2.5.2: a backslash right after a separator is Bash's escape (a Windows path has no
+  empty component), so `dist/\w` is `dist/w`; a stray `dist/\` completes as `dist/`
+  does, the whole word replaced; and `dist\` typed the Windows way lists what is inside,
+  which its Bash reading, the directory itself, had blocked.
