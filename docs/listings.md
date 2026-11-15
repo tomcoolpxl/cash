@@ -32,6 +32,17 @@ cash sorts first. The line:
 
 Pull request: <https://github.com/TaKO8Ki/awesome-alternatives-in-rust/pull/167>, opened
 2026-10-30 from the fork `tomcoolpxl/awesome-alternatives-in-rust`, branch `add-cash`.
+No review by 2026-11-15; the maintainer last merged in July.
+
+### winget
+
+<https://github.com/microsoft/winget-pkgs/pull/447760>, "New package: tomcoolpxl.cash",
+from the fork `tomcoolpxl/winget-pkgs`, the manifests of `packaging/winget` filled in
+(docs/RELEASING.md, step 8). Opened 2026-10-06; validation passed on 2026-10-31 at 2.3.2,
+after which it waits for a volunteer moderator's approval, as every new package does.
+Moved to 2.5.3 on 2026-11-15 (the user's yes), so that the version waiting is current:
+the 2.3.2 directory replaced by `manifests/t/tomcoolpxl/cash/2.5.3/`, the title renamed.
+Updating it does not move it up the moderators' queue.
 
 ## Later: each needs GitHub stars
 
