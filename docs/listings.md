@@ -42,7 +42,9 @@ from the fork `tomcoolpxl/winget-pkgs`, the manifests of `packaging/winget` fill
 after which it waits for a volunteer moderator's approval, as every new package does.
 Moved to 2.5.3 on 2026-11-15 (the user's yes), so that the version waiting is current:
 the 2.3.2 directory replaced by `manifests/t/tomcoolpxl/cash/2.5.3/`, the title renamed.
-Updating it does not move it up the moderators' queue.
+All ten validation checks passed again on 2026-11-16 (the installation run took about 97
+minutes), with the labels Azure-Pipeline-Passed and Validation-Completed back on. Updating
+it does not move it up the moderators' queue.
 
 ## Later: each needs GitHub stars
 
